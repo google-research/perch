@@ -114,7 +114,7 @@ def get_dataset(split: str,
   Returns:
     The placeholder dataset.
   """
-  builder = tfds.builder_from_directory(dataset_directory)
+  builder = tfds.core.builder_from_directory(dataset_directory)
 
   def process_batch(batch):
     return tf.vectorized_map(
