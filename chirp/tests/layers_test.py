@@ -20,37 +20,44 @@ from jax import numpy as jnp
 from jax import random
 from jax import tree_util
 
-
-def test_mbconv():
-  # See table 2 in the MobileNetV2 paper
-  mbconv = layers.MBConv(
-      features=24, kernel_size=(3, 3), strides=2, expand_ratio=6)
-  key = random.PRNGKey(0)
-  inputs = jnp.ones((1, 112, 112, 16))
-  outputs, variables = mbconv.init_with_output(key, inputs, train=True)
-  assert outputs.shape == (1, 56, 56, 24)
-
-  num_parameters = tree_util.tree_reduce(
-      operator.add, tree_util.tree_map(jnp.size, variables["params"]))
-  expected_num_parameters = (
-      16 * 6 * 16 +  # Expansion
-      3 * 3 * 6 * 16 +  # Depthwise separable convolution
-      16 * 6 * 24  # Reduction
-  )
-  assert num_parameters == expected_num_parameters
+from absl.testing import absltest
 
 
-def test_squeeze_and_excitation():
-  squeeze_and_excitation = layers.SqueezeAndExcitation()
-  key = random.PRNGKey(0)
-  inputs = jnp.ones((1, 112, 112, 16))
-  outputs, variables = squeeze_and_excitation.init_with_output(key, inputs)
-  assert outputs.shape == (1, 112, 112, 16)
+class LayersTest(absltest.TestCase):
 
-  num_parameters = tree_util.tree_reduce(
-      operator.add, tree_util.tree_map(jnp.size, variables["params"]))
-  expected_num_parameters = (
-      16 * 16 // 4 + 16 // 4 +  # Squeeze
-      16 // 4 * 16 + 16  # Excite
-  )
-  assert num_parameters == expected_num_parameters
+  def test_mbconv(self):
+    # See table 2 in the MobileNetV2 paper
+    mbconv = layers.MBConv(
+        features=24, kernel_size=(3, 3), strides=2, expand_ratio=6)
+    key = random.PRNGKey(0)
+    inputs = jnp.ones((1, 112, 112, 16))
+    outputs, variables = mbconv.init_with_output(key, inputs, train=True)
+    self.assertEqual(outputs.shape, (1, 56, 56, 24))
+
+    num_parameters = tree_util.tree_reduce(
+        operator.add, tree_util.tree_map(jnp.size, variables["params"]))
+    expected_num_parameters = (
+        16 * 6 * 16 +  # Expansion
+        3 * 3 * 6 * 16 +  # Depthwise separable convolution
+        16 * 6 * 24  # Reduction
+    )
+    self.assertEqual(num_parameters, expected_num_parameters)
+
+  def test_squeeze_and_excitation(self):
+    squeeze_and_excitation = layers.SqueezeAndExcitation()
+    key = random.PRNGKey(0)
+    inputs = jnp.ones((1, 112, 112, 16))
+    outputs, variables = squeeze_and_excitation.init_with_output(key, inputs)
+    self.assertEqual(outputs.shape, (1, 112, 112, 16))
+
+    num_parameters = tree_util.tree_reduce(
+        operator.add, tree_util.tree_map(jnp.size, variables["params"]))
+    expected_num_parameters = (
+        16 * 16 // 4 + 16 // 4 +  # Squeeze
+        16 // 4 * 16 + 16  # Excite
+    )
+    self.assertEqual(num_parameters, expected_num_parameters)
+
+
+if __name__ == "__main__":
+  absltest.main()
