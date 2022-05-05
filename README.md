@@ -16,6 +16,9 @@ sudo apt-get install libsndfile1
 
 Afterwards you should be able to run `poetry install` to create a virtual
 environment in which you can run the Chirp codebase. To run the tests, try
-`poetry run pytest chirp/tests`.
+
+```bash
+poetry run python -m unittest discover -s chirp/tests -p "*test.py"
+```
 
 *This is not an officially supported Google product.*
