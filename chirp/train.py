@@ -90,8 +90,8 @@ def train_and_evaluate(batch_size: int, num_train_steps: int, rng_seed: int,
   # Load dataset
   train_dataset, dataset_info = pipeline.get_dataset(
       "train", batch_size=batch_size, **data_config)
-  test_dataset, _ = pipeline.get_dataset(
-      "valid", batch_size=batch_size, **data_config)
+  valid_dataset, _ = pipeline.get_dataset(
+      "test_caples", batch_size=batch_size, **data_config)
   train_iterator = train_dataset.as_numpy_iterator()
 
   with model_config.unlocked():
@@ -185,7 +185,7 @@ def train_and_evaluate(batch_size: int, num_train_steps: int, rng_seed: int,
       # TODO(bartvm): Split eval into separate job for larger validation sets
       with report_progress.timed("eval"):
         valid_metrics = ValidationMetrics.empty()
-        for batch in test_dataset.as_numpy_iterator():
+        for batch in valid_dataset.as_numpy_iterator():
           valid_metrics = update_metrics(valid_metrics, batch, train_state)
 
         # Log validation loss
