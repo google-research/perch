@@ -19,18 +19,25 @@ from jax import numpy as jnp
 import numpy as np
 import tensorflow as tf
 
-
-def test_linear_to_mel_weight_matrix():
-  jax_val = signal.linear_to_mel_weight_matrix()
-  tf_val = tf.signal.linear_to_mel_weight_matrix()
-
-  np.testing.assert_allclose(jax_val, tf_val, rtol=1e-3)
+from google3.testing.pybase import googletest
 
 
-def test_frame():
-  shape = (2, 7, 3)
-  signal_ = jnp.reshape(jnp.arange(2 * 7 * 3), shape)
-  frames = signal.frame(signal_, 5, 2, axis=1)
-  assert frames.shape == (2, 2, 5, 3)
+class SignalTest(googletest.TestCase):
 
-  np.testing.assert_array_equal(frames[1, 1, :, 2], signal_[1, 2:7, 2])
+  def test_linear_to_mel_weight_matrix(self):
+    jax_val = signal.linear_to_mel_weight_matrix()
+    tf_val = tf.signal.linear_to_mel_weight_matrix()
+
+    np.testing.assert_allclose(jax_val, tf_val, rtol=1e-3)
+
+  def test_frame(self):
+    shape = (2, 7, 3)
+    signal_ = jnp.reshape(jnp.arange(2 * 7 * 3), shape)
+    frames = signal.frame(signal_, 5, 2, axis=1)
+    self.assertEqual(frames.shape, (2, 2, 5, 3))
+
+    np.testing.assert_array_equal(frames[1, 1, :, 2], signal_[1, 2:7, 2])
+
+
+if __name__ == "__main__":
+  googletest.main()

@@ -20,20 +20,28 @@ from jax import numpy as jnp
 from jax import random
 from jax import tree_util
 
+from google3.testing.pybase import googletest
 
-def test_efficientnet():
-  efficientnet_ = efficientnet.EfficientNet(
-      model=efficientnet.EfficientNetModel.B0, include_top=False)
-  key = random.PRNGKey(0)
-  params_key, dropout_key = random.split(key)
-  inputs = jnp.ones((1, 224, 224, 3))
-  out, variables = efficientnet_.init_with_output(
-      {
-          "dropout": dropout_key,
-          "params": params_key
-      }, inputs, train=True)
-  assert out.shape == (1, 7, 7, 1280)
-  num_parameters = tree_util.tree_reduce(
-      operator.add, tree_util.tree_map(jnp.size, variables["params"]))
-  # Keras has 7 more parameters due to the normalization of the inputs
-  assert num_parameters == 4_007_548
+
+class EfficientNetTest(googletest.TestCase):
+
+  def test_efficientnet(self):
+    efficientnet_ = efficientnet.EfficientNet(
+        model=efficientnet.EfficientNetModel.B0, include_top=False)
+    key = random.PRNGKey(0)
+    params_key, dropout_key = random.split(key)
+    inputs = jnp.ones((1, 224, 224, 3))
+    out, variables = efficientnet_.init_with_output(
+        {
+            "dropout": dropout_key,
+            "params": params_key
+        }, inputs, train=True)
+    self.assertEqual(out.shape, (1, 7, 7, 1280))
+    num_parameters = tree_util.tree_reduce(
+        operator.add, tree_util.tree_map(jnp.size, variables["params"]))
+    # Keras has 7 more parameters due to the normalization of the inputs
+    self.assertEqual(num_parameters, 4_007_548)
+
+
+if __name__ == "__main__":
+  googletest.main()
