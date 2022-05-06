@@ -49,7 +49,7 @@ class AudioUtilsTest(absltest.TestCase):
         audio + noise, scaling_config=None, **kwargs)
 
     self.assertEqual(batch_melspec.shape, (2, 3, 100, 160))
-    np.testing.assert_allclose(batch_melspec[0, 0], melspec)
+    np.testing.assert_allclose(batch_melspec[0, 0], melspec, 1e-6)
 
     # Test normalization
     melspec = audio_utils.compute_melspec(
