@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """Tests for pipeline."""
+import functools
 import tempfile
 
 from chirp.data import pipeline
@@ -92,6 +93,60 @@ class LayersTest(absltest.TestCase):
     fake_builder = FakeDataset(data_dir=data_dir)
     fake_builder.download_and_prepare()
     cls._builder = fake_builder
+
+  def test_mixin(self):
+    examples = {
+        'audio':
+            tf.random.uniform([2, 100], dtype=tf.float32),
+        'label':
+            tf.convert_to_tensor([[1], [2]], dtype=tf.int64),
+        'label_str':
+            tf.convert_to_tensor([['placeholder'], ['placeholder']],
+                                 dtype=tf.string),
+        'bg_labels':
+            tf.convert_to_tensor([[2, 3], [4, 5]], dtype=tf.int64),
+        'genus':
+            tf.convert_to_tensor([[1], [3]], dtype=tf.int64),
+        'family':
+            tf.convert_to_tensor([[1], [1]], dtype=tf.int64),
+        'order':
+            tf.convert_to_tensor([[1], [5]], dtype=tf.int64),
+        'filename':
+            tf.convert_to_tensor(['placeholder', 'placeholder'],
+                                 dtype=tf.string),
+    }
+    ds = tf.data.Dataset.from_tensor_slices(examples)
+    ds = ds.map(functools.partial(pipeline.multi_hot, info=self._builder.info))
+    mixed_ds = pipeline.mix_audio(ds, mixin_prob=1.0)
+    mixed_example = mixed_ds.get_single_element()
+    np.testing.assert_allclose(mixed_example['audio'],
+                               (examples['audio'][0] + examples['audio'][1]) /
+                               2)
+    np.testing.assert_equal(
+        mixed_example['genus'].numpy(),
+        np.asarray(
+            [0, 1, 0, 1] + [0] *
+            (self._builder.info.features['genus'].num_classes - 4),
+            dtype=np.int32))
+
+    np.testing.assert_equal(
+        mixed_example['family'].numpy(),
+        np.asarray(
+            [0, 1] + [0] *
+            (self._builder.info.features['family'].num_classes - 2),
+            dtype=np.int32))
+
+    np.testing.assert_equal(
+        mixed_example['bg_labels'].numpy(),
+        np.asarray(
+            [0, 0, 1, 1, 1, 1] + [0] *
+            (self._builder.info.features['bg_labels'].num_classes - 6),
+            dtype=np.int32))
+
+    unmixed_ds = pipeline.mix_audio(ds, mixin_prob=0.0)
+    for x, y in tf.data.Dataset.zip((ds, unmixed_ds)).as_numpy_iterator():
+      for key in x:
+        np.testing.assert_equal(x[key], y[key])
 
   def test_process_example(self):
     sample_rate_hz = self._builder.info.features['audio'].sample_rate
@@ -176,7 +231,8 @@ class LayersTest(absltest.TestCase):
           batch_size=batch_size,
           window_size_s=window_size_s,
           min_gain=min_gain,
-          max_gain=max_gain)
+          max_gain=max_gain,
+          mixin_prob=0.5)
 
       example = next(dataset.as_numpy_iterator())
       self.assertLen(example['audio'].shape, 2)

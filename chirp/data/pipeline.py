@@ -46,6 +46,41 @@ def _normalize_audio(audio: tf.Tensor, target_gain: tf.Tensor) -> tf.Tensor:
   return audio
 
 
+def mix_audio(dataset: tf.data.Dataset, mixin_prob: float) -> tf.data.Dataset:
+  """Mix audio samples.
+
+  Args:
+    dataset: The dataset of normalized audio samples. Must be before
+      mel-spectrogram creation.
+    mixin_prob: The probability with which samples are mixed. Note that if we
+      mix, e.g., 50% of samples, the final ratio between mixed and unmixed
+      samples is 1:2. More formally, to get a fraction `p` of the samples to be
+        mixed, set `mixin_prob` to `2 * p / (p + 1)`.
+
+  Returns:
+    A dataset with mixed audio examples.
+  """
+
+  def key_func(_):
+    return tf.cast(tf.less(tf.random.uniform([]), mixin_prob), tf.int64)
+
+  def reduce_func(key, dataset):
+    key = tf.equal(key, 0)
+    return tf.cond(
+        key, lambda: dataset,
+        lambda: dataset.batch(2, drop_remainder=True).map(_mix_audio))
+
+  def _mix_audio(examples: Dict[str, tf.Tensor]) -> Dict[str, tf.Tensor]:
+    for key in ('label', 'genus', 'family', 'order', 'bg_labels'):
+      examples[key] = tf.reduce_max(examples[key], axis=0)
+    # TODO(bartvm): Replace averaging with leaving first example untouched and
+    # mixing in second example with a random gain
+    examples['audio'] = (examples['audio'][0] + examples['audio'][1]) / 2
+    return examples
+
+  return dataset.group_by_window(key_func, reduce_func, window_size=2)
+
+
 def process_audio(example: Dict[str, tf.Tensor], info: tfds.core.DatasetInfo,
                   window_size_s: int, min_gain: float,
                   max_gain: float) -> Dict[str, tf.Tensor]:
@@ -61,8 +96,6 @@ def process_audio(example: Dict[str, tf.Tensor], info: tfds.core.DatasetInfo,
   Returns:
     The processed example.
   """
-  del example['filename']
-  del example['label_str']
   example['audio'] = _trim(
       example['audio'],
       window_size=window_size_s * info.features['audio'].sample_rate)
@@ -88,6 +121,8 @@ def multi_hot(
     The processed example with `bg_labels` replaced using a multi-hot
     representation.
   """
+  del example['filename']
+  del example['label_str']
   for key, feature in info.features.items():
     if (isinstance(feature, tfds.features.Sequence) and
         isinstance(feature.feature, tfds.features.ClassLabel)):
@@ -114,6 +149,8 @@ def get_dataset(split: str,
   Returns:
     The placeholder dataset.
   """
+  mixin_prob = data_config.pop('mixin_prob')
+
   builder = tfds.core.builder_from_directory(dataset_directory)
 
   def process_batch(batch):
@@ -123,8 +160,11 @@ def get_dataset(split: str,
 
   ds = builder.as_dataset(split=split).map(
       functools.partial(multi_hot, info=builder.info))
+  # TODO(bartvm): Pass `train` argument instead of relying on split name.
   if 'train' in split:
     ds = ds.shuffle(batch_size * 10)
+    if mixin_prob > 0.0:
+      ds = mix_audio(ds, mixin_prob)
   ds = ds.batch(batch_size, drop_remainder=True)
   ds = ds.map(process_batch, num_parallel_calls=tf.data.AUTOTUNE)
   if 'train' in split:
