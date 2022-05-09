@@ -1,0 +1,3080 @@
+{
+  "0":{
+    "species_code":"crebob2",
+    "xc_common_name":"Spot-bellied Bobwhite",
+    "ebird_common_name":"Crested Bobwhite (Spot-bellied)",
+    "xc_scientific_name":"Colinus leucopogon",
+    "ebird_scientific_name":"Colinus cristatus [leucopogon Group]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "1":{
+    "species_code":"chnfra1",
+    "xc_common_name":"Chestnut-naped Spurfowl",
+    "ebird_common_name":"Chestnut-naped Francolin",
+    "xc_scientific_name":"Pternistis castaneicollis",
+    "ebird_scientific_name":"Pternistis castaneicollis",
+    "wikipedia_url":"",
+    "rationale":"Scientific names match exactly."
+  },
+  "2":{
+    "species_code":"chnfra3",
+    "xc_common_name":"Black-fronted Spurfowl",
+    "ebird_common_name":"Black-fronted Francolin",
+    "xc_scientific_name":"Pternistis atrifrons",
+    "ebird_scientific_name":"Pternistis atrifrons",
+    "wikipedia_url":"",
+    "rationale":"Scientific names match exactly."
+  },
+  "3":{
+    "species_code":"blbqua1",
+    "xc_common_name":"King Quail",
+    "ebird_common_name":"Blue-breasted Quail",
+    "xc_scientific_name":"Excalfactoria chinensis",
+    "ebird_scientific_name":"Synoicus chinensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/King_quail",
+    "rationale":"Connected in Wikipedia."
+  },
+  "4":{
+    "species_code":"udzpar2",
+    "xc_common_name":"Rubeho Forest Partridge",
+    "ebird_common_name":"Udzungwa Partridge (Rubeho)",
+    "xc_scientific_name":"Xenoperdix obscuratus",
+    "ebird_scientific_name":"Xenoperdix udzungwensis obscuratus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Rubeho_forest_partridge",
+    "rationale":"Connected in Wikipedia: \"It was formerly considered to be a well-marked subspecies of the Udzungwa forest partridge\"."
+  },
+  "5":{
+    "species_code":"chhpar3",
+    "xc_common_name":"Siamese Partridge",
+    "ebird_common_name":"Chestnut-headed Partridge (Siamese)",
+    "xc_scientific_name":"Arborophila diversa",
+    "ebird_scientific_name":"Arborophila cambodiana diversa",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Siamese_partridge",
+    "rationale":"Connected in Wikipedia: \"Some taxonomic authorities consider it to be a subspecies of the chestnut-headed partridge\"."
+  },
+  "6":{
+    "species_code":"rinphe2",
+    "xc_common_name":"Green Pheasant",
+    "ebird_common_name":"Ring-necked Pheasant (Green)",
+    "xc_scientific_name":"Phasianus versicolor",
+    "ebird_scientific_name":"Phasianus colchicus [versicolor Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Green_pheasant",
+    "rationale":"from the scientific names, sounds like one is a subspecies of the other"
+  },
+  "7":{
+    "species_code":"egwtea1",
+    "xc_common_name":"Eurasian Teal",
+    "ebird_common_name":"Green-winged Teal (Eurasian)",
+    "xc_scientific_name":"Anas crecca",
+    "ebird_scientific_name":"Anas crecca crecca",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Eurasian_teal",
+    "rationale":"Connected in Wikipedia."
+  },
+  "8":{
+    "species_code":"agwtea1",
+    "xc_common_name":"Green-winged Teal",
+    "ebird_common_name":"Green-winged Teal (American)",
+    "xc_scientific_name":"Anas carolinensis",
+    "ebird_scientific_name":"Anas crecca carolinensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Green-winged_teal",
+    "rationale":"Connected in Wikipedia: \"The green-winged teal (Anas carolinensis) is a common and widespread duck that breeds in the northern areas of North America\"."
+  },
+  "9":{
+    "species_code":"eurnig1",
+    "xc_common_name":"Vaurie's Nightjar",
+    "ebird_common_name":"Eurasian Nightjar",
+    "xc_scientific_name":"Caprimulgus centralasicus",
+    "ebird_scientific_name":"Caprimulgus europaeus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/European_nightjar",
+    "rationale":"Connected in Wikipedia: \"(the wikipedia page for key redirects to that for value)\"."
+  },
+  "10":{
+    "species_code":"chaswi2",
+    "xc_common_name":"Mato Grosso Swift",
+    "ebird_common_name":"Chapman's Swift",
+    "xc_scientific_name":"Chaetura viridipennis",
+    "ebird_scientific_name":"Chaetura chapmani",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Chapman%27s_swift",
+    "rationale":"Connected in Wikipedia: \"(the wikipedia page for key redirects to that for value)\"."
+  },
+  "11":{
+    "species_code":"malpas1",
+    "xc_common_name":"Malagasy Palm Swift",
+    "ebird_common_name":"Malagasy Palm-Swift",
+    "xc_scientific_name":"Cypsiurus gracilis",
+    "ebird_scientific_name":"Cypsiurus gracilis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "12":{
+    "species_code":"afrswi2",
+    "xc_common_name":"Fernando Po Swift",
+    "ebird_common_name":"African Swift (Bioko)",
+    "xc_scientific_name":"Apus sladeniae",
+    "ebird_scientific_name":"Apus barbatus sladeniae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Fernando_Po_swift",
+    "rationale":"XC scientific name matches eBird scientific name: Apus sladeniae vs Apus barbatus sladeniae"
+  },
+  "13":{
+    "species_code":"wetsab2",
+    "xc_common_name":"Curve-winged Sabrewing",
+    "ebird_common_name":"Wedge-tailed Sabrewing (Curve-winged)",
+    "xc_scientific_name":"Campylopterus curvipennis",
+    "ebird_scientific_name":"Pampa curvipennis curvipennis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Curve-winged_sabrewing",
+    "rationale":"Connected in Wikipedia: \"The curve-winged sabrewing (Pampa curvipennis) [...] formerly included the wedge-tailed sabrewing\"."
+  },
+  "14":{
+    "species_code":"wetsab3",
+    "xc_common_name":"Wedge-tailed Sabrewing",
+    "ebird_common_name":"Wedge-tailed Sabrewing (Wedge-tailed)",
+    "xc_scientific_name":"Campylopterus pampa",
+    "ebird_scientific_name":"Pampa curvipennis pampa",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "15":{
+    "species_code":"stream3",
+    "xc_common_name":"Black-billed Streamertail",
+    "ebird_common_name":"Streamertail (Black-billed)",
+    "xc_scientific_name":"Trochilus scitulus",
+    "ebird_scientific_name":"Trochilus polytmus scitulus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "16":{
+    "species_code":"braeme3",
+    "xc_common_name":"Gould's Emerald",
+    "ebird_common_name":"Brace's Emerald (Caribbean)",
+    "xc_scientific_name":"Chlorostilbon elegans",
+    "ebird_scientific_name":"Riccordia bracei elegans",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Gould%27s_emerald",
+    "rationale":"Connected in Wikipedia: \"Gould's emerald (Riccordia elegans) is an extinct species of hummingbird [...]\"."
+  },
+  "17":{
+    "species_code":"braeme2",
+    "xc_common_name":"Brace's Emerald",
+    "ebird_common_name":"Brace's Emerald (Brace's)",
+    "xc_scientific_name":"Chlorostilbon bracei",
+    "ebird_scientific_name":"Riccordia bracei bracei",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "18":{
+    "species_code":"brbhum2",
+    "xc_common_name":"Doubleday's Hummingbird",
+    "ebird_common_name":"Turquoise-crowned Hummingbird",
+    "xc_scientific_name":"Cynanthus doubledayi",
+    "ebird_scientific_name":"Cynanthus doubledayi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Doubleday%27s_hummingbird",
+    "rationale":"Scientific names match exactly."
+  },
+  "19":{
+    "species_code":"gnfhum2",
+    "xc_common_name":"Cinnamon-sided Hummingbird",
+    "ebird_common_name":"Green-fronted Hummingbird (Cinnamon-sided)",
+    "xc_scientific_name":"Amazilia wagneri",
+    "ebird_scientific_name":"Leucolia viridifrons wagneri",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Cinnamon-sided_hummingbird",
+    "rationale":"Connected in Wikipedia: \"Some taxonomic authorities [...] consider conspecific with the green-fronted hummingbird\"."
+  },
+  "20":{
+    "species_code":"whtmog2",
+    "xc_common_name":"Grey-tailed Mountaingem",
+    "ebird_common_name":"White-throated Mountain-gem (Gray-tailed)",
+    "xc_scientific_name":"Lampornis cinereicauda",
+    "ebird_scientific_name":"Lampornis castaneoventris cinereicauda",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Grey-tailed_mountaingem",
+    "rationale":"Connected in Wikipedia: \"Until recently it was believed to be a subspecies of the white-throated mountaingem.\"."
+  },
+  "21":{
+    "species_code":"amtsun2",
+    "xc_common_name":"Longuemare's Sunangel",
+    "ebird_common_name":"Amethyst-throated Sunangel (Longuemare's)",
+    "xc_scientific_name":"Heliangelus clarisse",
+    "ebird_scientific_name":"Heliangelus amethysticollis clarisse\/violiceps",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/File:Heliangelus_clarisse.jpg",
+    "rationale":"Connected in Wikipedia: \"The South American Classification Committee (SACC) of the American Ornithological Society and the Clements taxonomy treat the first two as subspecies of the amethyst-throated sunangel (H. amethysticollis)\"."
+  },
+  "22":{
+    "species_code":"amtsun4",
+    "xc_common_name":"Merida Sunangel",
+    "ebird_common_name":"Amethyst-throated Sunangel (Merida)",
+    "xc_scientific_name":"Heliangelus spencei",
+    "ebird_scientific_name":"Heliangelus amethysticollis spencei",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/M%C3%A9rida_sunangel",
+    "rationale":"Connected in Wikipedia: \"The South American Classification Committee (SACC) of the American Ornithological Society and the Clements taxonomy treat it as subspecies of the amethyst-throated sunangel\"."
+  },
+  "23":{
+    "species_code":"boorat2",
+    "xc_common_name":"Peruvian Racket-tail",
+    "ebird_common_name":"Booted Racket-tail (Peruvian)",
+    "xc_scientific_name":"Ocreatus peruanus",
+    "ebird_scientific_name":"Ocreatus underwoodii peruanus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Peruvian_racket-tail",
+    "rationale":"Connected in Wikipedia: \"It previously was considered conspecific with the white-booted racket-tail and the rufous-booted racket-tail, together called the booted racket-tail.\"."
+  },
+  "24":{
+    "species_code":"boorat4",
+    "xc_common_name":"Rufous-booted Racket-tail",
+    "ebird_common_name":"Booted Racket-tail (Adda's)",
+    "xc_scientific_name":"Ocreatus addae",
+    "ebird_scientific_name":"Ocreatus underwoodii addae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Rufous-booted_racket-tail",
+    "rationale":"Connected in Wikipedia: \"The rufous-booted racket-tail (Ocreatus addae) [...] is named in honour of Mrs Adda Wilson\"."
+  },
+  "25":{
+    "species_code":"recbus1",
+    "xc_common_name":"Red-crested Korhaan",
+    "ebird_common_name":"Red-crested Bustard",
+    "xc_scientific_name":"Lophotis ruficrista",
+    "ebird_scientific_name":"Eupodotis ruficrista",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Red-crested_korhaan",
+    "rationale":"Connected in Wikipedia."
+  },
+  "26":{
+    "species_code":"blabus3",
+    "xc_common_name":"Southern Black Korhaan",
+    "ebird_common_name":"Black Bustard",
+    "xc_scientific_name":"Afrotis afra",
+    "ebird_scientific_name":"Eupodotis afra",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Southern_black_korhaan",
+    "rationale":"Connected in Wikipedia."
+  },
+  "27":{
+    "species_code":"whqbus1",
+    "xc_common_name":"Northern Black Korhaan",
+    "ebird_common_name":"White-quilled Bustard",
+    "xc_scientific_name":"Afrotis afraoides",
+    "ebird_scientific_name":"Eupodotis afraoides",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Northern_black_korhaan",
+    "rationale":"Connected in Wikipedia."
+  },
+  "28":{
+    "species_code":"whbcou3",
+    "xc_common_name":"Burchell's Coucal",
+    "ebird_common_name":"White-browed Coucal (Burchell's)",
+    "xc_scientific_name":"Centropus burchellii",
+    "ebird_scientific_name":"Centropus superciliosus burchellii\/fasciipygialis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Burchell%27s_coucal",
+    "rationale":"Connected in Wikipedia: \"It is sometimes considered a subspecies of the white-browed coucal\"."
+  },
+  "29":{
+    "species_code":"brucuc2",
+    "xc_common_name":"Rusty-breasted Cuckoo",
+    "ebird_common_name":"Brush Cuckoo (Rusty-breasted)",
+    "xc_scientific_name":"Cacomantis sepulcralis",
+    "ebird_scientific_name":"Cacomantis variolosus [sepulcralis Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Rusty-breasted_cuckoo",
+    "rationale":"Connected in Wikipedia: \"It is sometimes considered a subspecies of the brush cuckoo.\"."
+  },
+  "30":{
+    "species_code":"matdov1",
+    "xc_common_name":"Malagasy Turtle Dove",
+    "ebird_common_name":"Malagasy Turtle-Dove",
+    "xc_scientific_name":"Nesoenas picturatus",
+    "ebird_scientific_name":"Streptopelia picturata",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "31":{
+    "species_code":"gyhdov3",
+    "xc_common_name":"Azuero Dove",
+    "ebird_common_name":"Gray-headed Dove (Brown-backed)",
+    "xc_scientific_name":"Leptotila battyi",
+    "ebird_scientific_name":"Leptotila plumbeiceps battyi\/malae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Azuero_dove",
+    "rationale":"Connected in Wikipedia: \"The Azuero dove or brown-backed dove (Leptotila battyi) is a species of bird in the family Columbidae. The Asuero dove, [...], the grey-headed dove (L. plumbeiceps) of South and Central America, [...] were at one time thought to be a single species.\"."
+  },
+  "32":{
+    "species_code":"mantho1",
+    "xc_common_name":"'Mantaro Thornbird'",
+    "ebird_common_name":"Mantaro Thornbird (undescribed form)",
+    "xc_scientific_name":"Phacellodomus tax.nov.",
+    "ebird_scientific_name":"Phacellodomus [undescribed form]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "33":{
+    "species_code":"wbgdov1",
+    "xc_common_name":"White-breasted Ground Dove",
+    "ebird_common_name":"White-bibbed Ground Dove",
+    "xc_scientific_name":"Pampusana jobiensis",
+    "ebird_scientific_name":"Alopecoenas jobiensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-breasted_ground_dove",
+    "rationale":"Connected in Wikipedia: \"The white-breasted ground dove, white-bibbed ground dove, or purple ground dove (Pampusana jobiensis) is a species of bird in the family Columbidae.\"."
+  },
+  "34":{
+    "species_code":"cigdov1",
+    "xc_common_name":"White-fronted Ground Dove",
+    "ebird_common_name":"Caroline Islands Ground Dove",
+    "xc_scientific_name":"Pampusana kubaryi",
+    "ebird_scientific_name":"Alopecoenas kubaryi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-fronted_ground_dove",
+    "rationale":"Connected in Wikipedia."
+  },
+  "35":{
+    "species_code":"frgdov1",
+    "xc_common_name":"Tongan Ground Dove",
+    "ebird_common_name":"Shy Ground Dove",
+    "xc_scientific_name":"Pampusana stairi",
+    "ebird_scientific_name":"Alopecoenas stairi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Tongan_ground_dove",
+    "rationale":"Connected in Wikipedia."
+  },
+  "36":{
+    "species_code":"margrd1",
+    "xc_common_name":"Marquesan Ground Dove",
+    "ebird_common_name":"Marquesas Ground Dove",
+    "xc_scientific_name":"Pampusana rubescens",
+    "ebird_scientific_name":"Alopecoenas rubescens",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "37":{
+    "species_code":"soucrp2",
+    "xc_common_name":"Scheepmaker's Crowned Pigeon",
+    "ebird_common_name":"Scheepmaker's Crowned-Pigeon",
+    "xc_scientific_name":"Goura scheepmakeri",
+    "ebird_scientific_name":"Goura scheepmakeri",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "38":{
+    "species_code":"madgrp1",
+    "xc_common_name":"Madagascan Green Pigeon",
+    "ebird_common_name":"Madagascar Green-Pigeon",
+    "xc_scientific_name":"Treron australis",
+    "ebird_scientific_name":"Treron australis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "39":{
+    "species_code":"madgrp2",
+    "xc_common_name":"Comoros Green Pigeon",
+    "ebird_common_name":"Comoros Green-Pigeon",
+    "xc_scientific_name":"Treron griveaudi",
+    "ebird_scientific_name":"Treron griveaudi",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "40":{
+    "species_code":"bahtre1",
+    "xc_common_name":"'Serra do Lontras' Treehunter",
+    "ebird_common_name":"Bahia Treehunter (undescribed form)",
+    "xc_scientific_name":"Heliobletus sp.nov.Lontras",
+    "ebird_scientific_name":"Heliobletus [undescribed form]",
+    "wikipedia_url":"",
+    "rationale":"Avibase lists the two common names as synonyms (https:\/\/avibase.bsc-eoc.org\/species.jsp?avibaseid=DFCE2896)"
+  },
+  "41":{
+    "species_code":"intant1",
+    "xc_common_name":"'Inambari-Tambopata' Antwren",
+    "ebird_common_name":"Inambari-Tambopata Antwren (undescribed form)",
+    "xc_scientific_name":"Herpsilochmus sp.nov.Inambari_Tambopata",
+    "ebird_scientific_name":"Herpsilochmus [undescribed Inambari-Tambopata Antwren]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "42":{
+    "species_code":"torimp1",
+    "xc_common_name":"Torresian Imperial Pigeon",
+    "ebird_common_name":"Torresian Imperial-Pigeon",
+    "xc_scientific_name":"Ducula spilorrhoa",
+    "ebird_scientific_name":"Ducula spilorrhoa",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "43":{
+    "species_code":"madwor1",
+    "xc_common_name":"Madagascan Wood Rail",
+    "ebird_common_name":"Madagascar Wood-Rail",
+    "xc_scientific_name":"Mentocrex kioloides",
+    "ebird_scientific_name":"Mentocrex kioloides",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "44":{
+    "species_code":"tsiwor1",
+    "xc_common_name":"Tsingy Wood Rail",
+    "ebird_common_name":"Tsingy Wood-Rail",
+    "xc_scientific_name":"Mentocrex beankaensis",
+    "ebird_scientific_name":"Mentocrex beankaensis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "45":{
+    "species_code":"mayrai1",
+    "xc_common_name":"Mayr's Forest Rail",
+    "ebird_common_name":"Mayr's Rail",
+    "xc_scientific_name":"Rallicula mayri",
+    "ebird_scientific_name":"Rallina mayri",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Mayr%27s_forest_rail",
+    "rationale":"Scientific names are synonyms according to Wikipedia article."
+  },
+  "46":{
+    "species_code":"amptap1",
+    "xc_common_name":"'Ampay' Tapaculo",
+    "ebird_common_name":"Ampay Tapaculo",
+    "xc_scientific_name":"Scytalopus sp.nov.Ampay",
+    "ebird_scientific_name":"Scytalopus whitneyi",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "47":{
+    "species_code":"miltap1",
+    "xc_common_name":"'Millpo' Tapaculo",
+    "ebird_common_name":"Jalca Tapaculo",
+    "xc_scientific_name":"Scytalopus sp.nov.Millpo",
+    "ebird_scientific_name":"Scytalopus frankeae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Jalca_tapaculo",
+    "rationale":"Connected in Wikipedia: \"It (the jalca tapaculo) appears to be common at the type locality of Millpo in Hu\u00e1nuco ...\"."
+  },
+  "48":{
+    "species_code":"virrai1",
+    "xc_common_name":"Ecuadorian Rail",
+    "ebird_common_name":"Virginia Rail (Ecuadorian)",
+    "xc_scientific_name":"Rallus aequatorialis",
+    "ebird_scientific_name":"Rallus limicola aequatorialis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Virginia_rail",
+    "rationale":"Connected in Wikipedia: \"The Ecuadorian rail is often considered a subspecies, but some taxonomic authorities consider it distinct.\"."
+  },
+  "49":{
+    "species_code":"fusfly2",
+    "xc_common_name":"'Fuscous Flycatcher sp.nov.'",
+    "ebird_common_name":"Fuscous Flycatcher (Fuscous)",
+    "xc_scientific_name":"Cnemotriccus sp.nov.",
+    "ebird_scientific_name":"Cnemotriccus fuscatus [fuscatus Group]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "50":{
+    "species_code":"milrai1",
+    "xc_common_name":"Tahiti Crake",
+    "ebird_common_name":"Miller's Rail",
+    "xc_scientific_name":"Porzana nigra",
+    "ebird_scientific_name":"Zapornia nigra",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Tahiti_crake",
+    "rationale":"Connected in Wikipedia."
+  },
+  "51":{
+    "species_code":"heicra1",
+    "xc_common_name":"Henderson Crake",
+    "ebird_common_name":"Henderson Island Crake",
+    "xc_scientific_name":"Porzana atra",
+    "ebird_scientific_name":"Zapornia atra",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Henderson_crake",
+    "rationale":"Connected in Wikipedia: \"It is endemic to Henderson Island\"."
+  },
+  "52":{
+    "species_code":"mappyt1",
+    "xc_common_name":"'Maranhao-Piaui' Pygmy Tyrant",
+    "ebird_common_name":"Maranhao-Piaui Pygmy-Tyrant (undescribed form)",
+    "xc_scientific_name":"Myiornis sp.nov.Maranhao_Piaui",
+    "ebird_scientific_name":"Myiornis [undescribed form]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "53":{
+    "species_code":"litgre4",
+    "xc_common_name":"Tricolored Grebe",
+    "ebird_common_name":"Little Grebe (Tricolored)",
+    "xc_scientific_name":"Tachybaptus tricolor",
+    "ebird_scientific_name":"Tachybaptus ruficollis [tricolor Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Little_grebe",
+    "rationale":"Connected in Wikipedia."
+  },
+  "54":{
+    "species_code":"hotbut1",
+    "xc_common_name":"Hottentot Buttonquail",
+    "ebird_common_name":"Fynbos Buttonquail",
+    "xc_scientific_name":"Turnix hottentottus",
+    "ebird_scientific_name":"Turnix hottentottus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Fynbos_buttonquail",
+    "rationale":"Scientific names match exactly."
+  },
+  "55":{
+    "species_code":"bknsti2",
+    "xc_common_name":"White-backed Stilt",
+    "ebird_common_name":"Black-necked Stilt (White-backed)",
+    "xc_scientific_name":"Himantopus melanurus",
+    "ebird_scientific_name":"Himantopus mexicanus melanurus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-backed_stilt",
+    "rationale":"Connected in Wikipedia: \"The AOS considers it a subspecies of the black-necked stilt\"."
+  },
+  "56":{
+    "species_code":"pielap1",
+    "xc_common_name":"Pied Plover",
+    "ebird_common_name":"Pied Lapwing",
+    "xc_scientific_name":"Hoploxypterus cayanus",
+    "ebird_scientific_name":"Vanellus cayanus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Pied_plover",
+    "rationale":"Connected in Wikipedia."
+  },
+  "57":{
+    "species_code":"whimbr3",
+    "xc_common_name":"Hudsonian Whimbrel",
+    "ebird_common_name":"Whimbrel (Hudsonian)",
+    "xc_scientific_name":"Numenius hudsonicus",
+    "ebird_scientific_name":"Numenius phaeopus hudsonicus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "58":{
+    "species_code":"veggul1",
+    "xc_common_name":"Vega Gull",
+    "ebird_common_name":"Herring Gull (Vega)",
+    "xc_scientific_name":"Larus vegae",
+    "ebird_scientific_name":"Larus argentatus vegae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Vega_gull",
+    "rationale":"Connected in Wikipedia."
+  },
+  "59":{
+    "species_code":"gubter3",
+    "xc_common_name":"Australian Tern",
+    "ebird_common_name":"Gull-billed Tern (Australian)",
+    "xc_scientific_name":"Gelochelidon macrotarsa",
+    "ebird_scientific_name":"Gelochelidon nilotica macrotarsa",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Australian_tern",
+    "rationale":"Connected in Wikipedia."
+  },
+  "60":{
+    "species_code":"santer2",
+    "xc_common_name":"Cabot's Tern",
+    "ebird_common_name":"Sandwich Tern (Cabot's)",
+    "xc_scientific_name":"Thalasseus acuflavidus",
+    "ebird_scientific_name":"Thalasseus sandvicensis acuflavidus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Cabot%27s_tern",
+    "rationale":"Connected in Wikipedia: \"Cabot's tern (Thalasseus acuflavidus) is a tern in the family Laridae formerly considered as a subspecies of the Sandwich tern.\"."
+  },
+  "61":{
+    "species_code":"yenalb3",
+    "xc_common_name":"Indian Yellow-nosed Albatross",
+    "ebird_common_name":"Yellow-nosed Albatross (Indian)",
+    "xc_scientific_name":"Thalassarche carteri",
+    "ebird_scientific_name":"Thalassarche chlororhynchos carteri",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "62":{
+    "species_code":"feapet2",
+    "xc_common_name":"Desertas Petrel",
+    "ebird_common_name":"Fea's Petrel (Desertas)",
+    "xc_scientific_name":"Pterodroma deserta",
+    "ebird_scientific_name":"Pterodroma feae deserta",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Desertas_petrel",
+    "rationale":"Connected in Wikipedia: \"... while others consider it a subspecies of the Fea's petrel.\"."
+  },
+  "63":{
+    "species_code":"bkcpet2",
+    "xc_common_name":"Jamaican Petrel",
+    "ebird_common_name":"Black-capped Petrel (Jamaican)",
+    "xc_scientific_name":"Pterodroma caribbaea",
+    "ebird_scientific_name":"Pterodroma hasitata caribbaea",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Jamaican_petrel",
+    "rationale":"Connected in Wikipedia: \"It is related to the black-capped petrel P. hasitata.\"."
+  },
+  "64":{
+    "species_code":"lshpet1",
+    "xc_common_name":"St. Helena Petrel",
+    "ebird_common_name":"Large St. Helena Petrel",
+    "xc_scientific_name":"Pseudobulweria rupinarum",
+    "ebird_scientific_name":"Pterodroma rupinarum",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Saint_Helena_petrel",
+    "rationale":"Connected in Wikipedia."
+  },
+  "65":{
+    "species_code":"scoshe1",
+    "xc_common_name":"Scopoli's Shearwater",
+    "ebird_common_name":"Cory's Shearwater (Scopoli's)",
+    "xc_scientific_name":"Calonectris diomedea",
+    "ebird_scientific_name":"Calonectris diomedea diomedea",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Scopoli%27s_shearwater",
+    "rationale":"Connected in Wikipedia: \"It was formerly considered to be conspecific with Cory's shearwater.\"."
+  },
+  "66":{
+    "species_code":"corshe1",
+    "xc_common_name":"Cory's Shearwater",
+    "ebird_common_name":"Cory's Shearwater (borealis)",
+    "xc_scientific_name":"Calonectris borealis",
+    "ebird_scientific_name":"Calonectris diomedea borealis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Cory%27s_shearwater",
+    "rationale":"Connected in Wikipedia: \"Scopoli's shearwater and Cory's shearwater were previously considered as conspecific. They formed the Cory's shearwater complex (Calonectris diomedea). Based on the lack of hybridization and differences in mitochondrial DNA, morphology and vocalization, the complex was split into two separate species. The English name \"Cory's shearwater\" was transferred to Calonectris borealis while what was previously the nominate subspecies became Scopoli's shearwater (Calonectris diomedea)\"."
+  },
+  "67":{
+    "species_code":"grecor4",
+    "xc_common_name":"White-breasted Cormorant",
+    "ebird_common_name":"Great Cormorant (White-breasted)",
+    "xc_scientific_name":"Phalacrocorax lucidus",
+    "ebird_scientific_name":"Phalacrocorax carbo lucidus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-breasted_cormorant",
+    "rationale":"Connected in Wikipedia: \"The white-breasted cormorant (Phalacrocorax lucidus) is much like the widespread great cormorant and if not a regional variant of the same species, is at least very closely related.\"."
+  },
+  "68":{
+    "species_code":"impcor1",
+    "xc_common_name":"Imperial Shag",
+    "ebird_common_name":"Imperial Cormorant",
+    "xc_scientific_name":"Leucocarbo atriceps",
+    "ebird_scientific_name":"Leucocarbo atriceps",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Imperial_shag",
+    "rationale":"Scientific names match exactly."
+  },
+  "69":{
+    "species_code":"brosha1",
+    "xc_common_name":"Otago Shag",
+    "ebird_common_name":"Stewart Island Shag",
+    "xc_scientific_name":"Leucocarbo chalconotus",
+    "ebird_scientific_name":"Leucocarbo chalconotus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Otago_shag",
+    "rationale":"Scientific names match exactly."
+  },
+  "70":{
+    "species_code":"stisha2",
+    "xc_common_name":"Foveaux Shag",
+    "ebird_common_name":"Stewart Island Shag (Foveaux)",
+    "xc_scientific_name":"Leucocarbo stewarti",
+    "ebird_scientific_name":"Leucocarbo chalconotus stewarti",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Otago_shag",
+    "rationale":"Connected in Wikipedia: \"The Otago shag, (Leucocarbo chalconotus), together with the Foveaux shag formerly known as the Stewart Island shag and in its dark phase as the bronze shag, is a species of shag now found only in coastal Otago, New Zealand.\"."
+  },
+  "71":{
+    "species_code":"chisha1",
+    "xc_common_name":"Chatham Shag",
+    "ebird_common_name":"Chatham Islands Shag",
+    "xc_scientific_name":"Leucocarbo onslowi",
+    "ebird_scientific_name":"Leucocarbo onslowi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Chatham_shag",
+    "rationale":"Scientific names match exactly."
+  },
+  "72":{
+    "species_code":"caisha2",
+    "xc_common_name":"Campbell Shag",
+    "ebird_common_name":"Campbell Islands Shag",
+    "xc_scientific_name":"Leucocarbo campbelli",
+    "ebird_scientific_name":"Leucocarbo campbelli",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Campbell_shag",
+    "rationale":"Scientific names match exactly."
+  },
+  "73":{
+    "species_code":"auisha1",
+    "xc_common_name":"Auckland Shag",
+    "ebird_common_name":"Auckland Islands Shag",
+    "xc_scientific_name":"Leucocarbo colensoi",
+    "ebird_scientific_name":"Leucocarbo colensoi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Auckland_shag",
+    "rationale":"Scientific names match exactly."
+  },
+  "74":{
+    "species_code":"boisha1",
+    "xc_common_name":"Bounty Shag",
+    "ebird_common_name":"Bounty Islands Shag",
+    "xc_scientific_name":"Leucocarbo ranfurlyi",
+    "ebird_scientific_name":"Leucocarbo ranfurlyi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Bounty_shag",
+    "rationale":"Scientific names match exactly."
+  },
+  "75":{
+    "species_code":"strher3",
+    "xc_common_name":"Lava Heron",
+    "ebird_common_name":"Striated Heron (Galapagos)",
+    "xc_scientific_name":"Butorides sundevalli",
+    "ebird_scientific_name":"Butorides striata sundevalli",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Lava_heron",
+    "rationale":"Scientific names are synonyms according to Wikipedia article."
+  },
+  "76":{
+    "species_code":"categr2",
+    "xc_common_name":"Eastern Cattle Egret",
+    "ebird_common_name":"Cattle Egret (Eastern)",
+    "xc_scientific_name":"Bubulcus coromandus",
+    "ebird_scientific_name":"Bubulcus ibis coromandus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "77":{
+    "species_code":"litegr2",
+    "xc_common_name":"Dimorphic Egret",
+    "ebird_common_name":"Little Egret (Dimorphic)",
+    "xc_scientific_name":"Egretta dimorpha",
+    "ebird_scientific_name":"Egretta garzetta dimorpha",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Dimorphic_egret",
+    "rationale":"Connected in Wikipedia: \"The dimorphic egret is sometimes considered as a subspecies of [...] the little egret (Egretta garzetta)\"."
+  },
+  "78":{
+    "species_code":"osprey4",
+    "xc_common_name":"Eastern Osprey",
+    "ebird_common_name":"Osprey (Australasian)",
+    "xc_scientific_name":"Pandion cristatus",
+    "ebird_scientific_name":"Pandion haliaetus cristatus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Eastern_osprey",
+    "rationale":"Connected in Wikipedia: \"They live in Oceania at coastal regions of the Australian continent\"."
+  },
+  "79":{
+    "species_code":"hobkit2",
+    "xc_common_name":"Cuban Kite",
+    "ebird_common_name":"Hook-billed Kite (Cuban)",
+    "xc_scientific_name":"Chondrohierax wilsonii",
+    "ebird_scientific_name":"Chondrohierax uncinatus wilsonii",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Cuban_kite",
+    "rationale":"Connected in Wikipedia: \"The Clements Checklist and the AOU consider it as subspecies of the hook-billed kite.\"."
+  },
+  "80":{
+    "species_code":"barhob1",
+    "xc_common_name":"Barred Honey Buzzard",
+    "ebird_common_name":"Sulawesi Honey-buzzard",
+    "xc_scientific_name":"Pernis celebensis",
+    "ebird_scientific_name":"Pernis celebensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Barred_honey_buzzard",
+    "rationale":"Scientific names match exactly."
+  },
+  "81":{
+    "species_code":"barhob2",
+    "xc_common_name":"Philippine Honey Buzzard",
+    "ebird_common_name":"Philippine Honey-buzzard",
+    "xc_scientific_name":"Pernis steerei",
+    "ebird_scientific_name":"Pernis steerei",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "82":{
+    "species_code":"coseag1",
+    "xc_common_name":"Congo Serpent Eagle",
+    "ebird_common_name":"Congo Serpent-Eagle",
+    "xc_scientific_name":"Circaetus spectabilis",
+    "ebird_scientific_name":"Dryotriorchis spectabilis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "83":{
+    "species_code":"shshaw3",
+    "xc_common_name":"White-breasted Hawk",
+    "ebird_common_name":"Sharp-shinned Hawk (White-breasted)",
+    "xc_scientific_name":"Accipiter chionogaster",
+    "ebird_scientific_name":"Accipiter striatus chionogaster",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-breasted_hawk",
+    "rationale":"Connected in Wikipedia: \"It is usually considered a subspecies of the sharp-shinned hawk by most taxonomists\"."
+  },
+  "84":{
+    "species_code":"shshaw4",
+    "xc_common_name":"Plain-breasted Hawk",
+    "ebird_common_name":"Sharp-shinned Hawk (Plain-breasted)",
+    "xc_scientific_name":"Accipiter ventralis",
+    "ebird_scientific_name":"Accipiter striatus ventralis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Plain-breasted_hawk",
+    "rationale":"Connected in Wikipedia: \"It is usually considered a subspecies of the sharp-shinned hawk by most taxonomists\"."
+  },
+  "85":{
+    "species_code":"shshaw5",
+    "xc_common_name":"Rufous-thighed Hawk",
+    "ebird_common_name":"Sharp-shinned Hawk (Rufous-thighed)",
+    "xc_scientific_name":"Accipiter erythronemius",
+    "ebird_scientific_name":"Accipiter striatus erythronemius",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Rufous-thighed_hawk",
+    "rationale":"Connected in Wikipedia: \"It is usually considered a subspecies of the sharp-shinned hawk by most taxonomists\"."
+  },
+  "86":{
+    "species_code":"bichaw4",
+    "xc_common_name":"Chilean Hawk",
+    "ebird_common_name":"Bicolored Hawk (Chilean)",
+    "xc_scientific_name":"Accipiter chilensis",
+    "ebird_scientific_name":"Accipiter bicolor chilensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Chilean_hawk",
+    "rationale":"Connected in Wikipedia: \"It is sometimes considered to be a subspecies of its northern relative the bicolored hawk\"."
+  },
+  "87":{
+    "species_code":"blkkit3",
+    "xc_common_name":"Yellow-billed Kite",
+    "ebird_common_name":"Black Kite (Yellow-billed)",
+    "xc_scientific_name":"Milvus aegyptius",
+    "ebird_scientific_name":"Milvus migrans aegyptius\/parasitus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Yellow-billed_kite",
+    "rationale":"Connected in Wikipedia: \"The yellow-billed kite (Milvus aegyptius) is the Afrotropic counterpart of the black kite (Milvus migrans), of which it is most often considered a subspecies.\"."
+  },
+  "88":{
+    "species_code":"lesowl1",
+    "xc_common_name":"Lesser Sooty Owl",
+    "ebird_common_name":"Sooty Owl (Lesser)",
+    "xc_scientific_name":"Tyto multipunctata",
+    "ebird_scientific_name":"Tyto tenebricosa multipunctata",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "89":{
+    "species_code":"barowl28",
+    "xc_common_name":"American Barn Owl",
+    "ebird_common_name":"Barn Owl (White-winged)",
+    "xc_scientific_name":"Tyto furcata",
+    "ebird_scientific_name":"Tyto alba furcata",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/American_barn_owl",
+    "rationale":"Scientific names match exactly."
+  },
+  "90":{
+    "species_code":"barowl7",
+    "xc_common_name":"Eastern Barn Owl",
+    "ebird_common_name":"Barn Owl (Eastern)",
+    "xc_scientific_name":"Tyto javanica",
+    "ebird_scientific_name":"Tyto alba [javanica Group]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "91":{
+    "species_code":"eursco3",
+    "xc_common_name":"Cyprus Scops Owl",
+    "ebird_common_name":"Cyprus Scops-Owl",
+    "xc_scientific_name":"Otus cyprius",
+    "ebird_scientific_name":"Otus cyprius",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "92":{
+    "species_code":"sulsco3",
+    "xc_common_name":"Sula Scops Owl",
+    "ebird_common_name":"Sula Scops-Owl",
+    "xc_scientific_name":"Otus sulaensis",
+    "ebird_scientific_name":"Otus sulaensis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "93":{
+    "species_code":"reusco1",
+    "xc_common_name":"Reunion Owl",
+    "ebird_common_name":"Reunion Scops-Owl",
+    "xc_scientific_name":"Mascarenotus grucheti",
+    "ebird_scientific_name":"Otus grucheti",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/R%C3%A9union_owl",
+    "rationale":"Connected in Wikipedia."
+  },
+  "94":{
+    "species_code":"mausco1",
+    "xc_common_name":"Mauritius Owl",
+    "ebird_common_name":"Mauritius Scops-Owl",
+    "xc_scientific_name":"Mascarenotus sauzieri",
+    "ebird_scientific_name":"Otus sauzieri",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Mauritius_owl",
+    "rationale":"Connected in Wikipedia: \"The extinct Mauritius owl (Otus sauzieri), also known as Mauritius scops owl, Mauritius lizard owl, Commerson's owl, Sauzier's owl, or Newton's owl, was endemic to the Mascarene island of Mauritius.\"."
+  },
+  "95":{
+    "species_code":"rodsco1",
+    "xc_common_name":"Rodrigues Owl",
+    "ebird_common_name":"Rodrigues Scops-Owl",
+    "xc_scientific_name":"Mascarenotus murivorus",
+    "ebird_scientific_name":"Otus murivorus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Rodrigues_owl",
+    "rationale":"Connected in Wikipedia."
+  },
+  "96":{
+    "species_code":"versco5",
+    "xc_common_name":"Vermiculated Screech Owl",
+    "ebird_common_name":"Middle American Screech-Owl (Vermiculated)",
+    "xc_scientific_name":"Megascops vermiculatus",
+    "ebird_scientific_name":"Megascops guatemalae vermiculatus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Vermiculated_screech_owl",
+    "rationale":"Connected in Wikipedia: \"the Clements taxonomy treat it as a subspecies of the Middle American screech owl (M. guatemalae)\"."
+  },
+  "97":{
+    "species_code":"grhowl2",
+    "xc_common_name":"Lesser Horned Owl",
+    "ebird_common_name":"Great Horned Owl (Magellanic)",
+    "xc_scientific_name":"Bubo magellanicus",
+    "ebird_scientific_name":"Bubo virginianus magellanicus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Lesser_horned_owl",
+    "rationale":"Connected in Wikipedia: \"The lesser horned owl or Magellanic horned owl (Bubo magellanicus) is a large owl of the genus Bubo found in southern South America, extending north to the central Andes. It has traditionally been classified as a subspecies of the great horned owl (Bubo virginianus),\"."
+  },
+  "98":{
+    "species_code":"blfowl1",
+    "xc_common_name":"Blakiston's Fish Owl",
+    "ebird_common_name":"Blakiston's Fish-Owl",
+    "xc_scientific_name":"Bubo blakistoni",
+    "ebird_scientific_name":"Ketupa blakistoni",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "99":{
+    "species_code":"norpyo3",
+    "xc_common_name":"Baja Pygmy Owl",
+    "ebird_common_name":"Northern Pygmy-Owl (Cape)",
+    "xc_scientific_name":"Glaucidium hoskinsii",
+    "ebird_scientific_name":"Glaucidium gnoma hoskinsii",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Baja_pygmy_owl",
+    "rationale":"Connected in Wikipedia: \"The Baja pygmy owl (Glaucidium hoskinsii) or cape pygmy owl, is a subspecies of northern pygmy owl\"."
+  },
+  "100":{
+    "species_code":"norpyo4",
+    "xc_common_name":"Guatemalan Pygmy Owl",
+    "ebird_common_name":"Northern Pygmy-Owl (Guatemalan)",
+    "xc_scientific_name":"Glaucidium cobanense",
+    "ebird_scientific_name":"Glaucidium gnoma cobanense",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Guatemalan_pygmy_owl",
+    "rationale":"Connected in Wikipedia: \"However, some taxonomic systems consider it to be a subspecies of northern pygmy owl (G. gnoma)\"."
+  },
+  "101":{
+    "species_code":"viowoo3",
+    "xc_common_name":"Grant's Wood Hoopoe",
+    "ebird_common_name":"Violet Woodhoopoe (Grant's)",
+    "xc_scientific_name":"Phoeniculus granti",
+    "ebird_scientific_name":"Phoeniculus damarensis granti",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Violet_wood_hoopoe",
+    "rationale":"Connected in Wikipedia."
+  },
+  "102":{
+    "species_code":"scagrr1",
+    "xc_common_name":"Scaly Ground Roller",
+    "ebird_common_name":"Scaly Ground-Roller",
+    "xc_scientific_name":"Geobiastes squamiger",
+    "ebird_scientific_name":"Brachypteracias squamiger",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "103":{
+    "species_code":"bubpak1",
+    "xc_common_name":"Buff-breasted Paradise Kingfisher",
+    "ebird_common_name":"Buff-breasted Paradise-Kingfisher",
+    "xc_scientific_name":"Tanysiptera sylvia",
+    "ebird_scientific_name":"Tanysiptera sylvia",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "104":{
+    "species_code":"norsik1",
+    "xc_common_name":"Northern Silvery Kingfisher",
+    "ebird_common_name":"Northern Silvery-Kingfisher",
+    "xc_scientific_name":"Ceyx flumenicola",
+    "ebird_scientific_name":"Ceyx flumenicola",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "105":{
+    "species_code":"spbpuf3",
+    "xc_common_name":"Chaco Puffbird",
+    "ebird_common_name":"Spot-backed Puffbird (Chaco)",
+    "xc_scientific_name":"Nystalus striatipectus",
+    "ebird_scientific_name":"Nystalus maculatus striatipectus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Chaco_puffbird",
+    "rationale":"Connected in Wikipedia: \"treat it as the junior subspecies of spot-backed puffbird\"."
+  },
+  "106":{
+    "species_code":"rutpuf3",
+    "xc_common_name":"Two-banded Puffbird",
+    "ebird_common_name":"Russet-throated Puffbird (Two-banded)",
+    "xc_scientific_name":"Hypnelus bicinctus",
+    "ebird_scientific_name":"Hypnelus ruficollis bicinctus\/stoicus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Two-banded_puffbird",
+    "rationale":"Connected in Wikipedia: \"However, the Clements taxonomy treats the two as subspecies of the russet-throated puffbird\"."
+  },
+  "107":{
+    "species_code":"sirbar1",
+    "xc_common_name":"Sira Barbet",
+    "ebird_common_name":"Scarlet-banded Barbet (Sira)",
+    "xc_scientific_name":"Capito fitzpatricki",
+    "ebird_scientific_name":"Capito wallacei fitzpatricki",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Sira_barbet",
+    "rationale":"Connected in Wikipedia: \"the Clements taxonomy list it as a subspecies of scarlet-banded barbet\"."
+  },
+  "108":{
+    "species_code":"emetou3",
+    "xc_common_name":"Wagler's Toucanet",
+    "ebird_common_name":"Northern Emerald-Toucanet (Wagler's)",
+    "xc_scientific_name":"Aulacorhynchus wagleri",
+    "ebird_scientific_name":"Aulacorhynchus prasinus wagleri",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Wagler%27s_toucanet",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "109":{
+    "species_code":"emetou4",
+    "xc_common_name":"Blue-throated Toucanet",
+    "ebird_common_name":"Northern Emerald-Toucanet (Blue-throated)",
+    "xc_scientific_name":"Aulacorhynchus caeruleogularis",
+    "ebird_scientific_name":"Aulacorhynchus prasinus caeruleogularis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Blue-throated_toucanet",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "110":{
+    "species_code":"emetou8",
+    "xc_common_name":"Black-throated Toucanet",
+    "ebird_common_name":"Southern Emerald-Toucanet (Black-throated)",
+    "xc_scientific_name":"Aulacorhynchus atrogularis",
+    "ebird_scientific_name":"Aulacorhynchus albivitta atrogularis\/dimidiatus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Black-throated_toucanet",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "111":{
+    "species_code":"ivbara3",
+    "xc_common_name":"Brown-mandibled Aracari",
+    "ebird_common_name":"Ivory-billed Aracari (Brown-billed)",
+    "xc_scientific_name":"Pteroglossus mariae",
+    "ebird_scientific_name":"Pteroglossus azara mariae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Brown-mandibled_aracari",
+    "rationale":"Connected in Wikipedia: \"The brown-mandibled aracari is still considered to be a subspecies of the ivory-billed aracari by some authorities\"."
+  },
+  "112":{
+    "species_code":"colara4",
+    "xc_common_name":"Stripe-billed Aracari",
+    "ebird_common_name":"Collared Aracari (Stripe-billed)",
+    "xc_scientific_name":"Pteroglossus sanguineus",
+    "ebird_scientific_name":"Pteroglossus torquatus sanguineus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Stripe-billed_aracari",
+    "rationale":"Connected in Wikipedia: \"The stripe-billed aracari is considered to be a subspecies of the collared aracari by some authorities.\"."
+  },
+  "113":{
+    "species_code":"colara5",
+    "xc_common_name":"Pale-mandibled Aracari",
+    "ebird_common_name":"Collared Aracari (Pale-mandibled)",
+    "xc_scientific_name":"Pteroglossus erythropygius",
+    "ebird_scientific_name":"Pteroglossus torquatus erythropygius",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Pale-mandibled_aracari",
+    "rationale":"Connected in Wikipedia: \"The pale-mandibled aracari is considered to be a subspecies of the collared aracari by some authorities\"."
+  },
+  "114":{
+    "species_code":"chbtou3",
+    "xc_common_name":"Citron-throated Toucan",
+    "ebird_common_name":"Channel-billed Toucan (Citron-throated)",
+    "xc_scientific_name":"Ramphastos citreolaemus",
+    "ebird_scientific_name":"Ramphastos vitellinus citreolaemus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Citron-throated_toucan",
+    "rationale":"Connected in Wikipedia: \"The citron-throated toucan was formerly classified as a subspecies of the channel-billed toucan and some authorities still recognize it as such.\"."
+  },
+  "115":{
+    "species_code":"gospic3",
+    "xc_common_name":"Black-dotted Piculet",
+    "ebird_common_name":"Scaled Piculet (Black-dotted)",
+    "xc_scientific_name":"Picumnus nigropunctatus",
+    "ebird_scientific_name":"Picumnus squamulatus obsoletus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Black-dotted_piculet",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "116":{
+    "species_code":"ochpic1",
+    "xc_common_name":"Tawny Piculet",
+    "ebird_common_name":"Ochraceous Piculet",
+    "xc_scientific_name":"Picumnus fulvescens",
+    "ebird_scientific_name":"Picumnus limae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Ochraceous_piculet",
+    "rationale":"Connected in Wikipedia."
+  },
+  "117":{
+    "species_code":"gofwoo2",
+    "xc_common_name":"Velasquez's Woodpecker",
+    "ebird_common_name":"Golden-fronted Woodpecker (Velasquez's)",
+    "xc_scientific_name":"Melanerpes santacruzi",
+    "ebird_scientific_name":"Melanerpes aurifrons [santacruzi Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Golden-fronted_woodpecker",
+    "rationale":"Connected in Wikipedia."
+  },
+  "118":{
+    "species_code":"goowoo3",
+    "xc_common_name":"Bronze-winged Woodpecker",
+    "ebird_common_name":"Golden-olive Woodpecker (Bronze-winged)",
+    "xc_scientific_name":"Colaptes aeruginosus",
+    "ebird_scientific_name":"Colaptes rubiginosus aeruginosus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Bronze-winged_woodpecker",
+    "rationale":"Connected in Wikipedia: \"treat it as a subspecies of the golden-olive woodpecker.\"."
+  },
+  "119":{
+    "species_code":"grypar1",
+    "xc_common_name":"Timneh Parrot",
+    "ebird_common_name":"Gray Parrot (Timneh)",
+    "xc_scientific_name":"Psittacus timneh",
+    "ebird_scientific_name":"Psittacus erithacus timneh\/princeps",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Timneh_parrot",
+    "rationale":"Connected in Wikipedia."
+  },
+  "120":{
+    "species_code":"spfpar2",
+    "xc_common_name":"White-capped Parrot",
+    "ebird_common_name":"Speckle-faced Parrot (White-capped)",
+    "xc_scientific_name":"Pionus seniloides",
+    "ebird_scientific_name":"Pionus tumultuosus seniloides",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-capped_parrot",
+    "rationale":"Connected in Wikipedia: \"Before the split the common name of the combined taxa was \"speckle-faced parrot\"\"."
+  },
+  "121":{
+    "species_code":"relpar4",
+    "xc_common_name":"Diademed Amazon",
+    "ebird_common_name":"Red-lored Parrot (Diademed)",
+    "xc_scientific_name":"Amazona diadema",
+    "ebird_scientific_name":"Amazona autumnalis diadema",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Diademed_amazon",
+    "rationale":"Connected in Wikipedia: \"formerly considered conspecific with the red-lored amazon\"."
+  },
+  "122":{
+    "species_code":"yehpar2",
+    "xc_common_name":"Tres Marias Amazon",
+    "ebird_common_name":"Yellow-headed Parrot (Tres Marias Is.)",
+    "xc_scientific_name":"Amazona tresmariae",
+    "ebird_scientific_name":"Amazona oratrix tresmariae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Tres_Mar%C3%ADas_amazon",
+    "rationale":"Connected in Wikipedia: \"He considered it as a subspecies of the yellow-headed amazon\"."
+  },
+  "123":{
+    "species_code":"meapar1",
+    "xc_common_name":"Northern Mealy Amazon",
+    "ebird_common_name":"Mealy Parrot (Northern)",
+    "xc_scientific_name":"Amazona guatemalae",
+    "ebird_scientific_name":"Amazona farinosa guatemalae\/virenticeps",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Northern_mealy_amazon",
+    "rationale":"Connected in Wikipedia."
+  },
+  "124":{
+    "species_code":"buwpar3",
+    "xc_common_name":"Blue-winged Parrotlet",
+    "ebird_common_name":"Cobalt-rumped Parrotlet",
+    "xc_scientific_name":"Forpus xanthopterygius",
+    "ebird_scientific_name":"Forpus xanthopterygius",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Cobalt-rumped_parrotlet",
+    "rationale":"Scientific names match exactly."
+  },
+  "125":{
+    "species_code":"buwpar2",
+    "xc_common_name":"Large-billed Parrotlet",
+    "ebird_common_name":"Riparian Parrotlet",
+    "xc_scientific_name":"Forpus crassirostris",
+    "ebird_scientific_name":"Forpus crassirostris",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Riparian_parrotlet",
+    "rationale":"Scientific names match exactly."
+  },
+  "126":{
+    "species_code":"paipar6",
+    "xc_common_name":"Venezuelan Parakeet",
+    "ebird_common_name":"Painted Parakeet (Venezuelan)",
+    "xc_scientific_name":"Pyrrhura emma",
+    "ebird_scientific_name":"Pyrrhura picta emma",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Venezuelan_parakeet",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "127":{
+    "species_code":"grnpar3",
+    "xc_common_name":"Red-throated Parakeet",
+    "ebird_common_name":"Green Parakeet (Red-throated)",
+    "xc_scientific_name":"Psittacara rubritorquis",
+    "ebird_scientific_name":"Psittacara holochlorus rubritorquis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Red-throated_parakeet",
+    "rationale":"Connected in Wikipedia: \"Some taxonomists consider it to be a subspecies of the green parakeet.\"."
+  },
+  "128":{
+    "species_code":"scfpar3",
+    "xc_common_name":"Cordilleran Parakeet",
+    "ebird_common_name":"Scarlet-fronted Parakeet (Cordilleran)",
+    "xc_scientific_name":"Psittacara frontatus",
+    "ebird_scientific_name":"Psittacara wagleri frontatus\/minor",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Cordilleran_parakeet",
+    "rationale":"Connected in Wikipedia: \"It has historically been considered conspecific with the scarlet-fronted parakeet,\"."
+  },
+  "129":{
+    "species_code":"magpar1",
+    "xc_common_name":"Mascarene Grey Parakeet",
+    "ebird_common_name":"Mauritius Gray Parrot",
+    "xc_scientific_name":"Psittacula bensoni",
+    "ebird_scientific_name":"Lophopsittacus bensoni",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Mascarene_grey_parakeet",
+    "rationale":"Scientific names are synonyms according to Wikipedia article"
+  },
+  "130":{
+    "species_code":"gropar2",
+    "xc_common_name":"Western Ground Parrot",
+    "ebird_common_name":"Ground Parrot (Western)",
+    "xc_scientific_name":"Pezoporus flaviventris",
+    "ebird_scientific_name":"Pezoporus wallicus flaviventris",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "131":{
+    "species_code":"yaglor2",
+    "xc_common_name":"Citrine Lorikeet",
+    "ebird_common_name":"Yellow-cheeked Lorikeet",
+    "xc_scientific_name":"Trichoglossus flavoviridis",
+    "ebird_scientific_name":"Saudareos meyeri",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Citrine_lorikeet",
+    "rationale":"Connected in Wikipedia: \"key' has been split into some species, incl 'value'\"."
+  },
+  "132":{
+    "species_code":"rebwoo4",
+    "xc_common_name":"Brigida's Woodcreeper",
+    "ebird_common_name":"Uniform Woodcreeper (Brigida's)",
+    "xc_scientific_name":"Hylexetastes brigidai",
+    "ebird_scientific_name":"Hylexetastes uniformis brigidai",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Brigida%27s_woodcreeper",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "133":{
+    "species_code":"palhor4",
+    "xc_common_name":"Pacific Hornero",
+    "ebird_common_name":"Pale-legged Hornero (Pacific)",
+    "xc_scientific_name":"Furnarius cinnamomeus",
+    "ebird_scientific_name":"Furnarius leucopus cinnamomeus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Pale-legged_hornero",
+    "rationale":"Connected in Wikipedia."
+  },
+  "134":{
+    "species_code":"palhor5",
+    "xc_common_name":"Caribbean Hornero",
+    "ebird_common_name":"Pale-legged Hornero (Caribbean)",
+    "xc_scientific_name":"Furnarius longirostris",
+    "ebird_scientific_name":"Furnarius leucopus longirostris\/endoecus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Pale-legged_hornero",
+    "rationale":"Connected in Wikipedia."
+  },
+  "135":{
+    "species_code":"strwoo5",
+    "xc_common_name":"Western Woodhaunter",
+    "ebird_common_name":"Striped Woodhaunter (Central American)",
+    "xc_scientific_name":"Automolus virgatus",
+    "ebird_scientific_name":"Automolus subulatus [virgatus Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Western_woodhaunter",
+    "rationale":"from scientific names sound like they're in the same family?"
+  },
+  "136":{
+    "species_code":"ruftho3",
+    "xc_common_name":"Plain Thornbird",
+    "ebird_common_name":"Rufous-fronted Thornbird (Plain)",
+    "xc_scientific_name":"Phacellodomus inornatus",
+    "ebird_scientific_name":"Phacellodomus rufifrons inornatus\/castilloi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Rufous-fronted_thornbird",
+    "rationale":"Connected in Wikipedia."
+  },
+  "137":{
+    "species_code":"whfant4",
+    "xc_common_name":"Northern White-fringed Antwren",
+    "ebird_common_name":"White-fringed Antwren (Northern)",
+    "xc_scientific_name":"Formicivora intermedia",
+    "ebird_scientific_name":"Formicivora grisea [intermedia Group]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "138":{
+    "species_code":"eaafie1",
+    "xc_common_name":"White-backed Fire-eye",
+    "ebird_common_name":"East Amazonian Fire-eye",
+    "xc_scientific_name":"Pyriglena leuconota",
+    "ebird_scientific_name":"Pyriglena leuconota",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-backed_fire-eye",
+    "rationale":"Scientific names match exactly."
+  },
+  "139":{
+    "species_code":"colcre2",
+    "xc_common_name":"Double-collared Crescentchest",
+    "ebird_common_name":"Collared Crescentchest (Double-collared)",
+    "xc_scientific_name":"Melanopareia bitorquata",
+    "ebird_scientific_name":"Melanopareia torquata bitorquata",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Double-collared_crescentchest",
+    "rationale":"Connected in Wikipedia: \"and the Clements taxonomy consider it to be a subspecies of collared crescentchest\"."
+  },
+  "140":{
+    "species_code":"roltyr2",
+    "xc_common_name":"White-fronted Tyrannulet",
+    "ebird_common_name":"Rough-legged Tyrannulet (Zeledon's)",
+    "xc_scientific_name":"Phyllomyias zeledoni",
+    "ebird_scientific_name":"Phyllomyias burmeisteri zeledoni",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Rough-legged_tyrannulet",
+    "rationale":"Connected in Wikipedia."
+  },
+  "141":{
+    "species_code":"whcela4",
+    "xc_common_name":"Chilean Elaenia",
+    "ebird_common_name":"White-crested Elaenia (Chilean)",
+    "xc_scientific_name":"Elaenia chilensis",
+    "ebird_scientific_name":"Elaenia albiceps chilensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Chilean_elaenia",
+    "rationale":"Connected in Wikipedia: \"It is sometimes considered a subspecies of the white-crested elaenia.\"."
+  },
+  "142":{
+    "species_code":"moctyr6",
+    "xc_common_name":"Tumbesian Tyrannulet",
+    "ebird_common_name":"Mouse-colored Tyrannulet (Tumbes)",
+    "xc_scientific_name":"Phaeomyias tumbezana",
+    "ebird_scientific_name":"Phaeomyias murina tumbezana\/inflava",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Tumbesian_tyrannulet",
+    "rationale":"Connected in Wikipedia: \"The Tumbesian tyrannulet was formerly considered conspecific with the widespread mouse-colored tyrannulet.\"."
+  },
+  "143":{
+    "species_code":"tacpyt1",
+    "xc_common_name":"Tawny-crowned Pygmy Tyrant",
+    "ebird_common_name":"Rufous-crowned Pygmy-Tyrant",
+    "xc_scientific_name":"Euscarthmus meloryphus",
+    "ebird_scientific_name":"Euscarthmus meloryphus",
+    "wikipedia_url":"",
+    "rationale":"Scientific names match exactly."
+  },
+  "144":{
+    "species_code":"paltyr2",
+    "xc_common_name":"Paltry Tyrannulet",
+    "ebird_common_name":"Guatemalan Tyrannulet",
+    "xc_scientific_name":"Zimmerius vilissimus",
+    "ebird_scientific_name":"Zimmerius vilissimus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Guatemalan_tyrannulet",
+    "rationale":"Scientific names match exactly."
+  },
+  "145":{
+    "species_code":"goftyr4",
+    "xc_common_name":"Loja Tyrannulet",
+    "ebird_common_name":"Peruvian Tyrannulet (Loja)",
+    "xc_scientific_name":"Zimmerius flavidifrons",
+    "ebird_scientific_name":"Zimmerius viridiflavus flavidifrons",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Peruvian_tyrannulet",
+    "rationale":"Connected in Wikipedia."
+  },
+  "146":{
+    "species_code":"vabtyr1",
+    "xc_common_name":"Variegated Bristle Tyrant",
+    "ebird_common_name":"Variegated Bristle-Tyrant",
+    "xc_scientific_name":"Pogonotriccus poecilotis",
+    "ebird_scientific_name":"Phylloscartes poecilotis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "147":{
+    "species_code":"chabrt1",
+    "xc_common_name":"Chapman's Bristle Tyrant",
+    "ebird_common_name":"Chapman's Bristle-Tyrant",
+    "xc_scientific_name":"Pogonotriccus chapmani",
+    "ebird_scientific_name":"Phylloscartes chapmani",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "148":{
+    "species_code":"mfbtyr1",
+    "xc_common_name":"Marble-faced Bristle Tyrant",
+    "ebird_common_name":"Marble-faced Bristle-Tyrant",
+    "xc_scientific_name":"Pogonotriccus ophthalmicus",
+    "ebird_scientific_name":"Phylloscartes ophthalmicus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "149":{
+    "species_code":"spbtyr1",
+    "xc_common_name":"Spectacled Bristle Tyrant",
+    "ebird_common_name":"Spectacled Bristle-Tyrant",
+    "xc_scientific_name":"Pogonotriccus orbitalis",
+    "ebird_scientific_name":"Phylloscartes orbitalis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "150":{
+    "species_code":"vebtyr2",
+    "xc_common_name":"Venezuelan Bristle Tyrant",
+    "ebird_common_name":"Venezuelan Bristle-Tyrant",
+    "xc_scientific_name":"Pogonotriccus venezuelanus",
+    "ebird_scientific_name":"Phylloscartes venezuelanus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "151":{
+    "species_code":"anbtyr1",
+    "xc_common_name":"Antioquia Bristle Tyrant",
+    "ebird_common_name":"Antioquia Bristle-Tyrant",
+    "xc_scientific_name":"Pogonotriccus lanyoni",
+    "ebird_scientific_name":"Phylloscartes lanyoni",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "152":{
+    "species_code":"sobtyr2",
+    "xc_common_name":"Southern Bristle Tyrant",
+    "ebird_common_name":"Southern Bristle-Tyrant",
+    "xc_scientific_name":"Pogonotriccus eximius",
+    "ebird_scientific_name":"Phylloscartes eximius",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "153":{
+    "species_code":"yemfly2",
+    "xc_common_name":"Yellow-margined Flatbill",
+    "ebird_common_name":"Yellow-margined Flycatcher (Yellow-winged)",
+    "xc_scientific_name":"Tolmomyias flavotectus",
+    "ebird_scientific_name":"Tolmomyias assimilis flavotectus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Zimmer%27s_flatbill",
+    "rationale":"Connected in Wikipedia."
+  },
+  "154":{
+    "species_code":"yebfly4",
+    "xc_common_name":"Olive-faced Flatbill",
+    "ebird_common_name":"Yellow-breasted Flycatcher (Olive-faced)",
+    "xc_scientific_name":"Tolmomyias viridiceps",
+    "ebird_scientific_name":"Tolmomyias flaviventris [viridiceps Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Olive-faced_flatbill",
+    "rationale":"Scientific names match exactly."
+  },
+  "155":{
+    "species_code":"tropew2",
+    "xc_common_name":"Tumbes Pewee",
+    "ebird_common_name":"Tropical Pewee (Tumbes)",
+    "xc_scientific_name":"Contopus punensis",
+    "ebird_scientific_name":"Contopus cinereus punensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Tropical_pewee",
+    "rationale":"Connected in Wikipedia."
+  },
+  "156":{
+    "species_code":"verfly1",
+    "xc_common_name":"Scarlet Flycatcher",
+    "ebird_common_name":"Vermilion Flycatcher (Austral)",
+    "xc_scientific_name":"Pyrocephalus rubinus",
+    "ebird_scientific_name":"Pyrocephalus rubinus rubinus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Scarlet_flycatcher",
+    "rationale":"Connected in Wikipedia."
+  },
+  "157":{
+    "species_code":"verfly7",
+    "xc_common_name":"Vermilion Flycatcher",
+    "ebird_common_name":"Vermilion Flycatcher (obscurus Group)",
+    "xc_scientific_name":"Pyrocephalus obscurus",
+    "ebird_scientific_name":"Pyrocephalus rubinus [obscurus Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Vermilion_flycatcher",
+    "rationale":"Connected in Wikipedia: \"The vermilion flycatcher (Pyrocephalus obscurus)\"."
+  },
+  "158":{
+    "species_code":"verfly8",
+    "xc_common_name":"San Cristobal Flycatcher",
+    "ebird_common_name":"Brujo Flycatcher (San Cristobal)",
+    "xc_scientific_name":"Pyrocephalus dubius",
+    "ebird_scientific_name":"Pyrocephalus nanus dubius",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Makira_flycatcher",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "159":{
+    "species_code":"crocht3",
+    "xc_common_name":"Kalinowski's Chat-Tyrant",
+    "ebird_common_name":"Crowned Chat-Tyrant (Kalinowski's)",
+    "xc_scientific_name":"Silvicultrix spodionota",
+    "ebird_scientific_name":"Ochthoeca frontalis spodionota\/boliviana",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Kalinowski%27s_chat-tyrant",
+    "rationale":"Connected in Wikipedia: \"This bird was previously considered to be the subspecies of the crowned chat-tyrant (Silvicultrix frontalis)\"."
+  },
+  "160":{
+    "species_code":"slbcht1",
+    "xc_common_name":"Blackish Chat-Tyrant",
+    "ebird_common_name":"Slaty-backed Chat-Tyrant (Blackish)",
+    "xc_scientific_name":"Ochthoeca nigrita",
+    "ebird_scientific_name":"Ochthoeca cinnamomeiventris nigrita",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Blackish_chat-tyrant",
+    "rationale":"Connected in Wikipedia: \"The species was formerly treated as conspecific with the slaty-backed chat-tyrant (Ochthoeca cinnamomeiventris)\"."
+  },
+  "161":{
+    "species_code":"slbcht3",
+    "xc_common_name":"Maroon-belted Chat-Tyrant",
+    "ebird_common_name":"Slaty-backed Chat-Tyrant (Maroon-belted)",
+    "xc_scientific_name":"Ochthoeca thoracica",
+    "ebird_scientific_name":"Ochthoeca cinnamomeiventris thoracica\/angustifasciata",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Maroon-belted_chat-tyrant",
+    "rationale":"Connected in Wikipedia: \"This bird is often considered to be a subspecies of the slaty-backed chat-tyrant (Ochthoeca cinnamomeiventris).\"."
+  },
+  "162":{
+    "species_code":"swtcot2",
+    "xc_common_name":"Palkachupa Cotinga",
+    "ebird_common_name":"Swallow-tailed Cotinga (Palkachupa)",
+    "xc_scientific_name":"Phibalura boliviana",
+    "ebird_scientific_name":"Phibalura flavirostris boliviana",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Apolo_cotinga",
+    "rationale":"Connected in Wikipedia: \"...described as a subspecies of the swallow-tailed cotinga \"."
+  },
+  "163":{
+    "species_code":"royfly2",
+    "xc_common_name":"Northern Royal Flycatcher",
+    "ebird_common_name":"Royal Flycatcher (Northern)",
+    "xc_scientific_name":"Onychorhynchus mexicanus",
+    "ebird_scientific_name":"Onychorhynchus coronatus mexicanus\/fraterculus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "164":{
+    "species_code":"royfly3",
+    "xc_common_name":"Pacific Royal Flycatcher",
+    "ebird_common_name":"Royal Flycatcher (Pacific)",
+    "xc_scientific_name":"Onychorhynchus occidentalis",
+    "ebird_scientific_name":"Onychorhynchus coronatus occidentalis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "165":{
+    "species_code":"shlcot2",
+    "xc_common_name":"Andean Laniisoma",
+    "ebird_common_name":"Shrike-like Cotinga (Andean)",
+    "xc_scientific_name":"Laniisoma buckleyi",
+    "ebird_scientific_name":"Laniisoma elegans [buckleyi Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Brazilian_laniisoma",
+    "rationale":"Connected in Wikipedia: \"The Brazilian laniisoma (Laniisoma elegans), also known as the shrike-like laniisoma, the shrike-like cotinga [...] was formerly considered as conspecific with the Andean laniisoma (Laniisoma buckleyi)\"."
+  },
+  "166":{
+    "species_code":"gnbbec2",
+    "xc_common_name":"Yellow-cheeked Becard",
+    "ebird_common_name":"Green-backed Becard (Yellow-cheeked)",
+    "xc_scientific_name":"Pachyramphus xanthogenys",
+    "ebird_scientific_name":"Pachyramphus viridis xanthogenys\/peruanus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Yellow-cheeked_becard",
+    "rationale":"Connected in Wikipedia: \"It is treated variously as a distinct species or as a subspecies of the green-backed becard,\"."
+  },
+  "167":{
+    "species_code":"soomel1",
+    "xc_common_name":"Sooty Honeyeater",
+    "ebird_common_name":"Sooty Melidectes",
+    "xc_scientific_name":"Melionyx fuscus",
+    "ebird_scientific_name":"Melidectes fuscus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Sooty_honeyeater",
+    "rationale":"Connected in Wikipedia."
+  },
+  "168":{
+    "species_code":"lobmel1",
+    "xc_common_name":"Long-bearded Honeyeater",
+    "ebird_common_name":"Long-bearded Melidectes",
+    "xc_scientific_name":"Melionyx princeps",
+    "ebird_scientific_name":"Melidectes princeps",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Long-bearded_honeyeater",
+    "rationale":"Connected in Wikipedia."
+  },
+  "169":{
+    "species_code":"shbmel1",
+    "xc_common_name":"Short-bearded Honeyeater",
+    "ebird_common_name":"Short-bearded Melidectes",
+    "xc_scientific_name":"Melionyx nouhuysi",
+    "ebird_scientific_name":"Melidectes nouhuysi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Short-bearded_honeyeater",
+    "rationale":"Connected in Wikipedia."
+  },
+  "170":{
+    "species_code":"nehhon1",
+    "xc_common_name":"White-bellied Honeyeater",
+    "ebird_common_name":"Vanuatu Honeyeater",
+    "xc_scientific_name":"Glycifohia notabilis",
+    "ebird_scientific_name":"Gliciphila notabilis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-bellied_honeyeater",
+    "rationale":"Connected in Wikipedia: \"It is endemic to the Melanesian island nation of Vanuatu.\"."
+  },
+  "171":{
+    "species_code":"bismel1",
+    "xc_common_name":"Gilliard's Honeyeater",
+    "ebird_common_name":"Bismarck Honeyeater",
+    "xc_scientific_name":"Vosea whitemanensis",
+    "ebird_scientific_name":"Vosea whitemanensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Gilliard%27s_honeyeater",
+    "rationale":"Scientific names match exactly."
+  },
+  "172":{
+    "species_code":"bkffri1",
+    "xc_common_name":"Black-faced Friarbird",
+    "ebird_common_name":"Buru Friarbird",
+    "xc_scientific_name":"Philemon moluccensis",
+    "ebird_scientific_name":"Philemon moluccensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Buru_friarbird",
+    "rationale":"Scientific names match exactly."
+  },
+  "173":{
+    "species_code":"helfri3",
+    "xc_common_name":"New Guinea Friarbird",
+    "ebird_common_name":"Helmeted Friarbird (New Guinea)",
+    "xc_scientific_name":"Philemon novaeguineae",
+    "ebird_scientific_name":"Philemon buceroides novaeguineae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/New_Guinea_friarbird",
+    "rationale":"Connected in Wikipedia: \"Many taxonomists consider it to be a subspecies of the helmeted friarbird\"."
+  },
+  "174":{
+    "species_code":"helfri4",
+    "xc_common_name":"Hornbill Friarbird",
+    "ebird_common_name":"Helmeted Friarbird (Hornbill)",
+    "xc_scientific_name":"Philemon yorki",
+    "ebird_scientific_name":"Philemon buceroides yorki",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Helmeted_friarbird",
+    "rationale":"Connected in Wikipedia."
+  },
+  "175":{
+    "species_code":"spbmel1",
+    "xc_common_name":"Mottle-breasted Honeyeater",
+    "ebird_common_name":"Mottled Honeyeater",
+    "xc_scientific_name":"Microptilotis mimikae",
+    "ebird_scientific_name":"Microptilotis mimikae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Mottle-breasted_honeyeater",
+    "rationale":"Scientific names match exactly."
+  },
+  "176":{
+    "species_code":"rumwar1",
+    "xc_common_name":"Rusty Mouse-warbler",
+    "ebird_common_name":"Rusty Mouse-Warbler",
+    "xc_scientific_name":"Origma murina",
+    "ebird_scientific_name":"Crateroscelis murina",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "177":{
+    "species_code":"momwar1",
+    "xc_common_name":"Mountain Mouse-warbler",
+    "ebird_common_name":"Mountain Mouse-Warbler",
+    "xc_scientific_name":"Origma robusta",
+    "ebird_scientific_name":"Crateroscelis robusta",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "178":{
+    "species_code":"bimwar1",
+    "xc_common_name":"Bicolored Scrubwren",
+    "ebird_common_name":"Bicolored Mouse-Warbler",
+    "xc_scientific_name":"Aethomyias nigrorufus",
+    "ebird_scientific_name":"Crateroscelis nigrorufa",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Bicolored_scrubwren",
+    "rationale":"Connected in Wikipedia."
+  },
+  "179":{
+    "species_code":"gygscr1",
+    "xc_common_name":"Grey-green Scrubwren",
+    "ebird_common_name":"Gray-green Scrubwren",
+    "xc_scientific_name":"Aethomyias arfakianus",
+    "ebird_scientific_name":"Sericornis arfakianus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "180":{
+    "species_code":"whbscr3",
+    "xc_common_name":"Spotted Scrubwren",
+    "ebird_common_name":"White-browed Scrubwren (Spotted)",
+    "xc_scientific_name":"Sericornis maculatus",
+    "ebird_scientific_name":"Sericornis frontalis [maculatus Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Spotted_scrubwren",
+    "rationale":"Connected in Wikipedia: \"It was formerly considered conspecific with the white-browed scrubwren\"."
+  },
+  "181":{
+    "species_code":"weswhi4",
+    "xc_common_name":"White-bellied Whipbird",
+    "ebird_common_name":"Western Whipbird (White-bellied)",
+    "xc_scientific_name":"Psophodes leucogaster",
+    "ebird_scientific_name":"Psophodes nigrogularis leucogaster\/lashmari",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-bellied_whipbird",
+    "rationale":"Connected in Wikipedia: \"The Clements Checklist refers to this species with the common name western whipbird (white-bellied)\"."
+  },
+  "182":{
+    "species_code":"blujeb2",
+    "xc_common_name":"Brown-headed Jewel-babbler",
+    "ebird_common_name":"Dimorphic Jewel-babbler",
+    "xc_scientific_name":"Ptilorrhoa geislerorum",
+    "ebird_scientific_name":"Ptilorrhoa geislerorum",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Brown-headed_jewel-babbler",
+    "rationale":"Scientific names match exactly."
+  },
+  "183":{
+    "species_code":"shtbat3",
+    "xc_common_name":"Reichenow's Batis",
+    "ebird_common_name":"Short-tailed Batis (Reichenow's)",
+    "xc_scientific_name":"Batis reichenowi",
+    "ebird_scientific_name":"Batis mixta reichenowi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Forest_batis",
+    "rationale":"Connected in Wikipedia: \"The forest batis or short-tailed batis (Batis mixta) is a species [...].  Reichenow's batis (Batis reichenowi) was formerly treated as a subspecies\"."
+  },
+  "184":{
+    "species_code":"gygbus1",
+    "xc_common_name":"Bocage's Bushshrike",
+    "ebird_common_name":"Gray-green Bushshrike",
+    "xc_scientific_name":"Chlorophoneus bocagei",
+    "ebird_scientific_name":"Telophorus bocagei",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Bocage%27s_bushshrike",
+    "rationale":"Connected in Wikipedia."
+  },
+  "185":{
+    "species_code":"subbus1",
+    "xc_common_name":"Orange-breasted Bushshrike",
+    "ebird_common_name":"Sulphur-breasted Bushshrike",
+    "xc_scientific_name":"Chlorophoneus sulfureopectus",
+    "ebird_scientific_name":"Telophorus sulfureopectus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Orange-breasted_bushshrike",
+    "rationale":"Connected in Wikipedia."
+  },
+  "186":{
+    "species_code":"ashcus2",
+    "xc_common_name":"Madagascan Cuckooshrike",
+    "ebird_common_name":"Madagascar Cuckooshrike",
+    "xc_scientific_name":"Ceblepyris cinereus",
+    "ebird_scientific_name":"Coracina cinerea",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "187":{
+    "species_code":"grycus1",
+    "xc_common_name":"Grey Cuckooshrike",
+    "ebird_common_name":"Gray Cuckooshrike",
+    "xc_scientific_name":"Ceblepyris caesius",
+    "ebird_scientific_name":"Coracina caesia",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "188":{
+    "species_code":"cicada6",
+    "xc_common_name":"Grey-capped Cicadabird",
+    "ebird_common_name":"Common Cicadabird (Gray-capped)",
+    "xc_scientific_name":"Edolisoma remotum",
+    "ebird_scientific_name":"Edolisoma tenuirostre remotus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Grey-capped_cicadabird",
+    "rationale":"Connected in Wikipedia: \"It was previously considered conspecific with the common cicadabird.\"."
+  },
+  "189":{
+    "species_code":"cicada4",
+    "xc_common_name":"Palau Cicadabird",
+    "ebird_common_name":"Common Cicadabird (Palau)",
+    "xc_scientific_name":"Edolisoma monacha",
+    "ebird_scientific_name":"Edolisoma tenuirostre monacha",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Common_cicadabird",
+    "rationale":"Connected in Wikipedia."
+  },
+  "190":{
+    "species_code":"cicada5",
+    "xc_common_name":"Yap Cicadabird",
+    "ebird_common_name":"Common Cicadabird (Yap)",
+    "xc_scientific_name":"Edolisoma nesiotis",
+    "ebird_scientific_name":"Edolisoma tenuirostre nesiotis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Yap_cicadabird",
+    "rationale":"Connected in Wikipedia: \"The Yap cicadabird (Edolisoma nesiotis), sometimes considered to be a distinctive subspecies of the common cicadabird\"."
+  },
+  "191":{
+    "species_code":"cicada3",
+    "xc_common_name":"Pohnpei Cicadabird",
+    "ebird_common_name":"Common Cicadabird (Pohnpei)",
+    "xc_scientific_name":"Edolisoma insperatum",
+    "ebird_scientific_name":"Edolisoma tenuirostre insperatum",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Pohnpei_cicadabird",
+    "rationale":"Connected in Wikipedia: \"It was previously considered conspecific with the common cicadabird.\"."
+  },
+  "192":{
+    "species_code":"drawhi3",
+    "xc_common_name":"Cinnamon-breasted Whistler",
+    "ebird_common_name":"Drab Whistler (Cinnamon-breasted)",
+    "xc_scientific_name":"Pachycephala johni",
+    "ebird_scientific_name":"Pachycephala griseonota johni",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Cinnamon-breasted_whistler",
+    "rationale":"Connected in Wikipedia: \"[...] while others continue to classify it as a subspecies of the drab whistler.\"."
+  },
+  "193":{
+    "species_code":"ibgshr1",
+    "xc_common_name":"Iberian Grey Shrike",
+    "ebird_common_name":"Iberian Gray Shrike",
+    "xc_scientific_name":"Lanius meridionalis",
+    "ebird_scientific_name":"Lanius meridionalis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "194":{
+    "species_code":"thbvir2",
+    "xc_common_name":"Providencia Vireo",
+    "ebird_common_name":"Mangrove Vireo (Providencia)",
+    "xc_scientific_name":"Vireo approximans",
+    "ebird_scientific_name":"Vireo pallens approximans",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "195":{
+    "species_code":"bkhpaf2",
+    "xc_common_name":"Annobon Paradise Flycatcher",
+    "ebird_common_name":"Black-headed Paradise-Flycatcher (Annobon)",
+    "xc_scientific_name":"Terpsiphone smithii",
+    "ebird_scientific_name":"Terpsiphone rufiventer smithii",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Red-bellied_paradise_flycatcher",
+    "rationale":"Connected in Wikipedia: \"The red-bellied paradise flycatcher is also known as the black-headed paradise flycatcher. Until 2009, the Annob\u00f3n paradise flycatcher was classified as a subspecies (T. r. smithii) of the Red-bellied paradise flycatcher.\"."
+  },
+  "196":{
+    "species_code":"spemon3",
+    "xc_common_name":"Moluccan Monarch",
+    "ebird_common_name":"Spectacled Monarch (Halmahera)",
+    "xc_scientific_name":"Symposiachrus bimaculatus",
+    "ebird_scientific_name":"Symposiachrus trivirgatus bimaculatus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Moluccan_monarch",
+    "rationale":"Connected in Wikipedia: \"Some authorities consider the Moluccan monarch as a subspecies (S. trivirgatus bimaculatus) of the spectacled monarch. There are 2 subspecies. One of them is 'found on Morotai, Halmahera'.\"."
+  },
+  "197":{
+    "species_code":"grnjay1",
+    "xc_common_name":"Green Jay",
+    "ebird_common_name":"Green Jay (Green)",
+    "xc_scientific_name":"Cyanocorax luxuosus",
+    "ebird_scientific_name":"Cyanocorax yncas [luxuosus Group]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "198":{
+    "species_code":"grnjay2",
+    "xc_common_name":"Inca Jay",
+    "ebird_common_name":"Green Jay (Inca)",
+    "xc_scientific_name":"Cyanocorax yncas",
+    "ebird_scientific_name":"Cyanocorax yncas [yncas Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Inca_jay",
+    "rationale":"Connected in Wikipedia: \"Some ornithologists treat the green jay of North America and the Inca jay as conspecific\"."
+  },
+  "199":{
+    "species_code":"eurjac",
+    "xc_common_name":"Western Jackdaw",
+    "ebird_common_name":"Eurasian Jackdaw",
+    "xc_scientific_name":"Coloeus monedula",
+    "ebird_scientific_name":"Corvus monedula",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Western_jackdaw",
+    "rationale":"Connected in Wikipedia."
+  },
+  "200":{
+    "species_code":"amecro",
+    "xc_common_name":"Northwestern Crow",
+    "ebird_common_name":"American Crow",
+    "xc_scientific_name":"Corvus caurinus",
+    "ebird_scientific_name":"Corvus brachyrhynchos",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/American_crow",
+    "rationale":"Connected in Wikipedia."
+  },
+  "201":{
+    "species_code":"labcro4",
+    "xc_common_name":"Eastern Jungle Crow",
+    "ebird_common_name":"Large-billed Crow (Eastern)",
+    "xc_scientific_name":"Corvus levaillantii",
+    "ebird_scientific_name":"Corvus macrorhynchos levaillantii",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Large-billed_crow",
+    "rationale":"Connected in Wikipedia: \"The large-billed crow (Corvus macrorhynchos), formerly referred to widely as the jungle crow. The eastern jungle crow and Indian jungle crow were once considered conspecific and together called the jungle crow.\"."
+  },
+  "202":{
+    "species_code":"labcro3",
+    "xc_common_name":"Indian Jungle Crow",
+    "ebird_common_name":"Large-billed Crow (Indian Jungle)",
+    "xc_scientific_name":"Corvus culminatus",
+    "ebird_scientific_name":"Corvus macrorhynchos culminatus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Large-billed_crow",
+    "rationale":"Connected in Wikipedia: \"The large-billed crow (Corvus macrorhynchos), formerly referred to widely as the jungle crow. The eastern jungle crow and Indian jungle crow were once considered conspecific and together called the jungle crow.\"."
+  },
+  "203":{
+    "species_code":"lawpar2",
+    "xc_common_name":"Eastern Parotia",
+    "ebird_common_name":"Lawes's Parotia (Eastern)",
+    "xc_scientific_name":"Parotia helenae",
+    "ebird_scientific_name":"Parotia lawesii helenae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Eastern_parotia",
+    "rationale":"Connected in Wikipedia: \"Its appearance resembles Lawes's parotia, of which it is sometimes considered a subspecies\"."
+  },
+  "204":{
+    "species_code":"mbopar2",
+    "xc_common_name":"Magnificent Bird-of-paradise",
+    "ebird_common_name":"Magnificent Bird-of-Paradise",
+    "xc_scientific_name":"Diphyllodes magnificus",
+    "ebird_scientific_name":"Cicinnurus magnificus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "205":{
+    "species_code":"olyrob1",
+    "xc_common_name":"Banded Yellow Robin",
+    "ebird_common_name":"Olive-yellow Robin",
+    "xc_scientific_name":"Gennaeodryas placens",
+    "ebird_scientific_name":"Poecilodryas placens",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Banded_yellow_robin",
+    "rationale":"Connected in Wikipedia."
+  },
+  "206":{
+    "species_code":"yebrob1",
+    "xc_common_name":"Yellow-bellied Flyrobin",
+    "ebird_common_name":"Yellow-bellied Robin",
+    "xc_scientific_name":"Cryptomicroeca flaviventris",
+    "ebird_scientific_name":"Eopsaltria flaviventris",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Yellow-bellied_flyrobin",
+    "rationale":"Connected in Wikipedia: \"[...] its common name was changed from yellow-bellied robin to yellow-bellied flyrobin\"."
+  },
+  "207":{
+    "species_code":"yelfly4",
+    "xc_common_name":"Yellow-legged Flyrobin",
+    "ebird_common_name":"Yellow-legged Flycatcher",
+    "xc_scientific_name":"Kempiella griseoceps",
+    "ebird_scientific_name":"Microeca griseoceps",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Yellow-legged_flyrobin",
+    "rationale":"Connected in Wikipedia."
+  },
+  "208":{
+    "species_code":"canfly2",
+    "xc_common_name":"Canary Flyrobin",
+    "ebird_common_name":"Papuan Flycatcher",
+    "xc_scientific_name":"Devioeca papuana",
+    "ebird_scientific_name":"Microeca papuana",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Canary_flyrobin",
+    "rationale":"Connected in Wikipedia."
+  },
+  "209":{
+    "species_code":"indtit1",
+    "xc_common_name":"Indian Black-lored Tit",
+    "ebird_common_name":"Indian Yellow Tit",
+    "xc_scientific_name":"Machlolophus aplonotus",
+    "ebird_scientific_name":"Machlolophus aplonotus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Indian_black-lored_tit",
+    "rationale":"Scientific names match exactly."
+  },
+  "210":{
+    "species_code":"rubtit2",
+    "xc_common_name":"Cinnamon-breasted Tit",
+    "ebird_common_name":"Rufous-bellied Tit (Cinnamon-breasted)",
+    "xc_scientific_name":"Melaniparus pallidiventris",
+    "ebird_scientific_name":"Melaniparus rufiventris pallidiventris",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Cinnamon-breasted_tit",
+    "rationale":"Connected in Wikipedia: \"The cinnamon-breasted tit has sometimes been considered conspecific with the rufous-bellied tit,\"."
+  },
+  "211":{
+    "species_code":"sstlar3",
+    "xc_common_name":"Athi Short-toed Lark",
+    "ebird_common_name":"Somali Short-toed Lark (Athi)",
+    "xc_scientific_name":"Alaudala athensis",
+    "ebird_scientific_name":"Alaudala somalica athensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Athi_short-toed_lark",
+    "rationale":"Connected in Wikipedia: \"Formerly or presently, some authorities consider the Athi short-toed lark as a subspecies of the Somali short-toed lark\"."
+  },
+  "212":{
+    "species_code":"gyhbul1",
+    "xc_common_name":"Grey-headed Bulbul",
+    "ebird_common_name":"Gray-headed Bulbul",
+    "xc_scientific_name":"Pycnonotus priocephalus",
+    "ebird_scientific_name":"Brachypodius priocephalus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "213":{
+    "species_code":"combul5",
+    "xc_common_name":"Somali Bulbul",
+    "ebird_common_name":"Common Bulbul (Somali)",
+    "xc_scientific_name":"Pycnonotus somaliensis",
+    "ebird_scientific_name":"Pycnonotus barbatus somaliensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Somali_bulbul",
+    "rationale":"Connected in Wikipedia: \"Some authorities treat the Somali bulbul as a subspecies of the common bulbul\"."
+  },
+  "214":{
+    "species_code":"combul4",
+    "xc_common_name":"Dodson's Bulbul",
+    "ebird_common_name":"Common Bulbul (Dodson's)",
+    "xc_scientific_name":"Pycnonotus dodsoni",
+    "ebird_scientific_name":"Pycnonotus barbatus dodsoni",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Dodson%27s_bulbul",
+    "rationale":"Connected in Wikipedia: \"Some authorities treat the Dodson's bulbul as a subspecies of the common bulbul\"."
+  },
+  "215":{
+    "species_code":"combul6",
+    "xc_common_name":"Dark-capped Bulbul",
+    "ebird_common_name":"Common Bulbul (Dark-capped)",
+    "xc_scientific_name":"Pycnonotus tricolor",
+    "ebird_scientific_name":"Pycnonotus barbatus [tricolor Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Dark-capped_bulbul",
+    "rationale":"Connected in Wikipedia: \"Some authorities treat the dark-capped bulbul as a subspecies of the common bulbul.\"."
+  },
+  "216":{
+    "species_code":"shebul1",
+    "xc_common_name":"Kakamega Greenbul",
+    "ebird_common_name":"Shelley's Greenbul (Kakamega)",
+    "xc_scientific_name":"Arizelocichla kakamegae",
+    "ebird_scientific_name":"Arizelocichla masukuensis kakamegae\/kungwensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Kakamega_greenbul",
+    "rationale":"Connected in Wikipedia: \"Also, some authorities consider the Kakamega greenbul to be a subspecies of Shelley's greenbul.\"."
+  },
+  "217":{
+    "species_code":"easmog5",
+    "xc_common_name":"Olive-breasted Greenbul",
+    "ebird_common_name":"Eastern Mountain Greenbul (Olive-breasted)",
+    "xc_scientific_name":"Arizelocichla kikuyuensis",
+    "ebird_scientific_name":"Arizelocichla nigriceps kikuyuensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Mountain_greenbul",
+    "rationale":"Connected in Wikipedia: \"The mountain greenbul (Arizelocichla nigriceps), or eastern mountain greenbul, is a species [...]. Some authorities also consider the olive-breasted greenbul to be a subspecies of the mountain greenbul\"."
+  },
+  "218":{
+    "species_code":"stcgre3",
+    "xc_common_name":"Olive-headed Greenbul",
+    "ebird_common_name":"Stripe-cheeked Greenbul (Olive-headed)",
+    "xc_scientific_name":"Arizelocichla olivaceiceps",
+    "ebird_scientific_name":"Arizelocichla milanjensis olivaceiceps",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Olive-headed_greenbul",
+    "rationale":"Connected in Wikipedia: \"Some authorities have considered the olive-headed greenbul to be a subspecies of the stripe-cheeked greenbul.\"."
+  },
+  "219":{
+    "species_code":"stcgre4",
+    "xc_common_name":"Stripe-faced Greenbul",
+    "ebird_common_name":"Stripe-cheeked Greenbul (Stripe-faced)",
+    "xc_scientific_name":"Arizelocichla striifacies",
+    "ebird_scientific_name":"Arizelocichla milanjensis striifacies",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Stripe-faced_greenbul",
+    "rationale":"Connected in Wikipedia: \"Some authorities have considered the stripe-faced greenbul to be a subspecies of the stripe-cheeked greenbul\"."
+  },
+  "220":{
+    "species_code":"leaflo1",
+    "xc_common_name":"Red-tailed Leaflove",
+    "ebird_common_name":"Leaf-love",
+    "xc_scientific_name":"Phyllastrephus scandens",
+    "ebird_scientific_name":"Phyllastrephus scandens",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Red-tailed_leaflove",
+    "rationale":"Scientific names match exactly."
+  },
+  "221":{
+    "species_code":"cabgre3",
+    "xc_common_name":"Placid Greenbul",
+    "ebird_common_name":"Cabanis's Greenbul (Placid)",
+    "xc_scientific_name":"Phyllastrephus placidus",
+    "ebird_scientific_name":"Phyllastrephus cabanisi placidus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Placid_greenbul",
+    "rationale":"Connected in Wikipedia: \"Some authorities consider the placid greenbul to be either a subspecies of Cabanis's greenbul or Fischer's greenbul\"."
+  },
+  "222":{
+    "species_code":"yesgre2",
+    "xc_common_name":"Sharpe's Greenbul",
+    "ebird_common_name":"Yellow-streaked Greenbul (Sharpe's)",
+    "xc_scientific_name":"Phyllastrephus alfredi",
+    "ebird_scientific_name":"Phyllastrephus flavostriatus alfredi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Sharpe%27s_greenbul",
+    "rationale":"Connected in Wikipedia: \"some authorities classify it as a subspecies of the yellow-streaked greenbul\"."
+  },
+  "223":{
+    "species_code":"gycbul3",
+    "xc_common_name":"Grey-cheeked Bulbul",
+    "ebird_common_name":"Brown-cheeked Bulbul",
+    "xc_scientific_name":"Alophoixus bres",
+    "ebird_scientific_name":"Alophoixus bres",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Brown-cheeked_bulbul",
+    "rationale":"Scientific names match exactly."
+  },
+  "224":{
+    "species_code":"sulgob1",
+    "xc_common_name":"Northern Golden Bulbul",
+    "ebird_common_name":"Sula Golden-Bulbul",
+    "xc_scientific_name":"Thapsinillas longirostris",
+    "ebird_scientific_name":"Alophoixus longirostris",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Northern_golden_bulbul",
+    "rationale":"Connected in Wikipedia: \"Alternative names for the northern golden bulbul include the golden bulbul and Sula golden bulbul\"."
+  },
+  "225":{
+    "species_code":"golbul4",
+    "xc_common_name":"Buru Golden Bulbul",
+    "ebird_common_name":"Buru Golden-Bulbul",
+    "xc_scientific_name":"Thapsinillas mysticalis",
+    "ebird_scientific_name":"Alophoixus mystacalis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "226":{
+    "species_code":"rocmar1",
+    "xc_common_name":"Pale Crag Martin",
+    "ebird_common_name":"Rock Martin (Pale Crag-Martin)",
+    "xc_scientific_name":"Ptyonoprogne obsoleta",
+    "ebird_scientific_name":"Ptyonoprogne fuligula [obsoleta Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Pale_crag_martin",
+    "rationale":"Connected in Wikipedia: \"It was formerly considered to be the northern subspecies of the rock martin\"."
+  },
+  "227":{
+    "species_code":"rerswa3",
+    "xc_common_name":"West African Swallow",
+    "ebird_common_name":"Red-rumped Swallow (West African)",
+    "xc_scientific_name":"Cecropis domicella",
+    "ebird_scientific_name":"Cecropis daurica domicella",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/West_African_swallow",
+    "rationale":"Connected in Wikipedia: \"Some authorities consider it to be a subspecies of the red-rumped swallow.\"."
+  },
+  "228":{
+    "species_code":"bkbtit4",
+    "xc_common_name":"Black-browed Bushtit",
+    "ebird_common_name":"Black-browed Tit (Black-browed)",
+    "xc_scientific_name":"Aegithalos bonvaloti",
+    "ebird_scientific_name":"Aegithalos iouschistos bonvaloti\/obscuratus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Black-browed_bushtit",
+    "rationale":"Connected in Wikipedia."
+  },
+  "229":{
+    "species_code":"bkbtit6",
+    "xc_common_name":"Burmese Bushtit",
+    "ebird_common_name":"Black-browed Tit (Burmese)",
+    "xc_scientific_name":"Aegithalos sharpei",
+    "ebird_scientific_name":"Aegithalos iouschistos sharpei",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Black-browed_bushtit",
+    "rationale":"Connected in Wikipedia."
+  },
+  "230":{
+    "species_code":"pygtit1",
+    "xc_common_name":"Pygmy Bushtit",
+    "ebird_common_name":"Pygmy Tit",
+    "xc_scientific_name":"Aegithalos exilis",
+    "ebird_scientific_name":"Psaltria exilis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Pygmy_bushtit",
+    "rationale":"Connected in Wikipedia."
+  },
+  "231":{
+    "species_code":"mouwar4",
+    "xc_common_name":"Negros Leaf Warbler",
+    "ebird_common_name":"Mountain Leaf Warbler (Philippines)",
+    "xc_scientific_name":"Phylloscopus nigrorum",
+    "ebird_scientific_name":"Phylloscopus trivirgatus [nigrorum Group]",
+    "wikipedia_url":"",
+    "rationale":"Scientific names match exactly."
+  },
+  "232":{
+    "species_code":"plewar1",
+    "xc_common_name":"Styan's Grasshopper Warbler",
+    "ebird_common_name":"Pleske's Grasshopper Warbler",
+    "xc_scientific_name":"Helopsaltes pleskei",
+    "ebird_scientific_name":"Helopsaltes pleskei",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Styan%27s_grasshopper_warbler",
+    "rationale":"Scientific names match exactly."
+  },
+  "233":{
+    "species_code":"cbbwar2",
+    "xc_common_name":"Chestnut-backed Bush Warbler",
+    "ebird_common_name":"Sulawesi Bush Warbler",
+    "xc_scientific_name":"Locustella castanea",
+    "ebird_scientific_name":"Locustella castanea",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Chestnut-backed_bush_warbler",
+    "rationale":"Scientific names match exactly."
+  },
+  "234":{
+    "species_code":"chifer1",
+    "xc_common_name":"Chatham Fernbird",
+    "ebird_common_name":"Chatham Islands Fernbird",
+    "xc_scientific_name":"Poodytes rufescens",
+    "ebird_scientific_name":"Poodytes rufescens",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Chatham_fernbird",
+    "rationale":"Scientific names match exactly."
+  },
+  "235":{
+    "species_code":"bisthi1",
+    "xc_common_name":"New Britain Thicketbird",
+    "ebird_common_name":"Bismarck Thicketbird",
+    "xc_scientific_name":"Cincloramphus grosvenori",
+    "ebird_scientific_name":"Cincloramphus grosvenori",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/New_Britain_thicketbird",
+    "rationale":"Scientific names match exactly."
+  },
+  "236":{
+    "species_code":"bubbus1",
+    "xc_common_name":"Buff-banded Thicketbird",
+    "ebird_common_name":"Buff-banded Bushbird",
+    "xc_scientific_name":"Cincloramphus bivittatus",
+    "ebird_scientific_name":"Cincloramphus bivittatus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Buff-banded_thicketbird",
+    "rationale":"Scientific names match exactly."
+  },
+  "237":{
+    "species_code":"guathi1",
+    "xc_common_name":"Melanesian Thicketbird",
+    "ebird_common_name":"Guadalcanal Thicketbird",
+    "xc_scientific_name":"Cincloramphus whitneyi",
+    "ebird_scientific_name":"Cincloramphus whitneyi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Santo_thicketbird and  https:\/\/en.wikipedia.org\/wiki\/Guadalcanal_thicketbird",
+    "rationale":"Scientific names match exactly."
+  },
+  "238":{
+    "species_code":"necgra1",
+    "xc_common_name":"New Caledonian Thicketbird",
+    "ebird_common_name":"New Caledonian Grassbird",
+    "xc_scientific_name":"Cincloramphus mariae",
+    "ebird_scientific_name":"Cincloramphus mariei",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/New_Caledonian_thicketbird",
+    "rationale":"Connected in Wikipedia."
+  },
+  "239":{
+    "species_code":"gryemt1",
+    "xc_common_name":"Grey Emutail",
+    "ebird_common_name":"Gray Emutail",
+    "xc_scientific_name":"Bradypterus seebohmi",
+    "ebird_scientific_name":"Bradypterus seebohmi",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "240":{
+    "species_code":"rolcis3",
+    "xc_common_name":"Lazy Cisticola",
+    "ebird_common_name":"Rock-loving Cisticola (Lazy)",
+    "xc_scientific_name":"Cisticola aberrans",
+    "ebird_scientific_name":"Cisticola aberrans [aberrans Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Lazy_cisticola",
+    "rationale":"Connected in Wikipedia: \"It is sometimes split into two species: lazy cisticola (C. aberrans) in the southern part of its range and rock-loving cisticola (C. emini) further north.\"."
+  },
+  "241":{
+    "species_code":"rolcis1",
+    "xc_common_name":"Rock-loving Cisticola",
+    "ebird_common_name":"Rock-loving Cisticola (Rock-loving)",
+    "xc_scientific_name":"Cisticola emini",
+    "ebird_scientific_name":"Cisticola aberrans [emini Group]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "242":{
+    "species_code":"waicis2",
+    "xc_common_name":"Lynes's Cisticola",
+    "ebird_common_name":"Wailing Cisticola (Lynes's)",
+    "xc_scientific_name":"Cisticola distinctus",
+    "ebird_scientific_name":"Cisticola lais distinctus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Wailing_cisticola",
+    "rationale":"Connected in Wikipedia."
+  },
+  "243":{
+    "species_code":"strpri8",
+    "xc_common_name":"Swinhoe's Prinia",
+    "ebird_common_name":"Striped Prinia",
+    "xc_scientific_name":"Prinia striata",
+    "ebird_scientific_name":"Prinia striata",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Striped_prinia",
+    "rationale":"Scientific names match exactly."
+  },
+  "244":{
+    "species_code":"banpri3",
+    "xc_common_name":"Black-faced Prinia",
+    "ebird_common_name":"Banded Prinia (Black-faced)",
+    "xc_scientific_name":"Prinia melanops",
+    "ebird_scientific_name":"Prinia bairdii melanops\/obscura",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Banded_prinia",
+    "rationale":"Connected in Wikipedia."
+  },
+  "245":{
+    "species_code":"gnbcam2",
+    "xc_common_name":"Grey-backed Camaroptera",
+    "ebird_common_name":"Green-backed Camaroptera (Gray-backed)",
+    "xc_scientific_name":"Camaroptera brevicaudata",
+    "ebird_scientific_name":"Camaroptera brachyura [brevicaudata Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Grey-backed_camaroptera",
+    "rationale":"Connected in Wikipedia: \"Recent studies suggest this species and the green-backed camaroptera may be the same species\"."
+  },
+  "246":{
+    "species_code":"mrmwar3",
+    "xc_common_name":"Rubeho Warbler",
+    "ebird_common_name":"Mrs. Moreau's Warbler (Rubeho)",
+    "xc_scientific_name":"Scepomycter rubehoensis",
+    "ebird_scientific_name":"Scepomycter winifredae rubehoensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Winifred%27s_warbler",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "247":{
+    "species_code":"gyctib1",
+    "xc_common_name":"Grey-cheeked Tit-Babbler",
+    "ebird_common_name":"Gray-cheeked Tit-Babbler",
+    "xc_scientific_name":"Macronus flavicollis",
+    "ebird_scientific_name":"Mixornis flavicollis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "248":{
+    "species_code":"gyftib1",
+    "xc_common_name":"Grey-faced Tit-Babbler",
+    "ebird_common_name":"Gray-faced Tit-Babbler",
+    "xc_scientific_name":"Macronus kelleyi",
+    "ebird_scientific_name":"Mixornis kelleyi",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "249":{
+    "species_code":"limwrb3",
+    "xc_common_name":"Limestone Wren-Babbler",
+    "ebird_common_name":"Variable Limestone Babbler",
+    "xc_scientific_name":"Napothera crispifrons",
+    "ebird_scientific_name":"Gypsophila crispifrons",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Limestone_wren-babbler",
+    "rationale":"Connected in Wikipedia: \"key has been split into subspecies, including value\"."
+  },
+  "250":{
+    "species_code":"thrbab1",
+    "xc_common_name":"Spotted Thrush-Babbler",
+    "ebird_common_name":"Thrush Babbler",
+    "xc_scientific_name":"Ptyrticus turdinus",
+    "ebird_scientific_name":"Illadopsis turdina",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Spotted_thrush-babbler",
+    "rationale":"Connected in Wikipedia."
+  },
+  "251":{
+    "species_code":"stsbab1",
+    "xc_common_name":"Short-tailed Scimitar Babbler",
+    "ebird_common_name":"Short-tailed Scimitar-Babbler",
+    "xc_scientific_name":"Jabouilleia danjoui",
+    "ebird_scientific_name":"Napothera danjoui",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "252":{
+    "species_code":"namscb1",
+    "xc_common_name":"Naung Mung Scimitar Babbler",
+    "ebird_common_name":"Naung Mung Scimitar-Babbler",
+    "xc_scientific_name":"Jabouilleia naungmungensis",
+    "ebird_scientific_name":"Napothera naungmungensis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "253":{
+    "species_code":"gyccro1",
+    "xc_common_name":"Grey-crowned Crocias",
+    "ebird_common_name":"Gray-crowned Crocias",
+    "xc_scientific_name":"Laniellus langbianis",
+    "ebird_scientific_name":"Laniellus langbianis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "254":{
+    "species_code":"lagbab2",
+    "xc_common_name":"Large Grey Babbler",
+    "ebird_common_name":"Large Gray Babbler",
+    "xc_scientific_name":"Argya malcolmi",
+    "ebird_scientific_name":"Argya malcolmi",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "255":{
+    "species_code":"fulcha1",
+    "xc_common_name":"Fulvous Babbler",
+    "ebird_common_name":"Fulvous Chatterer",
+    "xc_scientific_name":"Argya fulva",
+    "ebird_scientific_name":"Argya fulva",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Fulvous_babbler",
+    "rationale":"Scientific names match exactly."
+  },
+  "256":{
+    "species_code":"rcmbab1",
+    "xc_common_name":"Red-collared Babbler",
+    "ebird_common_name":"Red-collared Mountain-Babbler",
+    "xc_scientific_name":"Turdoides rufocinctus",
+    "ebird_scientific_name":"Turdoides rufocinctus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Red-collared_babbler",
+    "rationale":"Scientific names match exactly."
+  },
+  "257":{
+    "species_code":"pedlau1",
+    "xc_common_name":"Plain Laughingthrush",
+    "ebird_common_name":"Pere David's Laughingthrush",
+    "xc_scientific_name":"Pterorhinus davidi",
+    "ebird_scientific_name":"Pterorhinus davidi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Plain_laughingthrush",
+    "rationale":"Scientific names match exactly."
+  },
+  "258":{
+    "species_code":"gyslau",
+    "xc_common_name":"Grey-sided Laughingthrush",
+    "ebird_common_name":"Gray-sided Laughingthrush",
+    "xc_scientific_name":"Pterorhinus caerulatus",
+    "ebird_scientific_name":"Pterorhinus caerulatus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "259":{
+    "species_code":"mouble1",
+    "xc_common_name":"Mountain Blackeye",
+    "ebird_common_name":"Mountain Black-eye",
+    "xc_scientific_name":"Zosterops emiliae",
+    "ebird_scientific_name":"Zosterops emiliae",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "260":{
+    "species_code":"crtwhe2",
+    "xc_common_name":"Morotai White-eye",
+    "ebird_common_name":"Cream-throated White-eye (Morotai)",
+    "xc_scientific_name":"Zosterops dehaani",
+    "ebird_scientific_name":"Zosterops atriceps dehaani",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Morotai_white-eye",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "261":{
+    "species_code":"wawwhe1",
+    "xc_common_name":"\"Wangi-wangi White-eye\"",
+    "ebird_common_name":"Wangi-Wangi White-eye (undescribed form)",
+    "xc_scientific_name":"Zosterops tax.nov.Wangi.wangi",
+    "ebird_scientific_name":"Zosterops [undescribed Wangi-Wangi form]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "262":{
+    "species_code":"gytwhe1",
+    "xc_common_name":"Grey-throated White-eye",
+    "ebird_common_name":"Gray-throated White-eye",
+    "xc_scientific_name":"Zosterops rendovae",
+    "ebird_scientific_name":"Zosterops rendovae",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "263":{
+    "species_code":"brrwhe8",
+    "xc_common_name":"Broad-ringed White-eye",
+    "ebird_common_name":"Kilimanjaro White-eye",
+    "xc_scientific_name":"Zosterops eurycricotus",
+    "ebird_scientific_name":"Zosterops eurycricotus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Broad-ringed_white-eye",
+    "rationale":"Scientific names match exactly."
+  },
+  "264":{
+    "species_code":"runwre3",
+    "xc_common_name":"Sclater's Wren",
+    "ebird_common_name":"Rufous-naped Wren (Sclater's)",
+    "xc_scientific_name":"Campylorhynchus humilis",
+    "ebird_scientific_name":"Campylorhynchus rufinucha humilis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Sclater%27s_wren",
+    "rationale":"Connected in Wikipedia: \"What is now Sclater's wren was previously treated as one of eight subspecies of rufous-naped wren\"."
+  },
+  "265":{
+    "species_code":"runwre4",
+    "xc_common_name":"Rufous-backed Wren",
+    "ebird_common_name":"Rufous-naped Wren (Rufous-backed)",
+    "xc_scientific_name":"Campylorhynchus capistratus",
+    "ebird_scientific_name":"Campylorhynchus rufinucha [capistratus Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Rufous-backed_wren",
+    "rationale":"Connected in Wikipedia: \"What is now the rufous-backed wren was previously treated as six of the eight subspecies of rufous-naped wren\"."
+  },
+  "266":{
+    "species_code":"metsta3",
+    "xc_common_name":"Violet-hooded Starling",
+    "ebird_common_name":"Metallic Starling (Violet-hooded)",
+    "xc_scientific_name":"Aplonis circumscripta",
+    "ebird_scientific_name":"Aplonis metallica circumscripta",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Metallic_starling",
+    "rationale":"Connected in Wikipedia."
+  },
+  "267":{
+    "species_code":"lbegls2",
+    "xc_common_name":"Miombo Blue-eared Starling",
+    "ebird_common_name":"Lesser Blue-eared Starling (Miombo)",
+    "xc_scientific_name":"Lamprotornis elisabeth",
+    "ebird_scientific_name":"Lamprotornis chloropterus elisabeth",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "268":{
+    "species_code":"sponit2",
+    "xc_common_name":"Sclater's Nightingale-Thrush",
+    "ebird_common_name":"Speckled Nightingale-Thrush",
+    "xc_scientific_name":"Catharus maculatus",
+    "ebird_scientific_name":"Catharus maculatus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Speckled_nightingale-thrush",
+    "rationale":"Scientific names match exactly."
+  },
+  "269":{
+    "species_code":"whtthr2",
+    "xc_common_name":"Dagua Thrush",
+    "ebird_common_name":"White-throated Thrush (Dagua)",
+    "xc_scientific_name":"Turdus daguae",
+    "ebird_scientific_name":"Turdus assimilis daguae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-throated_thrush",
+    "rationale":"Connected in Wikipedia."
+  },
+  "270":{
+    "species_code":"fruith1",
+    "xc_common_name":"Fruithunter",
+    "ebird_common_name":"Fruit-hunter",
+    "xc_scientific_name":"Chlamydochaera jefferyi",
+    "ebird_scientific_name":"Chlamydochaera jefferyi",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "271":{
+    "species_code":"whrsha2",
+    "xc_common_name":"White-crowned Shama",
+    "ebird_common_name":"White-rumped Shama (White-crowned)",
+    "xc_scientific_name":"Copsychus stricklandii",
+    "ebird_scientific_name":"Copsychus malabaricus stricklandii\/barbouri",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-crowned_shama",
+    "rationale":"Connected in Wikipedia: \"It is closely related to the white-rumped shama (Copsychus malabaricus), and is sometimes considered a subspecies of that species\"."
+  },
+  "272":{
+    "species_code":"gyttif1",
+    "xc_common_name":"Grey-throated Tit-Flycatcher",
+    "ebird_common_name":"Gray-throated Tit-Flycatcher",
+    "xc_scientific_name":"Myioparus griseigularis",
+    "ebird_scientific_name":"Fraseria griseigularis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "273":{
+    "species_code":"grytif1",
+    "xc_common_name":"Grey Tit-Flycatcher",
+    "ebird_common_name":"Gray Tit-Flycatcher",
+    "xc_scientific_name":"Myioparus plumbeus",
+    "ebird_scientific_name":"Fraseria plumbea",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "274":{
+    "species_code":"afgfly1",
+    "xc_common_name":"African Grey Flycatcher",
+    "ebird_common_name":"African Gray Flycatcher",
+    "xc_scientific_name":"Melaenornis microrhynchus",
+    "ebird_scientific_name":"Bradornis microrhynchus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "275":{
+    "species_code":"marfly1",
+    "xc_common_name":"Marico Flycatcher",
+    "ebird_common_name":"Mariqua Flycatcher",
+    "xc_scientific_name":"Melaenornis mariquensis",
+    "ebird_scientific_name":"Bradornis mariquensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Marico_flycatcher",
+    "rationale":"Connected in Wikipedia."
+  },
+  "276":{
+    "species_code":"spofly3",
+    "xc_common_name":"Mediterranean Flycatcher",
+    "ebird_common_name":"Spotted Flycatcher (Mediterranean)",
+    "xc_scientific_name":"Muscicapa tyrrhenica",
+    "ebird_scientific_name":"Muscicapa striata tyrrhenica\/balearica",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Mediterranean_flycatcher",
+    "rationale":"Connected in Wikipedia: \"The International Ornithologists' Union has split the species from the spotted flycatcher, but other taxonomic authorities considered it still conspecific.\"."
+  },
+  "277":{
+    "species_code":"chafly4",
+    "xc_common_name":"Itombwe Flycatcher",
+    "ebird_common_name":"Chapin's Flycatcher (Itombwe)",
+    "xc_scientific_name":"Muscicapa itombwensis",
+    "ebird_scientific_name":"Fraseria lendu itombwensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Itombwe_flycatcher",
+    "rationale":"Connected in Wikipedia: \"It was formerly considered a subspecies of Chapin's flycatcher.\"."
+  },
+  "278":{
+    "species_code":"subfly4",
+    "xc_common_name":"Tanahjampea Blue Flycatcher",
+    "ebird_common_name":"Sulawesi Blue Flycatcher (Tanahjampea)",
+    "xc_scientific_name":"Cyornis djampeanus",
+    "ebird_scientific_name":"Cyornis omissus djampeanus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "279":{
+    "species_code":"suljuf1",
+    "xc_common_name":"Sula Jungle Flycatcher",
+    "ebird_common_name":"Sula Jungle-Flycatcher",
+    "xc_scientific_name":"Cyornis colonus",
+    "ebird_scientific_name":"Cyornis colonus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "280":{
+    "species_code":"anccha1",
+    "xc_common_name":"Angolan Cave Chat",
+    "ebird_common_name":"Angola Cave-Chat",
+    "xc_scientific_name":"Cossypha ansorgei",
+    "ebird_scientific_name":"Xenocopsychus ansorgei",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "281":{
+    "species_code":"whcfor3",
+    "xc_common_name":"Bornean Forktail",
+    "ebird_common_name":"White-crowned Forktail (Bornean)",
+    "xc_scientific_name":"Enicurus borneensis",
+    "ebird_scientific_name":"Enicurus leschenaulti borneensis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-crowned_forktail",
+    "rationale":"Connected in Wikipedia."
+  },
+  "282":{
+    "species_code":"wwccha1",
+    "xc_common_name":"White-winged Cliff Chat",
+    "ebird_common_name":"White-winged Cliff-Chat",
+    "xc_scientific_name":"Monticola semirufus",
+    "ebird_scientific_name":"Thamnolaea semirufa",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "283":{
+    "species_code":"stonec7",
+    "xc_common_name":"Stejneger's Stonechat",
+    "ebird_common_name":"Amur Stonechat",
+    "xc_scientific_name":"Saxicola stejnegeri",
+    "ebird_scientific_name":"Saxicola stejnegeri",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Amur_stonechat",
+    "rationale":"Scientific names match exactly."
+  },
+  "284":{
+    "species_code":"stonec6",
+    "xc_common_name":"Madagascan Stonechat",
+    "ebird_common_name":"African Stonechat (Madagascar)",
+    "xc_scientific_name":"Saxicola sibilla",
+    "ebird_scientific_name":"Saxicola torquatus sibilla",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Madagascar_stonechat",
+    "rationale":"Connected in Wikipedia: \"The Madagascar stonechat has generally been considered a subspecies of African stonechat\"."
+  },
+  "285":{
+    "species_code":"moccha1",
+    "xc_common_name":"White-crowned Cliff Chat",
+    "ebird_common_name":"Mocking Cliff-Chat",
+    "xc_scientific_name":"Thamnolaea coronata",
+    "ebird_scientific_name":"Thamnolaea cinnamomeiventris",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-crowned_cliff_chat",
+    "rationale":"Connected in Wikipedia: \"It is sometimes considered a subspecies of the mocking cliff chat\"."
+  },
+  "286":{
+    "species_code":"wfbcha1",
+    "xc_common_name":"White-fronted Black Chat",
+    "ebird_common_name":"White-fronted Black-Chat",
+    "xc_scientific_name":"Oenanthe albifrons",
+    "ebird_scientific_name":"Oenanthe albifrons",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "287":{
+    "species_code":"brtcha1",
+    "xc_common_name":"Brown-tailed Rock Chat",
+    "ebird_common_name":"Brown-tailed Chat",
+    "xc_scientific_name":"Oenanthe scotocerca",
+    "ebird_scientific_name":"Oenanthe scotocerca",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Brown-tailed_rock_chat",
+    "rationale":"Scientific names match exactly."
+  },
+  "288":{
+    "species_code":"thbflo3",
+    "xc_common_name":"Striped Flowerpecker",
+    "ebird_common_name":"Thick-billed Flowerpecker (Striped)",
+    "xc_scientific_name":"Dicaeum aeruginosum",
+    "ebird_scientific_name":"Dicaeum agile [aeruginosum Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Striped_flowerpecker",
+    "rationale":"Connected in Wikipedia: \"It is sometimes considered conspecific with the thick-billed flowerpecker.\"."
+  },
+  "289":{
+    "species_code":"mdcsun2",
+    "xc_common_name":"Whyte's Double-collared Sunbird",
+    "ebird_common_name":"Montane Double-collared Sunbird (Eastern)",
+    "xc_scientific_name":"Cinnyris whytei",
+    "ebird_scientific_name":"Cinnyris ludovicensis whytei",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Whyte%27s_double-collared_sunbird",
+    "rationale":"Scientific names are synonyms according to Wikipedia article."
+  },
+  "290":{
+    "species_code":"shesun1",
+    "xc_common_name":"Hofmann's Sunbird",
+    "ebird_common_name":"Shelley's Sunbird (Hofmann's)",
+    "xc_scientific_name":"Cinnyris hofmanni",
+    "ebird_scientific_name":"Cinnyris shelleyi hofmanni",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "291":{
+    "species_code":"sousun1",
+    "xc_common_name":"Abbott's Sunbird",
+    "ebird_common_name":"Souimanga Sunbird (Abbott's)",
+    "xc_scientific_name":"Cinnyris abbotti",
+    "ebird_scientific_name":"Cinnyris sovimanga abbotti\/buchenorum",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Souimanga_sunbird",
+    "rationale":"Connected in Wikipedia."
+  },
+  "292":{
+    "species_code":"punsun1",
+    "xc_common_name":"Purple-naped Sunbird",
+    "ebird_common_name":"Purple-naped Spiderhunter",
+    "xc_scientific_name":"Kurochkinegramma hypogrammicum",
+    "ebird_scientific_name":"Kurochkinegramma hypogrammicum",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Purple-naped_sunbird",
+    "rationale":"Scientific names match exactly."
+  },
+  "293":{
+    "species_code":"swewax1",
+    "xc_common_name":"Angolan Waxbill",
+    "ebird_common_name":"Angola Waxbill",
+    "xc_scientific_name":"Coccopygia bocagei",
+    "ebird_scientific_name":"Coccopygia bocagei",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "294":{
+    "species_code":"fabwax3",
+    "xc_common_name":"Abyssinian Waxbill",
+    "ebird_common_name":"Fawn-breasted Waxbill (Abyssinian)",
+    "xc_scientific_name":"Estrilda ochrogaster",
+    "ebird_scientific_name":"Estrilda paludicola ochrogaster",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Fawn-breasted_waxbill",
+    "rationale":"Connected in Wikipedia."
+  },
+  "295":{
+    "species_code":"madmun1",
+    "xc_common_name":"Madagascan Mannikin",
+    "ebird_common_name":"Madagascar Munia",
+    "xc_scientific_name":"Lepidopygia nana",
+    "ebird_scientific_name":"Lepidopygia nana",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Madagascar_mannikin",
+    "rationale":"Scientific names match exactly."
+  },
+  "296":{
+    "species_code":"gyhsil1",
+    "xc_common_name":"Grey-headed Silverbill",
+    "ebird_common_name":"Gray-headed Silverbill",
+    "xc_scientific_name":"Odontospiza caniceps",
+    "ebird_scientific_name":"Spermestes griseicapilla",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "297":{
+    "species_code":"bawman3",
+    "xc_common_name":"Red-backed Mannikin",
+    "ebird_common_name":"Black-and-white Mannikin (Red-backed)",
+    "xc_scientific_name":"Lonchura nigriceps",
+    "ebird_scientific_name":"Spermestes bicolor nigriceps\/woltersi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Red-backed_mannikin",
+    "rationale":"Connected in Wikipedia: \"This taxon has been considered a subspecies of S. bicolor, the black-and-white mannikin.\"."
+  },
+  "298":{
+    "species_code":"sthmun3",
+    "xc_common_name":"White-spotted Mannikin",
+    "ebird_common_name":"White-spotted Munia",
+    "xc_scientific_name":"Lonchura leucosticta",
+    "ebird_scientific_name":"Mayrimunia leucosticta",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/White-spotted_mannikin",
+    "rationale":"Connected in Wikipedia."
+  },
+  "299":{
+    "species_code":"auspip2",
+    "xc_common_name":"Australian Pipit",
+    "ebird_common_name":"Australasian Pipit (Australian)",
+    "xc_scientific_name":"Anthus australis",
+    "ebird_scientific_name":"Anthus novaeseelandiae [australis Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Australasian_pipit",
+    "rationale":"Connected in Wikipedia: \"Some authors split the Australasian pipit further into two species: Australian pipit (Anthus australis) in Australia and ...\"."
+  },
+  "300":{
+    "species_code":"shbpip3",
+    "xc_common_name":"Puna Pipit",
+    "ebird_common_name":"Short-billed Pipit (Puna)",
+    "xc_scientific_name":"Anthus brevirostris",
+    "ebird_scientific_name":"Anthus furcatus brevirostris",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Puna_pipit",
+    "rationale":"Connected in Wikipedia: \"It is sometimes considered a subspecies of the short-billed pipit.\"."
+  },
+  "301":{
+    "species_code":"crwfin1",
+    "xc_common_name":"African Crimson-winged Finch",
+    "ebird_common_name":"Crimson-winged Finch (African)",
+    "xc_scientific_name":"Rhodopechys alienus",
+    "ebird_scientific_name":"Rhodopechys sanguineus alienus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "302":{
+    "species_code":"gowgro3",
+    "xc_common_name":"Socotra Golden-winged Grosbeak",
+    "ebird_common_name":"Socotra Grosbeak",
+    "xc_scientific_name":"Rhynchostruthus socotranus",
+    "ebird_scientific_name":"Rhynchostruthus socotranus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Socotra_golden-winged_grosbeak",
+    "rationale":"Scientific names match exactly."
+  },
+  "303":{
+    "species_code":"gowgro2",
+    "xc_common_name":"Arabian Golden-winged Grosbeak",
+    "ebird_common_name":"Arabian Grosbeak",
+    "xc_scientific_name":"Rhynchostruthus percivali",
+    "ebird_scientific_name":"Rhynchostruthus percivali",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Arabian_golden-winged_grosbeak",
+    "rationale":"Scientific names match exactly."
+  },
+  "304":{
+    "species_code":"foxsp2",
+    "xc_common_name":"Sooty Fox Sparrow",
+    "ebird_common_name":"Fox Sparrow (Sooty)",
+    "xc_scientific_name":"Passerella unalaschcensis",
+    "ebird_scientific_name":"Passerella iliaca [unalaschcensis Group]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "305":{
+    "species_code":"foxsp3",
+    "xc_common_name":"Slate-colored Fox Sparrow",
+    "ebird_common_name":"Fox Sparrow (Slate-colored)",
+    "xc_scientific_name":"Passerella schistacea",
+    "ebird_scientific_name":"Passerella iliaca [schistacea Group]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "306":{
+    "species_code":"foxsp4",
+    "xc_common_name":"Thick-billed Fox Sparrow",
+    "ebird_common_name":"Fox Sparrow (Thick-billed)",
+    "xc_scientific_name":"Passerella megarhyncha",
+    "ebird_scientific_name":"Passerella iliaca [megarhyncha Group]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "307":{
+    "species_code":"moubru2",
+    "xc_common_name":"Merida Brushfinch",
+    "ebird_common_name":"Moustached Brushfinch (Merida)",
+    "xc_scientific_name":"Atlapetes meridae",
+    "ebird_scientific_name":"Atlapetes albofrenatus meridae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Moustached_brushfinch",
+    "rationale":"Connected in Wikipedia: \"The eBird\/Clements and Howard and Moore checklists include the Merida brushfinch - A. albofrenatus meridaeas - as a subspecies of the moustached brushfinch\"."
+  },
+  "308":{
+    "species_code":"tribrf1",
+    "xc_common_name":"Choco Brushfinch",
+    "ebird_common_name":"Tricolored Brushfinch (Choco)",
+    "xc_scientific_name":"Atlapetes crassus",
+    "ebird_scientific_name":"Atlapetes tricolor crassus",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Choco_brushfinch",
+    "rationale":"Connected in Wikipedia: \"The Handbook of the Birds of the World (HBW) and the Clements taxonomy consider the choco brushfinch a subspecies of tricolored brushfinch\"."
+  },
+  "309":{
+    "species_code":"yebbru1",
+    "xc_common_name":"Black-fronted Brushfinch",
+    "ebird_common_name":"Yellow-breasted Brushfinch (nigrifrons)",
+    "xc_scientific_name":"Atlapetes nigrifrons",
+    "ebird_scientific_name":"Atlapetes latinuchus nigrifrons",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Black-fronted_brushfinch",
+    "rationale":"Connected in Wikipedia: \"The black-fronted brushfinch or black-fronted brush finch (Atlapetes nigrifrons) [...]. The Handbook of the Birds of the World (HBW) and the Clements taxonomy consider the black-fronted brushfinch a subspecies of yellow-breasted brushfinch\"."
+  },
+  "310":{
+    "species_code":"scrcac2",
+    "xc_common_name":"Scarlet-rumped Cacique",
+    "ebird_common_name":"Scarlet-rumped Cacique (Scarlet-rumped)",
+    "xc_scientific_name":"Cacicus microrhynchus",
+    "ebird_scientific_name":"Cacicus uropygialis microrhynchus",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "311":{
+    "species_code":"scrcac4",
+    "xc_common_name":"Subtropical Cacique",
+    "ebird_common_name":"Scarlet-rumped Cacique (Subtropical)",
+    "xc_scientific_name":"Cacicus uropygialis",
+    "ebird_scientific_name":"Cacicus uropygialis uropygialis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Scarlet-rumped_cacique",
+    "rationale":"Connected in Wikipedia."
+  },
+  "312":{
+    "species_code":"moucac2",
+    "xc_common_name":"Northern Mountain Cacique",
+    "ebird_common_name":"Mountain Cacique (Golden-shouldered)",
+    "xc_scientific_name":"Cacicus leucoramphus",
+    "ebird_scientific_name":"Cacicus chrysonotus leucoramphus\/peruvianus",
+    "wikipedia_url":"",
+    "rationale":"Scientific names match exactly."
+  },
+  "313":{
+    "species_code":"orcori3",
+    "xc_common_name":"Ochre Oriole",
+    "ebird_common_name":"Orchard Oriole (Fuertes's)",
+    "xc_scientific_name":"Icterus fuertesi",
+    "ebird_scientific_name":"Icterus spurius fuertesi",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Orchard_oriole",
+    "rationale":"Connected in Wikipedia: \"The subspecies of the Caribbean coast of Mexico, I. s. fuertesi, is sometimes considered a separate species, the ochre oriole or Fuertes's oriole.\"."
+  },
+  "314":{
+    "species_code":"brocow2",
+    "xc_common_name":"Bronze-brown Cowbird",
+    "ebird_common_name":"Bronzed Cowbird (Bronze-brown)",
+    "xc_scientific_name":"Molothrus armenti",
+    "ebird_scientific_name":"Molothrus aeneus armenti",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Bronzed_cowbird",
+    "rationale":"Connected in Wikipedia."
+  },
+  "315":{
+    "species_code":"masyel3",
+    "xc_common_name":"Chiriqui Yellowthroat",
+    "ebird_common_name":"Olive-crowned Yellowthroat (Chiriqui)",
+    "xc_scientific_name":"Geothlypis chiriquensis",
+    "ebird_scientific_name":"Geothlypis semiflava chiriquensis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "316":{
+    "species_code":"masyel4",
+    "xc_common_name":"Black-lored Yellowthroat",
+    "ebird_common_name":"Masked Yellowthroat (Black-lored)",
+    "xc_scientific_name":"Geothlypis auricularis",
+    "ebird_scientific_name":"Geothlypis aequinoctialis auricularis\/peruviana",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Masked_yellowthroat",
+    "rationale":"Connected in Wikipedia."
+  },
+  "317":{
+    "species_code":"masyel5",
+    "xc_common_name":"Southern Yellowthroat",
+    "ebird_common_name":"Masked Yellowthroat (Southern)",
+    "xc_scientific_name":"Geothlypis velata",
+    "ebird_scientific_name":"Geothlypis aequinoctialis velata",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Masked_yellowthroat",
+    "rationale":"Connected in Wikipedia."
+  },
+  "318":{
+    "species_code":"yelwar1",
+    "xc_common_name":"American Yellow Warbler",
+    "ebird_common_name":"Yellow Warbler (Northern)",
+    "xc_scientific_name":"Setophaga aestiva",
+    "ebird_scientific_name":"Setophaga petechia [aestiva Group]",
+    "wikipedia_url":"wikipedia article inconclusive but sounds from the scientific names that one is a subset of another?",
+    "rationale":"from scientific names sound like one is subspecies of the other"
+  },
+  "319":{
+    "species_code":"audwar",
+    "xc_common_name":"Audubon's Warbler",
+    "ebird_common_name":"Yellow-rumped Warbler (Audubon's)",
+    "xc_scientific_name":"Setophaga auduboni",
+    "ebird_scientific_name":"Setophaga coronata auduboni",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Audubon%27s_warbler",
+    "rationale":"Connected in Wikipedia: \"at various times the two forms (Audubon's warbler and the myrtle warbler) have been classed as separate species or grouped as the yellow-rumped warbler.\"."
+  },
+  "320":{
+    "species_code":"yerwar2",
+    "xc_common_name":"Goldman's Warbler",
+    "ebird_common_name":"Yellow-rumped Warbler (Goldman's)",
+    "xc_scientific_name":"Setophaga goldmani",
+    "ebird_scientific_name":"Setophaga coronata goldmani",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Yellow-rumped_warbler",
+    "rationale":"Connected in Wikipedia."
+  },
+  "321":{
+    "species_code":"twbwar2",
+    "xc_common_name":"Roraiman Warbler",
+    "ebird_common_name":"Two-banded Warbler (Roraiman)",
+    "xc_scientific_name":"Myiothlypis roraimae",
+    "ebird_scientific_name":"Myiothlypis bivittata roraimae",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Two-banded_warbler",
+    "rationale":"Connected in Wikipedia."
+  },
+  "322":{
+    "species_code":"gobwar4",
+    "xc_common_name":"Choco Warbler",
+    "ebird_common_name":"Golden-bellied Warbler (Choco)",
+    "xc_scientific_name":"Myiothlypis chlorophrys",
+    "ebird_scientific_name":"Myiothlypis chrysogaster chlorophrys",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Golden-bellied_warbler",
+    "rationale":"Connected in Wikipedia."
+  },
+  "323":{
+    "species_code":"gyhwar1",
+    "xc_common_name":"Grey-headed Warbler",
+    "ebird_common_name":"Gray-headed Warbler",
+    "xc_scientific_name":"Myiothlypis griseiceps",
+    "ebird_scientific_name":"Basileuterus griseiceps",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "324":{
+    "species_code":"thswar2",
+    "xc_common_name":"Yungas Warbler",
+    "ebird_common_name":"Three-striped Warbler (Bolivian)",
+    "xc_scientific_name":"Basileuterus punctipectus",
+    "ebird_scientific_name":"Basileuterus tristriatus [punctipectus Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Three-striped_warbler",
+    "rationale":"Scientific names match exactly."
+  },
+  "325":{
+    "species_code":"heptan2",
+    "xc_common_name":"Tooth-billed Tanager",
+    "ebird_common_name":"Hepatic Tanager (Highland)",
+    "xc_scientific_name":"Piranga lutea",
+    "ebird_scientific_name":"Piranga flava [lutea Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Hepatic_tanager",
+    "rationale":"from scientific names sound like one is subspecies of the other"
+  },
+  "326":{
+    "species_code":"heptan3",
+    "xc_common_name":"Red Tanager",
+    "ebird_common_name":"Hepatic Tanager (Lowland)",
+    "xc_scientific_name":"Piranga flava",
+    "ebird_scientific_name":"Piranga flava [flava Group]",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Hepatic_tanager",
+    "rationale":"Scientific names match exactly."
+  },
+  "327":{
+    "species_code":"heptan1",
+    "xc_common_name":"Hepatic Tanager",
+    "ebird_common_name":"Hepatic Tanager (Northern)",
+    "xc_scientific_name":"Piranga hepatica",
+    "ebird_scientific_name":"Piranga flava [hepatica Group]",
+    "wikipedia_url":"",
+    "rationale":"from scientific names sound like one is subspecies of the other"
+  },
+  "328":{
+    "species_code":"cartan2",
+    "xc_common_name":"Olive Tanager",
+    "ebird_common_name":"Carmiol's Tanager (Yellow-lored)",
+    "xc_scientific_name":"Chlorothraupis frenata",
+    "ebird_scientific_name":"Chlorothraupis carmioli frenata",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Olive_tanager",
+    "rationale":"Connected in Wikipedia: \"The olive tanager (Chlorothraupis carmioli), also known as Carmiol's tanager, [...]\"."
+  },
+  "329":{
+    "species_code":"blusee4",
+    "xc_common_name":"Ecuadorian Seedeater",
+    "ebird_common_name":"Blue Seedeater (Equatorial)",
+    "xc_scientific_name":"Amaurospiza aequatorialis",
+    "ebird_scientific_name":"Amaurospiza concolor aequatorialis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Ecuadorian_seedeater",
+    "rationale":"Connected in Wikipedia: \"In 2015 the IOC split the subspecies Amaurospiza concolor aequatorialis from the blue seedeater (Amaurospiza concolor sensu lato) as the Ecuadorian seedeater\"."
+  },
+  "330":{
+    "species_code":"bkchem2",
+    "xc_common_name":"White-browed Hemispingus",
+    "ebird_common_name":"Black-capped Hemispingus (White-browed)",
+    "xc_scientific_name":"Hemispingus auricularis",
+    "ebird_scientific_name":"Kleinothraupis atropileus auricularis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Black-capped_hemispingus",
+    "rationale":"Connected in Wikipedia."
+  },
+  "331":{
+    "species_code":"bkehem3",
+    "xc_common_name":"Western Hemispingus",
+    "ebird_common_name":"Black-eared Hemispingus (Western)",
+    "xc_scientific_name":"Hemispingus ochraceus",
+    "ebird_scientific_name":"Sphenopsis melanotis ochracea",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Black-eared_hemispingus",
+    "rationale":"Connected in Wikipedia."
+  },
+  "332":{
+    "species_code":"bkehem1",
+    "xc_common_name":"Piura Hemispingus",
+    "ebird_common_name":"Black-eared Hemispingus (Piura)",
+    "xc_scientific_name":"Hemispingus piurae",
+    "ebird_scientific_name":"Sphenopsis melanotis piurae\/macrophrys",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Black-eared_hemispingus",
+    "rationale":"Connected in Wikipedia."
+  },
+  "333":{
+    "species_code":"bkfdac1",
+    "xc_common_name":"Yellow-tufted Dacnis",
+    "ebird_common_name":"Black-faced Dacnis (Yellow-tufted)",
+    "xc_scientific_name":"Dacnis egregia",
+    "ebird_scientific_name":"Dacnis lineata egregia\/aequatorialis",
+    "wikipedia_url":"https:\/\/en.wikipedia.org\/wiki\/Black-faced_dacnis",
+    "rationale":"Connected in Wikipedia."
+  },
+  "334":{
+    "species_code":"tbsfin1",
+    "xc_common_name":"Thick-billed Seed Finch",
+    "ebird_common_name":"Thick-billed Seed-Finch",
+    "xc_scientific_name":"Oryzoborus funereus",
+    "ebird_scientific_name":"Sporophila funerea",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "335":{
+    "species_code":"cbsfin",
+    "xc_common_name":"Chestnut-bellied Seed Finch",
+    "ebird_common_name":"Chestnut-bellied Seed-Finch",
+    "xc_scientific_name":"Oryzoborus angolensis",
+    "ebird_scientific_name":"Sporophila angolensis",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "336":{
+    "species_code":"nisfin1",
+    "xc_common_name":"Nicaraguan Seed Finch",
+    "ebird_common_name":"Nicaraguan Seed-Finch",
+    "xc_scientific_name":"Oryzoborus nuttingi",
+    "ebird_scientific_name":"Sporophila nuttingi",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "337":{
+    "species_code":"lbsfin1",
+    "xc_common_name":"Large-billed Seed Finch",
+    "ebird_common_name":"Large-billed Seed-Finch",
+    "xc_scientific_name":"Oryzoborus crassirostris",
+    "ebird_scientific_name":"Sporophila crassirostris",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "338":{
+    "species_code":"gbsfin1",
+    "xc_common_name":"Great-billed Seed Finch",
+    "ebird_common_name":"Great-billed Seed-Finch",
+    "xc_scientific_name":"Oryzoborus maximiliani",
+    "ebird_scientific_name":"Sporophila maximiliani",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "339":{
+    "species_code":"bbsfin1",
+    "xc_common_name":"Black-billed Seed Finch",
+    "ebird_common_name":"Black-billed Seed-Finch",
+    "xc_scientific_name":"Oryzoborus atrirostris",
+    "ebird_scientific_name":"Sporophila atrirostris",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "340":{
+    "species_code":"ibesee1",
+    "xc_common_name":"Ibera Seedeater",
+    "ebird_common_name":"Ibera Seedeater (undescribed form)",
+    "xc_scientific_name":"Sporophila digiacomoi",
+    "ebird_scientific_name":"Sporophila [undescribed form]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  },
+  "341":{
+    "species_code":"bisfly1",
+    "xc_common_name":"Bismarck Flyrobin",
+    "ebird_common_name":"Bismarck Flyrobin (undescribed form)",
+    "xc_scientific_name":"Microeca tax.nov.Bismarck",
+    "ebird_scientific_name":"Microeca [undescribed form]",
+    "wikipedia_url":"",
+    "rationale":"Common names match up to a negligible variation."
+  }
+}

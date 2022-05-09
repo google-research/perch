@@ -571,11 +571,31 @@ def create_taxonomy_info(
       dict(
           zip(ebird_taxonomy['SPECIES_CODE'],
               ebird_taxonomy['PRIMARY_COM_NAME'])))
-  logging.info(
-      'The following %d species need manual verification (keys are '
-      'from Xeno-Canto, values are from eBird):', len(to_verify))
-  for k, v in zip(to_verify_xeno_canto, to_verify_ebird):
-    logging.info('- %s:\n      %s', k, v)
+
+  # `allowlist` is a set of (species code, scientific name) tuples representing
+  # species code matches which have already been manually validated. The
+  # rationale for each match is detailed in `species_code_rationales.json`.
+  file_path = (
+      epath.Path(__file__).parent / 'species_code_rationales.json')
+  allowlist = pd.read_json(file_path, orient='index')
+  allowlist = set(
+      zip(allowlist['species_code'], allowlist['xc_scientific_name']))
+
+  needs_manual_validation = []
+  for k, v, s, c in zip(to_verify_xeno_canto, to_verify_ebird,
+                        to_verify['Scientific name'],
+                        to_verify['species_code']):
+    # When common names match exactly, we don't need manual validation.
+    if k != v and (c, s) not in allowlist:
+      needs_manual_validation.append((k, v))
+
+  if needs_manual_validation:
+    logging.info(
+        'The following %d species need manual verification (keys are '
+        'from Xeno-Canto, values are from eBird):',
+        len(needs_manual_validation))
+    for k, v in needs_manual_validation:
+      logging.info('- %s:\n      %s', k, v)
 
   not_found = taxonomy_info[
       taxonomy_info['species_code'].isna()
