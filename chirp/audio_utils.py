@@ -28,6 +28,8 @@ from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax import scipy
+from jax.experimental import jax2tf
+import tensorflow as tf
 
 
 @struct.dataclass
@@ -51,7 +53,7 @@ class PCENScalingConfig:
 ScalingConfig = Union[LogScalingConfig, PCENScalingConfig]
 
 
-@functools.partial(jax.jit, static_argnums=(1, 2, 3, 4))
+@functools.partial(jax.jit, static_argnums=(1, 2, 3, 4, 7))
 def compute_melspec(
     audio: jnp.ndarray,
     sample_rate_hz: int,
@@ -60,6 +62,7 @@ def compute_melspec(
     frame_length_secs: float = 0.08,
     lower_edge_hz: float = 60.0,
     upper_edge_hz: float = 10_000.0,
+    use_tf_stft: bool = False,
     scaling_config: Optional[ScalingConfig] = None) -> jnp.ndarray:
   """Converts audio to melspectrogram.
 
@@ -72,8 +75,9 @@ def compute_melspec(
     frame_length_secs: the stft window length in seconds.
     lower_edge_hz: lower bound on the frequencies to be included in the mel
       spectrum.
-    upper_edge_hz: he desired top edge of the highest frequency band in the mel
+    upper_edge_hz: the desired top edge of the highest frequency band in the mel
       spectrum.
+    use_tf_stft: if true, uses the Tensorflow STFT op.
     scaling_config: Scaling configuration.
 
   Returns:
@@ -91,21 +95,35 @@ def compute_melspec(
     audio = jnp.pad(audio, pad_width)
   overlap = frame_length - frame_step
 
-  _, _, stfts = scipy.signal.stft(
-      audio,
-      sample_rate_hz,
-      nperseg=frame_length,
-      noverlap=overlap,
-      nfft=nfft,
-      return_onesided=True,
-      window="hann",
-      padded=False,
-      boundary=None)
-  magnitude_spectrograms = jnp.abs(stfts)
+  if use_tf_stft:
+    # The Jax stft uses a complex convolution which is not supported
+    # by TFLite.
+    def _tf_stft(x):
+      return tf.signal.stft(
+          x,
+          frame_length=frame_length,
+          frame_step=frame_step,
+          fft_length=nfft,
+          pad_end=False)
 
-  # Scaling to match the tf.signal.stft output.
-  magnitude_spectrograms = frame_length / 2 * magnitude_spectrograms
-  magnitude_spectrograms = jnp.swapaxes(magnitude_spectrograms, -1, -2)
+    stfts = jax2tf.call_tf(_tf_stft)(audio)
+    magnitude_spectrograms = jnp.abs(stfts)
+  else:
+    _, _, stfts = scipy.signal.stft(
+        audio,
+        sample_rate_hz,
+        nperseg=frame_length,
+        noverlap=overlap,
+        nfft=nfft,
+        return_onesided=True,
+        window="hann",
+        padded=False,
+        boundary=None)
+    magnitude_spectrograms = jnp.abs(stfts)
+    # Scaling to match the tf.signal.stft output.
+    magnitude_spectrograms = frame_length / 2 * magnitude_spectrograms
+    magnitude_spectrograms = jnp.swapaxes(magnitude_spectrograms, -1, -2)
+
   # An energy spectrogram is the magnitude of the complex-valued STFT.
   # A float32 Tensor of shape [batch_size, ?, num_spectrogram_bins].
   num_spectrogram_bins = magnitude_spectrograms.shape[-1]
