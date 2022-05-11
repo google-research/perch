@@ -14,8 +14,10 @@
 # limitations under the License.
 
 """Training loop."""
+from chirp import audio_utils
 from chirp.data import pipeline
 from chirp.models import class_average
+from chirp.models import efficientnet
 from chirp.models import metrics
 from chirp.models import taxonomy_model
 from clu import checkpoint
@@ -64,6 +66,42 @@ class ValidationMetrics(clu_metrics.Collection):
 class TrainingMetrics(clu_metrics.Collection):
   train_loss: clu_metrics.LastValue.from_fun(mean_cross_entropy)
   train_map: clu_metrics.LastValue.from_fun(map_)
+
+
+def parse_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
+  """Parse the model configuration.
+
+  This converts string-based configuration into the necessary objects.
+
+  Args:
+    config: The model configuration. Will be modified in-place.
+
+  Returns:
+    The modified model configuration which can be passed to the model
+    constructor.
+  """
+  # Handle model config
+  model_config = config.model_config
+  with model_config.unlocked():
+    if model_config.encoder_.startswith("efficientnet-"):
+      model = efficientnet.EfficientNetModel(model_config.encoder_[-2:])
+      model_config.encoder = efficientnet.EfficientNet(model)
+    else:
+      raise ValueError("unknown encoder")
+    del model_config.encoder_
+
+  # Handle melspec config
+  melspec_config = model_config.melspec_config
+  with melspec_config.unlocked():
+    # TODO(bartvm): Add scaling config for hyperparameter search
+    if melspec_config.scaling == "pcen":
+      melspec_config.scaling_config = audio_utils.PCENScalingConfig()
+    elif melspec_config.scaling == "log":
+      melspec_config.scaling_config = audio_utils.LogScalingConfig()
+    elif melspec_config.scaling == "raw":
+      melspec_config.scaling_config = None
+    del melspec_config.scaling
+  return config
 
 
 def train_and_evaluate(batch_size: int, num_train_steps: int, rng_seed: int,
