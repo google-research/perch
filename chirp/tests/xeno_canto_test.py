@@ -30,8 +30,9 @@ from absl.testing import parameterized
 def _make_mock_requests_side_effect(broken_down_taxonomy_info,
                                     wrong_num_recordings=False):
   to_query = lambda row: row['xeno_canto_query'].replace(' ', '%20')
+  to_genus = lambda row: row['xeno_canto_query'].split(' ')[0]
   api_url = xeno_canto._XC_API_URL
-  to_url = lambda row: f"{api_url}?query={to_query(row)}%20gen:{row['genus']}"
+  to_url = lambda row: f'{api_url}?query={to_query(row)}%20gen:{to_genus(row)}'
 
   xeno_canto_queries = broken_down_taxonomy_info['xeno_canto_query'].tolist()
 
@@ -387,12 +388,10 @@ class XenoCantoTest(parameterized.TestCase):
         ])
     ]
 
-    expected_columns = ('species_code', 'xeno_canto_query', 'scientific_name',
-                        'species', 'genus', 'family', 'order', 'common_name')
-    expected = self.broken_down_taxonomy_info.copy().drop(columns=[
-        c for c in self.broken_down_taxonomy_info.columns
-        if c not in expected_columns
-    ])
+    expected = self.broken_down_taxonomy_info.copy()[[
+        'No.', 'species_code', 'xeno_canto_query', 'scientific_name', 'species',
+        'genus', 'family', 'order', 'common_name'
+    ]]
 
     wikidata_checksum = hashlib.sha256(str(matches).encode('utf-8')).hexdigest()
     with mock.patch.object(
@@ -412,15 +411,30 @@ class XenoCantoTest(parameterized.TestCase):
     mock_session_cls.return_value.get.side_effect = (
         _make_mock_requests_side_effect(self.broken_down_taxonomy_info))
 
-    expected = self.broken_down_taxonomy_info.copy()
+    taxonomy_info = self.broken_down_taxonomy_info.drop(columns=[
+        'Common name', 'Scientific name', 'No. Back', 'is_insect',
+        'no_species_code', 'to_verify'
+    ])
+
+    expected = taxonomy_info.copy().drop(columns=['No.'])
     expected['xeno_canto_ids'] = [['00000'], ['00001'], ['00002']]
     expected['xeno_canto_quality_scores'] = [['A'], [''], ['no score']]
     expected['xeno_canto_bg_species_codes'] = [[['ostric3']], [['grerhe1']],
                                                [['ostric2']]]
     self.assertTrue(
         xeno_canto.retrieve_recording_metadata(
-            self.broken_down_taxonomy_info,
-            progress_bar=False).equals(expected))
+            taxonomy_info, progress_bar=False).equals(expected))
+
+    # The function should raise a RuntimeError if the number of foreground
+    # recordings declared by `taxonomy_info` is greater than the number of
+    # recordings retrieved.
+    taxonomy_info_wrong_no = taxonomy_info.copy()
+    taxonomy_info_wrong_no['No.'] = 500
+    self.assertRaises(
+        RuntimeError,
+        xeno_canto.retrieve_recording_metadata,
+        taxonomy_info_wrong_no,
+        progress_bar=False)
 
 
 if __name__ == '__main__':

@@ -445,6 +445,10 @@ def _scrape_xeno_canto_recording_metadata(
   Returns:
     A mapping from species code to Xeno-Canto recording metadata for that
     species.
+
+  Raises:
+    RuntimeError: if the number of recordings obtained is incorrect for some
+      species.
   """
   session = requests.Session()
   session.mount(
@@ -457,21 +461,30 @@ def _scrape_xeno_canto_recording_metadata(
     species_code = row['species_code']
     recording_info_dicts = []
     for query in row['xeno_canto_query'].replace(' ', '%20').split(','):
+      genus = query.split('%20')[0]
       response = session.get(
           # Specifying gen:<GENUS> speeds up the lookup.
-          url=f"{_XC_API_URL}?query={query}%20gen:{row['genus']}").json()
+          url=f'{_XC_API_URL}?query={query}%20gen:{genus}').json()
       dicts = response['recordings']
       # If there are more than one page of responses, loop over pages.
       if int(response['numPages']) > 1:
         for page in range(2, int(response['numPages']) + 1):
           # Specifying gen:<GENUS> speeds up the lookup.
           url_with_page = (
-              f"{_XC_API_URL}?query={query}%20gen:{row['genus']}&page={page}")
+              f'{_XC_API_URL}?query={query}%20gen:{genus}&page={page}')
           dicts.extend(session.get(url=url_with_page).json()['recordings'])
       if len(dicts) != int(response['numRecordings']):
         raise RuntimeError(
             f'wrong number of recordings obtained for {species_code}')
       recording_info_dicts.extend(dicts)
+    # 'No.' is the number of recordings reported for a given species by
+    # https://xeno-canto.org/collection/species/all. It's possible that this
+    # column is not entirely up to date, so we treat it as a lower-bound for
+    # the number of recordings expected. This check helps prefent accidentally
+    # discarding recordings for an entire species through a malformed query.
+    if len(recording_info_dicts) < row['No.']:
+      raise RuntimeError(
+          f'wrong number of recordings obtained for {species_code}')
     return (species_code, recording_info_dicts)
 
   with concurrent.futures.ThreadPoolExecutor(
@@ -644,10 +657,10 @@ def create_taxonomy_info(
   taxonomy_info = _break_down_taxonomy(taxonomy_info, ebird_taxonomy)
 
   # Drop unused columns.
-  # Columns: 'species_code', 'xeno_canto_query', 'scientific_name', 'species',
-  #          'genus', 'family', 'order', 'common_name'.
+  # Columns: 'No.', 'species_code', 'xeno_canto_query', 'scientific_name',
+  #          'species', 'genus', 'family', 'order', 'common_name'.
   taxonomy_info = taxonomy_info.drop(columns=[
-      'Common name', 'Scientific name', 'No.', 'No. Back', 'is_insect',
+      'Common name', 'Scientific name', 'No. Back', 'is_insect',
       'no_species_code', 'to_verify'
   ])
 
@@ -687,6 +700,7 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
   logging.info('Scraping Xeno-Canto for recording IDs...')
   species_code_to_recording_metadata = _scrape_xeno_canto_recording_metadata(
       taxonomy_info, progress_bar=progress_bar)
+  taxonomy_info = taxonomy_info.drop(columns=['No.'])
   taxonomy_info['xeno_canto_ids'] = taxonomy_info['species_code'].map({
       species_code: [info.xc_id for info in metadata]
       for species_code, metadata in species_code_to_recording_metadata.items()
