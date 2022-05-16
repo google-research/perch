@@ -453,32 +453,56 @@ def _scrape_xeno_canto_recording_metadata(
           max_retries=requests.adapters.Retry(total=5, backoff_factor=0.1)))
 
   @ratelimiter.RateLimiter(max_calls=_XC_API_RATE_LIMIT, period=1)
-  def retrieve_recording_infos(row):
+  def retrieve_recording_info_dicts(row):
     species_code = row['species_code']
-    recording_infos = []
+    recording_info_dicts = []
     for query in row['xeno_canto_query'].replace(' ', '%20').split(','):
-      recording_info_dicts = session.get(
+      response = session.get(
           # Specifying gen:<GENUS> speeds up the lookup.
-          url=f"{_XC_API_URL}?query={query}%20gen:{row['genus']}").json(
-          )['recordings']
-      # Avoid restricted recordings and *-nd licenses. Restricted recordings
-      # have an empty string as the 'file' value.
-      recording_info_dicts = [
-          r for r in recording_info_dicts if r['file'] and '-nd' not in r['lic']
-      ]
-      recording_infos.extend(
-          RecordingInfo(
-              xc_id=r['id'], quality_score=r['q'], background_species=r['also'])
-          for r in recording_info_dicts)
-    return (species_code, recording_infos)
+          url=f"{_XC_API_URL}?query={query}%20gen:{row['genus']}").json()
+      dicts = response['recordings']
+      # If there are more than one page of responses, loop over pages.
+      if int(response['numPages']) > 1:
+        for page in range(2, int(response['numPages']) + 1):
+          # Specifying gen:<GENUS> speeds up the lookup.
+          url_with_page = (
+              f"{_XC_API_URL}?query={query}%20gen:{row['genus']}&page={page}")
+          dicts.extend(session.get(url=url_with_page).json()['recordings'])
+      if len(dicts) != int(response['numRecordings']):
+        raise RuntimeError(
+            f'wrong number of recordings obtained for {species_code}')
+      recording_info_dicts.extend(dicts)
+    return (species_code, recording_info_dicts)
 
   with concurrent.futures.ThreadPoolExecutor(
       max_workers=_XC_API_RATE_LIMIT) as executor:
     rows = [row for _, row in taxonomy_info.iterrows()]
-    iterator = executor.map(retrieve_recording_infos, rows)
+    iterator = executor.map(retrieve_recording_info_dicts, rows)
     if progress_bar:
       iterator = tqdm.tqdm(iterator, total=len(rows))
-    species_code_to_recording_metadata = dict(iterator)
+    species_code_to_recording_info_dicts = dict(iterator)
+
+  species_code_to_recording_metadata = {}
+  num_total, num_restricted, num_nd, num_remaining = 0, 0, 0, 0
+  for species_code, dicts in species_code_to_recording_info_dicts.items():
+    num_total += len(dicts)
+    # Avoid restricted recordings and *-nd licenses. Restricted recordings
+    # have an empty string as the 'file' value.
+    num_restricted += len([r for r in dicts if not r['file']])
+    num_nd += len([r for r in dicts if '-nd' in r['lic']])
+    recording_info_dicts = [
+        RecordingInfo(r['id'], r['q'], r['also'])
+        for r in dicts
+        if r['file'] and '-nd' not in r['lic']
+    ]
+
+    num_remaining += len(recording_info_dicts)
+    species_code_to_recording_metadata[species_code] = recording_info_dicts
+
+  logging.info(
+      'Retrieved %d recordings out of %d, ignoring %d restricted recordings '
+      'and %d ND-licensed recordings', num_remaining, num_total, num_restricted,
+      num_nd)
 
   return species_code_to_recording_metadata
 

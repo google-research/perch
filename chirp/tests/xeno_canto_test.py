@@ -27,7 +27,8 @@ from absl.testing import absltest
 from absl.testing import parameterized
 
 
-def _make_mock_requests_side_effect(broken_down_taxonomy_info):
+def _make_mock_requests_side_effect(broken_down_taxonomy_info,
+                                    wrong_num_recordings=False):
   to_query = lambda row: row['xeno_canto_query'].replace(' ', '%20')
   api_url = xeno_canto._XC_API_URL
   to_url = lambda row: f"{api_url}?query={to_query(row)}%20gen:{row['genus']}"
@@ -67,11 +68,21 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info):
         'lic': 'cc-by-nd'
     }]
 
+  # Return recordings in two pages to test resiliency to multi-page results.
   return_values = {
       to_url(row): {
-          'recordings': make_recordings(i)
+          'recordings': make_recordings(i)[:-1],
+          'numRecordings': '4' if wrong_num_recordings else '3',
+          'numPages': '2',
       } for i, row in broken_down_taxonomy_info.iterrows()
   }
+  return_values.update({
+      to_url(row) + '&page=2': {
+          'recordings': make_recordings(i)[-1:],
+          'numRecordings': '4' if wrong_num_recordings else '3',
+          'numPages': '2',
+      } for i, row in broken_down_taxonomy_info.iterrows()
+  })
 
   def side_effect(url):
     mock_response = mock.MagicMock()
@@ -306,7 +317,19 @@ class XenoCantoTest(parameterized.TestCase):
   def test_scrape_xeno_canto_recording_metadata(self, mock_session_cls):
     # Mock requests.Session.get to simulate a Xeno-Canto API call.
     mock_session_cls.return_value.get.side_effect = (
-        _make_mock_requests_side_effect(self.broken_down_taxonomy_info))
+        _make_mock_requests_side_effect(
+            self.broken_down_taxonomy_info, wrong_num_recordings=True))
+
+    # We expect a RuntimeError to be raised if the code fails to retrieve the
+    # number of recordings declared in the response.
+    with self.assertRaises(RuntimeError):
+      xeno_canto._scrape_xeno_canto_recording_metadata(
+          self.broken_down_taxonomy_info, progress_bar=False)
+
+    # Mock requests.Session.get to simulate a Xeno-Canto API call.
+    mock_session_cls.return_value.get.side_effect = (
+        _make_mock_requests_side_effect(
+            self.broken_down_taxonomy_info, wrong_num_recordings=False))
 
     # We expect only the first recording to be returned for each species code,
     # since the 'file' is empty for the second one and the third one has a *-nd
