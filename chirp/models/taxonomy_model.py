@@ -52,7 +52,7 @@ class TaxonomyModel(nn.Module):
     """Apply the taxonomy model.
 
     Args:
-      inputs: A spectrogram of shape `(batch size, time, frequency)`.
+      inputs: Audio of shape `(batch size, time)`.
       train: Whether this is training (affects batch norm and dropout).
 
     Returns:

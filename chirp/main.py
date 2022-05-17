@@ -22,6 +22,7 @@ from absl import flags
 from absl import logging
 
 from chirp import train
+from chirp.data import pipeline
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
 
@@ -40,8 +41,27 @@ def main(argv: Sequence[str]) -> None:
   logging.info(_CONFIG.value)
   tf.config.experimental.set_visible_devices([], "GPU")
   config = train.parse_config(_CONFIG.value)
+
+  train_dataset, dataset_info = pipeline.get_dataset(
+      "train", batch_size=config.batch_size, **config.data_config)
+  valid_dataset, _ = pipeline.get_dataset(
+      "test_caples", batch_size=config.batch_size, **config.data_config)
+  model_bundle, train_state = train.initialize_model(
+      dataset_info,
+      workdir=_WORKDIR.value,
+      data_config=config.data_config,
+      model_config=config.model_config,
+      rng_seed=config.rng_seed,
+      learning_rate=config.learning_rate)
   train.train_and_evaluate(
-      **config, workdir=_WORKDIR.value, logdir=_LOGDIR.value)
+      model_bundle,
+      train_state,
+      train_dataset,
+      valid_dataset,
+      dataset_info,
+      workdir=_WORKDIR.value,
+      logdir=_LOGDIR.value,
+      **config.train_config)
 
 
 if __name__ == "__main__":

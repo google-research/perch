@@ -24,10 +24,11 @@ def get_config() -> config_dict.ConfigDict:
   config.rng_seed = 0
   config.learning_rate = 0.01
 
-  config.num_train_steps = 100_000
-  config.log_every_steps = 100
-  config.eval_every_steps = 500
-  config.checkpoint_every_steps = 2_000
+  train_config = config_dict.ConfigDict()
+  train_config.num_train_steps = 100_000
+  train_config.log_every_steps = 100
+  train_config.eval_every_steps = 500
+  train_config.checkpoint_every_steps = 2_000
 
   data_config = config_dict.ConfigDict()
   data_config.window_size_s = 5
@@ -50,5 +51,6 @@ def get_config() -> config_dict.ConfigDict:
   config.data_config = data_config
   config.model_config = model_config
   config.model_config.melspec_config = melspec_config
+  config.train_config = train_config
 
   return config
