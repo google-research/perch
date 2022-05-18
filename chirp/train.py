@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """Training loop."""
+from absl import logging
 import os
 from chirp import audio_utils
 from chirp.models import class_average
@@ -111,6 +112,9 @@ def parse_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
     elif melspec_config.scaling == "raw":
       melspec_config.scaling_config = None
     del melspec_config.scaling
+  if config.train_config.tflite_export and not melspec_config.use_tf_stft:
+    logging.warning(
+        "TFLite export will probably fail if using the JAX stft op.")
   return config
 
 
@@ -153,6 +157,7 @@ def train_and_evaluate(model_bundle, train_state, train_dataset, valid_dataset,
                        dataset_info, num_train_steps: int, logdir: str,
                        workdir: str, log_every_steps: int,
                        checkpoint_every_steps: int, eval_every_steps: int,
+                       tflite_export: bool,
                        data_config: config_dict.ConfigDict) -> None:
   """Train a model.
 
@@ -168,6 +173,7 @@ def train_and_evaluate(model_bundle, train_state, train_dataset, valid_dataset,
     log_every_steps: Write the training minibatch loss.
     checkpoint_every_steps: Checkpoint the model and training state.
     eval_every_steps: Evaluate on the validation set.
+    tflite_export: Whether to export TFLite models.
     data_config: Data loading configuration.
   """
   train_iterator = train_dataset.as_numpy_iterator()
@@ -237,8 +243,9 @@ def train_and_evaluate(model_bundle, train_state, train_dataset, valid_dataset,
     if train_state.step % checkpoint_every_steps == 0:
       with report_progress.timed("checkpoint"):
         model_bundle.ckpt.save(train_state)
-      with report_progress.timed("tflite_export"):
-        export_tf_lite(model_bundle, train_state, workdir, input_size)
+      if tflite_export:
+        with report_progress.timed("tflite_export"):
+          export_tf_lite(model_bundle, train_state, workdir, input_size)
 
     if train_state.step % eval_every_steps == 0:
       # TODO(bartvm): Split eval into separate job for larger validation sets

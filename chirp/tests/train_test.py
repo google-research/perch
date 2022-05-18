@@ -49,6 +49,7 @@ class TrainTest(absltest.TestCase):
     train_config.log_every_steps = 1
     train_config.eval_every_steps = 50
     train_config.checkpoint_every_steps = 1
+    train_config.tflite_export = True
 
     data_config = config_dict.ConfigDict()
     data_config.window_size_s = 1

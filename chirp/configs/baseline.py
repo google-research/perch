@@ -29,6 +29,7 @@ def get_config() -> config_dict.ConfigDict:
   train_config.log_every_steps = 100
   train_config.eval_every_steps = 500
   train_config.checkpoint_every_steps = 2_000
+  train_config.tflite_export = False
 
   data_config = config_dict.ConfigDict()
   data_config.window_size_s = 5
@@ -47,6 +48,7 @@ def get_config() -> config_dict.ConfigDict:
   melspec_config.melspec_depth = 160
   melspec_config.melspec_frequency = 100
   melspec_config.scaling = 'pcen'
+  melspec_config.use_tf_stft = False
 
   config.data_config = data_config
   config.model_config = model_config
