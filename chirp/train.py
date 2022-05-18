@@ -33,6 +33,7 @@ from jax import random
 from jax.experimental import jax2tf
 from ml_collections import config_dict
 import optax
+import pprint
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -286,3 +287,24 @@ def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,
 
   with tf.io.gfile.GFile(os.path.join(workdir, "model.tflite"), "wb") as f:
     f.write(tflite_float_model)
+
+
+def write_config(config: config_dict.ConfigDict,
+                 workdir: str,
+                 overwrite_previous: bool = False):
+  """Write model config to json and txt files."""
+  if not tf.io.gfile.exists(workdir):
+    tf.io.gfile.makedirs(workdir)
+  json_fp = os.path.join(workdir, "config.json")
+  if tf.io.gfile.exists(json_fp):
+    tf.io.gfile.rename(
+        json_fp, json_fp + ".previous", overwrite=overwrite_previous)
+  txt_fp = os.path.join(workdir, "config.txt")
+  if tf.io.gfile.exists(txt_fp):
+    tf.io.gfile.rename(
+        txt_fp, txt_fp + ".previous", overwrite=overwrite_previous)
+
+  with tf.io.gfile.GFile(json_fp, "wb") as f:
+    f.write(config.to_json_best_effort())
+  with tf.io.gfile.GFile(txt_fp, "w") as f:
+    pprint.pprint(config.to_dict(), f, indent=2)

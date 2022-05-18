@@ -105,6 +105,20 @@ class TrainTest(absltest.TestCase):
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))
 
+  def test_write_config(self):
+    config = self._get_test_config()
+    train.write_config(config, self.train_dir, True)
+    self.assertTrue(
+        tf.io.gfile.exists(os.path.join(self.train_dir, "config.json")))
+    self.assertTrue(
+        tf.io.gfile.exists(os.path.join(self.train_dir, "config.txt")))
+
+    train.write_config(config, self.train_dir, True)
+    self.assertTrue(
+        tf.io.gfile.exists(
+            os.path.join(self.train_dir, "config.json.previous")))
+    self.assertTrue(
+        tf.io.gfile.exists(os.path.join(self.train_dir, "config.txt.previous")))
 
 if __name__ == "__main__":
   absltest.main()

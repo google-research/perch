@@ -40,6 +40,7 @@ def main(argv: Sequence[str]) -> None:
     raise app.UsageError("Too many command-line arguments.")
   logging.info(_CONFIG.value)
   tf.config.experimental.set_visible_devices([], "GPU")
+  train.write_config(_CONFIG.value, _WORKDIR.value)
   config = train.parse_config(_CONFIG.value)
 
   train_dataset, dataset_info = pipeline.get_dataset(
