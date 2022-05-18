@@ -59,6 +59,7 @@ def main(argv: Sequence[str]) -> None:
       train_dataset,
       valid_dataset,
       dataset_info,
+      data_config=config.data_config,
       workdir=_WORKDIR.value,
       logdir=_LOGDIR.value,
       **config.train_config)
