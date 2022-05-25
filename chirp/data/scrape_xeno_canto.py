@@ -15,7 +15,8 @@
 
 """Scrapes the Xeno-Canto website for taxonomy and audio data."""
 
-from typing import Sequence
+import functools
+from typing import Sequence, Tuple
 
 from absl import app
 from absl import flags
@@ -25,7 +26,6 @@ import pandas as pd
 
 _MODES = (
     'collect_info',
-    'collect_info_and_download_audio',  # copypara:strip
 )
 _MODE = flags.DEFINE_enum('mode', 'collect_info', _MODES, 'Operation mode.')
 _OUTPUT_DIR = flags.DEFINE_string(
@@ -55,7 +55,8 @@ def main(argv: Sequence[str]) -> None:
     raise app.UsageError('Too many command-line arguments.')
 
   modes = {
-      'collect_info': collect_info,
+      'collect_info':
+          collect_info,
   }
   modes[_MODE.value](_OUTPUT_DIR.value, _TAXONOMY_INFO_FILENAME.value)
 

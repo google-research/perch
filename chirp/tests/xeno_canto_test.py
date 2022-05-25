@@ -28,7 +28,8 @@ from absl.testing import parameterized
 
 
 def _make_mock_requests_side_effect(broken_down_taxonomy_info,
-                                    wrong_num_recordings=False):
+                                    wrong_num_recordings=False,
+                                    unknown_file_extension=False):
   to_query = lambda row: row['xeno_canto_query'].replace(' ', '%20')
   to_genus = lambda row: row['xeno_canto_query'].split(' ')[0]
   api_url = xeno_canto._XC_API_URL
@@ -37,8 +38,10 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
   xeno_canto_queries = broken_down_taxonomy_info['xeno_canto_query'].tolist()
 
   def make_recordings(i):
+    suffix = '.unknown_extension' if unknown_file_extension else '.mp3'
     return [{
-        'file': f'XC{i:05d}.mp3',
+        'file': f'XC{i:05d}{suffix}',
+        'file-name': f'XC{i:05d}{suffix}',
         'id': f'{i:05d}',
         'q': {
             0: 'A',
@@ -49,6 +52,7 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
         'lic': 'cc-by'
     }, {
         'file': '',
+        'file-name': '',
         'id': f'{i:05d}',
         'q': {
             0: 'A',
@@ -58,7 +62,8 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
         'also': [xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]],
         'lic': 'cc-by'
     }, {
-        'file': f'XC{i:05d}.mp3',
+        'file': f'XC{i:05d}{suffix}',
+        'file-name': f'XC{i:05d}{suffix}',
         'id': f'{i:05d}',
         'q': {
             0: 'A',
@@ -70,6 +75,7 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
     }]
 
   # Return recordings in two pages to test resiliency to multi-page results.
+  # pylint: disable=g-complex-comprehension
   return_values = {
       to_url(row): {
           'recordings': make_recordings(i)[:-1],
@@ -84,6 +90,8 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
           'numPages': '2',
       } for i, row in broken_down_taxonomy_info.iterrows()
   })
+
+  # pylint: enable=g-complex-comprehension
 
   def side_effect(url):
     mock_response = mock.MagicMock()
@@ -316,25 +324,36 @@ class XenoCantoTest(parameterized.TestCase):
 
   @mock.patch.object(xeno_canto.requests, 'Session', autospec=True)
   def test_scrape_xeno_canto_recording_metadata(self, mock_session_cls):
-    # Mock requests.Session.get to simulate a Xeno-Canto API call.
+    # In this test we mock requests.Session.get to simulate a Xeno-Canto API
+    # call.
+
+    # We expect a RuntimeError to be raised if the code fails to retrieve the
+    # number of recordings declared in the response.
     mock_session_cls.return_value.get.side_effect = (
         _make_mock_requests_side_effect(
             self.broken_down_taxonomy_info, wrong_num_recordings=True))
 
-    # We expect a RuntimeError to be raised if the code fails to retrieve the
-    # number of recordings declared in the response.
     with self.assertRaises(RuntimeError):
       xeno_canto._scrape_xeno_canto_recording_metadata(
           self.broken_down_taxonomy_info, progress_bar=False)
 
-    # Mock requests.Session.get to simulate a Xeno-Canto API call.
+    # We expect a RuntimeError to be raised if the code fails to infer the file
+    # extension.
     mock_session_cls.return_value.get.side_effect = (
         _make_mock_requests_side_effect(
-            self.broken_down_taxonomy_info, wrong_num_recordings=False))
+            self.broken_down_taxonomy_info, unknown_file_extension=True))
+
+    with self.assertRaises(RuntimeError):
+      xeno_canto._scrape_xeno_canto_recording_metadata(
+          self.broken_down_taxonomy_info, progress_bar=False)
 
     # We expect only the first recording to be returned for each species code,
     # since the 'file' is empty for the second one and the third one has a *-nd
     # license.
+    mock_session_cls.return_value.get.side_effect = (
+        _make_mock_requests_side_effect(
+            self.broken_down_taxonomy_info, wrong_num_recordings=False))
+
     species_code_to_recording_metadata = (
         xeno_canto._scrape_xeno_canto_recording_metadata(
             self.broken_down_taxonomy_info, progress_bar=False))
@@ -343,6 +362,7 @@ class XenoCantoTest(parameterized.TestCase):
           species_code_to_recording_metadata[row['species_code']], [
               xeno_canto.RecordingInfo(
                   xc_id=f'{i:05d}',
+                  xc_format='mp3',
                   quality_score={
                       0: 'A',
                       1: '',
@@ -351,7 +371,8 @@ class XenoCantoTest(parameterized.TestCase):
                   background_species=[[
                       'Struthio molybdophanes', 'Rhea americana',
                       'Struthio camelus'
-                  ][i]])
+                  ][i]],
+                  xc_license='cc-by')
           ])
 
   @mock.patch.object(xeno_canto.SPARQLWrapper, 'SPARQLWrapper', autospec=True)
@@ -418,9 +439,11 @@ class XenoCantoTest(parameterized.TestCase):
 
     expected = taxonomy_info.copy().drop(columns=['No.'])
     expected['xeno_canto_ids'] = [['00000'], ['00001'], ['00002']]
+    expected['xeno_canto_formats'] = [['mp3'], ['mp3'], ['mp3']]
     expected['xeno_canto_quality_scores'] = [['A'], [''], ['no score']]
     expected['xeno_canto_bg_species_codes'] = [[['ostric3']], [['grerhe1']],
                                                [['ostric2']]]
+    expected['xeno_canto_licenses'] = [['cc-by'], ['cc-by'], ['cc-by']]
     self.assertTrue(
         xeno_canto.retrieve_recording_metadata(
             taxonomy_info, progress_bar=False).equals(expected))

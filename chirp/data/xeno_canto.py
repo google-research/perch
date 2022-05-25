@@ -20,6 +20,7 @@ import concurrent.futures
 import dataclasses
 import hashlib
 import io
+import re
 import subprocess
 import sys
 from typing import Dict, FrozenSet, Sequence, Tuple
@@ -209,12 +210,17 @@ class SpeciesMappingConfig:
 
 @dataclasses.dataclass
 class RecordingInfo:
+  """Information on a Xeno-Canto recording."""
   # Xeno-Canto recording ID.
   xc_id: str
+  # File format.
+  xc_format: str
   # Quality score in {'A', 'B', 'C', 'D', 'E', '', 'no score'}.
   quality_score: str
   # Background species (scientific names).
   background_species: Sequence[str]
+  # Recording license.
+  xc_license: str
 
 
 def _infer_species_codes_from_wikidata(taxonomy_info: pd.DataFrame,
@@ -495,16 +501,22 @@ def _scrape_xeno_canto_recording_metadata(
       iterator = tqdm.tqdm(iterator, total=len(rows))
     species_code_to_recording_info_dicts = dict(iterator)
 
+  def infer_format(r):
+    m = re.search('(mp3|wav|ogg|flac)$', r['file-name'].lower()[-4:])
+    if not m:
+      raise RuntimeError(f"can't infer file format from {r['file-name']}")
+    return m.group(1)
+
   species_code_to_recording_metadata = {}
-  num_total, num_restricted, num_nd, num_remaining = 0, 0, 0, 0
+  num_total, num_unavailable, num_nd, num_remaining = 0, 0, 0, 0
   for species_code, dicts in species_code_to_recording_info_dicts.items():
     num_total += len(dicts)
-    # Avoid restricted recordings and *-nd licenses. Restricted recordings
+    # Avoid unavailable recordings and *-nd licenses. Unavailable recordings
     # have an empty string as the 'file' value.
-    num_restricted += len([r for r in dicts if not r['file']])
+    num_unavailable += len([r for r in dicts if not r['file']])
     num_nd += len([r for r in dicts if '-nd' in r['lic']])
     recording_info_dicts = [
-        RecordingInfo(r['id'], r['q'], r['also'])
+        RecordingInfo(r['id'], infer_format(r), r['q'], r['also'], r['lic'])
         for r in dicts
         if r['file'] and '-nd' not in r['lic']
     ]
@@ -513,9 +525,9 @@ def _scrape_xeno_canto_recording_metadata(
     species_code_to_recording_metadata[species_code] = recording_info_dicts
 
   logging.info(
-      'Retrieved %d recordings out of %d, ignoring %d restricted recordings '
-      'and %d ND-licensed recordings', num_remaining, num_total, num_restricted,
-      num_nd)
+      'Retrieved %d recordings out of %d, ignoring %d unavailable recordings '
+      'and %d ND-licensed recordings', num_remaining, num_total,
+      num_unavailable, num_nd)
 
   return species_code_to_recording_metadata
 
@@ -685,9 +697,11 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
   This function adds the following columns:
 
   * 'xeno_canto_ids': list of Xeno-Canto recording IDs.
+  * 'xeno_canto_formats': list of file formats.
   * 'xeno_canto_quality_scores': list of recording quality scores.
   * 'xeno_canto_bg_species_codes': list of species names for species heard in
       the background.
+  * 'xeno_canto_licenses': list of licenses.
 
   Args:
     taxonomy_info: Xeno-Canto taxonomy DataFrame.
@@ -703,6 +717,10 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
   taxonomy_info = taxonomy_info.drop(columns=['No.'])
   taxonomy_info['xeno_canto_ids'] = taxonomy_info['species_code'].map({
       species_code: [info.xc_id for info in metadata]
+      for species_code, metadata in species_code_to_recording_metadata.items()
+  })
+  taxonomy_info['xeno_canto_formats'] = taxonomy_info['species_code'].map({
+      species_code: [info.xc_format for info in metadata]
       for species_code, metadata in species_code_to_recording_metadata.items()
   })
   taxonomy_info['xeno_canto_quality_scores'] = taxonomy_info[
@@ -727,5 +745,10 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
           [_to_species_codes(info.background_species) for info in metadata]
           for code, metadata in species_code_to_recording_metadata.items()
       })
+
+  taxonomy_info['xeno_canto_licenses'] = taxonomy_info['species_code'].map({
+      species_code: [info.xc_license for info in metadata]
+      for species_code, metadata in species_code_to_recording_metadata.items()
+  })
 
   return taxonomy_info
