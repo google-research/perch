@@ -50,7 +50,111 @@ class PCENScalingConfig:
   eps: float = 1e-6
 
 
+@struct.dataclass
+class STFTParams:
+  """STFT Parameters."""
+  frame_step: int
+  frame_length: int
+  nfft: int
+  num_padded_samples: int
+  overlap: int
+
+
 ScalingConfig = Union[LogScalingConfig, PCENScalingConfig]
+
+
+def get_stft_params(sample_rate_hz: int,
+                    frame_rate: int,
+                    frame_length_secs: float = 0.08) -> STFTParams:
+  """Computes STFT parameters from high-level specifications (hz, seconds)."""
+  frame_step = sample_rate_hz // frame_rate
+  frame_length = int(sample_rate_hz * frame_length_secs)
+  # use math because nfft must be a static argument to signal.stft
+  nfft = 2**math.ceil(math.log2(frame_length))
+  num_padded_samples = (frame_length - frame_step) // 2
+  overlap = frame_length - frame_step
+  return STFTParams(frame_step, frame_length, nfft, num_padded_samples, overlap)
+
+
+@functools.partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
+def compute_stft(audio: jnp.ndarray,
+                 sample_rate_hz: int,
+                 frame_rate: int,
+                 frame_length_secs: float = 0.08,
+                 use_tf_stft: bool = True) -> jnp.ndarray:
+  """Computes the STFT of the audio."""
+  stft_params = get_stft_params(sample_rate_hz, frame_rate, frame_length_secs)
+  if stft_params.num_padded_samples > 0:
+    pad_width = ((0, 0),) * (audio.ndim - 1) + (
+        (stft_params.num_padded_samples,) * 2,)
+    audio = jnp.pad(audio, pad_width)
+
+  if use_tf_stft:
+    # The Jax stft uses a complex convolution which is not supported
+    # by TFLite.
+    def _tf_stft(x):
+      return tf.signal.stft(
+          x,
+          frame_length=stft_params.frame_length,
+          frame_step=stft_params.frame_step,
+          fft_length=stft_params.nfft,
+          pad_end=False)
+
+    stfts = jax2tf.call_tf(_tf_stft)(audio)
+  else:
+    _, _, stfts = scipy.signal.stft(
+        audio,
+        sample_rate_hz,
+        nperseg=stft_params.frame_length,
+        noverlap=stft_params.overlap,
+        nfft=stft_params.nfft,
+        return_onesided=True,
+        window="hann",
+        padded=False,
+        boundary=None)
+    # Scaling to match the tf.signal.stft output.
+    stfts = stft_params.frame_length / 2 * stfts
+    stfts = jnp.swapaxes(stfts, -1, -2)
+  return stfts
+
+
+def compute_istft(spectrogram: jnp.ndarray,
+                  sample_rate_hz: int,
+                  frame_rate: int,
+                  frame_length_secs: float = 0.08,
+                  use_tf_stft: bool = True) -> jnp.ndarray:
+  """Applies the inverse STFT."""
+  stft_params = get_stft_params(sample_rate_hz, frame_rate, frame_length_secs)
+
+  if use_tf_stft:
+    # The Jax stft uses a complex convolution which is not supported
+    # by TFLite.
+    def _tf_istft(x):
+      return tf.signal.inverse_stft(
+          x,
+          frame_length=stft_params.frame_length,
+          frame_step=stft_params.frame_step,
+          fft_length=stft_params.nfft,
+          window_fn=tf.signal.inverse_stft_window_fn(stft_params.frame_step))
+
+    waveform = jax2tf.call_tf(_tf_istft)(spectrogram)
+  else:
+    spectrogram = 2 / stft_params.frame_length * spectrogram
+    waveform = jax.scipy.signal.istft(
+        spectrogram,
+        nperseg=stft_params.frame_length,
+        nfft=stft_params.nfft,
+        boundary=False,
+        input_onesided=True,
+        time_axis=-2,
+        freq_axis=-1,
+        noverlap=stft_params.overlap)[1]
+
+  # Remove center padding added by the forward STFT.
+  if stft_params.num_padded_samples > 0:
+    pad = stft_params.num_padded_samples
+    waveform = waveform[..., pad:-pad]
+  return waveform
 
 
 @functools.partial(jax.jit, static_argnums=(1, 2, 3, 4, 7))
@@ -83,46 +187,10 @@ def compute_melspec(
   Returns:
     The melspectrogram of the audio, shape `(melspec_frequency, melspec_depth)`.
   """
-  frame_step = sample_rate_hz // melspec_frequency
-  frame_length = int(sample_rate_hz * frame_length_secs)
-  # use math because nfft must be a static argument to signal.stft
-  nfft = 2**math.ceil(math.log2(frame_length))
+  stfts = compute_stft(audio, sample_rate_hz, melspec_frequency,
+                       frame_length_secs, use_tf_stft)
+  magnitude_spectrograms = jnp.abs(stfts)
 
-  num_padded_samples = (frame_length - frame_step) // 2
-
-  if num_padded_samples > 0:
-    pad_width = ((0, 0),) * (audio.ndim - 1) + ((num_padded_samples,) * 2,)
-    audio = jnp.pad(audio, pad_width)
-  overlap = frame_length - frame_step
-
-  if use_tf_stft:
-    # The Jax stft uses a complex convolution which is not supported
-    # by TFLite.
-    def _tf_stft(x):
-      return tf.signal.stft(
-          x,
-          frame_length=frame_length,
-          frame_step=frame_step,
-          fft_length=nfft,
-          pad_end=False)
-
-    stfts = jax2tf.call_tf(_tf_stft)(audio)
-    magnitude_spectrograms = jnp.abs(stfts)
-  else:
-    _, _, stfts = scipy.signal.stft(
-        audio,
-        sample_rate_hz,
-        nperseg=frame_length,
-        noverlap=overlap,
-        nfft=nfft,
-        return_onesided=True,
-        window="hann",
-        padded=False,
-        boundary=None)
-    magnitude_spectrograms = jnp.abs(stfts)
-    # Scaling to match the tf.signal.stft output.
-    magnitude_spectrograms = frame_length / 2 * magnitude_spectrograms
-    magnitude_spectrograms = jnp.swapaxes(magnitude_spectrograms, -1, -2)
 
   # An energy spectrogram is the magnitude of the complex-valued STFT.
   # A float32 Tensor of shape [batch_size, ?, num_spectrogram_bins].

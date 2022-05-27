@@ -107,6 +107,52 @@ class AudioUtilsTest(parameterized.TestCase):
         **kwargs)
     np.testing.assert_allclose(melspec_jax, melspec_tf, atol=atol)
 
+  @parameterized.named_parameters(
+      {
+          "testcase_name": "_tf",
+          "tf_forward": True,
+          "tf_inverse": True,
+      }, {
+          "testcase_name": "_jax",
+          "tf_forward": False,
+          "tf_inverse": False,
+      }, {
+          "testcase_name": "_tf_jax",
+          "tf_forward": True,
+          "tf_inverse": False,
+      }, {
+          "testcase_name": "_jax_tf",
+          "tf_forward": False,
+          "tf_inverse": True,
+      })
+  def test_stft(self, tf_forward, tf_inverse):
+    batch_size = 3
+    sample_rate_hz = 22050
+    frame_rate = 105
+    frame_length_secs = 0.08
+
+    time_size = 5 * sample_rate_hz
+    audio = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, time_size))
+    noise = 0.01 * random.normal(random.PRNGKey(0), (batch_size, time_size))
+    signal = audio + noise
+
+    stfts = audio_utils.compute_stft(
+        signal,
+        sample_rate_hz,
+        frame_rate,
+        frame_length_secs,
+        use_tf_stft=tf_forward)
+    recon = audio_utils.compute_istft(
+        stfts,
+        sample_rate_hz,
+        frame_rate,
+        frame_length_secs,
+        use_tf_stft=tf_inverse)
+    # Windowing effects concentrate error in the first and last half-frames.
+    half_frame = int(frame_length_secs * sample_rate_hz / 2)
+    residual = (signal - recon)[half_frame:-half_frame]
+    np.testing.assert_allclose(residual, np.zeros_like(residual), atol=1e-5)
+
   def test_tflite_melspec(self):
     # Demonstrate TFLite export of the melspec computation.
     sample_rate_hz = 22050
