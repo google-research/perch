@@ -15,10 +15,12 @@
 
 """Tests for pipeline."""
 import functools
+import os
 import tempfile
 
 from chirp.data import pipeline
 from chirp.tests import fake_dataset
+import jax
 import numpy as np
 import tensorflow as tf
 
@@ -30,6 +32,8 @@ class LayersTest(absltest.TestCase):
   @classmethod
   def setUpClass(cls):
     super().setUpClass()
+    # Test with two CPU devices.
+    os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=2'
     data_dir = tempfile.TemporaryDirectory('data_dir').name
     fake_builder = fake_dataset.FakeDataset(data_dir=data_dir)
     fake_builder.download_and_prepare()
@@ -176,8 +180,10 @@ class LayersTest(absltest.TestCase):
           mixin_prob=0.5)
 
       example = next(dataset.as_numpy_iterator())
-      self.assertLen(example['audio'].shape, 2)
-      self.assertEqual(example['audio'].shape[0], batch_size)
+      self.assertLen(example['audio'].shape, 3)
+      self.assertLen(jax.devices(), example['audio'].shape[0])
+      self.assertEqual(example['audio'].shape[1],
+                       batch_size // len(jax.devices()))
       self.assertSetEqual(
           set(example.keys()),
           {'audio', 'bg_labels', 'family', 'genus', 'label', 'order'})

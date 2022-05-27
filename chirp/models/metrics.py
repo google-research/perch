@@ -14,8 +14,23 @@
 # limitations under the License.
 
 """Metrics for training and validation."""
+
 from jax import lax
 from jax import numpy as jnp
+import optax
+
+
+def mean_cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
+  mean = jnp.mean(optax.sigmoid_binary_cross_entropy(logits, labels), axis=-1)
+  return lax.pmean(mean, axis_name="batch")
+
+
+def map_(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
+  return average_precision(scores=logits, labels=labels)
+
+
+def cmap(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
+  return average_precision(scores=logits, labels=labels), labels
 
 
 def average_precision(scores: jnp.ndarray,
@@ -47,4 +62,10 @@ def average_precision(scores: jnp.ndarray,
           jnp.arange(labels.shape[axis]) + 1)
   if interpolated:
     pr_curve = lax.cummax(pr_curve, reverse=True, axis=axis)
-  return jnp.sum(pr_curve * labels, axis=axis) / jnp.sum(labels, axis=axis)
+
+  # In case of an empty row, assign precision = 1, and avoid dividing by zero.
+  mask = jnp.float32(jnp.sum(labels, axis=axis) == 0)
+  raw_av_prec = (
+      jnp.sum(pr_curve * labels, axis=axis) /
+      jnp.maximum(jnp.sum(labels, axis=axis), 1.0))
+  return mask + (1 - mask) * raw_av_prec

@@ -14,8 +14,9 @@
 # limitations under the License.
 
 """Training loop."""
-from absl import logging
+import functools
 import os
+from absl import logging
 from chirp import audio_utils
 from chirp.models import class_average
 from chirp.models import efficientnet
@@ -27,11 +28,13 @@ from clu import metrics as clu_metrics
 from clu import periodic_actions
 import flax
 from flax import linen as nn
+import flax.jax_utils as flax_utils
 import jax
 from jax import numpy as jnp
 from jax import random
 from jax.experimental import jax2tf
 from ml_collections import config_dict
+import numpy as np
 import optax
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -53,30 +56,17 @@ class ModelBundle:
   ckpt: checkpoint.Checkpoint
 
 
-# Metrics
-def mean_cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
-  return jnp.mean(optax.sigmoid_binary_cross_entropy(logits, labels), axis=-1)
-
-
-def map_(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
-  return metrics.average_precision(scores=logits, labels=labels)
-
-
-def cmap(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
-  return metrics.average_precision(scores=logits, labels=labels), labels
-
-
 @flax.struct.dataclass
 class ValidationMetrics(clu_metrics.Collection):
-  valid_loss: clu_metrics.Average.from_fun(mean_cross_entropy)
-  valid_map: clu_metrics.Average.from_fun(map_)
-  valid_cmap: class_average.ClassAverage.from_fun(cmap)
+  valid_loss: clu_metrics.Average.from_fun(metrics.mean_cross_entropy)
+  valid_map: clu_metrics.Average.from_fun(metrics.map_)
+  valid_cmap: class_average.ClassAverage.from_fun(metrics.cmap)
 
 
 @flax.struct.dataclass
 class TrainingMetrics(clu_metrics.Collection):
-  train_loss: clu_metrics.LastValue.from_fun(mean_cross_entropy)
-  train_map: clu_metrics.LastValue.from_fun(map_)
+  train_loss: clu_metrics.LastValue.from_fun(metrics.mean_cross_entropy)
+  train_map: clu_metrics.LastValue.from_fun(metrics.map_)
 
 
 def parse_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
@@ -146,7 +136,7 @@ def initialize_model(dataset_info: tfds.core.DatasetInfo,
   opt_state = optimizer.init(params)
 
   # Load checkpoint
-  ckpt = checkpoint.Checkpoint(workdir)
+  ckpt = checkpoint.MultihostCheckpoint(workdir)
   train_state = TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
   train_state = ckpt.restore_or_initialize(train_state)
@@ -182,7 +172,7 @@ def train_and_evaluate(model_bundle, train_state, train_dataset, valid_dataset,
       dataset_info.features["audio"].sample_rate * data_config.window_size_s)
 
   # Define update step
-  @jax.jit
+  @functools.partial(jax.pmap, axis_name="batch")
   def update_step(key, batch, train_state):
 
     dropout_key, low_pass_key = random.split(key)
@@ -198,12 +188,13 @@ def train_and_evaluate(model_bundle, train_state, train_dataset, valid_dataset,
               "dropout": dropout_key,
               "low_pass": low_pass_key
           })
-      train_metrics = TrainingMetrics.single_from_model_output(
+      train_metrics = TrainingMetrics.gather_from_model_output(
           logits=logits, labels=batch["label"]).compute()
       return train_metrics["train_loss"], (train_metrics, model_state)
 
     (_, (train_metrics, model_state)), grads = jax.value_and_grad(
         step, has_aux=True)(train_state.params, train_state.model_state)
+    grads = jax.lax.pmean(grads, axis_name="batch")
     updates, opt_state = model_bundle.optimizer.update(grads,
                                                        train_state.opt_state)
     params = optax.apply_updates(train_state.params, updates)
@@ -214,49 +205,67 @@ def train_and_evaluate(model_bundle, train_state, train_dataset, valid_dataset,
         model_state=model_state)
     return train_metrics, train_state
 
-  @jax.jit
-  def update_metrics(valid_metrics, batch, train_state):
-    variables = {"params": train_state.params, **train_state.model_state}
-    logits = model_bundle.model.apply(variables, batch["audio"], train=False)
-    return valid_metrics.merge(
-        ValidationMetrics.single_from_model_output(
-            logits=logits, labels=batch["label"]))
+  initial_step = int(train_state.step)
+  train_state = flax.jax_utils.replicate(train_state)
 
   # Logging
   writer = metric_writers.create_default_writer(logdir)
-  report_progress = periodic_actions.ReportProgress(
+  reporter = periodic_actions.ReportProgress(
       num_train_steps=num_train_steps, writer=writer)
 
   # Training and evaluation loop
   key = model_bundle.key
 
-  while train_state.step < num_train_steps:
-    with jax.profiler.StepTraceAnnotation("train", step_num=train_state.step):
+  for step in range(initial_step, num_train_steps + 1):
+    with jax.profiler.StepTraceAnnotation("train", step_num=step):
       batch = next(train_iterator)
       step_key, key = random.split(key)
+      step_key = random.split(step_key, num=jax.device_count())
       train_metrics, train_state = update_step(step_key, batch, train_state)
+      train_metrics = flax_utils.unreplicate(train_metrics)
 
-      if train_state.step % log_every_steps == 0:
-        writer.write_scalars(int(train_state.step), train_metrics)
-      report_progress(int(train_state.step))
+      if step % log_every_steps == 0:
+        writer.write_scalars(step, train_metrics)
+      reporter(step)
     # Run validation loop
-    if train_state.step % checkpoint_every_steps == 0:
-      with report_progress.timed("checkpoint"):
-        model_bundle.ckpt.save(train_state)
+    if (step + 1) % checkpoint_every_steps == 0:
+      with reporter.timed("checkpoint"):
+        model_bundle.ckpt.save(flax_utils.unreplicate(train_state))
       if tflite_export:
-        with report_progress.timed("tflite_export"):
+        with reporter.timed("tflite_export"):
           export_tf_lite(model_bundle, train_state, workdir, input_size)
 
-    if train_state.step % eval_every_steps == 0:
-      # TODO(bartvm): Split eval into separate job for larger validation sets
-      with report_progress.timed("eval"):
-        valid_metrics = ValidationMetrics.empty()
-        for batch in valid_dataset.as_numpy_iterator():
-          valid_metrics = update_metrics(valid_metrics, batch, train_state)
-
-        # Log validation loss
-        writer.write_scalars(int(train_state.step), valid_metrics.compute())
+    if eval_every_steps > 0 and (step + 1) % eval_every_steps == 0:
+      evaluate(model_bundle, train_state, valid_dataset, writer, reporter)
   writer.close()
+
+
+def evaluate(model_bundle: ModelBundle, train_state: TrainState,
+             valid_dataset: tf.data.Dataset,
+             writer: metric_writers.MetricWriter,
+             reporter: periodic_actions.ReportProgress):
+  """Run evaluation."""
+
+  @functools.partial(jax.pmap, axis_name="batch")
+  def update_metrics(valid_metrics, batch, train_state):
+    variables = {"params": train_state.params, **train_state.model_state}
+    logits = model_bundle.model.apply(variables, batch["audio"], train=False)
+    return valid_metrics.merge(
+        ValidationMetrics.gather_from_model_output(
+            logits=logits, labels=batch["label"], axis_name="batch"))
+
+  step = flax_utils.unreplicate(train_state.step)
+  with reporter.timed("eval"):
+    valid_metrics = flax.jax_utils.replicate(ValidationMetrics.empty())
+    for batch in valid_dataset.as_numpy_iterator():
+      batch = jax.tree_map(np.asarray, batch)
+      valid_metrics = update_metrics(valid_metrics, batch, train_state)
+
+    # Log validation loss
+    valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
+
+  writer.write_scalars(step, valid_metrics)
+  writer.flush()
 
 
 def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,
@@ -284,5 +293,7 @@ def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,
   ]
   tflite_float_model = converter.convert()
 
+  if not tf.io.gfile.exists(workdir):
+    tf.io.gfile.makedirs(workdir)
   with tf.io.gfile.GFile(os.path.join(workdir, "model.tflite"), "wb") as f:
     f.write(tflite_float_model)

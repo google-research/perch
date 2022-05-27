@@ -18,6 +18,7 @@
 import functools
 from typing import Dict, Tuple
 
+import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -165,8 +166,12 @@ def get_dataset(split: str,
     ds = ds.shuffle(batch_size * 10)
     if mixin_prob > 0.0:
       ds = mix_audio(ds, mixin_prob)
-  ds = ds.batch(batch_size, drop_remainder=True)
+
+  per_device_batch_size = batch_size // jax.device_count()
+  ds = ds.batch(per_device_batch_size, drop_remainder=True)
+
   ds = ds.map(process_batch, num_parallel_calls=tf.data.AUTOTUNE)
+  ds = ds.batch(jax.device_count(), drop_remainder=True)
   if 'train' in split:
     ds = ds.repeat()
   ds = ds.prefetch(tf.data.AUTOTUNE)

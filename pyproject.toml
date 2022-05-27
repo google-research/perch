@@ -8,7 +8,7 @@ license = "Apache 2.0"
 [tool.poetry.dependencies]
 python = ">=3.7.1,<3.11"
 absl-py = "^1.0.0"
-clu = "^0.0.6"
+clu = "^0.0.7"
 flax = "^0.4.1"
 jax = "^0.3.9"
 ml-collections = "^0.1.1"
