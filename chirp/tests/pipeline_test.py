@@ -91,7 +91,12 @@ class LayersTest(absltest.TestCase):
     unmixed_ds = pipeline.mix_audio(ds, mixin_prob=0.0)
     for x, y in tf.data.Dataset.zip((ds, unmixed_ds)).as_numpy_iterator():
       for key in x:
-        np.testing.assert_equal(x[key], y[key])
+        if key == 'source_audio':
+          np.testing.assert_equal(x['source_audio'], y['source_audio'][:1])
+          np.testing.assert_equal(
+              np.zeros_like(x['source_audio']), y['source_audio'][1:])
+        else:
+          np.testing.assert_equal(x[key], y[key])
 
   def test_process_example(self):
     sample_rate_hz = self._builder.info.features['audio'].sample_rate
@@ -185,8 +190,10 @@ class LayersTest(absltest.TestCase):
       self.assertEqual(example['audio'].shape[1],
                        batch_size // len(jax.devices()))
       self.assertSetEqual(
-          set(example.keys()),
-          {'audio', 'bg_labels', 'family', 'genus', 'label', 'order'})
+          set(example.keys()), {
+              'audio', 'source_audio', 'bg_labels', 'family', 'genus', 'label',
+              'order'
+          })
 
 
 if __name__ == '__main__':
