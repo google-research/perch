@@ -19,7 +19,7 @@ General utilities for processing audio and spectrograms.
 """
 import functools
 import math
-from typing import Optional, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union
 
 from chirp import signal
 from flax import struct
@@ -29,6 +29,7 @@ from jax import numpy as jnp
 from jax import random
 from jax import scipy
 from jax.experimental import jax2tf
+from scipy import signal as scipy_signal
 import tensorflow as tf
 
 
@@ -51,6 +52,11 @@ class PCENScalingConfig:
 
 
 @struct.dataclass
+class NoScalingConfig:
+  pass
+
+
+@struct.dataclass
 class STFTParams:
   """STFT Parameters."""
   frame_step: int
@@ -60,7 +66,7 @@ class STFTParams:
   overlap: int
 
 
-ScalingConfig = Union[LogScalingConfig, PCENScalingConfig]
+ScalingConfig = Union[LogScalingConfig, PCENScalingConfig, NoScalingConfig]
 
 
 def get_stft_params(sample_rate_hz: int,
@@ -187,10 +193,11 @@ def compute_melspec(
   Returns:
     The melspectrogram of the audio, shape `(melspec_frequency, melspec_depth)`.
   """
+  scaling_config = scaling_config or NoScalingConfig()
+
   stfts = compute_stft(audio, sample_rate_hz, melspec_frequency,
                        frame_length_secs, use_tf_stft)
   magnitude_spectrograms = jnp.abs(stfts)
-
 
   # An energy spectrogram is the magnitude of the complex-valued STFT.
   # A float32 Tensor of shape [batch_size, ?, num_spectrogram_bins].
@@ -210,7 +217,7 @@ def compute_melspec(
     x, _ = fixed_pcen(mel_spectrograms, scaling_config.smoothing_coef,
                       scaling_config.gain, scaling_config.bias,
                       scaling_config.root, scaling_config.eps)
-  elif scaling_config is None:
+  elif isinstance(scaling_config, NoScalingConfig):
     x = mel_spectrograms
   else:
     raise ValueError("Unrecognized scaling mode.")
@@ -337,3 +344,169 @@ def random_low_pass_filter(key: jnp.ndarray,
 
   envelope = 1 - 0.5 * (jnp.tanh(slope * (xspace - 0.5) - offset) + 1)
   return melspec * envelope
+
+
+def apply_mixture_denoising(melspec: jnp.ndarray,
+                            threshold: float) -> jnp.ndarray:
+  """Denoises the melspectrogram using an estimated Gaussian noise distribution.
+
+  Forms a noise estimate by a) estimating mean+std, b) removing extreme
+  values, c) re-estimating mean+std for the noise, and then d) classifying
+  values in the spectrogram as 'signal' or 'noise' based on likelihood under
+  the revised estimate. We then apply a mask to return the signal values.
+
+  Args:
+    melspec: input melspectrogram of rank 2 (time, frequency).
+    threshold: z-score theshold for separating signal from noise. On the first
+      pass, we use 2 * threshold, and on the second pass we use threshold
+      directly.
+
+  Returns:
+    The denoised melspectrogram.
+  """
+  x = melspec
+  feature_mean = jnp.mean(x, axis=0, keepdims=True)
+  feature_std = jnp.std(x, axis=0, keepdims=True)
+  is_noise = (x - feature_mean) < 2 * threshold * feature_std
+
+  noise_counts = jnp.sum(is_noise.astype(x.dtype), axis=0, keepdims=True)
+  noise_mean = jnp.sum(x * is_noise, axis=1, keepdims=True) / (noise_counts + 1)
+  noise_var = jnp.sum(
+      is_noise * jnp.square(x - noise_mean), axis=0, keepdims=True)
+  noise_std = jnp.sqrt(noise_var / (noise_counts + 1))
+
+  # Recompute signal/noise separation.
+  demeaned = x - noise_mean
+  is_signal = demeaned >= threshold * noise_std
+  is_signal = is_signal.astype(x.dtype)
+  is_noise = 1.0 - is_signal
+
+  signal_part = is_signal * x
+  noise_part = is_noise * noise_mean
+  reconstructed = signal_part + noise_part - noise_mean
+  return reconstructed
+
+
+def pad_to_length_if_shorter(audio: jnp.ndarray, target_length: int):
+  """Wraps the audio sequence if it's shorter than the target length.
+
+  Args:
+    audio: input audio sequence of shape [num_samples].
+    target_length: target sequence length.
+
+  Returns:
+    The audio sequence, padded through wrapping (if it's shorter than the target
+    length).
+  """
+  if audio.shape[0] < target_length:
+    missing = target_length - audio.shape[0]
+    pad_left = missing // 2
+    pad_right = missing - pad_left
+    audio = jnp.pad(audio, [[pad_left, pad_right]], mode="wrap")
+  return audio
+
+
+def slice_peaked_audio(
+    audio: jnp.ndarray,
+    sample_rate_hz: int,
+    interval_length_s: float = 6.0,
+    max_intervals: int = 5,
+    scaling_config: Optional[ScalingConfig] = None) -> Sequence[jnp.ndarray]:
+  """Extracts audio intervals from melspec peaks.
+
+  Args:
+    audio: input audio sequence of shape [num_samples].
+    sample_rate_hz: sample rate of the audio sequence (Hz).
+    interval_length_s: length each extracted audio interval.
+    max_intervals: upper-bound on the number of audio intervals to extract.
+    scaling_config: Scaling configuration for the melspectrogram computation.
+
+  Returns:
+    Sequence of extracted audio intervals, each of shape
+    [sample_rate_hz * interval_length_s].
+  """
+  scaling_config = scaling_config or PCENScalingConfig()
+  target_length = int(sample_rate_hz * interval_length_s)
+
+  # Wrap audio to the target length if it's shorter than that.
+  audio = pad_to_length_if_shorter(audio, target_length)
+
+  peaks = find_peaks_from_audio(audio, sample_rate_hz, max_intervals,
+                                scaling_config)
+  left_shift = target_length // 2
+  right_shift = target_length - left_shift
+
+  # Ensure that the peak locations are such that
+  # `audio[peak - left_shift: peak + right_shift]` is a non-truncated slice.
+  peaks = jnp.clip(peaks, left_shift, audio.shape[0] - right_shift)
+  # As a result, it's possible that some (start, stop) pairs become identical;
+  # eliminate duplicates.
+  start_stop = jnp.unique(
+      jnp.stack([peaks - left_shift, peaks + right_shift], axis=-1), axis=0)
+
+  return [audio[a:b] for (a, b) in start_stop]
+
+
+def find_peaks_from_audio(audio: jnp.ndarray, sample_rate_hz: int,
+                          max_peaks: int,
+                          scaling_config: ScalingConfig) -> jnp.ndarray:
+  """Construct melspec and find peaks.
+
+  Args:
+    audio: input audio sequence of shape [num_samples].
+    sample_rate_hz: sample rate of the audio sequence (Hz).
+    max_peaks: upper-bound on the number of peaks to return.
+    scaling_config: Scaling configuration for the melspectrogram computation.
+
+  Returns:
+    Sequence of scalar indices for the peaks found in the audio sequence.
+  """
+  melspec_rate_hz = 100
+  melspec = compute_melspec(
+      audio=audio,
+      sample_rate_hz=sample_rate_hz,
+      melspec_depth=160,
+      melspec_frequency=melspec_rate_hz,
+      scaling_config=scaling_config)
+  melspec = apply_mixture_denoising(melspec, 0.75)
+
+  peaks = find_peaks_from_melspec(melspec, melspec_rate_hz)
+  peak_energies = jnp.sum(melspec, axis=1)[peaks]
+
+  t_mel_to_t_au = lambda tm: 1.0 * tm * sample_rate_hz / melspec_rate_hz
+  peaks = [t_mel_to_t_au(p) for p in peaks]
+
+  peak_set = sorted(zip(peak_energies, peaks), reverse=True)
+  if max_peaks > 0 and len(peaks) > max_peaks:
+    peak_set = peak_set[:max_peaks]
+  return jnp.asarray([p[1] for p in peak_set], dtype=jnp.int32)
+
+
+def find_peaks_from_melspec(melspec: jnp.ndarray, stft_fps: int) -> jnp.ndarray:
+  """Locate peaks inside signal of summed spectral magnitudes.
+
+  Args:
+    melspec: input melspectrogram of rank 2 (time, frequency).
+    stft_fps: Number of summed magnitude bins per second. Calculated from the
+      original sample of the waveform.
+
+  Returns:
+    A list of filtered peak indices.
+  """
+  summed_spectral_magnitudes = jnp.sum(melspec, axis=1)
+  threshold = jnp.mean(summed_spectral_magnitudes) * 1.5
+  min_width = int(round(0.5 * stft_fps))
+  max_width = int(round(2 * stft_fps))
+  width_step_size = int(round((max_width - min_width) / 10))
+  peaks = scipy_signal.find_peaks_cwt(
+      summed_spectral_magnitudes,
+      jnp.arange(min_width, max_width, width_step_size))
+  margin_frames = int(round(0.3 * stft_fps))
+  start_stop = jnp.clip(
+      jnp.stack([peaks - margin_frames, peaks + margin_frames], axis=-1), 0,
+      summed_spectral_magnitudes.shape[0])
+  peaks = [
+      p for p, (a, b) in zip(peaks, start_stop)
+      if summed_spectral_magnitudes[a:b].max() >= threshold
+  ]
+  return jnp.asarray(peaks, dtype=jnp.int32)

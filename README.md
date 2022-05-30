@@ -16,8 +16,9 @@ curl -sSL https://install.python-poetry.org | python3 -
 sudo apt-get install libsndfile1
 ```
 
-Afterwards you should be able to run `poetry install` to create a virtual
-environment in which you can run the Chirp codebase. To run the tests, try
+Afterwards you should be able to run `poetry update tf-nightly && poetry
+install` to create a virtual environment in which you can run the Chirp
+codebase. To run the tests, try
 
 ```bash
 poetry run python -m unittest discover -s chirp/tests -p "*test.py"

@@ -245,6 +245,14 @@ class AudioUtilsTest(parameterized.TestCase):
 
     np.testing.assert_allclose(out, librosa_out, rtol=1e-2)
 
+  def test_pad_to_length_if_shorter(self):
+    audio = jnp.asarray([-1, 0, 1, 0], dtype=jnp.float32)
+    np.testing.assert_allclose(
+        audio_utils.pad_to_length_if_shorter(audio, 4), audio)
+    np.testing.assert_allclose(
+        audio_utils.pad_to_length_if_shorter(audio, 6),
+        jnp.asarray([0, -1, 0, 1, 0, -1], dtype=jnp.float32))
+
 
 if __name__ == "__main__":
   absltest.main()

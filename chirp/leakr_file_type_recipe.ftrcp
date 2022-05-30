@@ -1,0 +1,11 @@
+name: "Chirp filetype recipes"
+desc: "Copybara leakr checks, used by copy.bara.sky."
+
+file_config:{
+  name: "Scan checksums.tsv."
+  desc: "TFDS checksums."
+  pattern: ".*?checksums.tsv$"
+  compression: COMPRESSION_NONE
+  scan_mode: SCAN_PLAIN_TEXT
+  file_group: FG_PLAIN_TEXT_GENERIC
+}
