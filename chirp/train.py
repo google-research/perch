@@ -16,6 +16,8 @@
 """Training loop."""
 import functools
 import os
+import time
+from typing import Optional
 from absl import logging
 from chirp import audio_utils
 from chirp.models import class_average
@@ -38,6 +40,9 @@ import numpy as np
 import optax
 import tensorflow as tf
 import tensorflow_datasets as tfds
+
+
+EVAL_LOOP_SLEEP_S = 30
 
 
 @flax.struct.dataclass
@@ -95,6 +100,7 @@ def parse_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
   melspec_config = model_config.melspec_config
   with melspec_config.unlocked():
     # TODO(bartvm): Add scaling config for hyperparameter search
+    melspec_config.sample_rate_hz = config.sample_rate_hz
     if melspec_config.scaling == "pcen":
       melspec_config.scaling_config = audio_utils.PCENScalingConfig()
     elif melspec_config.scaling == "log":
@@ -102,7 +108,11 @@ def parse_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
     elif melspec_config.scaling == "raw":
       melspec_config.scaling_config = None
     del melspec_config.scaling
-  if config.train_config.tflite_export and not melspec_config.use_tf_stft:
+
+  with config.unlocked():
+    config.input_size = (
+        config.data_config.window_size_s * config.sample_rate_hz)
+  if config.eval_config.tflite_export and not melspec_config.use_tf_stft:
     logging.warning(
         "TFLite export will probably fail if using the JAX stft op.")
   return config
@@ -113,10 +123,6 @@ def initialize_model(dataset_info: tfds.core.DatasetInfo,
                      model_config: config_dict.ConfigDict, rng_seed: int,
                      learning_rate: float, workdir: str):
   """Creates model for training, eval, or inference."""
-  with model_config.unlocked():
-    model_config.melspec_config.sample_rate_hz = dataset_info.features[
-        "audio"].sample_rate
-
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
 
@@ -143,33 +149,21 @@ def initialize_model(dataset_info: tfds.core.DatasetInfo,
   return ModelBundle(model, optimizer, key, ckpt), train_state
 
 
-def train_and_evaluate(model_bundle, train_state, train_dataset, valid_dataset,
-                       dataset_info, num_train_steps: int, logdir: str,
-                       workdir: str, log_every_steps: int,
-                       checkpoint_every_steps: int, eval_every_steps: int,
-                       tflite_export: bool,
-                       data_config: config_dict.ConfigDict) -> None:
+def train(model_bundle, train_state, train_dataset, num_train_steps: int,
+          logdir: str, log_every_steps: int,
+          checkpoint_every_steps: int) -> None:
   """Train a model.
 
   Args:
     model_bundle: Static objects for conducting the experiment.
     train_state: Initial TrainState.
     train_dataset: Training dataset.
-    valid_dataset: Validation dataset.
-    dataset_info: Dataset info.
     num_train_steps: The number of training steps.
     logdir: Directory to use for logging.
-    workdir: Directory to use for checkpointing.
     log_every_steps: Write the training minibatch loss.
     checkpoint_every_steps: Checkpoint the model and training state.
-    eval_every_steps: Evaluate on the validation set.
-    tflite_export: Whether to export TFLite models.
-    data_config: Data loading configuration.
   """
   train_iterator = train_dataset.as_numpy_iterator()
-
-  input_size = (
-      dataset_info.features["audio"].sample_rate * data_config.window_size_s)
 
   # Define update step
   @functools.partial(jax.pmap, axis_name="batch")
@@ -206,7 +200,7 @@ def train_and_evaluate(model_bundle, train_state, train_dataset, valid_dataset,
     return train_metrics, train_state
 
   initial_step = int(train_state.step)
-  train_state = flax.jax_utils.replicate(train_state)
+  train_state = flax_utils.replicate(train_state)
 
   # Logging
   writer = metric_writers.create_default_writer(logdir)
@@ -231,19 +225,15 @@ def train_and_evaluate(model_bundle, train_state, train_dataset, valid_dataset,
     if (step + 1) % checkpoint_every_steps == 0:
       with reporter.timed("checkpoint"):
         model_bundle.ckpt.save(flax_utils.unreplicate(train_state))
-      if tflite_export:
-        with reporter.timed("tflite_export"):
-          export_tf_lite(model_bundle, train_state, workdir, input_size)
-
-    if eval_every_steps > 0 and (step + 1) % eval_every_steps == 0:
-      evaluate(model_bundle, train_state, valid_dataset, writer, reporter)
   writer.close()
 
 
-def evaluate(model_bundle: ModelBundle, train_state: TrainState,
+def evaluate(model_bundle: ModelBundle,
+             train_state: TrainState,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
-             reporter: periodic_actions.ReportProgress):
+             reporter: periodic_actions.ReportProgress,
+             max_eval_steps: int = -1):
   """Run evaluation."""
 
   @functools.partial(jax.pmap, axis_name="batch")
@@ -256,16 +246,56 @@ def evaluate(model_bundle: ModelBundle, train_state: TrainState,
 
   step = flax_utils.unreplicate(train_state.step)
   with reporter.timed("eval"):
-    valid_metrics = flax.jax_utils.replicate(ValidationMetrics.empty())
-    for batch in valid_dataset.as_numpy_iterator():
+    valid_metrics = flax_utils.replicate(ValidationMetrics.empty())
+    for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
       valid_metrics = update_metrics(valid_metrics, batch, train_state)
+      if max_eval_steps > 0 and s >= max_eval_steps:
+        break
 
     # Log validation loss
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
 
   writer.write_scalars(step, valid_metrics)
   writer.flush()
+
+
+def evaluate_loop(model_bundle: ModelBundle,
+                  train_state: TrainState,
+                  valid_dataset: tf.data.Dataset,
+                  workdir: str,
+                  logdir: str,
+                  num_train_steps: int,
+                  eval_steps_per_loop: int,
+                  tflite_export: bool = False,
+                  input_size: int = -1):
+  """Run evaluation in a loop."""
+  writer = metric_writers.create_default_writer(logdir)
+  reporter = periodic_actions.ReportProgress(
+      num_train_steps=num_train_steps, writer=writer)
+  # Initialize last_step to zero so we always run at least one eval.
+  last_step = -1
+  last_ckpt = ""
+
+  while last_step < num_train_steps:
+    ckpt = checkpoint.MultihostCheckpoint(workdir)
+    if ckpt.latest_checkpoint == last_ckpt:
+      time.sleep(EVAL_LOOP_SLEEP_S)
+      continue
+    try:
+      train_state = ckpt.restore_or_initialize(train_state)
+    except tf.errors.NotFoundError:
+      logging.warning("Checkpoint %s not found in workdir %s",
+                      ckpt.latest_checkpoint, workdir)
+      time.sleep(EVAL_LOOP_SLEEP_S)
+      continue
+
+    evaluate(model_bundle, flax_utils.replicate(train_state), valid_dataset,
+             writer, reporter, eval_steps_per_loop)
+    if tflite_export:
+      export_tf_lite(model_bundle, train_state, workdir, input_size)
+    last_step = int(train_state.step)
+    last_ckpt = ckpt.latest_checkpoint
 
 
 def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,

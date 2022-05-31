@@ -32,6 +32,7 @@ _CONFIG = config_flags.DEFINE_config_file("config")
 _LOGDIR = flags.DEFINE_string("logdir", None, "Work unit logging directory.")
 _WORKDIR = flags.DEFINE_string("workdir", None,
                                "Work unit checkpointing directory.")
+_MODE = flags.DEFINE_enum("mode", "train", ["train", "eval"], "Mode.")
 flags.mark_flags_as_required(["config", "workdir", "logdir"])
 
 
@@ -42,10 +43,15 @@ def main(argv: Sequence[str]) -> None:
   tf.config.experimental.set_visible_devices([], "GPU")
   config = train.parse_config(_CONFIG.value)
 
-  train_dataset, dataset_info = pipeline.get_dataset(
-      "train", batch_size=config.batch_size, **config.data_config)
-  valid_dataset, _ = pipeline.get_dataset(
-      "test_caples", batch_size=config.batch_size, **config.data_config)
+  if _MODE.value == "train":
+    train_dataset, dataset_info = pipeline.get_dataset(
+        "train", batch_size=config.batch_size, **config.data_config)
+  elif _MODE.value == "eval":
+    valid_dataset, dataset_info = pipeline.get_dataset(
+        "test_caples", batch_size=config.batch_size, **config.data_config)
+  if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
+    raise ValueError("Dataset sample rate must match config sample rate.")
+
   model_bundle, train_state = train.initialize_model(
       dataset_info,
       workdir=_WORKDIR.value,
@@ -53,16 +59,23 @@ def main(argv: Sequence[str]) -> None:
       model_config=config.model_config,
       rng_seed=config.rng_seed,
       learning_rate=config.learning_rate)
-  train.train_and_evaluate(
-      model_bundle,
-      train_state,
-      train_dataset,
-      valid_dataset,
-      dataset_info,
-      data_config=config.data_config,
-      workdir=_WORKDIR.value,
-      logdir=_LOGDIR.value,
-      **config.train_config)
+  if _MODE.value == "train":
+    train.train(
+        model_bundle,
+        train_state,
+        train_dataset,
+        logdir=_LOGDIR.value,
+        **config.train_config)
+  elif _MODE.value == "eval":
+    train.evaluate_loop(
+        model_bundle,
+        train_state,
+        valid_dataset,
+        workdir=_WORKDIR.value,
+        logdir=_LOGDIR.value,
+        num_train_steps=config.train_config.num_train_steps,
+        input_size=config.input_size,
+        **config.eval_config)
 
 
 if __name__ == "__main__":

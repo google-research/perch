@@ -43,6 +43,7 @@ class TrainTest(absltest.TestCase):
     config.batch_size = 1
     config.rng_seed = 0
     config.learning_rate = 0.04
+    config.sample_rate_hz = 22050
 
     train_config = config_dict.ConfigDict()
     train_config.num_train_steps = 1
@@ -50,6 +51,11 @@ class TrainTest(absltest.TestCase):
     train_config.eval_every_steps = 50
     train_config.checkpoint_every_steps = 1
     train_config.tflite_export = True
+
+    eval_config = config_dict.ConfigDict()
+    eval_config.eval_steps_per_loop = -1
+    eval_config.eval_delay_steps = 500
+    eval_config.tflite_export = False
 
     data_config = config_dict.ConfigDict()
     data_config.window_size_s = 1
@@ -75,6 +81,7 @@ class TrainTest(absltest.TestCase):
     config.model_config = model_config
     config.model_config.melspec_config = melspec_config
     config.train_config = train_config
+    config.eval_config = eval_config
     return config
 
   def test_export_model(self):
