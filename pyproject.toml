@@ -16,7 +16,7 @@ optax = "^0.1.2"
 tensorflow = "^2.8.0"
 tensorflow-datasets = {extras = ["dev"], version = "^4.5.2"}
 pandas = "==1.3.5"
-etils = {extras = ["epath-no-tf"], version = "^0.5.1"}
+etils = {extras = ["epath"], version = "^0.6.0"}
 ratelimiter = "^1.2.0.post0"
 SPARQLWrapper = "^2.0.0"
 
