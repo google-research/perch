@@ -88,9 +88,7 @@ def mix_audio(dataset: tf.data.Dataset, mixin_prob: float) -> tf.data.Dataset:
       examples[key] = tf.reduce_max(examples[key], axis=0)
     # TODO(bartvm): Replace averaging with leaving first example untouched and
     # mixing in second example with a random gain
-    # Scale source_audio to match gain in the mixed audio.
-    examples['source_audio'] /= examples['audio'].shape[0]
-    examples['audio'] = tf.reduce_mean(examples['audio'], axis=0)
+    examples['audio'] = tf.reduce_sum(examples['audio'], axis=0)
     return examples
 
   return dataset.group_by_window(key_func, reduce_func, window_size=2)
@@ -107,6 +105,7 @@ def process_audio(example: Dict[str, tf.Tensor], info: tfds.core.DatasetInfo,
     window_size_s: window size (in seconds) for the random cropping operation.
     min_gain: minimum gain for the random renormalization operation.
     max_gain: maximum gain for the random renormalization operation.
+      Set <=0 to disable gain randomization.
 
   Returns:
     The processed example.
@@ -114,9 +113,12 @@ def process_audio(example: Dict[str, tf.Tensor], info: tfds.core.DatasetInfo,
   example['audio'], start_ind, end_ind = _trim(
       example['audio'],
       window_size=window_size_s * info.features['audio'].sample_rate)
-  example['audio'], gain_scalar = _normalize_audio(
-      example['audio'],
-      target_gain=tf.random.uniform([], minval=min_gain, maxval=max_gain))
+  if max_gain > 0.0:
+    example['audio'], gain_scalar = _normalize_audio(
+        example['audio'],
+        target_gain=tf.random.uniform([], minval=min_gain, maxval=max_gain))
+  else:
+    gain_scalar = 1.0
   example['source_audio'] = (
       example['source_audio'][:, start_ind:end_ind] * gain_scalar)
   return example
@@ -139,7 +141,8 @@ def multi_hot(
     representation.
   """
   del example['filename']
-  del example['label_str']
+  if 'label_str' in example:
+    del example['label_str']
   for key, feature in info.features.items():
     if (isinstance(feature, tfds.features.Sequence) and
         isinstance(feature.feature, tfds.features.ClassLabel)):

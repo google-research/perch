@@ -65,8 +65,7 @@ class LayersTest(absltest.TestCase):
     mixed_ds = pipeline.mix_audio(ds, mixin_prob=1.0)
     mixed_example = mixed_ds.get_single_element()
     np.testing.assert_allclose(mixed_example['audio'],
-                               (examples['audio'][0] + examples['audio'][1]) /
-                               2)
+                               examples['audio'][0] + examples['audio'][1])
     np.testing.assert_equal(
         mixed_example['genus'].numpy(),
         np.asarray(
