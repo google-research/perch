@@ -199,7 +199,7 @@ python-versions = "*"
 
 [[package]]
 name = "cachetools"
-version = "5.1.0"
+version = "5.2.0"
 description = "Extensible memoizing collections and decorators"
 category = "main"
 optional = false
@@ -377,31 +377,27 @@ python-versions = ">=3.6"
 
 [[package]]
 name = "etils"
-version = "0.5.1"
+version = "0.6.0"
 description = "Collection of common python utils"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 
 [package.dependencies]
-etils = [
-    {version = "*", extras = ["epath-no-tf"], optional = true, markers = "extra == \"epath\""},
-    {version = "*", extras = ["epy"], optional = true, markers = "extra == \"epath-no-tf\""},
-]
-importlib_resources = {version = "*", optional = true, markers = "extra == \"epath-no-tf\""}
-tf-nightly = {version = "*", optional = true, markers = "extra == \"epath\""}
+etils = {version = "*", extras = ["epy"], optional = true, markers = "extra == \"epath\""}
+importlib_resources = {version = "*", optional = true, markers = "extra == \"epath\""}
 typing_extensions = {version = "*", optional = true, markers = "extra == \"epy\""}
-zipp = {version = "*", optional = true, markers = "extra == \"epath-no-tf\""}
+zipp = {version = "*", optional = true, markers = "extra == \"epath\""}
 
 [package.extras]
 all = ["etils", "etils", "etils", "etils", "etils", "etils", "etils", "etils", "etils", "etils", "etils"]
 array-types = ["numpy"]
-dev = ["pytest", "pytest-xdist", "chex", "tfds-nightly"]
+dev = ["pytest", "pytest-subtests", "pytest-xdist", "pylint (>=2.6.0)", "yapf", "chex"]
 ecolab = ["jupyter", "numpy", "mediapy", "etils"]
 edc = ["etils"]
 enp = ["numpy", "etils"]
-epath = ["etils", "tf-nightly"]
-epath-no-tf = ["importlib-resources", "zipp", "etils"]
+epath = ["importlib-resources", "zipp", "etils"]
+epath-no-tf = ["etils"]
 epy = ["typing-extensions"]
 etqdm = ["absl-py", "tqdm", "etils"]
 etree = ["etils", "etils", "etils", "etils"]
@@ -955,14 +951,6 @@ python-versions = ">=3.6"
 [[package]]
 name = "keras"
 version = "2.9.0"
-description = "Deep learning for humans."
-category = "main"
-optional = false
-python-versions = "*"
-
-[[package]]
-name = "keras-nightly"
-version = "2.10.0.dev2022052607"
 description = "Deep learning for humans."
 category = "main"
 optional = false
@@ -1989,27 +1977,6 @@ keepalive = ["keepalive (>=0.5)"]
 pandas = ["pandas (>=1.3.5)"]
 
 [[package]]
-name = "tb-nightly"
-version = "2.10.0a20220527"
-description = "TensorBoard lets you watch Tensors Flow"
-category = "main"
-optional = false
-python-versions = ">=3.6"
-
-[package.dependencies]
-absl-py = ">=0.4"
-google-auth = ">=1.6.3,<3"
-google-auth-oauthlib = ">=0.4.1,<0.5"
-grpcio = ">=1.24.3"
-markdown = ">=2.6.8"
-numpy = ">=1.12.0"
-protobuf = ">=3.9.2,<3.20"
-requests = ">=2.21.0,<3"
-tensorboard-data-server = ">=0.6.0,<0.7.0"
-tensorboard-plugin-wit = ">=1.6.0"
-werkzeug = ">=1.0.1"
-
-[[package]]
 name = "tensorboard"
 version = "2.9.0"
 description = "TensorBoard lets you watch Tensors Flow"
@@ -2201,45 +2168,6 @@ tornado = ">=6.1.0"
 test = ["pre-commit", "pytest-timeout", "pytest (>=6.0)"]
 
 [[package]]
-name = "tf-estimator-nightly"
-version = "2.10.0.dev2022052708"
-description = "TensorFlow Estimator."
-category = "main"
-optional = false
-python-versions = ">=3.7"
-
-[[package]]
-name = "tf-nightly"
-version = "2.10.0.dev20220530"
-description = "TensorFlow is an open source machine learning framework for everyone."
-category = "main"
-optional = false
-python-versions = ">=3.7"
-
-[package.dependencies]
-absl-py = ">=1.0.0"
-astunparse = ">=1.6.0"
-flatbuffers = ">=1.12,<2"
-gast = ">=0.2.1,<=0.4.0"
-google-pasta = ">=0.1.1"
-grpcio = ">=1.24.3,<2.0"
-h5py = ">=2.9.0"
-keras-nightly = ">=2.10.0.dev,<2.11.0"
-keras-preprocessing = ">=1.1.1"
-libclang = ">=13.0.0"
-numpy = ">=1.20"
-opt-einsum = ">=2.3.2"
-packaging = "*"
-protobuf = ">=3.9.2,<3.20"
-six = ">=1.12.0"
-tb-nightly = ">=2.10.0.a,<2.11.0"
-tensorflow-io-gcs-filesystem = ">=0.23.1"
-termcolor = ">=1.1.0"
-tf-estimator-nightly = ">=2.10.0.dev,<2.11.0"
-typing-extensions = ">=3.6.6"
-wrapt = ">=1.11.0"
-
-[[package]]
 name = "threadpoolctl"
 version = "3.1.0"
 description = "threadpoolctl"
@@ -2412,7 +2340,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.11"
-content-hash = "3868eab5287909e9a3403d0e01eb41ea5ed21496bb5aa634d75367d272c46d9e"
+content-hash = "c74c46c156d80eec2e79f8e110bfc1654b7c27b7b9bd6249fcd3e800c1e5b050"
 
 [metadata.files]
 absl-py = [
@@ -2517,8 +2445,8 @@ cached-property = [
     {file = "cached_property-1.5.2-py2.py3-none-any.whl", hash = "sha256:df4f613cf7ad9a588cc381aaf4a512d26265ecebd5eb9e1ba12f1319eb85a6a0"},
 ]
 cachetools = [
-    {file = "cachetools-5.1.0-py3-none-any.whl", hash = "sha256:4ebbd38701cdfd3603d1f751d851ed248ab4570929f2d8a7ce69e30c420b141c"},
-    {file = "cachetools-5.1.0.tar.gz", hash = "sha256:8b3b8fa53f564762e5b221e9896798951e7f915513abf2ba072ce0f07f3f5a98"},
+    {file = "cachetools-5.2.0-py3-none-any.whl", hash = "sha256:f9f17d2aec496a9aa6b76f53e3b614c965223c061982d434d160f930c698a9db"},
+    {file = "cachetools-5.2.0.tar.gz", hash = "sha256:6a94c6402995a99c3970cc7e4884bb60b4a8639938157eeed436098bf9831757"},
 ]
 certifi = [
     {file = "certifi-2022.5.18.1-py3-none-any.whl", hash = "sha256:f1d53542ee8cbedbe2118b5686372fb33c297fcd6379b050cca0ef13a597382a"},
@@ -2673,8 +2601,8 @@ entrypoints = [
     {file = "entrypoints-0.4.tar.gz", hash = "sha256:b706eddaa9218a19ebcd67b56818f05bb27589b1ca9e8d797b74affad4ccacd4"},
 ]
 etils = [
-    {file = "etils-0.5.1-py3-none-any.whl", hash = "sha256:5fa5cf6cadf7bb49581fb2608823cd4cdda54e07fb9d8e9693a3789d559d150e"},
-    {file = "etils-0.5.1.tar.gz", hash = "sha256:953e89a968aefb3fa733aba3945e9f599c1514d211d603ef59c02fa5b45c89b6"},
+    {file = "etils-0.6.0-py3-none-any.whl", hash = "sha256:e47b14402f2fc883c70a394e86b3236e4929cfd90187fba58d2f4d3eb2e07c05"},
+    {file = "etils-0.6.0.tar.gz", hash = "sha256:6677241051835d0db11c4947bcad938f57b51ea102290624f892f1e4e51b70e5"},
 ]
 execnet = [
     {file = "execnet-1.9.0-py2.py3-none-any.whl", hash = "sha256:a295f7cc774947aac58dde7fdc85f4aa00c42adf5d8f5468fc630c1acf30a142"},
@@ -2920,9 +2848,6 @@ jupyterlab-widgets = [
 ]
 keras = [
     {file = "keras-2.9.0-py2.py3-none-any.whl", hash = "sha256:55911256f89cfc9343c9fbe4b61ec45a2d33d89729cbe1ab9dcacf8b07b8b6ab"},
-]
-keras-nightly = [
-    {file = "keras_nightly-2.10.0.dev2022052607-py2.py3-none-any.whl", hash = "sha256:6276035fab4d9f38871797cfa4fe2128f4059cfa1839fc03fe80d9562c458e64"},
 ]
 keras-preprocessing = [
     {file = "Keras_Preprocessing-1.1.2-py2.py3-none-any.whl", hash = "sha256:7b82029b130ff61cc99b55f3bd27427df4838576838c5b2f65940e4fcec99a7b"},
@@ -3980,9 +3905,6 @@ sparqlwrapper = [
     {file = "SPARQLWrapper-2.0.0-py3-none-any.whl", hash = "sha256:c99a7204fff676ee28e6acef327dc1ff8451c6f7217dcd8d49e8872f324a8a20"},
     {file = "SPARQLWrapper-2.0.0.tar.gz", hash = "sha256:3fed3ebcc77617a4a74d2644b86fd88e0f32e7f7003ac7b2b334c026201731f1"},
 ]
-tb-nightly = [
-    {file = "tb_nightly-2.10.0a20220527-py3-none-any.whl", hash = "sha256:33abd9485d5bce9578ec5e34fbd8c0c9c03567fe016229270771b580747ee2e2"},
-]
 tensorboard = [
     {file = "tensorboard-2.9.0-py3-none-any.whl", hash = "sha256:bd78211076dca5efa27260afacfaa96cd05c7db12a6c09cc76a1d6b2987ca621"},
 ]
@@ -4042,19 +3964,6 @@ termcolor = [
 terminado = [
     {file = "terminado-0.15.0-py3-none-any.whl", hash = "sha256:0d5f126fbfdb5887b25ae7d9d07b0d716b1cc0ccaacc71c1f3c14d228e065197"},
     {file = "terminado-0.15.0.tar.gz", hash = "sha256:ab4eeedccfcc1e6134bfee86106af90852c69d602884ea3a1e8ca6d4486e9bfe"},
-]
-tf-estimator-nightly = [
-    {file = "tf_estimator_nightly-2.10.0.dev2022052708-py2.py3-none-any.whl", hash = "sha256:831b77accd9ac0776360fd3002c008928d832f63ad057ba231a64a9fb63037ce"},
-]
-tf-nightly = [
-    {file = "tf_nightly-2.10.0.dev20220530-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:1ecb88de87e2d4f4ff76b6d95ac160334e6fc842722f05c651b5eaf6435149d8"},
-    {file = "tf_nightly-2.10.0.dev20220530-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ba81ce64d616982ea3df6ac82167d00b1cb2a6b0fefb127ba241af682e3a8ece"},
-    {file = "tf_nightly-2.10.0.dev20220530-cp37-cp37m-macosx_10_14_x86_64.whl", hash = "sha256:193016d2df1aa9ea0bb2922ac55a7c9504b6a59c484ff3fa79a1dec349940131"},
-    {file = "tf_nightly-2.10.0.dev20220530-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3e72c1cf935b077c64f00ef23f7daf0fddb697966abe99a895d097461d96f767"},
-    {file = "tf_nightly-2.10.0.dev20220530-cp38-cp38-macosx_10_14_x86_64.whl", hash = "sha256:ce25f013cd44f580db2da62155cf9316c4bc1d1b88b008f34b1f76fe4f9f5de2"},
-    {file = "tf_nightly-2.10.0.dev20220530-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:be0bf11101e14e766727c5d6d93cc1f00de83e91725348e17ebc6c45739010ef"},
-    {file = "tf_nightly-2.10.0.dev20220530-cp39-cp39-macosx_10_14_x86_64.whl", hash = "sha256:c547f758cbca1f3473812ef37d3d75828677a7520016a139e70b42c9e67c7753"},
-    {file = "tf_nightly-2.10.0.dev20220530-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a6df1e14d27572b8d67f892ecd13e758cf27c8169d95836d407f0caccc3d8e3f"},
 ]
 threadpoolctl = [
     {file = "threadpoolctl-3.1.0-py3-none-any.whl", hash = "sha256:8b99adda265feb6773280df41eece7b2e6561b772d21ffd52e372f999024907b"},
