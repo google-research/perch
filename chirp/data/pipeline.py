@@ -16,13 +16,14 @@
 """Data pipeline functions."""
 
 import functools
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
 _DEFAULT_DATASET_DIR = None
+_DEFAULT_TFDS_DATADIR = None
 
 
 def _trim(audio: tf.Tensor,
@@ -159,6 +160,7 @@ def multi_hot(
 def get_dataset(split: str,
                 batch_size: int,
                 dataset_directory: str = _DEFAULT_DATASET_DIR,
+                tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
                 **data_config) -> Tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
   """Returns the placeholder dataset.
 
@@ -166,6 +168,8 @@ def get_dataset(split: str,
     split: data split, e.g. 'train', 'test', 'train[:80%]', etc.
     batch_size: batch size.
     dataset_directory: dataset directory.
+    tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
+      instead of using the tfds.core.builder_from_directory.
     **data_config: Data configuration, passed on to `process_audio`.
 
   Returns:
@@ -173,9 +177,15 @@ def get_dataset(split: str,
   """
   mixin_prob = data_config.pop('mixin_prob')
 
-  builder = tfds.core.builder_from_directory(dataset_directory)
-  ds = builder.as_dataset(split=split).map(
-      functools.partial(multi_hot, info=builder.info))
+  if tfds_data_dir:
+    tfds.core.add_data_dir(tfds_data_dir)
+    ds, dataset_info = tfds.load(dataset_directory, split=split, with_info=True)
+  else:
+    builder = tfds.core.builder_from_directory(dataset_directory)
+    ds = builder.as_dataset(split=split)
+    dataset_info = builder.info
+
+  ds = ds.map(functools.partial(multi_hot, info=dataset_info))
   # TODO(bartvm): Pass `train` argument instead of relying on split name.
   if 'train' in split:
     ds = ds.shuffle(batch_size * 10)
@@ -189,11 +199,11 @@ def get_dataset(split: str,
 
   def process_batch(batch):
     return tf.vectorized_map(
-        functools.partial(process_audio, info=builder.info, **data_config),
+        functools.partial(process_audio, info=dataset_info, **data_config),
         batch)
 
   ds = builder.as_dataset(split=split).map(
-      functools.partial(multi_hot, info=builder.info))
+      functools.partial(multi_hot, info=dataset_info))
   # TODO(bartvm): Pass `train` argument instead of relying on split name.
   if 'train' in split:
     ds = ds.shuffle(batch_size * 10)
@@ -208,4 +218,4 @@ def get_dataset(split: str,
   if 'train' in split:
     ds = ds.repeat()
   ds = ds.prefetch(tf.data.AUTOTUNE)
-  return ds, builder.info
+  return ds, dataset_info
