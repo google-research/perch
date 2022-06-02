@@ -137,7 +137,7 @@ class LayersTest(absltest.TestCase):
 
     example = pipeline.process_audio(
         example=example,
-        info=self._builder.info,
+        sample_rate_hz=sample_rate_hz,
         window_size_s=window_size_s,
         min_gain=min_gain,
         max_gain=max_gain)

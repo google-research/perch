@@ -95,14 +95,14 @@ def mix_audio(dataset: tf.data.Dataset, mixin_prob: float) -> tf.data.Dataset:
   return dataset.group_by_window(key_func, reduce_func, window_size=2)
 
 
-def process_audio(example: Dict[str, tf.Tensor], info: tfds.core.DatasetInfo,
+def process_audio(example: Dict[str, tf.Tensor], sample_rate_hz: int,
                   window_size_s: int, min_gain: float,
                   max_gain: float) -> Dict[str, tf.Tensor]:
   """Processes an example.
 
   Args:
     example: the input example.
-    info: dataset information.
+    sample_rate_hz: audio example sample rate.
     window_size_s: window size (in seconds) for the random cropping operation.
     min_gain: minimum gain for the random renormalization operation.
     max_gain: maximum gain for the random renormalization operation.
@@ -112,8 +112,7 @@ def process_audio(example: Dict[str, tf.Tensor], info: tfds.core.DatasetInfo,
     The processed example.
   """
   example['audio'], start_ind, end_ind = _trim(
-      example['audio'],
-      window_size=window_size_s * info.features['audio'].sample_rate)
+      example['audio'], window_size=window_size_s * sample_rate_hz)
   if max_gain > 0.0:
     example['audio'], gain_scalar = _normalize_audio(
         example['audio'],
@@ -141,7 +140,8 @@ def multi_hot(
     The processed example with `bg_labels` replaced using a multi-hot
     representation.
   """
-  del example['filename']
+  if 'filename' in example:
+    del example['filename']
   if 'label_str' in example:
     del example['label_str']
   for key, feature in info.features.items():
@@ -184,6 +184,7 @@ def get_dataset(split: str,
     builder = tfds.core.builder_from_directory(dataset_directory)
     ds = builder.as_dataset(split=split)
     dataset_info = builder.info
+  sample_rate_hz = dataset_info.features['audio'].sample_rate
 
   ds = ds.map(functools.partial(multi_hot, info=dataset_info))
   # TODO(bartvm): Pass `train` argument instead of relying on split name.
@@ -194,21 +195,10 @@ def get_dataset(split: str,
     # TODO(tomdenton): Add an option to mix-in audio during eval.
     ds = mix_audio(ds, 0.0)
 
-  per_device_batch_size = batch_size // jax.device_count()
-  ds = ds.batch(per_device_batch_size, drop_remainder=True)
-
   def process_batch(batch):
     return tf.vectorized_map(
-        functools.partial(process_audio, info=dataset_info, **data_config),
-        batch)
-
-  ds = builder.as_dataset(split=split).map(
-      functools.partial(multi_hot, info=dataset_info))
-  # TODO(bartvm): Pass `train` argument instead of relying on split name.
-  if 'train' in split:
-    ds = ds.shuffle(batch_size * 10)
-    if mixin_prob > 0.0:
-      ds = mix_audio(ds, mixin_prob)
+        functools.partial(
+            process_audio, sample_rate_hz=sample_rate_hz, **data_config), batch)
 
   per_device_batch_size = batch_size // jax.device_count()
   ds = ds.batch(per_device_batch_size, drop_remainder=True)

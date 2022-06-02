@@ -71,9 +71,13 @@ class Int16AsFloatTensor(tfds.features.Tensor):
   def __init__(self,
                *,
                shape: tfds.typing.Shape,
+               sample_rate: int,
                encoding: tfds.features.Encoding = tfds.features.Encoding.NONE):
     self._int16_tensor_feature = tfds.features.Tensor(
         shape=shape, dtype=tf.int16, encoding=encoding)
+    # Note: We use sample_rate instead of sample_rate_hz to match
+    # tfds.features.Audio.
+    self.sample_rate = sample_rate
     super().__init__(shape=shape, dtype=tf.float32, encoding=encoding)
 
   def get_serialized_info(self):
@@ -165,7 +169,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
             'audio':
                 Int16AsFloatTensor(
                     shape=audio_feature_shape,
-                    encoding=tfds.features.Encoding.ZLIB),
+                    sample_rate=self.builder_config.sample_rate_hz,
+                    encoding=tfds.features.Encoding.ZLIB,
+                ),
             'label':
                 tfds.features.Sequence(
                     tfds.features.ClassLabel(names=class_names['species_code'])
