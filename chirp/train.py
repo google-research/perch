@@ -142,13 +142,14 @@ def parse_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
   """
   # Handle model config
   model_config = config.model_config
-  with model_config.unlocked():
-    if model_config.encoder_.startswith("efficientnet-"):
-      model = efficientnet.EfficientNetModel(model_config.encoder_[-2:])
-      model_config.encoder = efficientnet.EfficientNet(model)
-    else:
-      raise ValueError("unknown encoder")
-    del model_config.encoder_
+  if hasattr(model_config, "encoder_"):
+    with model_config.unlocked():
+      if model_config.encoder_.startswith("efficientnet-"):
+        model = efficientnet.EfficientNetModel(model_config.encoder_[-2:])
+        model_config.encoder = efficientnet.EfficientNet(model)
+      else:
+        raise ValueError("unknown encoder")
+      del model_config.encoder_
 
   # Handle melspec config
   melspec_config = model_config.melspec_config
@@ -313,7 +314,7 @@ def evaluate(model_bundle: ModelBundle,
         variables, batch["audio"], train=False)
     return valid_metrics.merge(
         valid_metrics.gather_from_model_output(
-            model_outputs=model_outputs,
+            outputs=model_outputs,
             label=batch["label"],
             genus=batch["genus"],
             family=batch["family"],
@@ -346,7 +347,8 @@ def evaluate_loop(model_bundle: ModelBundle,
                   num_train_steps: int,
                   eval_steps_per_loop: int,
                   tflite_export: bool = False,
-                  input_size: int = -1):
+                  input_size: int = -1,
+                  eval_sleep_s: int = EVAL_LOOP_SLEEP_S):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
   reporter = periodic_actions.ReportProgress(
@@ -358,14 +360,14 @@ def evaluate_loop(model_bundle: ModelBundle,
   while last_step < num_train_steps:
     ckpt = checkpoint.MultihostCheckpoint(workdir)
     if ckpt.latest_checkpoint == last_ckpt:
-      time.sleep(EVAL_LOOP_SLEEP_S)
+      time.sleep(eval_sleep_s)
       continue
     try:
       train_state = ckpt.restore_or_initialize(train_state)
     except tf.errors.NotFoundError:
       logging.warning("Checkpoint %s not found in workdir %s",
                       ckpt.latest_checkpoint, workdir)
-      time.sleep(EVAL_LOOP_SLEEP_S)
+      time.sleep(eval_sleep_s)
       continue
 
     evaluate(model_bundle, flax_utils.replicate(train_state), valid_dataset,
