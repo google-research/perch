@@ -27,7 +27,7 @@ def get_config() -> config_dict.ConfigDict:
   # config.input_size is added automatically during parsing.
 
   train_config = config_dict.ConfigDict()
-  train_config.num_train_steps = 100_000
+  train_config.num_train_steps = 250_000
   train_config.log_every_steps = 250
   train_config.checkpoint_every_steps = 5_000
 
@@ -47,6 +47,7 @@ def get_config() -> config_dict.ConfigDict:
   model_config.random_low_pass = False
   model_config.robust_normalization = False
   model_config.encoder_ = 'efficientnet-b1'
+  model_config.taxonomy_loss_weight = 0.25
 
   melspec_config = config_dict.ConfigDict()
   melspec_config.melspec_depth = 160

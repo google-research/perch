@@ -14,14 +14,24 @@
 # limitations under the License.
 
 """Taxonomy model."""
-from typing import Optional, Sequence
+from typing import Dict, Optional
 
 from chirp import audio_utils
 from chirp import signal
 from chirp.models import efficientnet
+import flax
 from flax import linen as nn
 from jax import numpy as jnp
 from ml_collections import config_dict
+
+
+@flax.struct.dataclass
+class ModelOutputs:
+  embedding: jnp.ndarray
+  label: jnp.ndarray
+  genus: Optional[jnp.ndarray] = None
+  family: Optional[jnp.ndarray] = None
+  order: Optional[jnp.ndarray] = None
 
 
 class TaxonomyModel(nn.Module):
@@ -34,21 +44,23 @@ class TaxonomyModel(nn.Module):
   Attributes:
     encoder: A network (e.g., a 2D convolutional network) that takes
       spectrograms and returns feature vectors.
+    taxonomy_loss_weight: Weight for taxonomic label losses.
     bandwidth: The number of frequencies in each band.
     band_stride: The number of frequencies between each band.
     num_classes: Number of classes for each output head.
   """
-  num_classes: int
+  num_classes: Dict[str, int]
   melspec_config: config_dict.ConfigDict
   random_low_pass: bool
   robust_normalization: bool
   bandwidth: int
+  taxonomy_loss_weight: float
   band_stride: Optional[int] = None
   encoder: nn.Module = efficientnet.EfficientNet(
       efficientnet.EfficientNetModel.B1)
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> Sequence[jnp.ndarray]:
+  def __call__(self, inputs: jnp.ndarray, train: bool) -> ModelOutputs:
     """Apply the taxonomy model.
 
     Args:
@@ -77,4 +89,10 @@ class TaxonomyModel(nn.Module):
     # Apply the encoder
     x = self.encoder(x, train=train)
 
-    return nn.Dense(self.num_classes)(x)
+    model_outputs = {}
+    model_outputs["embedding"] = x
+    for k, n in self.num_classes.items():
+      if self.taxonomy_loss_weight == 0.0 and k != "label":
+        continue
+      model_outputs[k] = nn.Dense(n)(x)
+    return ModelOutputs(**model_outputs)

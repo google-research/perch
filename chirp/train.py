@@ -45,6 +45,73 @@ import tensorflow_datasets as tfds
 EVAL_LOOP_SLEEP_S = 30
 
 
+def taxonomy_cross_entropy(outputs: taxonomy_model.ModelOutputs,
+                           label: jnp.ndarray, genus: jnp.ndarray,
+                           family: jnp.ndarray, order: jnp.ndarray,
+                           taxonomy_loss_weight: float,
+                           **unused_kwargs) -> jnp.ndarray:
+  """Computes mean cross entropy across taxonomic labels."""
+  mean = jnp.mean(
+      optax.sigmoid_binary_cross_entropy(outputs.label, label), axis=-1)
+  if taxonomy_loss_weight != 0:
+    mean += taxonomy_loss_weight * jnp.mean(
+        optax.sigmoid_binary_cross_entropy(outputs.genus, genus), axis=-1)
+    mean += taxonomy_loss_weight * jnp.mean(
+        optax.sigmoid_binary_cross_entropy(outputs.family, family), axis=-1)
+    mean += taxonomy_loss_weight * jnp.mean(
+        optax.sigmoid_binary_cross_entropy(outputs.order, order), axis=-1)
+  return mean
+
+
+def keyed_cross_entropy(key: str, outputs: taxonomy_model.ModelOutputs,
+                        **kwargs) -> Optional[jnp.ndarray]:
+  """Cross entropy for the specified taxonomic label set."""
+  mean = jnp.mean(
+      optax.sigmoid_binary_cross_entropy(getattr(outputs, key), kwargs[key]),
+      axis=-1)
+  return mean
+
+
+def keyed_map(key: str, outputs: taxonomy_model.ModelOutputs,
+              **kwargs) -> Optional[jnp.ndarray]:
+  return metrics.average_precision(
+      scores=getattr(outputs, key), labels=kwargs[key])
+
+
+def keyed_cmap(key: str, outputs: taxonomy_model.ModelOutputs,
+               **kwargs) -> Optional[jnp.ndarray]:
+  return metrics.average_precision(
+      scores=getattr(outputs, key), labels=kwargs[key]), kwargs[key]
+
+
+def make_metrics_collection(prefix: str, taxonomy_loss_weight: float):
+  """Create metrics collection."""
+  # pylint: disable=g-long-lambda
+  metrics_dict = {}
+  if taxonomy_loss_weight != 0.0:
+    taxo_keys = ["label", "genus", "family", "order"]
+  else:
+    taxo_keys = ["label"]
+
+  for key in taxo_keys:
+    metrics_dict.update({
+        key + "_xentropy":
+            clu_metrics.Average.from_fun(
+                functools.partial(keyed_cross_entropy, key=key)),
+        key + "_map":
+            clu_metrics.Average.from_fun(functools.partial(keyed_map, key=key)),
+        key + "_cmap":
+            class_average.ClassAverage.from_fun(
+                functools.partial(keyed_cmap, key=key)),
+    })
+  if taxonomy_loss_weight != 0.0:
+    metrics_dict["loss"] = clu_metrics.Average.from_fun(taxonomy_cross_entropy)
+  else:
+    metrics_dict["loss"] = metrics_dict["label_xentropy"]
+  metrics_dict = {prefix + k: v for k, v in metrics_dict.items()}
+  return clu_metrics.Collection.create(**metrics_dict)
+
+
 @flax.struct.dataclass
 class TrainState:
   step: int
@@ -59,19 +126,6 @@ class ModelBundle:
   optimizer: optax.GradientTransformation
   key: jnp.ndarray
   ckpt: checkpoint.Checkpoint
-
-
-@flax.struct.dataclass
-class ValidationMetrics(clu_metrics.Collection):
-  valid_loss: clu_metrics.Average.from_fun(metrics.mean_cross_entropy)
-  valid_map: clu_metrics.Average.from_fun(metrics.map_)
-  valid_cmap: class_average.ClassAverage.from_fun(metrics.cmap)
-
-
-@flax.struct.dataclass
-class TrainingMetrics(clu_metrics.Collection):
-  train_loss: clu_metrics.LastValue.from_fun(metrics.mean_cross_entropy)
-  train_map: clu_metrics.LastValue.from_fun(metrics.map_)
 
 
 def parse_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
@@ -128,8 +182,11 @@ def initialize_model(dataset_info: tfds.core.DatasetInfo,
 
   # Load model
   model_init_key, key = random.split(key)
-  model = taxonomy_model.TaxonomyModel(
-      num_classes=dataset_info.features["label"].num_classes, **model_config)
+  num_classes = {
+      k: dataset_info.features[k].num_classes
+      for k in ("label", "genus", "family", "order")
+  }
+  model = taxonomy_model.TaxonomyModel(num_classes=num_classes, **model_config)
   variables = model.init(
       model_init_key,
       jnp.zeros((1, dataset_info.features["audio"].sample_rate *
@@ -164,6 +221,8 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
     checkpoint_every_steps: Checkpoint the model and training state.
   """
   train_iterator = train_dataset.as_numpy_iterator()
+  train_metrics_collection = make_metrics_collection(
+      "train___", model_bundle.model.taxonomy_loss_weight)
 
   # Define update step
   @functools.partial(jax.pmap, axis_name="batch")
@@ -173,7 +232,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
 
     def step(params, model_state):
       variables = {"params": params, **model_state}
-      logits, model_state = model_bundle.model.apply(
+      model_outputs, model_state = model_bundle.model.apply(
           variables,
           batch["audio"],
           train=True,
@@ -182,9 +241,15 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
               "dropout": dropout_key,
               "low_pass": low_pass_key
           })
-      train_metrics = TrainingMetrics.gather_from_model_output(
-          logits=logits, labels=batch["label"]).compute()
-      return train_metrics["train_loss"], (train_metrics, model_state)
+      taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
+      train_metrics = train_metrics_collection.gather_from_model_output(
+          outputs=model_outputs,
+          label=batch["label"],
+          genus=batch["genus"],
+          family=batch["family"],
+          order=batch["order"],
+          taxonomy_loss_weight=taxonomy_loss_weight).compute()
+      return train_metrics["train___loss"], (train_metrics, model_state)
 
     (_, (train_metrics, model_state)), grads = jax.value_and_grad(
         step, has_aux=True)(train_state.params, train_state.model_state)
@@ -219,6 +284,9 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
       train_metrics = flax_utils.unreplicate(train_metrics)
 
       if step % log_every_steps == 0:
+        train_metrics = {
+            k.replace("___", "/"): v for k, v in train_metrics.items()
+        }
         writer.write_scalars(step, train_metrics)
       reporter(step)
     # Run validation loop
@@ -235,18 +303,27 @@ def evaluate(model_bundle: ModelBundle,
              reporter: periodic_actions.ReportProgress,
              max_eval_steps: int = -1):
   """Run evaluation."""
+  valid_metrics = make_metrics_collection(
+      "valid___", model_bundle.model.taxonomy_loss_weight)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def update_metrics(valid_metrics, batch, train_state):
     variables = {"params": train_state.params, **train_state.model_state}
-    logits = model_bundle.model.apply(variables, batch["audio"], train=False)
+    model_outputs = model_bundle.model.apply(
+        variables, batch["audio"], train=False)
     return valid_metrics.merge(
-        ValidationMetrics.gather_from_model_output(
-            logits=logits, labels=batch["label"], axis_name="batch"))
+        valid_metrics.gather_from_model_output(
+            model_outputs=model_outputs,
+            label=batch["label"],
+            genus=batch["genus"],
+            family=batch["family"],
+            order=batch["order"],
+            taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
+            axis_name="batch"))
 
   step = flax_utils.unreplicate(train_state.step)
   with reporter.timed("eval"):
-    valid_metrics = flax_utils.replicate(ValidationMetrics.empty())
+    valid_metrics = flax_utils.replicate(valid_metrics.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
       valid_metrics = update_metrics(valid_metrics, batch, train_state)
@@ -256,6 +333,7 @@ def evaluate(model_bundle: ModelBundle,
     # Log validation loss
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
 
+  valid_metrics = {k.replace("___", "/"): v for k, v in valid_metrics.items()}
   writer.write_scalars(step, valid_metrics)
   writer.flush()
 
@@ -304,8 +382,9 @@ def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,
   variables = {"params": train_state.params, **train_state.model_state}
 
   def infer_fn(audio_batch):
-    logits = model_bundle.model.apply(variables, audio_batch, train=False)
-    return logits
+    model_outputs = model_bundle.model.apply(
+        variables, audio_batch, train=False)
+    return model_outputs.label
 
   tf_predict = tf.function(
       jax2tf.convert(infer_fn, enable_xla=False),

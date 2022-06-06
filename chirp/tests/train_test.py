@@ -15,14 +15,15 @@
 
 """Tests for train."""
 
-from ml_collections import config_dict
 import os
 import tempfile
-import tensorflow as tf
 
 from chirp import train
+from chirp.configs import baseline
 from chirp.data import pipeline
 from chirp.tests import fake_dataset
+from ml_collections import config_dict
+import tensorflow as tf
 from absl.testing import absltest
 
 
@@ -70,6 +71,7 @@ class TrainTest(absltest.TestCase):
     model_config.random_low_pass = False
     model_config.robust_normalization = False
     model_config.encoder_ = "efficientnet-b0"
+    model_config.taxonomy_loss_weight = 1.0
 
     melspec_config = config_dict.ConfigDict()
     melspec_config.melspec_depth = 32
@@ -112,6 +114,28 @@ class TrainTest(absltest.TestCase):
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))
 
+  def test_init_baseline(self):
+    # Ensure that we can initialize the model with the baseline config.
+    config = baseline.get_config()
+    parsed_config = train.parse_config(config)
+    _, dataset_info = pipeline.get_dataset(
+        "train",
+        dataset_directory=self.builder.data_dir,
+        batch_size=parsed_config.batch_size,
+        window_size_s=parsed_config.data_config.window_size_s,
+        min_gain=parsed_config.data_config.min_gain,
+        max_gain=parsed_config.data_config.max_gain,
+        mixin_prob=0.5)
+
+    model_bundle, train_state = train.initialize_model(
+        dataset_info,
+        workdir=self.train_dir,
+        data_config=parsed_config.data_config,
+        model_config=parsed_config.model_config,
+        rng_seed=parsed_config.rng_seed,
+        learning_rate=parsed_config.learning_rate)
+    self.assertIsNotNone(model_bundle)
+    self.assertIsNotNone(train_state)
 
 if __name__ == "__main__":
   absltest.main()
