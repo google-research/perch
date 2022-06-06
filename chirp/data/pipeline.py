@@ -16,7 +16,7 @@
 """Data pipeline functions."""
 
 import functools
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import jax
 import tensorflow as tf
@@ -161,6 +161,7 @@ def get_dataset(split: str,
                 batch_size: int,
                 dataset_directory: str = _DEFAULT_DATASET_DIR,
                 tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
+                tf_data_service_address: Optional[Any] = None,
                 **data_config) -> Tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
   """Returns the placeholder dataset.
 
@@ -170,6 +171,7 @@ def get_dataset(split: str,
     dataset_directory: dataset directory.
     tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
       instead of using the tfds.core.builder_from_directory.
+    tf_data_service_address: Address for TFDataService.
     **data_config: Data configuration, passed on to `process_audio`.
 
   Returns:
@@ -207,5 +209,11 @@ def get_dataset(split: str,
   ds = ds.batch(jax.device_count(), drop_remainder=True)
   if 'train' in split:
     ds = ds.repeat()
+  if 'train' in split and tf_data_service_address:
+    ds = ds.apply(
+        tf.data.experimental.service.distribute(
+            processing_mode=tf.data.experimental.service.ShardingPolicy.DYNAMIC,
+            service=tf_data_service_address,
+            job_name='chirp_job'))
   ds = ds.prefetch(tf.data.AUTOTUNE)
   return ds, dataset_info

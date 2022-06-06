@@ -33,6 +33,11 @@ _LOGDIR = flags.DEFINE_string("logdir", None, "Work unit logging directory.")
 _WORKDIR = flags.DEFINE_string("workdir", None,
                                "Work unit checkpointing directory.")
 _MODE = flags.DEFINE_enum("mode", "train", ["train", "eval"], "Mode.")
+_TF_DATA_SERVICE_ADDRESS = flags.DEFINE_string(
+    "tf_data_service_address",
+    "",
+    "The dispatcher's address.",
+    allow_override_cpp=True)
 flags.mark_flags_as_required(["config", "workdir", "logdir"])
 
 
@@ -45,7 +50,10 @@ def main(argv: Sequence[str]) -> None:
 
   if _MODE.value == "train":
     train_dataset, dataset_info = pipeline.get_dataset(
-        "train", batch_size=config.batch_size, **config.data_config)
+        "train",
+        batch_size=config.batch_size,
+        tf_data_service_address=_TF_DATA_SERVICE_ADDRESS.value,
+        **config.data_config)
   elif _MODE.value == "eval":
     valid_dataset, dataset_info = pipeline.get_dataset(
         "test_caples", batch_size=config.batch_size, **config.data_config)
