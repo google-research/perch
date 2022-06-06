@@ -20,7 +20,7 @@ etils = {extras = ["epath"], version = "^0.6.0"}
 ratelimiter = "^1.2.0.post0"
 SPARQLWrapper = "^2.0.0"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 librosa = "^0.9.1"
 numpy = "^1.21.6"
 

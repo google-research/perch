@@ -41,6 +41,20 @@ def hertz_to_mel(frequencies_hertz: jnp.ndarray) -> jnp.ndarray:
       frequencies_hertz / _MEL_BREAK_FREQUENCY_HERTZ)
 
 
+def mel_to_hertz(frequencies_mel: jnp.ndarray) -> jnp.ndarray:
+  """Converts frequencies in `frequencies_mel` in the mel scale to Hertz.
+
+  Args:
+    frequencies_mel: An array of frequencies in the mel scale.
+
+  Returns:
+    An array of the same shape and type of `frequencies_mel` containing
+    frequencies in Hertz.
+  """
+  return _MEL_BREAK_FREQUENCY_HERTZ * (
+      jnp.expm1(frequencies_mel / _MEL_HIGH_FREQUENCY_Q))
+
+
 @functools.partial(jax.jit, static_argnums=(0, 1))
 def linear_to_mel_weight_matrix(
     num_mel_bins: int = 20,
