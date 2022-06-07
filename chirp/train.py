@@ -290,8 +290,8 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
         }
         writer.write_scalars(step, train_metrics)
       reporter(step)
-    # Run validation loop
-    if (step + 1) % checkpoint_every_steps == 0:
+
+    if (step + 1) % checkpoint_every_steps == 0 or step == num_train_steps:
       with reporter.timed("checkpoint"):
         model_bundle.ckpt.save(flax_utils.unreplicate(train_state))
   writer.close()
