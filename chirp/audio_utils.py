@@ -425,7 +425,7 @@ def slice_peaked_audio(
     Sequence of extracted audio intervals, each of shape
     [sample_rate_hz * interval_length_s].
   """
-  scaling_config = scaling_config or PCENScalingConfig()
+  scaling_config = scaling_config or LogScalingConfig()
   target_length = int(sample_rate_hz * interval_length_s)
 
   # Wrap audio to the target length if it's shorter than that.

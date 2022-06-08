@@ -53,7 +53,7 @@ LocalizationFn = Callable[[KeyExample, int, float], Sequence[KeyExample]]
 
 @dataclasses.dataclass
 class BirdTaxonomyConfig(tfds.core.BuilderConfig):
-  sample_rate_hz: int = 22_500
+  sample_rate_hz: int = 32_000
   resampling_method: str = 'polyphase'
   localization_fn: Optional[LocalizationFn] = None
   interval_length_s: Optional[float] = None
@@ -104,9 +104,12 @@ class Int16AsFloatTensor(tfds.features.Tensor):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.0.0')
+  VERSION = tfds.core.Version('1.1.0')
   RELEASE_NOTES = {
-      '1.0.0': 'Initial release.',
+      '1.0.0':
+          'Initial release.',
+      '1.1.0': ('Switched to higher sampling rate, added recording metadata '
+                'features, switched to log-scaling in slice_peaked_audio.'),
   }
   BUILDER_CONFIGS = [
       BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
@@ -122,7 +125,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   ]
 
   GCS_URL = epath.Path('gs://chirp-public-bucket/xeno-canto')
-  TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-05-21.json'
+  TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-05-31.json'
 
   def _load_taxonomy_metadata(self) -> pd.DataFrame:
     file_path = (
@@ -191,6 +194,28 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                     tfds.features.ClassLabel(names=class_names['order'])),
             'filename':
                 tfds.features.Text(),
+            'quality_score':
+                tfds.features.Text(),
+            'license':
+                tfds.features.Text(),
+            'altitude':
+                tfds.features.Text(),
+            'bird_seen':
+                tfds.features.Text(),
+            'country':
+                tfds.features.Text(),
+            'latitude':
+                tfds.features.Text(),
+            'longitude':
+                tfds.features.Text(),
+            'playback_used':
+                tfds.features.Text(),
+            'recordist':
+                tfds.features.Text(),
+            'remarks':
+                tfds.features.Text(),
+            'sound_type':
+                tfds.features.Text(),
         }),
         supervised_keys=('audio', 'label'),
         homepage='https://github.com/google-research/chirp',
@@ -227,18 +252,27 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     # Rename columns to reflect the fact that they contain one value per row.
     renames = {
         'xeno_canto_ids': 'xeno_canto_id',
-        'xeno_canto_formats': 'xeno_canto_format',
-        'xeno_canto_quality_scores': 'xeno_canto_quality_score',
-        'xeno_canto_licenses': 'xeno_canto_license',
+        'altitudes': 'altitude',
+        'countries': 'country',
+        'file_formats': 'file_format',
+        'latitudes': 'latitude',
+        'licenses': 'license',
+        'longitudes': 'longitude',
+        'quality_scores': 'quality_score',
+        'recordists': 'recordist',
+        'sound_types': 'sound_type',
     }
     source_info = source_info.rename(renames, axis=1)
 
     # Remap '' and 'no score' scores to 'E' (the worst score).
-    clean_up_score = lambda s: 'E' if s in ('', 'no score') else s
-    source_info['xeno_canto_quality_score'] = source_info[
-        'xeno_canto_quality_score'].map(clean_up_score)
+    source_info['quality_score'] = source_info['quality_score'].map(
+        lambda s: 'E' if s in ('', 'no score') else s)
 
-    get_format = lambda s: s['xeno_canto_format']
+    # Remap None to '' for the 'latitude' and 'longitude' columns.
+    for column in ['latitude', 'longitude']:
+      source_info[column] = source_info[column].map(lambda s: s or '')
+
+    get_format = lambda s: s['file_format']
     get_xc_id = lambda s: s['xeno_canto_id']
     to_name = lambda s: f"{s['species_code']}/XC{get_xc_id(s)}.{get_format(s)}"
     source_info['url'] = source_info.apply(
@@ -271,11 +305,22 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       return source['xeno_canto_id'], {
           'audio': audio,
           'label': [source['species_code']],
-          'bg_labels': source['xeno_canto_bg_species_codes'],
+          'bg_labels': source['bg_species_codes'],
           'genus': [source['genus']],
           'family': [source['family']],
           'order': [source['order']],
           'filename': source['url'].name,
+          'quality_score': source['quality_score'],
+          'license': source['license'],
+          'altitude': source['altitude'],
+          'bird_seen': source['bird_seen'],
+          'country': source['country'],
+          'latitude': source['latitude'],
+          'longitude': source['longitude'],
+          'playback_used': source['playback_used'],
+          'recordist': source['recordist'],
+          'remarks': source['remarks'],
+          'sound_type': source['sound_type'],
       }
 
     pipeline = (

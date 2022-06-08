@@ -49,7 +49,16 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
             2: 'no score'
         }[i],
         'also': [xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]],
-        'lic': 'cc-by'
+        'lic': 'cc-by',
+        'alt': '0',
+        'bird-seen': 'yes',
+        'playback-used': 'no',
+        'cnt': '',
+        'lat': '0.0',
+        'lng': '0.0',
+        'rec': '',
+        'rmk': '',
+        'type': 'song',
     }, {
         'file': '',
         'file-name': '',
@@ -60,7 +69,16 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
             2: 'no score'
         }[i],
         'also': [xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]],
-        'lic': 'cc-by'
+        'lic': 'cc-by',
+        'alt': '0',
+        'bird-seen': 'yes',
+        'playback-used': 'no',
+        'cnt': '',
+        'lat': '0.0',
+        'lng': '0.0',
+        'rec': '',
+        'rmk': '',
+        'type': 'song',
     }, {
         'file': f'XC{i:05d}{suffix}',
         'file-name': f'XC{i:05d}{suffix}',
@@ -71,7 +89,16 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
             2: 'no score'
         }[i],
         'also': [xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]],
-        'lic': 'cc-by-nd'
+        'lic': 'cc-by-nd',
+        'alt': '0',
+        'bird-seen': 'yes',
+        'playback-used': 'no',
+        'cnt': '',
+        'lat': '0.0',
+        'lng': '0.0',
+        'rec': '',
+        'rmk': '',
+        'type': 'song',
     }]
 
   # Return recordings in two pages to test resiliency to multi-page results.
@@ -335,7 +362,9 @@ class XenoCantoTest(parameterized.TestCase):
 
     with self.assertRaises(RuntimeError):
       xeno_canto._scrape_xeno_canto_recording_metadata(
-          self.broken_down_taxonomy_info, progress_bar=False)
+          self.broken_down_taxonomy_info,
+          include_nd_recordings=False,
+          progress_bar=False)
 
     # We expect a RuntimeError to be raised if the code fails to infer the file
     # extension.
@@ -345,7 +374,9 @@ class XenoCantoTest(parameterized.TestCase):
 
     with self.assertRaises(RuntimeError):
       xeno_canto._scrape_xeno_canto_recording_metadata(
-          self.broken_down_taxonomy_info, progress_bar=False)
+          self.broken_down_taxonomy_info,
+          include_nd_recordings=False,
+          progress_bar=False)
 
     # We expect only the first recording to be returned for each species code,
     # since the 'file' is empty for the second one and the third one has a *-nd
@@ -356,7 +387,9 @@ class XenoCantoTest(parameterized.TestCase):
 
     species_code_to_recording_metadata = (
         xeno_canto._scrape_xeno_canto_recording_metadata(
-            self.broken_down_taxonomy_info, progress_bar=False))
+            self.broken_down_taxonomy_info,
+            include_nd_recordings=False,
+            progress_bar=False))
     for i, row in self.broken_down_taxonomy_info.iterrows():
       self.assertListEqual(
           species_code_to_recording_metadata[row['species_code']], [
@@ -372,8 +405,32 @@ class XenoCantoTest(parameterized.TestCase):
                       'Struthio molybdophanes', 'Rhea americana',
                       'Struthio camelus'
                   ][i]],
-                  xc_license='cc-by')
+                  xc_license='cc-by',
+                  altitude='0',
+                  bird_seen='yes',
+                  country='',
+                  latitude='0.0',
+                  longitude='0.0',
+                  playback_used='no',
+                  recordist='',
+                  remarks='',
+                  sound_type='song')
           ])
+
+    # We expect two recordings to be returned for each species code when
+    # including *-nd-licensed recordings.
+    mock_session_cls.return_value.get.side_effect = (
+        _make_mock_requests_side_effect(
+            self.broken_down_taxonomy_info, wrong_num_recordings=False))
+
+    species_code_to_recording_metadata = (
+        xeno_canto._scrape_xeno_canto_recording_metadata(
+            self.broken_down_taxonomy_info,
+            include_nd_recordings=True,
+            progress_bar=False))
+    self.assertListEqual(
+        [len(rs) for rs in species_code_to_recording_metadata.values()],
+        [2, 2, 2])
 
   @mock.patch.object(xeno_canto.SPARQLWrapper, 'SPARQLWrapper', autospec=True)
   @mock.patch.object(xeno_canto.subprocess, 'run', autospec=True)
@@ -439,14 +496,23 @@ class XenoCantoTest(parameterized.TestCase):
 
     expected = taxonomy_info.copy().drop(columns=['No.'])
     expected['xeno_canto_ids'] = [['00000'], ['00001'], ['00002']]
-    expected['xeno_canto_formats'] = [['mp3'], ['mp3'], ['mp3']]
-    expected['xeno_canto_quality_scores'] = [['A'], [''], ['no score']]
-    expected['xeno_canto_bg_species_codes'] = [[['ostric3']], [['grerhe1']],
-                                               [['ostric2']]]
-    expected['xeno_canto_licenses'] = [['cc-by'], ['cc-by'], ['cc-by']]
+    expected['altitudes'] = [['0'], ['0'], ['0']]
+    expected['bird_seen'] = [['yes'], ['yes'], ['yes']]
+    expected['countries'] = [[''], [''], ['']]
+    expected['file_formats'] = [['mp3'], ['mp3'], ['mp3']]
+    expected['latitudes'] = [['0.0'], ['0.0'], ['0.0']]
+    expected['licenses'] = [['cc-by'], ['cc-by'], ['cc-by']]
+    expected['longitudes'] = [['0.0'], ['0.0'], ['0.0']]
+    expected['playback_used'] = [['no'], ['no'], ['no']]
+    expected['quality_scores'] = [['A'], [''], ['no score']]
+    expected['recordists'] = [[''], [''], ['']]
+    expected['remarks'] = [[''], [''], ['']]
+    expected['sound_types'] = [['song'], ['song'], ['song']]
+    expected['bg_species_codes'] = [[['ostric3']], [['grerhe1']], [['ostric2']]]
     self.assertTrue(
         xeno_canto.retrieve_recording_metadata(
-            taxonomy_info, progress_bar=False).equals(expected))
+            taxonomy_info, include_nd_recordings=False,
+            progress_bar=False).equals(expected))
 
     # The function should raise a RuntimeError if the number of foreground
     # recordings declared by `taxonomy_info` is greater than the number of
@@ -457,6 +523,7 @@ class XenoCantoTest(parameterized.TestCase):
         RuntimeError,
         xeno_canto.retrieve_recording_metadata,
         taxonomy_info_wrong_no,
+        include_nd_recordings=False,
         progress_bar=False)
 
 

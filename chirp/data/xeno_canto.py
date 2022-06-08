@@ -23,7 +23,7 @@ import io
 import re
 import subprocess
 import sys
-from typing import Dict, FrozenSet, Sequence, Tuple
+from typing import cast, Dict, FrozenSet, Sequence, Tuple, Union
 
 from absl import logging
 from etils import epath
@@ -177,6 +177,9 @@ _ALLOWED_SPECIES_CODE_COLLISIONS = {
     frozenset(('Thamnolaea cinnamomeiventris', 'Thamnolaea coronata')):
         'moccha1',
 }
+# These Xeno-Canto recordings are unavailable despite having an associated
+# filename.
+_SKIP_XC_IDS = ('104022', '727818')
 
 
 @dataclasses.dataclass
@@ -211,16 +214,45 @@ class SpeciesMappingConfig:
 @dataclasses.dataclass
 class RecordingInfo:
   """Information on a Xeno-Canto recording."""
-  # Xeno-Canto recording ID.
-  xc_id: str
-  # File format.
-  xc_format: str
-  # Quality score in {'A', 'B', 'C', 'D', 'E', '', 'no score'}.
-  quality_score: str
-  # Background species (scientific names).
-  background_species: Sequence[str]
-  # Recording license.
-  xc_license: str
+  xc_id: str  # Xeno-Canto recording ID.
+  xc_format: str  # File format.
+  xc_license: str  # Recording license.
+  background_species: Sequence[str]  # Background species (scientific names).
+  altitude: str
+  bird_seen: str
+  country: str
+  latitude: str
+  longitude: str
+  playback_used: str
+  quality_score: str  # In {'A', 'B', 'C', 'D', 'E', '', 'no score'}.
+  recordist: str
+  remarks: str
+  sound_type: str  # What kind of vocalization (call, song, etc.).
+
+  @classmethod
+  def from_info_dict(cls, info_dict: Dict[str, Union[str, Sequence[str]]]):
+    # Infer file format.
+    file_name = cast(str, info_dict['file-name'])
+    m = re.search('(mp3|wav|ogg|flac)$', file_name.lower()[-4:])
+    if not m:
+      raise RuntimeError(f"can't infer file format from {file_name}")
+    xc_format = m.group(1)
+
+    return cls(
+        xc_id=info_dict['id'],
+        xc_format=xc_format,
+        xc_license=info_dict['lic'],
+        background_species=info_dict['also'],
+        altitude=info_dict['alt'],
+        bird_seen=info_dict['bird-seen'],
+        country=info_dict['cnt'],
+        latitude=info_dict['lat'],
+        longitude=info_dict['lng'],
+        playback_used=info_dict['playback-used'],
+        quality_score=info_dict['q'],
+        recordist=info_dict['rec'],
+        remarks=info_dict['rmk'],
+        sound_type=info_dict['type'])
 
 
 def _infer_species_codes_from_wikidata(taxonomy_info: pd.DataFrame,
@@ -441,11 +473,13 @@ def _break_down_taxonomy(taxonomy_info: pd.DataFrame,
 
 def _scrape_xeno_canto_recording_metadata(
     taxonomy_info: pd.DataFrame,
+    include_nd_recordings: bool,
     progress_bar: bool = True) -> Dict[str, Sequence[RecordingInfo]]:
   """Scrapes and returns Xeno-Canto recording metadata for all species.
 
   Args:
     taxonomy_info: Xeno-Canto taxonomy DataFrame.
+    include_nd_recordings: whether to include ND-licensed recordings.
     progress_bar: whether to show a progress bar.
 
   Returns:
@@ -471,24 +505,26 @@ def _scrape_xeno_canto_recording_metadata(
       response = session.get(
           # Specifying gen:<GENUS> speeds up the lookup.
           url=f'{_XC_API_URL}?query={query}%20gen:{genus}').json()
-      dicts = response['recordings']
+      info_dicts = response['recordings']
       # If there are more than one page of responses, loop over pages.
       if int(response['numPages']) > 1:
         for page in range(2, int(response['numPages']) + 1):
           # Specifying gen:<GENUS> speeds up the lookup.
           url_with_page = (
               f'{_XC_API_URL}?query={query}%20gen:{genus}&page={page}')
-          dicts.extend(session.get(url=url_with_page).json()['recordings'])
-      if len(dicts) != int(response['numRecordings']):
+          info_dicts.extend(session.get(url=url_with_page).json()['recordings'])
+      if len(info_dicts) != int(response['numRecordings']):
         raise RuntimeError(
             f'wrong number of recordings obtained for {species_code}')
-      recording_info_dicts.extend(dicts)
+      recording_info_dicts.extend(info_dicts)
     # 'No.' is the number of recordings reported for a given species by
     # https://xeno-canto.org/collection/species/all. It's possible that this
-    # column is not entirely up to date, so we treat it as a lower-bound for
-    # the number of recordings expected. This check helps prefent accidentally
-    # discarding recordings for an entire species through a malformed query.
-    if len(recording_info_dicts) < row['No.']:
+    # column is not entirely up to date (some recordings could have been added,
+    # and some recordings may be no longer available), so we treat it as a soft
+    # lower-bound for the number of recordings expected. This check helps
+    # prevent accidentally discarding recordings for an entire species through
+    # a malformed query.
+    if len(recording_info_dicts) < 0.75 * row['No.']:
       raise RuntimeError(
           f'wrong number of recordings obtained for {species_code}')
     return (species_code, recording_info_dicts)
@@ -501,28 +537,26 @@ def _scrape_xeno_canto_recording_metadata(
       iterator = tqdm.tqdm(iterator, total=len(rows))
     species_code_to_recording_info_dicts = dict(iterator)
 
-  def infer_format(r):
-    m = re.search('(mp3|wav|ogg|flac)$', r['file-name'].lower()[-4:])
-    if not m:
-      raise RuntimeError(f"can't infer file format from {r['file-name']}")
-    return m.group(1)
-
   species_code_to_recording_metadata = {}
   num_total, num_unavailable, num_nd, num_remaining = 0, 0, 0, 0
-  for species_code, dicts in species_code_to_recording_info_dicts.items():
-    num_total += len(dicts)
+  nd_predicate = lambda lic: include_nd_recordings or '-nd' not in lic
+  available_predicate = lambda r: r['file'] and r['id'] not in _SKIP_XC_IDS
+  for species_code, info_dicts in species_code_to_recording_info_dicts.items():
+    num_total += len(info_dicts)
     # Avoid unavailable recordings and *-nd licenses. Unavailable recordings
     # have an empty string as the 'file' value.
-    num_unavailable += len([r for r in dicts if not r['file']])
-    num_nd += len([r for r in dicts if '-nd' in r['lic']])
-    recording_info_dicts = [
-        RecordingInfo(r['id'], infer_format(r), r['q'], r['also'], r['lic'])
-        for r in dicts
-        if r['file'] and '-nd' not in r['lic']
+    num_unavailable += len(
+        [r for r in info_dicts if not available_predicate(r)])
+    if not include_nd_recordings:
+      num_nd += len([r for r in info_dicts if '-nd' in r['lic']])
+    recording_metadata = [
+        RecordingInfo.from_info_dict(r)
+        for r in info_dicts
+        if available_predicate(r) and nd_predicate(r['lic'])
     ]
 
-    num_remaining += len(recording_info_dicts)
-    species_code_to_recording_metadata[species_code] = recording_info_dicts
+    num_remaining += len(recording_metadata)
+    species_code_to_recording_metadata[species_code] = recording_metadata
 
   logging.info(
       'Retrieved %d recordings out of %d, ignoring %d unavailable recordings '
@@ -680,6 +714,7 @@ def create_taxonomy_info(
 
 
 def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
+                                include_nd_recordings: bool,
                                 progress_bar: bool = True) -> pd.DataFrame:
   """Retrieves recording metadata for a given Xeno-Canto taxonomy DataFrame.
 
@@ -697,14 +732,24 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
   This function adds the following columns:
 
   * 'xeno_canto_ids': list of Xeno-Canto recording IDs.
-  * 'xeno_canto_formats': list of file formats.
-  * 'xeno_canto_quality_scores': list of recording quality scores.
-  * 'xeno_canto_bg_species_codes': list of species names for species heard in
-      the background.
-  * 'xeno_canto_licenses': list of licenses.
+  * 'file_formats': list of file formats.
+  * 'quality_scores': list of recording quality scores.
+  * 'licenses': list of licenses.
+  * 'altitudes': list of recording altitudes.
+  * 'bird_seen': list of booleans indicating whether the bird was seen.
+  * 'countries': list of recording countries.
+  * 'latitudes': list of recording latitudes.
+  * 'longitudes': list of recording longitudes.
+  * 'playback_used': list of booleans indicating whether a playback was used.
+  * 'recordists': list of recordists.
+  * 'remarks': list of additional remarks.
+  * 'sound_types': list of sound types (what kind of vocalization).
+  * 'bg_species_codes': list of species names for species heard in the
+       background.
 
   Args:
     taxonomy_info: Xeno-Canto taxonomy DataFrame.
+    include_nd_recordings: whether to include ND-licensed recordings.
     progress_bar: whether to show a progress bar.
 
   Returns:
@@ -713,21 +758,28 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
   taxonomy_info = taxonomy_info.copy()
   logging.info('Scraping Xeno-Canto for recording IDs...')
   species_code_to_recording_metadata = _scrape_xeno_canto_recording_metadata(
-      taxonomy_info, progress_bar=progress_bar)
+      taxonomy_info, include_nd_recordings, progress_bar=progress_bar)
   taxonomy_info = taxonomy_info.drop(columns=['No.'])
-  taxonomy_info['xeno_canto_ids'] = taxonomy_info['species_code'].map({
-      species_code: [info.xc_id for info in metadata]
-      for species_code, metadata in species_code_to_recording_metadata.items()
-  })
-  taxonomy_info['xeno_canto_formats'] = taxonomy_info['species_code'].map({
-      species_code: [info.xc_format for info in metadata]
-      for species_code, metadata in species_code_to_recording_metadata.items()
-  })
-  taxonomy_info['xeno_canto_quality_scores'] = taxonomy_info[
-      'species_code'].map({
-          species_code: [info.quality_score for info in metadata] for
-          species_code, metadata in species_code_to_recording_metadata.items()
-      })
+  column_and_attribute_names = (
+      ('xeno_canto_ids', 'xc_id'),
+      ('altitudes', 'altitude'),
+      ('bird_seen', 'bird_seen'),
+      ('countries', 'country'),
+      ('file_formats', 'xc_format'),
+      ('latitudes', 'latitude'),
+      ('licenses', 'xc_license'),
+      ('longitudes', 'longitude'),
+      ('playback_used', 'playback_used'),
+      ('quality_scores', 'quality_score'),
+      ('recordists', 'recordist'),
+      ('remarks', 'remarks'),
+      ('sound_types', 'sound_type'),
+  )
+  for column_name, attribute_name in column_and_attribute_names:
+    taxonomy_info[column_name] = taxonomy_info['species_code'].map({
+        species_code: [getattr(info, attribute_name) for info in metadata] for
+        species_code, metadata in species_code_to_recording_metadata.items()
+    })
 
   xeno_canto_query_to_species_code = dict(
       zip(taxonomy_info['xeno_canto_query'], taxonomy_info['species_code']))
@@ -739,16 +791,9 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
         if q in xeno_canto_query_to_species_code
     ]
 
-  taxonomy_info['xeno_canto_bg_species_codes'] = taxonomy_info[
-      'species_code'].map({
-          code:
-          [_to_species_codes(info.background_species) for info in metadata]
-          for code, metadata in species_code_to_recording_metadata.items()
-      })
-
-  taxonomy_info['xeno_canto_licenses'] = taxonomy_info['species_code'].map({
-      species_code: [info.xc_license for info in metadata]
-      for species_code, metadata in species_code_to_recording_metadata.items()
+  taxonomy_info['bg_species_codes'] = taxonomy_info['species_code'].map({
+      code: [_to_species_codes(info.background_species) for info in metadata
+            ] for code, metadata in species_code_to_recording_metadata.items()
   })
 
   return taxonomy_info
