@@ -59,7 +59,7 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
   interval_length_s: Optional[float] = None
 
 
-class Int16AsFloatTensor(tfds.features.Tensor):
+class Int16AsFloatTensor(tfds.features.Audio):
   """An int16 tfds.features.Tensor represented as a float32 in [-1, 1).
 
   Examples are stored as int16 tensors but encoded from and decoded into float32
@@ -68,17 +68,29 @@ class Int16AsFloatTensor(tfds.features.Tensor):
   """
   INT16_SCALE = float(1 << 15)
 
-  def __init__(self,
-               *,
-               shape: tfds.typing.Shape,
-               sample_rate: int,
-               encoding: tfds.features.Encoding = tfds.features.Encoding.NONE):
+  def __init__(
+      self,
+      *,
+      file_format: Optional[str] = None,
+      shape: tfds.typing.Shape,
+      dtype: tf.dtypes.DType = tf.float32,
+      sample_rate: tfds.typing.Dim,
+      encoding: Union[str,
+                      tfds.features.Encoding] = tfds.features.Encoding.NONE,
+      doc: tfds.features.DocArg = None):
+    del file_format
+    del dtype
+
     self._int16_tensor_feature = tfds.features.Tensor(
         shape=shape, dtype=tf.int16, encoding=encoding)
-    # Note: We use sample_rate instead of sample_rate_hz to match
-    # tfds.features.Audio.
-    self.sample_rate = sample_rate
-    super().__init__(shape=shape, dtype=tf.float32, encoding=encoding)
+
+    super().__init__(
+        file_format=None,
+        shape=shape,
+        dtype=tf.float32,
+        sample_rate=sample_rate,
+        encoding=encoding,
+        doc=doc)
 
   def get_serialized_info(self):
     return self._int16_tensor_feature.get_serialized_info()

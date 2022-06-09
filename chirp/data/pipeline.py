@@ -170,7 +170,7 @@ def get_dataset(split: str,
     batch_size: batch size.
     dataset_directory: dataset directory.
     tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
-      instead of using the tfds.core.builder_from_directory.
+      instead of using the tfds.builder_from_directory.
     tf_data_service_address: Address for TFDataService.
     **data_config: Data configuration, passed on to `process_audio`.
 
@@ -183,7 +183,7 @@ def get_dataset(split: str,
     tfds.core.add_data_dir(tfds_data_dir)
     ds, dataset_info = tfds.load(dataset_directory, split=split, with_info=True)
   else:
-    builder = tfds.core.builder_from_directory(dataset_directory)
+    builder = tfds.builder_from_directory(dataset_directory)
     ds = builder.as_dataset(split=split)
     dataset_info = builder.info
   sample_rate_hz = dataset_info.features['audio'].sample_rate
