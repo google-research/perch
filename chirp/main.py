@@ -53,10 +53,14 @@ def main(argv: Sequence[str]) -> None:
         "train",
         batch_size=config.batch_size,
         tf_data_service_address=_TF_DATA_SERVICE_ADDRESS.value,
+        mixin_prob=config.mixin_prob,
         **config.data_config)
   elif _MODE.value == "eval":
     valid_dataset, dataset_info = pipeline.get_dataset(
-        "test_caples", batch_size=config.batch_size, **config.data_config)
+        "test_caples",
+        batch_size=config.batch_size,
+        mixin_prob=0.0,
+        **config.data_config)
   if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
     raise ValueError("Dataset sample rate must match config sample rate.")
 

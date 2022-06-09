@@ -18,9 +18,11 @@
 import functools
 from typing import Any, Dict, Optional, Tuple
 
+from absl import logging
 # Import bird_taxonomy to register the custom tfds.features.FeatureConnector.
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
 import jax
+import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -123,6 +125,7 @@ def process_audio(example: Dict[str, tf.Tensor], sample_rate_hz: int,
     gain_scalar = 1.0
   example['source_audio'] = (
       example['source_audio'][:, start_ind:end_ind] * gain_scalar)
+
   return example
 
 
@@ -142,10 +145,16 @@ def multi_hot(
     The processed example with `bg_labels` replaced using a multi-hot
     representation.
   """
-  if 'filename' in example:
-    del example['filename']
-  if 'label_str' in example:
-    del example['label_str']
+  # Delete features which are not JAX-compatible.
+  del_keys = []
+  for k, v in example.items():
+    if v.dtype == np.dtype('O'):
+      logging.warning('Removing dataset feature %s with unsupported dtype %s',
+                      k, v.dtype)
+      del_keys.append(k)
+  for k in del_keys:
+    del example[k]
+
   for key, feature in info.features.items():
     if (isinstance(feature, tfds.features.Sequence) and
         isinstance(feature.feature, tfds.features.ClassLabel)):
@@ -164,6 +173,7 @@ def get_dataset(split: str,
                 dataset_directory: str = _DEFAULT_DATASET_DIR,
                 tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
                 tf_data_service_address: Optional[Any] = None,
+                mixin_prob: float = 0.0,
                 **data_config) -> Tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
   """Returns the placeholder dataset.
 
@@ -174,13 +184,12 @@ def get_dataset(split: str,
     tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
       instead of using the tfds.builder_from_directory.
     tf_data_service_address: Address for TFDataService.
+    mixin_prob: Probability of mixing in a second example.
     **data_config: Data configuration, passed on to `process_audio`.
 
   Returns:
     The placeholder dataset.
   """
-  mixin_prob = data_config.pop('mixin_prob')
-
   if tfds_data_dir:
     tfds.core.add_data_dir(tfds_data_dir)
     ds, dataset_info = tfds.load(dataset_directory, split=split, with_info=True)
@@ -194,10 +203,7 @@ def get_dataset(split: str,
   # TODO(bartvm): Pass `train` argument instead of relying on split name.
   if 'train' in split:
     ds = ds.shuffle(batch_size * 10)
-    ds = mix_audio(ds, mixin_prob)
-  else:
-    # TODO(tomdenton): Add an option to mix-in audio during eval.
-    ds = mix_audio(ds, 0.0)
+  ds = mix_audio(ds, mixin_prob)
 
   def process_batch(batch):
     return tf.vectorized_map(
