@@ -18,6 +18,8 @@
 import functools
 from typing import Any, Dict, Optional, Tuple
 
+# Import bird_taxonomy to register the custom tfds.features.FeatureConnector.
+import chirp.data.bird_taxonomy  # pylint: disable=unused-import
 import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds

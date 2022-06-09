@@ -25,17 +25,25 @@ class FakeDataset(tfds.core.GeneratorBasedBuilder):
 
   VERSION = tfds.core.Version('1.0.0')
 
+  sample_rate: int
+
   LABEL_NAMES = [str(i) for i in range(90)]
   GENUS_NAMES = [str(i) for i in range(60)]
   FAMILY_NAMES = [str(i) for i in range(30)]
   ORDER_NAMES = [str(i) for i in range(20)]
+
+  def __init__(self, sample_rate=32_000, **kwargs):
+    # self.sample_rate is accessed from the super init, so assign first.
+    self.sample_rate = sample_rate
+    super(tfds.core.GeneratorBasedBuilder, self).__init__(**kwargs)
 
   def _info(self):
     return tfds.core.DatasetInfo(
         builder=self,
         features=tfds.features.FeaturesDict({
             'audio':
-                tfds.features.Audio(dtype=tf.float32, sample_rate=44_100),
+                tfds.features.Audio(
+                    dtype=tf.float32, sample_rate=self.sample_rate),
             'label':
                 tfds.features.Sequence(
                     tfds.features.ClassLabel(names=self.LABEL_NAMES)),
@@ -68,7 +76,7 @@ class FakeDataset(tfds.core.GeneratorBasedBuilder):
   def _generate_examples(self, num_examples):
     for i in range(num_examples):
       yield i, {
-          'audio': np.random.uniform(-1.0, 1.0, [44_100]),
+          'audio': np.random.uniform(-1.0, 1.0, [self.sample_rate]),
           'label': np.random.choice(self.LABEL_NAMES, size=[3]),
           'label_str': ['placeholder'] * 3,
           'bg_labels': np.random.choice(self.LABEL_NAMES, size=[2]),
