@@ -76,9 +76,9 @@ def gabor_filter(
   frequencies. This means that it is not a wavelet (it fails the admissibility
   condition)[^2] and it is not analytic[^3].
 
-  The zero-mean, shifted version of this filter is often called the Morlet
-  wavelet, Gabor wavelet, or Gabor kernel. The Gabor filter is sometimes also
-  referred to as the Gabor function[^4].
+  The zero-mean, shifted version of this filter is often called the (complex)
+  Morlet wavelet, Gabor wavelet, or Gabor kernel. The Gabor filter is sometimes
+  also referred to as the Gabor function[^4].
 
   To match `leaf_audio.impulse_response.gabor_impulse_response`: Use L1
   normalization. Set sigma to the product of η and σ and then use σ as the
@@ -98,22 +98,22 @@ def gabor_filter(
     normalization: What normalization to use.
 
   Returns:
-    A function which calculates the filter over the time domain.
+    A function which calculates the filter over the time or frequency domain.
   """
-  if domain == Domain.TIME:
-    if normalization == Normalization.L1:
+  if domain is Domain.TIME:
+    if normalization is Normalization.L1:
       norm = 1 / jnp.sqrt(2 * jnp.pi)
-    elif normalization == Normalization.L2:
+    elif normalization is Normalization.L2:
       norm = jnp.pi**(-1 / 4)
 
     def _gabor_filter(t: jnp.ndarray) -> jnp.ndarray:
       sinusoids = jnp.exp(1j * t * sigma)
       gaussian = jnp.exp(-1 / 2 * t**2)
       return norm * gaussian * sinusoids
-  elif domain == Domain.FREQUENCY:
-    if normalization == Normalization.L1:
+  elif domain is Domain.FREQUENCY:
+    if normalization is Normalization.L1:
       norm = 1.
-    elif normalization == Normalization.L2:
+    elif normalization is Normalization.L2:
       norm = jnp.pi**(1 / 4) * jnp.sqrt(2)
 
     def _gabor_filter(f: jnp.ndarray) -> jnp.ndarray:
@@ -121,6 +121,101 @@ def gabor_filter(
       return norm * gaussian
 
   return _gabor_filter
+
+
+def sinc_filter(
+    sigma: float, domain: Domain,
+    normalization: Normalization) -> Callable[[jnp.ndarray], jnp.ndarray]:
+  """A sinc filter.
+
+  Rather than being parameterized by its upper and lower frequency, this sinc
+  filter is parametrized by its central frequency. The width of the filter can
+  then be set by the scaling factor (i.e., scaling the inputs).
+
+  The sinc filter is not differentiable in the frequency domain.
+
+  The L1 norm of the sinc filter diverges to infinity[^1], so L1 normalization
+  is not supported.
+
+  [^1]: Borwein, David, Jonathan M. Borwein, and Isaac E. Leonard. "L p norms
+    and the sinc function." The American Mathematical Monthly 117.6 (2010):
+    528-539.
+
+  Args:
+    sigma: The central frequency of the function.
+    domain: The domain.
+    normalization: What normalization to use.
+
+  Returns:
+    A function which calculates the filter over the time or frequency domain.
+
+  Raises:
+    ValueError: If L1 normalization is requested.
+  """
+  if normalization is Normalization.L1:
+    raise ValueError("sinc filter does not support L1 normalization")
+  if domain is Domain.TIME:
+
+    def _sinc_filter(t: jnp.ndarray) -> jnp.ndarray:
+      shift = jnp.exp(2j * jnp.pi * t * sigma)
+      # NOTE: Normalized sinc function
+      return shift * jnp.sinc(t)
+  elif domain is Domain.FREQUENCY:
+
+    def _sinc_filter(f: jnp.ndarray) -> jnp.ndarray:
+      return jnp.where(jnp.abs(f - sigma) < 1 / 2, 1.0, 0.0)
+
+  return _sinc_filter
+
+
+def morlet_wavelet(
+    sigma: float, domain: Domain,
+    normalization: Normalization) -> Callable[[jnp.ndarray], jnp.ndarray]:
+  """A Morlet wavelet.
+
+  This wavelet is a sinusoid modulated by a Gaussian which is shifted down in
+  order to have zero mean (admissibility condition). It has a non-zero response
+  to negative frequencies, so it is not analytic.
+
+  For large values of sigma this wavelet is approximately equal to a Gabor
+  filter. See `gabor_filter` for details regarding naming.
+
+  The peak frequency of this wavelet is the solution `wc` to the equation
+  wc * 2π = sigma / (1 - exp(-sigma * wc * 2π)). This can be found using fixed
+  point iteration.
+
+  Args:
+    sigma: The parameter which allows the wavelet to trade-off between time and
+      frequency resolution.
+    domain: The domain.
+    normalization: What normalization to use.
+
+  Returns:
+    A function which calculates the filter over the time or frequency domain.
+  """
+  if normalization is Normalization.L1:
+    # TODO(bartvm): Does an expression exist for this?
+    raise NotImplementedError
+
+  # Follows notation from, e.g., https://en.wikipedia.org/wiki/Morlet_wavelet
+  kappa = jnp.exp(-1 / 2 * sigma**2)
+  c = (1 + jnp.exp(-sigma**2) - 2 * jnp.exp(-3 / 4 * sigma**2))**(-1 / 2)
+
+  if domain is Domain.TIME:
+
+    def _morlet_wavelet(t: jnp.ndarray) -> jnp.ndarray:
+      return (c * jnp.pi**(-1 / 4) * jnp.exp(-1 / 2 * t**2) *
+              (jnp.exp(1j * sigma * t) - kappa))
+
+  elif domain is Domain.FREQUENCY:
+
+    def _morlet_wavelet(f: jnp.ndarray) -> jnp.ndarray:
+      f = jnp.pi * 2 * f
+      return (c * jnp.pi**(1 / 4) * jnp.sqrt(2) *
+              (jnp.exp(-1 / 2 *
+                       (sigma - f)**2) - kappa * jnp.exp(-1 / 2 * f**2)))
+
+  return _morlet_wavelet
 
 
 def melspec_params(num_mel_bins: int, sample_rate: float,
@@ -185,9 +280,9 @@ def convolve_filter(filter_: Callable[[jnp.ndarray], jnp.ndarray],
   """
   ts = jnp.arange(-(window_size_frames // 2), (window_size_frames + 1) // 2)
   ts = ts[:, jnp.newaxis] / scale_factors
-  if normalization == Normalization.L1:
+  if normalization is Normalization.L1:
     norm = 1 / scale_factors
-  elif normalization == Normalization.L2:
+  elif normalization is Normalization.L2:
     norm = 1 / jnp.sqrt(scale_factors)
   sampled_filters = norm * jnp.conj(filter_(ts))
 
@@ -234,8 +329,8 @@ def multiply_filter(filter_: Callable[[jnp.ndarray], jnp.ndarray],
   # complex conjugates manually.
   filtered_signal = jnp.fft.ifft(
       jnp.fft.fft(signal, axis=-2) * filter_(fs), axis=-2)
-  if normalization == Normalization.L1:
+  if normalization is Normalization.L1:
     norm = 1
-  elif normalization == Normalization.L2:
+  elif normalization is Normalization.L2:
     norm = jnp.sqrt(scale_factors)
   return norm * filtered_signal
