@@ -52,6 +52,7 @@ from typing import Callable, Tuple
 import chirp.signal
 from jax import lax
 from jax import numpy as jnp
+from jax import scipy as jsp
 
 
 class Domain(enum.Enum):
@@ -216,6 +217,65 @@ def morlet_wavelet(
                        (sigma - f)**2) - kappa * jnp.exp(-1 / 2 * f**2)))
 
   return _morlet_wavelet
+
+
+def morse_wavelet(
+    gamma: float, beta: float, domain: Domain,
+    normalization: Normalization) -> Callable[[jnp.ndarray], jnp.ndarray]:
+  """A Morse wavelet.
+
+  For a general overview of Morse wavelets see Lilly and Olhede[^1][^2]. For
+  the mathematical details of higher-order wavelets, see Olhede and Walden[^3].
+  This code follows the notation in Lilly and Olhede.
+
+  This wavelet is analytic (i.e., it has zero response for negative
+  frequencies). It has no analytic expression in the time-domain.
+
+  The peak frequency is equal to (beta / gamma)^(1 / gamma) and the width
+  (duration) scales as sqrt(beta * gamma).
+
+  [^1]: Lilly, Jonathan M., and Sofia C. Olhede. "Generalized Morse wavelets as
+      a superfamily of analytic wavelets." IEEE Transactions on Signal
+      Processing 60.11 (2012): 6036-6041.
+  [^2]: Lilly, Jonathan M., and Sofia C. Olhede. "Higher-order properties of
+      analytic wavelets." IEEE Transactions on Signal Processing 57.1 (2008):
+      146-160.
+  [^3]: Olhede, Sofia C., and Andrew T. Walden. "Generalized morse wavelets."
+      IEEE Transactions on Signal Processing 50.11 (2002): 2661-2670.
+
+  Args:
+    gamma: A parameter which controls the high-frequency decay. A common choice
+      is 3, in which case it defines the family of Airy wavelets (which are
+      similar to the commonly used Morlet and Gabor wavelets). See figure 1 in
+      Lilly and Olhede (2012) for the relationship between gamma and other
+      wavelet families. Gamma must be positive.
+    beta: A parameter which controls the behavior near the zero frequency. When
+      gamma is equal to 3, increasing this has a similar effect as increasing
+      the parameter of a Morlet wavelet. Beta must be positive.
+    domain: The domain.
+    normalization: What normalization to use.
+
+  Returns:
+    A function which calculates the wavelet over the frequency domain.
+  """
+  if domain is not Domain.FREQUENCY:
+    raise ValueError(
+        "Morse wavelets have no analytic expression in the time domain")
+
+  r = (2 * beta + 1) / gamma
+
+  # NOTE: Computations in log-space for numerical stability
+  if normalization is Normalization.L2:
+    log_norm = (jnp.log(gamma) + r * jnp.log(2) - jsp.special.gammaln(r)) / 2
+  elif normalization is Normalization.L1:
+    log_norm = jnp.log(gamma) - jsp.special.gammaln((1 + beta) / gamma)
+
+  def _morse_wavelet(f: jnp.ndarray) -> jnp.ndarray:
+    f_nonneg = (f >= 0)
+    f *= f_nonneg
+    return jnp.exp(log_norm + beta * jnp.log(f) - f**gamma) * f_nonneg
+
+  return _morse_wavelet
 
 
 def melspec_params(num_mel_bins: int, sample_rate: float,
