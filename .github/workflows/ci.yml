@@ -27,6 +27,7 @@ jobs:
           cache: 'poetry'
       - name: Install Chirp and its dependencies
         run: |
+          sudo apt-get update
           sudo apt-get install libsndfile1 ffmpeg
           poetry install
       - name: Test with unittest
