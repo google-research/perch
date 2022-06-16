@@ -23,7 +23,7 @@ def get_config() -> config_dict.ConfigDict:
   config.batch_size = 64
   config.rng_seed = 0
   config.learning_rate = 0.01
-  config.sample_rate_hz = 22050
+  config.sample_rate_hz = 32000
   config.mixin_prob = 0.75
   # config.input_size is added automatically during parsing.
 
