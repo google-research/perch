@@ -16,6 +16,7 @@
 """Bird taxonomy dataset."""
 
 import dataclasses
+import functools
 import json
 import os
 import tempfile
@@ -57,6 +58,7 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
   resampling_method: str = 'polyphase'
   localization_fn: Optional[LocalizationFn] = None
   interval_length_s: Optional[float] = None
+  tiny: bool = False  # If True, subsample down to two species
 
 
 class Int16AsFloatTensor(tfds.features.Audio):
@@ -116,12 +118,12 @@ class Int16AsFloatTensor(tfds.features.Audio):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.1.0')
+  VERSION = tfds.core.Version('1.1.1')
   RELEASE_NOTES = {
-      '1.0.0':
-          'Initial release.',
+      '1.0.0': 'Initial release.',
       '1.1.0': ('Switched to higher sampling rate, added recording metadata '
                 'features, switched to log-scaling in slice_peaked_audio.'),
+      '1.1.1': 'Added slice_peaked_tiny config.',
   }
   BUILDER_CONFIGS = [
       BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
@@ -131,6 +133,14 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           description=('Chunked audio sequences processed with '
                        'chirp.audio_utils.slice_peaked_audio.')),
       BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+          name='slice_peaked_tiny',
+          localization_fn=functools.partial(
+              audio_utils.slice_peaked_audio, max_intervals=1),
+          interval_length_s=6.0,
+          tiny=True,
+          description=('Chunked audio sequences processed with '
+                       'chirp.audio_utils.slice_peaked_audio (two species).')),
+      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
           name='full_length',
           localization_fn=None,
           description='Full-length audio sequences.'),
@@ -138,8 +148,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
 
   GCS_URL = epath.Path('gs://chirp-public-bucket/xeno-canto')
   TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-05-31.json'
+  TINY_SPECIES = ('ostric2', 'piebar1')
 
-  def _load_taxonomy_metadata(self) -> pd.DataFrame:
+  def _load_taxonomy_metadata(self, disable_filtering=False) -> pd.DataFrame:
     file_path = (
         epath.Path(__file__).parent / f'metadata/taxonomy_metadata.json')
     # The taxonomy_metadata.json file contains a taxonomy tree organized as
@@ -151,12 +162,15 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       for family, genus_to_species_codes in family_to_genera.items():
         for genus, species_codes in genus_to_species_codes.items():
           for species_code in species_codes:
-            rows.append({
-                'species_code': species_code,
-                'genus': genus,
-                'family': family,
-                'order': order
-            })
+            # TODO(mboudiaf): refactor into a more general implementation.
+            if (disable_filtering or not self.builder_config.tiny or
+                species_code in self.TINY_SPECIES):
+              rows.append({
+                  'species_code': species_code,
+                  'genus': genus,
+                  'family': family,
+                  'order': order
+              })
     return pd.DataFrame(rows)
 
   def _info(self) -> tfds.core.DatasetInfo:
@@ -247,7 +261,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
         'species_code', 'genus', 'family', 'order'
     ]].sort_values(
         by='species_code', axis=0, ignore_index=True).equals(
-            self._load_taxonomy_metadata().sort_values(
+            self._load_taxonomy_metadata(disable_filtering=True).sort_values(
                 by='species_code', axis=0, ignore_index=True)):
       raise RuntimeError('Downloaded taxonomy_info dataframe is incompatible '
                          'with the taxonomy_metadata dataframe.')
@@ -275,6 +289,14 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
         'sound_types': 'sound_type',
     }
     source_info = source_info.rename(renames, axis=1)
+
+    # In the 'tiny' variant, use only two species.
+    # TODO(mboudiaf): refactor into a more general implementation.
+    if self.builder_config.tiny:
+      source_info = source_info[source_info['species_code'].isin(
+          self.TINY_SPECIES)]
+      source_info['bg_species_codes'] = source_info['bg_species_codes'].map(
+          lambda codes: [c for c in codes if c in self.TINY_SPECIES])
 
     # Remap '' and 'no score' scores to 'E' (the worst score).
     source_info['quality_score'] = source_info['quality_score'].map(

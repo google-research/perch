@@ -31,6 +31,11 @@ from absl.testing import absltest
 class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
   """Tests for the bird taxonomy dataset."""
   DATASET_CLASS = bird_taxonomy.BirdTaxonomy
+  BUILDER_CONFIG_NAMES_TO_TEST = [
+      config.name
+      for config in DATASET_CLASS.BUILDER_CONFIGS
+      if config.name not in ['slice_peaked_tiny']
+  ]
   EXAMPLE_DIR = DATASET_CLASS.code_path.parent / 'placeholder_data'
   DL_EXTRACT_RESULT = {'taxonomy_info': 'taxonomy_info.json'}
   SPLITS = {'train': 4}
