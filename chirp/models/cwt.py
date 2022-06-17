@@ -13,11 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Learnable filter banks.
+"""Continuous wavelet transforms.
 
-This defines a module which learns a filter bank. The filters can be
-parametrized functions (Gabor, sinc), wavelets (Morlet, Morse), or entirely
-learned (1D convolutional filters).
+This module contains filters (Gabor, sinc) and wavelets (Morlet, Morse) that can
+be used in a continuous wavelet transform.
 
 Filtering can be done through convolution in the time-domain or by
 multiplication in the frequency domain. Note that some filters are
