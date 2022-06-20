@@ -25,6 +25,7 @@ import warnings
 
 from absl import logging
 from chirp import audio_utils
+from chirp.data import data_processing_ops as dpo
 from etils import epath
 import numpy as np
 import pandas as pd
@@ -54,11 +55,22 @@ LocalizationFn = Callable[[KeyExample, int, float], Sequence[KeyExample]]
 
 @dataclasses.dataclass
 class BirdTaxonomyConfig(tfds.core.BuilderConfig):
+  """The config used to generate multiple versions of BirdTaxonomy.
+
+  Special note on processing queries: Because some queries don't make sense
+  applying to the metadata dataframe, e.g. scrubbing, we make a disctinction
+  between `data_processing_query` applied to the recordings' dataframe, and
+  `metadata_processing_query` applied to the metadata (used in _info()).
+  Checks are made downstream to ensure both dataframes encode consistent
+  label spaces.
+  """
   sample_rate_hz: int = 32_000
   resampling_method: str = 'polyphase'
   localization_fn: Optional[LocalizationFn] = None
   interval_length_s: Optional[float] = None
-  tiny: bool = False  # If True, subsample down to two species
+  data_processing_query: dpo.QuerySequence = dpo.QuerySequence(queries=[])
+  metadata_processing_query: dpo.QuerySequence = dpo.QuerySequence(queries=[])
+  tiny_reference: bool = False
 
 
 class Int16AsFloatTensor(tfds.features.Audio):
@@ -118,13 +130,16 @@ class Int16AsFloatTensor(tfds.features.Audio):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.1.1')
+  VERSION = tfds.core.Version('1.1.2')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
       '1.1.0': ('Switched to higher sampling rate, added recording metadata '
                 'features, switched to log-scaling in slice_peaked_audio.'),
       '1.1.1': 'Added slice_peaked_tiny config.',
+      '1.1.2': 'Kept previous tiny_config as reference, but also added a tiny'
+               'version generated with queries.',
   }
+  TINY_SPECIES = ('ostric2', 'piebar1')
   BUILDER_CONFIGS = [
       BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
           name='slice_peaked',
@@ -133,13 +148,51 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           description=('Chunked audio sequences processed with '
                        'chirp.audio_utils.slice_peaked_audio.')),
       BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
-          name='slice_peaked_tiny',
+          name='slice_peaked_tiny_reference',
           localization_fn=functools.partial(
               audio_utils.slice_peaked_audio, max_intervals=1),
           interval_length_s=6.0,
-          tiny=True,
-          description=('Chunked audio sequences processed with '
-                       'chirp.audio_utils.slice_peaked_audio (two species).')),
+          tiny_reference=True,
+          description=('A reference tiny version of the slice_peaked dataset '
+                       'containing only two species, built with using pandas'
+                       'built-in functions.')),
+      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+          name='slice_peaked_tiny_queries',
+          localization_fn=functools.partial(
+              audio_utils.slice_peaked_audio, max_intervals=1),
+          interval_length_s=6.0,
+          description=('A tiny version of the slice_peaked dataset '
+                       'containing only two species, built using homemade '
+                       'queries.'),
+          data_processing_query=dpo.QuerySequence([
+              dpo.Query(
+                  op=dpo.TransformOp.FILTER,
+                  kwargs={
+                      'mask_op': dpo.MaskOp.IN,
+                      'op_kwargs': {
+                          'key': 'species_code',
+                          'values': list(TINY_SPECIES)
+                      }
+                  }),
+              dpo.Query(
+                  op=dpo.TransformOp.SCRUB_ALL_BUT,
+                  kwargs={
+                      'key': 'bg_species_codes',
+                      'values': list(TINY_SPECIES)
+                  })
+          ]),
+          metadata_processing_query=dpo.QuerySequence([
+              dpo.Query(
+                  op=dpo.TransformOp.FILTER,
+                  kwargs={
+                      'mask_op': dpo.MaskOp.IN,
+                      'op_kwargs': {
+                          'key': 'species_code',
+                          'values': list(TINY_SPECIES)
+                      }
+                  }),
+          ]),
+      ),
       BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
           name='full_length',
           localization_fn=None,
@@ -148,7 +201,6 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
 
   GCS_URL = epath.Path('gs://chirp-public-bucket/xeno-canto')
   TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-05-31.json'
-  TINY_SPECIES = ('ostric2', 'piebar1')
 
   def _load_taxonomy_metadata(self, disable_filtering=False) -> pd.DataFrame:
     file_path = (
@@ -162,16 +214,20 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       for family, genus_to_species_codes in family_to_genera.items():
         for genus, species_codes in genus_to_species_codes.items():
           for species_code in species_codes:
-            # TODO(mboudiaf): refactor into a more general implementation.
-            if (disable_filtering or not self.builder_config.tiny or
-                species_code in self.TINY_SPECIES):
+            if disable_filtering or not self.builder_config.tiny_reference or species_code in self.TINY_SPECIES:
               rows.append({
                   'species_code': species_code,
                   'genus': genus,
                   'family': family,
                   'order': order
               })
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    # At that point, the dataframe contains all possible species. Now we apply
+    # filtering operations.
+    if not disable_filtering and not self.builder_config.tiny_reference:
+      # We apply all the metadata processing queries
+      df = dpo.apply_sequence(df, self.builder_config.metadata_processing_query)
+    return df
 
   def _info(self) -> tfds.core.DatasetInfo:
     # The taxonomy_metadata dataframe is a lightweight subset of the
@@ -290,13 +346,17 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     }
     source_info = source_info.rename(renames, axis=1)
 
-    # In the 'tiny' variant, use only two species.
-    # TODO(mboudiaf): refactor into a more general implementation.
-    if self.builder_config.tiny:
+    # To generate the reference tiny version, we filter/scrub using built-in
+    # dataframe functions only, not queries.
+    if self.builder_config.tiny_reference:
       source_info = source_info[source_info['species_code'].isin(
           self.TINY_SPECIES)]
       source_info['bg_species_codes'] = source_info['bg_species_codes'].map(
           lambda codes: [c for c in codes if c in self.TINY_SPECIES])
+    else:
+      # We apply all the processing queries.
+      source_info = dpo.apply_sequence(
+          source_info, self.builder_config.data_processing_query)
 
     # Remap '' and 'no score' scores to 'E' (the worst score).
     source_info['quality_score'] = source_info['quality_score'].map(

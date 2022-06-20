@@ -34,7 +34,10 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
   BUILDER_CONFIG_NAMES_TO_TEST = [
       config.name
       for config in DATASET_CLASS.BUILDER_CONFIGS
-      if config.name not in ['slice_peaked_tiny']
+      if config.name not in [
+          'slice_peaked_tiny', 'slice_peaked_tiny_queries',
+          'slice_peaked_tiny_reference'
+      ]
   ]
   EXAMPLE_DIR = DATASET_CLASS.code_path.parent / 'placeholder_data'
   DL_EXTRACT_RESULT = {'taxonomy_info': 'taxonomy_info.json'}
