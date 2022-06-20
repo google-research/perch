@@ -79,5 +79,57 @@ class NotInTest(absltest.TestCase):
           result_type='expand')
 
 
+class ScrubTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+
+    self.taxonomy_info = pd.DataFrame({
+        'species_code': ['ostric2', 'ostric3', 'grerhe1'],
+        'Common name': ['Common Ostrich', 'Somali Ostrich', 'Greater Rhea'],
+        'bg_labels': [['ostric3', 'grerhe1'], ['ostric2', 'grerhe1'],
+                      ['ostric2', 'ostric3']],
+        'Country': ['Colombia', 'Australia', 'France'],
+    })
+
+  def test_scrubbing_ideal(self):
+    """Ensure scrubbing works as expected in nominal case."""
+    expected_df = self.taxonomy_info.copy()
+    expected_df['bg_labels'] = [['grerhe1'], ['ostric2', 'grerhe1'],
+                                ['ostric2']]
+
+    # A simple scrubbing query
+    test_df = self.taxonomy_info.copy()
+    test_df = test_df.apply(
+        lambda row: filter_scrub_utils.scrub(row, 'bg_labels', ['ostric3']),
+        axis=1,
+        result_type='expand')
+    self.assertEqual(expected_df.to_dict(), test_df.to_dict())
+
+  def test_scrubbing_empty_col(self):
+    """Ensure scrubbing doesn't do anything if the column is empty."""
+
+    expected_df = self.taxonomy_info.copy()
+    test_df = self.taxonomy_info.copy()
+    expected_df['bg_labels'] = [[], [], []]
+    test_df['bg_labels'] = [[], [], []]
+    test_df = test_df.apply(
+        lambda row: filter_scrub_utils.scrub(row, 'bg_labels', ['ostric3']),
+        axis=1,
+        result_type='expand')
+    self.assertEqual(expected_df.to_dict(), test_df.to_dict())
+
+  def test_scrubbing_empty_query(self):
+    """Ensure scrubbing doesn't do anything if `values` is an empty list."""
+
+    expected_df = self.taxonomy_info.copy()
+    test_df = self.taxonomy_info.copy()
+    test_df = test_df.apply(
+        lambda row: filter_scrub_utils.scrub(row, 'bg_labels', []),
+        axis=1,
+        result_type='expand')
+    self.assertEqual(expected_df.to_dict(), test_df.to_dict())
+
+
 if __name__ == '__main__':
   absltest.main()
