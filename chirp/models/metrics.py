@@ -17,6 +17,7 @@
 
 from jax import lax
 from jax import numpy as jnp
+from jax import scipy
 import optax
 
 
@@ -31,6 +32,86 @@ def map_(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
 
 def cmap(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
   return average_precision(scores=logits, labels=labels), labels
+
+
+def log_mse_loss(source: jnp.ndarray,
+                 estimate: jnp.ndarray,
+                 max_snr: float = 1e6,
+                 eps=1e-8) -> jnp.ndarray:
+  """Negative log MSE loss, the negated log of SNR denominator.
+
+  With default max_snr = 1e6, this gives the usual log((source-estimate)**2).
+  When a max_snr is specified, it acts as a soft threshold clamping the loss.
+
+  Args:
+    source: Groundtruth audio, with time in the last dimension.
+    estimate: Estimate of Groundtruth with the same shape as source.
+    max_snr: SNR threshold for minimal loss. The default 1e6 yields an unbiased
+      log mse calculation.
+    eps: Epsilon for log stabilization.
+
+  Returns:
+    Array of loss values.
+  """
+  err_pow = jnp.sum((source - estimate)**2, axis=-1)
+  snrfactor = 10.**(-max_snr / 10.)
+  ref_pow = jnp.sum(jnp.square(source), axis=-1)
+  bias = snrfactor * ref_pow
+  return 10 * jnp.log10(bias + err_pow + eps)
+
+
+def negative_snr_loss(source: jnp.ndarray,
+                      estimate: jnp.ndarray,
+                      max_snr: float = 1e6,
+                      eps: float = 1e-8) -> jnp.ndarray:
+  """Negative SNR loss with max SNR term.
+
+  Args:
+    source: Groundtruth signal.
+    estimate: Estimated signal.
+    max_snr: SNR threshold which minimizes loss. The default 1e6 yields an
+      unbiased SNR calculation.
+    eps: Log stabilization epsilon.
+
+  Returns:
+    Loss tensor.
+  """
+  snrfactor = 10.**(-max_snr / 10.)
+  ref_pow = jnp.sum(jnp.square(source), axis=-1)
+  bias = snrfactor * ref_pow
+
+  numer = 10. * jnp.log10(ref_pow + eps)
+  err_pow = jnp.sum(jnp.square(source - estimate), axis=-1)
+  return 10 * jnp.log10(bias + err_pow + eps) - numer
+
+
+def source_sparsity_l1l2ratio_loss(separated_waveforms: jnp.ndarray,
+                                   mix_of_mix_waveforms: jnp.ndarray,
+                                   eps: float = 1e-8) -> jnp.ndarray:
+  """Sparsity loss for separated audio.
+
+  Computes the ratio of L1 to L2 measures across source rms power.
+  Note, this is actually the square root of the weighted mean when input
+  and weights are rms power.
+  See Section 2.3 in https://arxiv.org/abs/2106.00847
+
+  Args:
+    separated_waveforms: Estimated separated audio with shape [Batch, Channels,
+      Time].
+    mix_of_mix_waveforms: MoM audio, which separated_waveforms separates.
+    eps: Epsilon for stability.
+
+  Returns:
+    Loss tensor.
+  """
+  src_pow = jnp.mean(jnp.square(separated_waveforms), axis=2)
+  src_rms = jnp.sqrt(src_pow)
+
+  l1norm = jnp.mean(src_rms, axis=1)
+  mixture_pow = jnp.mean(jnp.square(mix_of_mix_waveforms), axis=2)
+  l2norm_mixture = jnp.sqrt(mixture_pow)
+  loss = l1norm / (l2norm_mixture + eps)
+  return loss
 
 
 def average_precision(scores: jnp.ndarray,
@@ -69,3 +150,28 @@ def average_precision(scores: jnp.ndarray,
       jnp.sum(pr_curve * labels, axis=axis) /
       jnp.maximum(jnp.sum(labels, axis=axis), 1.0))
   return mask + (1 - mask) * raw_av_prec
+
+
+def least_squares_solve_mix(matrix, rhs, diag_loading=1e-3):
+  # Assumes a real-valued matrix, with zero mean.
+  adj_matrix = jnp.conjugate(jnp.swapaxes(matrix, -1, -2))
+  cov_matrix = jnp.matmul(adj_matrix, matrix)
+
+  # diag_loading ensures invertibility of the (pos. semi-definite) cov_matrix.
+  cov_matrix += diag_loading * jnp.eye(
+      cov_matrix.shape[-1], dtype=cov_matrix.dtype)
+  return scipy.linalg.solve(
+      cov_matrix, jnp.matmul(adj_matrix, rhs), sym_pos=True)
+
+
+def least_squares_mixit(reference, estimate):
+  """Applies loss_fn after finding the best fit MixIt assignment."""
+  # Reference shape is [B, M, T]
+  # Estimate shape is [B, C, T]
+  mix_matrix = least_squares_solve_mix(
+      jnp.swapaxes(estimate, -1, -2), jnp.swapaxes(reference, -1, -2))
+  mix_matrix = jnp.swapaxes(mix_matrix, -1, -2)
+  max_per_column = jnp.max(mix_matrix, axis=-2, keepdims=True)
+  mix_matrix = jnp.where(mix_matrix == max_per_column, 1.0, 0.0)
+  best_mix = mix_matrix @ estimate
+  return best_mix, mix_matrix

@@ -18,10 +18,12 @@
 import functools
 import os
 from chirp.models import class_average
+from chirp.models import cwt
 from chirp.models import metrics
 from clu import metrics as clu_metrics
 import flax
 import jax
+from jax import numpy as jnp
 from absl.testing import absltest
 
 
@@ -85,6 +87,34 @@ class MetricsTest(absltest.TestCase):
     labels = jax.numpy.zeros_like(logits)
     av_prec = jax.numpy.mean(metrics.average_precision(logits, labels))
     self.assertEqual(av_prec, 1.0)
+
+  def test_least_squares_mixit(self):
+    # Create some genuinely interesting source signals...
+    xs = jnp.linspace(-jnp.pi, jnp.pi, 256)
+    f3 = cwt.gabor_filter(3, cwt.Domain.TIME, cwt.Normalization.L2)(xs).real
+    f9 = cwt.gabor_filter(9, cwt.Domain.TIME, cwt.Normalization.L2)(xs).real
+    f5 = cwt.gabor_filter(5, cwt.Domain.TIME, cwt.Normalization.L2)(xs).real
+    f25 = cwt.gabor_filter(25, cwt.Domain.TIME, cwt.Normalization.L2)(xs).real
+
+    mix1 = f3 + f9
+    mix2 = f5 + f25
+    reference = jnp.concatenate(
+        [mix1[jnp.newaxis, jnp.newaxis, :], mix2[jnp.newaxis, jnp.newaxis, :]],
+        1)
+    estimate = jnp.concatenate([
+        f3[jnp.newaxis, jnp.newaxis, :], f5[jnp.newaxis, jnp.newaxis, :],
+        f9[jnp.newaxis, jnp.newaxis, :], f25[jnp.newaxis, jnp.newaxis, :]
+    ], 1)
+    best_mix, mix_matrix = metrics.least_squares_mixit(reference, estimate)
+
+    l1_err = lambda x, y: jnp.sum(jnp.abs(x - y))
+    # The mix matrix corresponding to the definition of mix1 and mix2.
+    expected_mix = jnp.array([[1., 0., 1., 0.], [0., 1., 0., 1.]])
+    self.assertEqual(l1_err(mix_matrix, expected_mix), 0.0)
+
+    # The best_mix should recover the mixture channels exactly.
+    self.assertEqual(l1_err(best_mix[0, 0], mix1), 0.0)
+    self.assertEqual(l1_err(best_mix[0, 1], mix2), 0.0)
 
 
 if __name__ == "__main__":

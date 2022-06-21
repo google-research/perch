@@ -24,6 +24,45 @@ from jax import nn as jnn
 from jax import numpy as jnp
 
 
+class LearnedFilterbank(nn.Module):
+  """Thin wrapper around a Conv1D."""
+  features: int
+  kernel_size: int
+  strides: int
+  padding: str = "SAME"
+
+  @nn.compact
+  def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    # Input audio has shape [B, T].
+    output = nn.Conv(
+        features=self.features,
+        kernel_size=(self.kernel_size,),
+        strides=(self.strides,),
+        padding=self.padding)(
+            inputs[:, :, jnp.newaxis])
+    return output
+
+
+class LearnedFilterbankInverse(nn.Module):
+  """Thin wrapper around a Conv1DTranspose."""
+  features: int
+  kernel_size: int
+  strides: int
+  padding: str = "SAME"
+
+  @nn.compact
+  def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    # Reshapes inputs to hides extra batch dimensions.
+    output = nn.ConvTranspose(
+        features=1,
+        kernel_size=(self.kernel_size,),
+        strides=(self.strides,),
+        padding=self.padding)(
+            jnp.reshape(inputs, (-1,) + inputs.shape[-2:]))
+    output = jnp.reshape(output, inputs.shape[:-2] + output.shape[-2:])
+    return jnp.squeeze(output, -1)
+
+
 class SqueezeAndExcitation(nn.Module):
   """Squeeze-and-Excitation layer.
 
