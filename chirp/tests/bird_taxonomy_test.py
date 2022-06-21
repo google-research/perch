@@ -41,38 +41,39 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
   SPLITS = {'train': 4}
   SKIP_CHECKSUMS = True
 
-  def setUp(self):
+  @classmethod
+  def setUpClass(cls):
+    super().setUpClass()
+
     # `self.create_tempdir()` raises an UnparsedFlagAccessError, which is why
     # we use `tempdir` directly.
-    self.tempdir = tempfile.mkdtemp()
+    cls.tempdir = tempfile.mkdtemp()
 
     _ = tfds.core.lazy_imports.librosa
 
-    # We patch `self.DATASET_CLASS` _before_ calling `super().setUp()` because
-    # `DatasetBuilderTestCase` instantiates `self.DATASET_CLASS` in its
-    # `setUp()` method.
-    metadata_patcher = mock.patch.object(self.DATASET_CLASS,
-                                         '_load_taxonomy_metadata')
-    mock_load_taxonomy_metadata = metadata_patcher.start()
+    cls.metadata_patcher = mock.patch.object(cls.DATASET_CLASS,
+                                             '_load_taxonomy_metadata')
+    mock_load_taxonomy_metadata = cls.metadata_patcher.start()
     mock_load_taxonomy_metadata.return_value = pd.read_json(
-        self.EXAMPLE_DIR /
+        cls.EXAMPLE_DIR /
         'taxonomy_info.json')[['species_code', 'genus', 'family', 'order']]
 
-    url_patcher = mock.patch.object(self.DATASET_CLASS, 'GCS_URL',
-                                    epath.Path(self.tempdir))
-    url_patcher.start()
-    subdir = epath.Path(self.tempdir) / 'audio-data' / 'fakecode1'
+    cls.url_patcher = mock.patch.object(cls.DATASET_CLASS, 'GCS_URL',
+                                        epath.Path(cls.tempdir))
+    cls.url_patcher.start()
+    subdir = epath.Path(cls.tempdir) / 'audio-data' / 'fakecode1'
     subdir.mkdir(parents=True)
     for i in range(4):
       tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(
           subdir / f'XC{i:05d}.mp3', format='mp3')
 
-    super().setUp()
-    self.patchers.extend([metadata_patcher, url_patcher])
+  @classmethod
+  def tearDownClass(cls):
+    super().tearDownClass()
 
-  def tearDown(self):
-    super().tearDown()
-    shutil.rmtree(self.tempdir)
+    cls.metadata_patcher.stop()
+    cls.url_patcher.stop()
+    shutil.rmtree(cls.tempdir)
 
 
 class Int16AsFloatTensorTest(absltest.TestCase):
