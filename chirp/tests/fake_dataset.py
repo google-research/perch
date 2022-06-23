@@ -15,57 +15,12 @@
 
 """A fake dataset for testing."""
 
+from chirp.data import bird_taxonomy
 import numpy as np
-import tensorflow as tf
-import tensorflow_datasets as tfds
 
 
-class FakeDataset(tfds.core.GeneratorBasedBuilder):
+class FakeDataset(bird_taxonomy.BirdTaxonomy):
   """Fake dataset."""
-
-  VERSION = tfds.core.Version('1.0.0')
-
-  sample_rate: int
-
-  LABEL_NAMES = [str(i) for i in range(90)]
-  GENUS_NAMES = [str(i) for i in range(60)]
-  FAMILY_NAMES = [str(i) for i in range(30)]
-  ORDER_NAMES = [str(i) for i in range(20)]
-
-  def __init__(self, sample_rate=32_000, **kwargs):
-    # self.sample_rate is accessed from the super init, so assign first.
-    self.sample_rate = sample_rate
-    super(tfds.core.GeneratorBasedBuilder, self).__init__(**kwargs)
-
-  def _info(self):
-    return tfds.core.DatasetInfo(
-        builder=self,
-        features=tfds.features.FeaturesDict({
-            'audio':
-                tfds.features.Audio(
-                    dtype=tf.float32, sample_rate=self.sample_rate),
-            'label':
-                tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=self.LABEL_NAMES)),
-            'label_str':
-                tfds.features.Sequence(tfds.features.Text()),
-            'bg_labels':
-                tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=self.LABEL_NAMES)),
-            'genus':
-                tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=self.GENUS_NAMES)),
-            'family':
-                tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=self.FAMILY_NAMES)),
-            'order':
-                tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=self.ORDER_NAMES)),
-            'filename':
-                tfds.features.Text(),
-        }),
-        description='Fake dataset.',
-    )
 
   def _split_generators(self, dl_manager):
     return {
@@ -74,14 +29,45 @@ class FakeDataset(tfds.core.GeneratorBasedBuilder):
     }
 
   def _generate_examples(self, num_examples):
+
     for i in range(num_examples):
       yield i, {
-          'audio': np.random.uniform(-1.0, 1.0, [self.sample_rate]),
-          'label': np.random.choice(self.LABEL_NAMES, size=[3]),
-          'label_str': ['placeholder'] * 3,
-          'bg_labels': np.random.choice(self.LABEL_NAMES, size=[2]),
-          'genus': np.random.choice(self.GENUS_NAMES, size=[1]),
-          'family': np.random.choice(self.FAMILY_NAMES, size=[1]),
-          'order': np.random.choice(self.ORDER_NAMES, size=[2]),
-          'filename': 'placeholder',
+          'audio':
+              np.random.uniform(-1.0, 0.99,
+                                self.info.features['audio'].shape).astype(
+                                    np.float32),
+          'label':
+              np.random.choice(self.info.features['label'].names, size=[3]),
+          'bg_labels':
+              np.random.choice(self.info.features['bg_labels'].names, size=[2]),
+          'genus':
+              np.random.choice(self.info.features['genus'].names, size=[3]),
+          'family':
+              np.random.choice(self.info.features['family'].names, size=[3]),
+          'order':
+              np.random.choice(self.info.features['order'].names, size=[3]),
+          'filename':
+              'placeholder',
+          'quality_score':
+              np.random.choice(['A', 'B', 'C', 'D', 'E', 'F']),
+          'license':
+              '//creativecommons.org/licenses/by-nc-sa/4.0/',
+          'country':
+              np.random.choice(['South Africa', 'Colombia', 'Namibia']),
+          'altitude':
+              str(np.random.uniform(0, 3000)),
+          'bird_seen':
+              np.random.choice(['yes', 'no']),
+          'latitude':
+              str(np.random.uniform(0, 90)),
+          'longitude':
+              str(np.random.uniform(0, 90)),
+          'playback_used':
+              'yes',
+          'recordist':
+              'N/A',
+          'remarks':
+              'N/A',
+          'sound_type':
+              np.random.choice(['call', 'song'])
       }

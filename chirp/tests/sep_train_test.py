@@ -17,12 +17,15 @@
 
 import tempfile
 
+from chirp import audio_utils
 from chirp import sep_train
 from chirp.configs import separator
 from chirp.data import pipeline
+from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.tests import fake_dataset
 from clu import checkpoint
 from ml_collections import config_dict
+
 from absl.testing import absltest
 
 
@@ -33,8 +36,17 @@ class TrainSeparationTest(absltest.TestCase):
     self.train_dir = tempfile.TemporaryDirectory("train_dir").name
 
     self.data_dir = tempfile.TemporaryDirectory("data_dir").name
+
+    # The following config should be practically equivalent to what was done
+    # before: audio feature shape will be [sample_rate]
+    config = bird_taxonomy.BirdTaxonomyConfig(
+        name="sep_train_test_config",
+        sample_rate_hz=32_000,
+        localization_fn=audio_utils.slice_peaked_audio,
+        interval_length_s=1.0,
+    )
     fake_builder = fake_dataset.FakeDataset(
-        sample_rate=32_000, data_dir=self.data_dir)
+        config=config, data_dir=self.data_dir)
     fake_builder.download_and_prepare()
     self.builder = fake_builder
 
