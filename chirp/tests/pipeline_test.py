@@ -104,6 +104,7 @@ class LayersTest(absltest.TestCase):
     window_size_s = 5
     min_gain = 0.15
     max_gain = 0.25
+    highpass_cutoff_hz = 60.0
 
     example = {
         'audio':
@@ -140,7 +141,8 @@ class LayersTest(absltest.TestCase):
         sample_rate_hz=sample_rate_hz,
         window_size_s=window_size_s,
         min_gain=min_gain,
-        max_gain=max_gain)
+        max_gain=max_gain,
+        highpass_cutoff_hz=highpass_cutoff_hz)
 
     # The audio feature should be trimmed to the requested length, and its
     # maximum absolute value should be within [min_gain, max_gain].
@@ -181,7 +183,8 @@ class LayersTest(absltest.TestCase):
           window_size_s=window_size_s,
           min_gain=min_gain,
           max_gain=max_gain,
-          mixin_prob=0.5)
+          mixin_prob=0.5,
+          highpass_cutoff_hz=60.0)
 
       example = next(dataset.as_numpy_iterator())
       self.assertLen(example['audio'].shape, 3)

@@ -58,7 +58,8 @@ class TrainSeparationTest(absltest.TestCase):
         window_size_s=parsed_config.data_config.window_size_s,
         min_gain=parsed_config.data_config.min_gain,
         max_gain=parsed_config.data_config.max_gain,
-        mixin_prob=0.5)
+        mixin_prob=0.5,
+        highpass_cutoff_hz=60.0)
     return ds, dataset_info
 
   def _get_test_config(self, use_small_encoder=True) -> config_dict.ConfigDict:

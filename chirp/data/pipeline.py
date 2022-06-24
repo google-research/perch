@@ -23,6 +23,7 @@ from absl import logging
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
 import jax
 import numpy as np
+import scipy
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -54,6 +55,14 @@ def _normalize_audio(audio: tf.Tensor,
   gain_scalar = target_gain / (max_gain + 0.01)
   audio = audio * gain_scalar
   return audio, gain_scalar
+
+
+def _highpass_audio_py(audio: np.ndarray, cutoff_freq_hz: float,
+                       sample_rate_hz: int) -> np.ndarray:
+  """Highpass filter audio with a Butterworth filter."""
+  b, a = scipy.signal.butter(7, cutoff_freq_hz, 'high', fs=sample_rate_hz)
+  audio = scipy.signal.filtfilt(b, a, audio)
+  return audio.astype(np.float32)
 
 
 def mix_audio(dataset: tf.data.Dataset, mixin_prob: float) -> tf.data.Dataset:
@@ -100,8 +109,8 @@ def mix_audio(dataset: tf.data.Dataset, mixin_prob: float) -> tf.data.Dataset:
 
 
 def process_audio(example: Dict[str, tf.Tensor], sample_rate_hz: int,
-                  window_size_s: int, min_gain: float,
-                  max_gain: float) -> Dict[str, tf.Tensor]:
+                  window_size_s: int, min_gain: float, max_gain: float,
+                  highpass_cutoff_hz: float) -> Dict[str, tf.Tensor]:
   """Processes an example.
 
   Args:
@@ -111,12 +120,18 @@ def process_audio(example: Dict[str, tf.Tensor], sample_rate_hz: int,
     min_gain: minimum gain for the random renormalization operation.
     max_gain: maximum gain for the random renormalization operation.
       Set <=0 to disable gain randomization.
+    highpass_cutoff_hz: Cutoff for highpass filtering.
+      Set <=0 to disable filter.
 
   Returns:
     The processed example.
   """
   example['audio'], start_ind, end_ind = _trim(
       example['audio'], window_size=window_size_s * sample_rate_hz)
+  if highpass_cutoff_hz > 0.0:
+    example['audio'] = tf.numpy_function(
+        _highpass_audio_py,
+        [example['audio'], highpass_cutoff_hz, sample_rate_hz], tf.float32)
   if max_gain > 0.0:
     example['audio'], gain_scalar = _normalize_audio(
         example['audio'],

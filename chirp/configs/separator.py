@@ -39,6 +39,7 @@ def get_config() -> config_dict.ConfigDict:
   data_config.window_size_s = 5
   data_config.min_gain = 0.15
   data_config.max_gain = 0.75
+  data_config.highpass_cutoff_hz = 60.0
 
   eval_data_config = config_dict.ConfigDict()
   eval_data_config.window_size_s = 5
