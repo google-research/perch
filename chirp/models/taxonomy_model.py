@@ -18,6 +18,7 @@ from typing import Dict, Optional
 
 from chirp import audio_utils
 from chirp import signal
+from chirp.models import conformer
 from chirp.models import efficientnet
 import flax
 from flax import linen as nn
@@ -79,15 +80,20 @@ class TaxonomyModel(nn.Module):
       med = jnp.median(x, axis=1, keepdims=True)
       mad = jnp.median(jnp.abs(x - med), axis=1, keepdims=True)
       x = (x - med) / (mad + 1e-3)
-    if self.bandwidth <= 0:
-      x = x[..., jnp.newaxis]
-    else:
-      band_stride = self.band_stride or self.bandwidth
-      x = signal.frame(x, self.bandwidth, band_stride)
-      x = jnp.swapaxes(x, 2, 3)
+
+    if not isinstance(self.encoder, conformer.Conformer):
+      if self.bandwidth <= 0:
+        x = x[..., jnp.newaxis]
+      else:
+        band_stride = self.band_stride or self.bandwidth
+        x = signal.frame(x, self.bandwidth, band_stride)
+        x = jnp.swapaxes(x, 2, 3)
 
     # Apply the encoder
     x = self.encoder(x, train=train)
+    if isinstance(self.encoder, conformer.Conformer):
+      # Silly baseline: average over the time dimension.
+      x = jnp.mean(x, axis=1)
 
     model_outputs = {}
     model_outputs["embedding"] = x

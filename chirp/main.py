@@ -62,7 +62,10 @@ def main(argv: Sequence[str]) -> None:
         mixin_prob=0.0,
         **config.data_config)
   if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
-    raise ValueError("Dataset sample rate must match config sample rate.")
+    raise ValueError(
+        "Dataset sample rate must match config sample rate. To address this, "
+        "need to set the sample rate in the config to {}.".format(
+            dataset_info.features["audio"].sample_rate))
 
   model_bundle, train_state = train.initialize_model(
       dataset_info,

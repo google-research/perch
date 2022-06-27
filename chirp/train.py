@@ -21,6 +21,7 @@ from typing import Optional
 from absl import logging
 from chirp import audio_utils
 from chirp.models import class_average
+from chirp.models import conformer
 from chirp.models import efficientnet
 from chirp.models import metrics
 from chirp.models import taxonomy_model
@@ -147,6 +148,8 @@ def parse_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
       if model_config.encoder_.startswith("efficientnet-"):
         model = efficientnet.EfficientNetModel(model_config.encoder_[-2:])
         model_config.encoder = efficientnet.EfficientNet(model)
+      elif model_config.encoder_ == "conformer":
+        model_config.encoder = conformer.Conformer(**config.encoder_config)
       else:
         raise ValueError("unknown encoder")
       del model_config.encoder_
