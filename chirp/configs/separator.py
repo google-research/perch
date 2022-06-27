@@ -14,49 +14,41 @@
 # limitations under the License.
 
 """Configuration to run baseline separation model."""
+from chirp import config_utils
 from ml_collections import config_dict
 
 
-def get_config() -> config_dict.ConfigDict:
+def get_config(bank_type) -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
+  sample_rate_hz = config_dict.FieldReference(32_000)
+
   config = config_dict.ConfigDict()
-  config.batch_size = 128
-  config.rng_seed = 0
-  config.learning_rate = 0.0001
-  config.sample_rate_hz = 32000
+  config.sample_rate_hz = sample_rate_hz
 
-  train_config = config_dict.ConfigDict()
-  train_config.num_train_steps = 2_000_000
-  train_config.log_every_steps = 500
-  train_config.checkpoint_every_steps = 10_000
-  train_config.loss_max_snr = 30.0
-
-  eval_config = config_dict.ConfigDict()
-  eval_config.eval_steps_per_loop = 100
-  eval_config.tflite_export = False
-
+  # Data config
   data_config = config_dict.ConfigDict()
   data_config.window_size_s = 5
+  # TODO(bartvm): min_gain and max_gain should be deterministic for eval data
   data_config.min_gain = 0.15
   data_config.max_gain = 0.75
+  data_config.batch_size = 128
+  data_config.mixin_prob = 1.0
+  config.train_data_config = config.eval_data_config = data_config
 
-  eval_data_config = config_dict.ConfigDict()
-  eval_data_config.window_size_s = 5
-  eval_data_config.min_gain = 0.15
-  eval_data_config.max_gain = 0.75
+  # Experiment configuration
+  init_config = config_dict.ConfigDict()
+  init_config.rng_seed = 0
+  init_config.learning_rate = 0.0001
+  init_config.input_size = sample_rate_hz * data_config.window_size_s
+  config.init_config = init_config
 
-  stft_config = config_dict.ConfigDict()
-  stft_config.sample_rate_hz = config.sample_rate_hz
-  stft_config.frame_rate = 100
-  stft_config.frame_length_secs = 0.08
-  stft_config.use_tf_stft = True
-  stft_config.mag_spec = False
+  # Model Configuration
+  model_config = config_dict.ConfigDict()
+  model_config.num_mask_channels = 4
+  model_config.mask_kernel_size = 3
+  init_config.model_config = model_config
 
-  learned_fb_config = config_dict.ConfigDict()
-  learned_fb_config.features = 128
-  learned_fb_config.kernel_size = 128
-  learned_fb_config.strides = 32
-
+  # Mask generator model configuration
   soundstream_config = config_dict.ConfigDict()
   soundstream_config.base_filters = 128
   # Bottleneck filters has minimal impact on quality.
@@ -66,29 +58,47 @@ def get_config() -> config_dict.ConfigDict:
   soundstream_config.strides = (2, 5, 2)
   soundstream_config.feature_mults = (2, 2, 2)
   soundstream_config.groups = (1, 1, 1)
+  model_config.mask_generator = config_utils.callable_config(
+      "soundstream_unet.SoundstreamUNet", soundstream_config)
 
-  model_config = config_dict.ConfigDict()
-  model_config.num_mask_channels = 4
-  model_config.mask_kernel_size = 3
+  # STFT
+  stft_config = config_dict.ConfigDict()
+  stft_config.sample_rate_hz = sample_rate_hz
+  stft_config.frame_rate = 100
+  stft_config.frame_length_secs = 0.08
+  # TODO(bartvm): Dynamic shape errors when set to True?
+  stft_config.use_tf_stft = False
 
-  config.mask_generator_type = "soundstream_unet"
-  config.bank_type = "learned"
-  config.unbank_type = "learned"
+  # Learned filter banks
+  learned_fb_config = config_dict.ConfigDict()
+  learned_fb_config.features = 128
+  learned_fb_config.kernel_size = 128
+  learned_fb_config.strides = 32
 
-  config.mask_generator_config = soundstream_config
-
-  if config.bank_type == "learned":
-    config.bank_transform_config = learned_fb_config
-    config.unbank_transform_config = learned_fb_config
+  if bank_type == "learned":
+    model_config.bank_transform = config_utils.callable_config(
+        "layers.LearnedFilterbank", learned_fb_config)
+    model_config.unbank_transform = config_utils.callable_config(
+        "layers.LearnedFilterbankInverse", learned_fb_config)
     model_config.bank_is_real = True
-  elif model_config.bank_type == "stft":
-    config.bank_transform_config = stft_config
-    config.unbank_transform_config = stft_config
+  elif bank_type == "stft":
+    # TODO(bartvm): Remove once STFT module available
+    model_config.stft_config = stft_config
     model_config.bank_is_real = False
 
+  # Training loop configuration
+  num_train_steps = config_dict.FieldReference(250_000)
+
+  train_config = config_dict.ConfigDict()
+  train_config.num_train_steps = num_train_steps
+  train_config.log_every_steps = 500
+  train_config.checkpoint_every_steps = 10_000
+  train_config.loss_max_snr = 30.0
   config.train_config = train_config
-  config.data_config = data_config
-  config.eval_data_config = eval_data_config
-  config.model_config = model_config
+
+  eval_config = config_dict.ConfigDict()
+  eval_config.num_train_steps = num_train_steps
+  eval_config.eval_steps_per_checkpoint = 100
   config.eval_config = eval_config
+
   return config

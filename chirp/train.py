@@ -19,10 +19,7 @@ import os
 import time
 from typing import Optional
 from absl import logging
-from chirp import audio_utils
 from chirp.models import class_average
-from chirp.models import conformer
-from chirp.models import efficientnet
 from chirp.models import metrics
 from chirp.models import taxonomy_model
 from clu import checkpoint
@@ -41,7 +38,6 @@ import numpy as np
 import optax
 import tensorflow as tf
 import tensorflow_datasets as tfds
-
 
 EVAL_LOOP_SLEEP_S = 30
 
@@ -129,57 +125,9 @@ class ModelBundle:
   ckpt: checkpoint.Checkpoint
 
 
-def parse_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
-  """Parse the model configuration.
-
-  This converts string-based configuration into the necessary objects.
-
-  Args:
-    config: The model configuration. Will be modified in-place.
-
-  Returns:
-    The modified model configuration which can be passed to the model
-    constructor.
-  """
-  # Handle model config
-  model_config = config.model_config
-  if hasattr(model_config, "encoder_"):
-    with model_config.unlocked():
-      if model_config.encoder_.startswith("efficientnet-"):
-        model = efficientnet.EfficientNetModel(model_config.encoder_[-2:])
-        model_config.encoder = efficientnet.EfficientNet(model)
-      elif model_config.encoder_ == "conformer":
-        model_config.encoder = conformer.Conformer(**config.encoder_config)
-      else:
-        raise ValueError("unknown encoder")
-      del model_config.encoder_
-
-  # Handle melspec config
-  melspec_config = model_config.melspec_config
-  with melspec_config.unlocked():
-    # TODO(bartvm): Add scaling config for hyperparameter search
-    melspec_config.sample_rate_hz = config.sample_rate_hz
-    if melspec_config.scaling == "pcen":
-      melspec_config.scaling_config = audio_utils.PCENScalingConfig()
-    elif melspec_config.scaling == "log":
-      melspec_config.scaling_config = audio_utils.LogScalingConfig()
-    elif melspec_config.scaling == "raw":
-      melspec_config.scaling_config = None
-    del melspec_config.scaling
-
-  with config.unlocked():
-    config.input_size = (
-        config.data_config.window_size_s * config.sample_rate_hz)
-  if config.eval_config.tflite_export and not melspec_config.use_tf_stft:
-    logging.warning(
-        "TFLite export will probably fail if using the JAX stft op.")
-  return config
-
-
 def initialize_model(dataset_info: tfds.core.DatasetInfo,
-                     data_config: config_dict.ConfigDict,
                      model_config: config_dict.ConfigDict, rng_seed: int,
-                     learning_rate: float, workdir: str):
+                     input_size: int, learning_rate: float, workdir: str):
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
@@ -192,10 +140,7 @@ def initialize_model(dataset_info: tfds.core.DatasetInfo,
   }
   model = taxonomy_model.TaxonomyModel(num_classes=num_classes, **model_config)
   variables = model.init(
-      model_init_key,
-      jnp.zeros((1, dataset_info.features["audio"].sample_rate *
-                 data_config.window_size_s)),
-      train=False)
+      model_init_key, jnp.zeros((1, input_size)), train=False)
   model_state, params = variables.pop("params")
 
   # Initialize optimizer
@@ -300,12 +245,10 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
   writer.close()
 
 
-def evaluate(model_bundle: ModelBundle,
-             train_state: TrainState,
+def evaluate(model_bundle: ModelBundle, train_state: TrainState,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
-             reporter: periodic_actions.ReportProgress,
-             max_eval_steps: int = -1):
+             reporter: periodic_actions.ReportProgress, max_eval_steps: int):
   """Run evaluation."""
   valid_metrics = make_metrics_collection(
       "valid___", model_bundle.model.taxonomy_loss_weight)
@@ -348,9 +291,9 @@ def evaluate_loop(model_bundle: ModelBundle,
                   workdir: str,
                   logdir: str,
                   num_train_steps: int,
-                  eval_steps_per_loop: int,
+                  eval_steps_per_checkpoint: int,
                   tflite_export: bool = False,
-                  input_size: int = -1,
+                  input_size: Optional[int] = None,
                   eval_sleep_s: int = EVAL_LOOP_SLEEP_S):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -374,7 +317,7 @@ def evaluate_loop(model_bundle: ModelBundle,
       continue
 
     evaluate(model_bundle, flax_utils.replicate(train_state), valid_dataset,
-             writer, reporter, eval_steps_per_loop)
+             writer, reporter, eval_steps_per_checkpoint)
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_size)
     last_step = int(train_state.step)

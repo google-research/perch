@@ -18,7 +18,9 @@
 import tempfile
 
 from chirp import audio_utils
+from chirp import config_utils
 from chirp import sep_train
+from chirp.configs import config_globals
 from chirp.configs import separator
 from chirp.data import pipeline
 from chirp.data.bird_taxonomy import bird_taxonomy
@@ -50,81 +52,69 @@ class TrainSeparationTest(absltest.TestCase):
     fake_builder.download_and_prepare()
     self.builder = fake_builder
 
-  def _get_test_dataset(self, parsed_config):
-    ds, dataset_info = pipeline.get_dataset(
-        "train",
-        dataset_directory=self.builder.data_dir,
-        batch_size=parsed_config.batch_size,
-        window_size_s=parsed_config.data_config.window_size_s,
-        min_gain=parsed_config.data_config.min_gain,
-        max_gain=parsed_config.data_config.max_gain,
-        mixin_prob=0.5)
+  def _get_test_dataset(self, split, config):
+    config.dataset_directory = self.builder.data_dir
+    config.tfds_data_dir = ""
+    ds, dataset_info = pipeline.get_dataset(split, **config)
     return ds, dataset_info
 
   def _get_test_config(self, use_small_encoder=True) -> config_dict.ConfigDict:
     """Create configuration dictionary for training."""
-    config = separator.get_config()
-    with config.unlocked():
-      config.batch_size = 2
-      config.data_config.window_size_s = 1
+    config = separator.get_config("learned")
 
-      config.train_config.num_train_steps = 1
-      config.train_config.checkpoint_every_steps = 1
-      config.train_config.log_every_steps = 1
-      config.eval_config.eval_steps_per_loop = 1
+    config.train_data_config.batch_size = 2
+    config.train_data_config.window_size_s = 1
 
-      if use_small_encoder:
-        config.mask_generator_config.base_filters = 2
-        config.mask_generator_config.bottleneck_filters = 4
-        config.mask_generator_config.output_filters = 8
-        config.mask_generator_config.strides = (2, 2)
-        config.mask_generator_config.feature_mults = (2, 2)
-        config.mask_generator_config.groups = (1, 2)
+    config.eval_data_config.batch_size = 2
+    config.eval_data_config.window_size_s = 1
 
+    config.train_config.num_train_steps = 1
+    config.train_config.checkpoint_every_steps = 1
+    config.train_config.log_every_steps = 1
+    config.eval_config.eval_steps_per_checkpoint = 1
+
+    if use_small_encoder:
+      soundstream_config = config_dict.ConfigDict()
+      soundstream_config.base_filters = 2
+      soundstream_config.bottleneck_filters = 4
+      soundstream_config.output_filters = 8
+      soundstream_config.strides = (2, 2)
+      soundstream_config.feature_mults = (2, 2)
+      soundstream_config.groups = (1, 2)
+      config.init_config.model_config.mask_generator = config_utils.callable_config(
+          "soundstream_unet.SoundstreamUNet", soundstream_config)
+
+    config = config_utils.parse_config(config, config_globals.get_globals())
     return config
 
   def test_init_baseline(self):
     # Ensure that we can initialize the model with the baseline config.
-    config = separator.get_config()
-    _, dataset_info = self._get_test_dataset(config)
+    config = separator.get_config("learned")
+    config = config_utils.parse_config(config, config_globals.get_globals())
 
     model_bundle, train_state = sep_train.initialize_model(
-        config,
-        dataset_info,
-        workdir=self.train_dir,
-        rng_seed=config.rng_seed,
-        learning_rate=config.learning_rate)
+        workdir=self.train_dir, **config.init_config)
     self.assertIsNotNone(model_bundle)
     self.assertIsNotNone(train_state)
 
   def test_train_one_step(self):
     config = self._get_test_config(use_small_encoder=True)
-    ds, dataset_info = self._get_test_dataset(config)
-    model_bundle, train_state = sep_train.initialize_model(
-        config,
-        dataset_info,
-        workdir=self.train_dir,
-        rng_seed=config.rng_seed,
-        learning_rate=config.learning_rate)
+    ds, _ = self._get_test_dataset("train", config.train_data_config)
+    model = sep_train.initialize_model(
+        workdir=self.train_dir, **config.init_config)
 
     sep_train.train(
-        model_bundle=model_bundle,
-        train_state=train_state,
-        train_dataset=ds,
-        logdir=self.train_dir,
-        **config.train_config)
+        *model, train_dataset=ds, logdir=self.train_dir, **config.train_config)
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)
     self.assertIsNotNone(ckpt.latest_checkpoint)
 
   def test_eval_one_step(self):
     config = self._get_test_config(use_small_encoder=True)
-    ds, dataset_info = self._get_test_dataset(config)
+    config.eval_config.num_train_steps = 0
+
+    ds, _ = self._get_test_dataset("test", config.eval_data_config)
     model_bundle, train_state = sep_train.initialize_model(
-        config,
-        dataset_info,
-        workdir=self.train_dir,
-        rng_seed=config.rng_seed,
-        learning_rate=config.learning_rate)
+        workdir=self.train_dir, **config.init_config)
     # Write a chekcpoint, or else the eval will hang.
     model_bundle.ckpt.save(train_state)
 
@@ -134,7 +124,6 @@ class TrainSeparationTest(absltest.TestCase):
         valid_dataset=ds,
         workdir=self.train_dir,
         logdir=self.train_dir,
-        num_train_steps=0,
         eval_sleep_s=0,
         **config.eval_config)
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)

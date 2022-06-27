@@ -20,19 +20,23 @@ from typing import Sequence
 from absl import app
 from absl import flags
 from absl import logging
-
+from chirp import config_utils
 from chirp import train
+from chirp.configs import config_globals
 from chirp.data import pipeline
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
 
 from xmanager import xm  # pylint: disable=unused-import
 
+TRAIN = "train"
+EVAL = "eval"
+
 _CONFIG = config_flags.DEFINE_config_file("config")
 _LOGDIR = flags.DEFINE_string("logdir", None, "Work unit logging directory.")
 _WORKDIR = flags.DEFINE_string("workdir", None,
                                "Work unit checkpointing directory.")
-_MODE = flags.DEFINE_enum("mode", "train", ["train", "eval"], "Mode.")
+_MODE = flags.DEFINE_enum("mode", TRAIN, [TRAIN, EVAL], "Mode.")
 _TF_DATA_SERVICE_ADDRESS = flags.DEFINE_string(
     "tf_data_service_address",
     "",
@@ -46,50 +50,34 @@ def main(argv: Sequence[str]) -> None:
     raise app.UsageError("Too many command-line arguments.")
   logging.info(_CONFIG.value)
   tf.config.experimental.set_visible_devices([], "GPU")
-  config = train.parse_config(_CONFIG.value)
+  config = config_utils.parse_config(_CONFIG.value,
+                                     config_globals.get_globals())
 
-  if _MODE.value == "train":
+  if _MODE.value == TRAIN:
     train_dataset, dataset_info = pipeline.get_dataset(
-        "train",
-        batch_size=config.batch_size,
+        TRAIN,
         tf_data_service_address=_TF_DATA_SERVICE_ADDRESS.value,
-        mixin_prob=config.mixin_prob,
-        **config.data_config)
-  elif _MODE.value == "eval":
+        **config.train_data_config)
+  elif _MODE.value == EVAL:
     valid_dataset, dataset_info = pipeline.get_dataset(
-        "test_caples",
-        batch_size=config.batch_size,
-        mixin_prob=0.0,
-        **config.data_config)
+        "test_caples", **config.eval_data_config)
   if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
     raise ValueError(
         "Dataset sample rate must match config sample rate. To address this, "
         "need to set the sample rate in the config to {}.".format(
             dataset_info.features["audio"].sample_rate))
 
-  model_bundle, train_state = train.initialize_model(
-      dataset_info,
-      workdir=_WORKDIR.value,
-      data_config=config.data_config,
-      model_config=config.model_config,
-      rng_seed=config.rng_seed,
-      learning_rate=config.learning_rate)
-  if _MODE.value == "train":
+  model = train.initialize_model(
+      dataset_info, workdir=_WORKDIR.value, **config.init_config)
+  if _MODE.value == TRAIN:
     train.train(
-        model_bundle,
-        train_state,
-        train_dataset,
-        logdir=_LOGDIR.value,
-        **config.train_config)
-  elif _MODE.value == "eval":
+        *model, train_dataset, logdir=_LOGDIR.value, **config.train_config)
+  elif _MODE.value == EVAL:
     train.evaluate_loop(
-        model_bundle,
-        train_state,
+        *model,
         valid_dataset,
         workdir=_WORKDIR.value,
         logdir=_LOGDIR.value,
-        num_train_steps=config.train_config.num_train_steps,
-        input_size=config.input_size,
         **config.eval_config)
 
 

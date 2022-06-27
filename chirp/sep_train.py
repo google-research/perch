@@ -15,16 +15,13 @@
 
 """Training loop for separation models."""
 
-import enum
 import functools
 import time
 
 from absl import logging
 from chirp import audio_utils
-from chirp.models import layers
 from chirp.models import metrics
 from chirp.models import separation_model
-from chirp.models import soundstream_unet
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -39,14 +36,6 @@ from jax import random
 from ml_collections import config_dict
 import optax
 import tensorflow as tf
-import tensorflow_datasets as tfds
-
-
-class Transform(enum.Enum):
-  MELSPEC = "melspec"
-  STFT = "stft"
-  LEARNED = "learned"
-
 
 EVAL_LOOP_SLEEP_S = 30
 
@@ -109,58 +98,30 @@ class TrainingMetrics(clu_metrics.Collection):
 
 def construct_model(config: config_dict.ConfigDict):
   """Constructs the SeparationModel from the config."""
-  if config.bank_type == "stft":
-    bank_transform = functools.partial(audio_utils.compute_stft,
-                                       **config.bank_transform_config)
-    unbank_transform = functools.partial(audio_utils.compute_istft,
-                                         **config.unbank_transform_config)
-  elif config.bank_type == "learned":
-    bank_transform = layers.LearnedFilterbank(**config.bank_transform_config)
-    unbank_transform = layers.LearnedFilterbankInverse(
-        **config.unbank_transform_config)
-  else:
-    raise ValueError("Unrecognized bank transform frontend (%s)" %
-                     config.bank_type)
+  # TODO(bartvm): Remove this once STFT module available
+  if hasattr(config, "stft_config"):
+    with config.unlocked():
+      config.bank_transform = functools.partial(audio_utils.compute_stft,
+                                                **config.stft_config)
+      config.unbank_transform = functools.partial(audio_utils.compute_istft,
+                                                  **config.stft_config)
+      del config.stft_config
 
-  if config.mask_generator_type == "soundstream_unet":
-    mask_generator = soundstream_unet.SoundstreamUNet(
-        **config.mask_generator_config)
-  else:
-    raise ValueError("Unrecognized mask generator type (%s)" %
-                     config.mask_generator_type)
-
-  model = separation_model.SeparationModel(
-      bank_transform=bank_transform,
-      unbank_transform=unbank_transform,
-      mask_generator=mask_generator,
-      **config.model_config,
-  )
+  model = separation_model.SeparationModel(**config)
   return model
 
 
-def initialize_model(config: config_dict.ConfigDict,
-                     dataset_info: tfds.core.DatasetInfo, rng_seed: int,
-                     learning_rate: float, workdir: str):
+def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
+                     workdir: str, model_config: config_dict.ConfigDict):
   """Creates model for training, eval, or inference."""
-  with config.model_config.unlocked():
-    if config.bank_type == Transform.STFT:
-      config.bank_transform_config.sample_rate_hz = dataset_info.features[
-          "audio"].sample_rate
-    if config.unbank_type == Transform.STFT:
-      config.unbank_transform_config.sample_rate_hz = dataset_info.features[
-          "audio"].sample_rate
-
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
 
   # Load model
   model_init_key, key = random.split(key)
-  model = construct_model(config)
+  model = construct_model(model_config)
   variables = model.init(
-      model_init_key,
-      jnp.zeros((1, dataset_info.features["audio"].sample_rate *
-                 config.data_config.window_size_s)),
-      train=False)
+      model_init_key, jnp.zeros((1, input_size)), train=False)
   model_state, params = variables.pop("params")
 
   # Initialize optimizer
@@ -282,7 +243,7 @@ def evaluate_loop(model_bundle: ModelBundle,
                   workdir: str,
                   logdir: str,
                   num_train_steps: int,
-                  eval_steps_per_loop: int,
+                  eval_steps_per_checkpoint: int,
                   tflite_export: bool = False,
                   eval_sleep_s: int = EVAL_LOOP_SLEEP_S):
   """Run evaluation in a loop."""
@@ -307,7 +268,7 @@ def evaluate_loop(model_bundle: ModelBundle,
       continue
 
     evaluate(model_bundle, train_state, valid_dataset, writer, reporter,
-             eval_steps_per_loop)
+             eval_steps_per_checkpoint)
     if tflite_export:
       raise NotImplementedError()
     last_step = int(train_state.step)

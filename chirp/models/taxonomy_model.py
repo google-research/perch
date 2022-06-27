@@ -14,16 +14,13 @@
 # limitations under the License.
 
 """Taxonomy model."""
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from chirp import audio_utils
-from chirp import signal
 from chirp.models import conformer
-from chirp.models import efficientnet
 import flax
 from flax import linen as nn
 from jax import numpy as jnp
-from ml_collections import config_dict
 
 
 @flax.struct.dataclass
@@ -43,22 +40,16 @@ class TaxonomyModel(nn.Module):
   and the nature of the background noise.
 
   Attributes:
+    num_classes: Number of classes for each output head.
     encoder: A network (e.g., a 2D convolutional network) that takes
       spectrograms and returns feature vectors.
     taxonomy_loss_weight: Weight for taxonomic label losses.
-    bandwidth: The number of frequencies in each band.
-    band_stride: The number of frequencies between each band.
-    num_classes: Number of classes for each output head.
+    melspec_config: Configuration for the mel-spectrogram creation.
   """
   num_classes: Dict[str, int]
-  melspec_config: config_dict.ConfigDict
-  random_low_pass: bool
-  robust_normalization: bool
-  bandwidth: int
+  encoder: nn.Module
   taxonomy_loss_weight: float
-  band_stride: Optional[int] = None
-  encoder: nn.Module = efficientnet.EfficientNet(
-      efficientnet.EfficientNetModel.B1)
+  melspec_config: Dict[str, Any]
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool) -> ModelOutputs:
@@ -71,26 +62,9 @@ class TaxonomyModel(nn.Module):
     Returns:
       Logits for each output head.
     """
-    # TODO(bartvm): Factor out frontend
     x = audio_utils.compute_melspec(inputs, **self.melspec_config)
-    if train and self.random_low_pass:
-      x = audio_utils.random_low_pass_filter(self.make_rng("low_pass"), x)
-    if self.robust_normalization:
-      # TODO(bartvm): Understand instability and compare against old version
-      med = jnp.median(x, axis=1, keepdims=True)
-      mad = jnp.median(jnp.abs(x - med), axis=1, keepdims=True)
-      x = (x - med) / (mad + 1e-3)
-
-    if not isinstance(self.encoder, conformer.Conformer):
-      if self.bandwidth <= 0:
-        x = x[..., jnp.newaxis]
-      else:
-        band_stride = self.band_stride or self.bandwidth
-        x = signal.frame(x, self.bandwidth, band_stride)
-        x = jnp.swapaxes(x, 2, 3)
-
-    # Apply the encoder
-    x = self.encoder(x, train=train)
+    # Treat the spectrogram as a gray-scale image
+    x = self.encoder(x[..., jnp.newaxis], train=train)
     if isinstance(self.encoder, conformer.Conformer):
       # Silly baseline: average over the time dimension.
       x = jnp.mean(x, axis=1)

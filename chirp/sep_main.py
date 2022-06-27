@@ -20,8 +20,9 @@ from typing import Sequence
 from absl import app
 from absl import flags
 from absl import logging
-
+from chirp import config_utils
 from chirp import sep_train
+from chirp.configs import config_globals
 from chirp.data import pipeline
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
@@ -49,46 +50,32 @@ def main(argv: Sequence[str]) -> None:
     raise app.UsageError("Too many command-line arguments.")
   logging.info(_CONFIG.value)
   tf.config.experimental.set_visible_devices([], "GPU")
-  config = _CONFIG.value
+  config = config_utils.parse_config(_CONFIG.value,
+                                     config_globals.get_globals())
 
   if _MODE.value == TRAIN:
     train_dataset, dataset_info = pipeline.get_dataset(
         TRAIN,
-        batch_size=config.batch_size,
         tf_data_service_address=_TF_DATA_SERVICE_ADDRESS.value,
-        mixin_prob=1.0,
-        **config.data_config)
+        **config.train_data_config)
   elif _MODE.value == EVAL:
     # TODO(tomdenton): Better eval scheme for separation.
     valid_dataset, dataset_info = pipeline.get_dataset(
-        TRAIN,
-        batch_size=config.batch_size,
-        mixin_prob=1.0,
-        **config.eval_data_config)
+        "test_caples", **config.eval_data_config)
   if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
     raise ValueError("Dataset sample rate must match config sample rate.")
 
-  model_bundle, train_state = sep_train.initialize_model(
-      config,
-      dataset_info,
-      workdir=_WORKDIR.value,
-      rng_seed=config.rng_seed,
-      learning_rate=config.learning_rate)
+  model = sep_train.initialize_model(
+      workdir=_WORKDIR.value, **config.init_config)
   if _MODE.value == TRAIN:
     sep_train.train(
-        model_bundle,
-        train_state,
-        train_dataset,
-        logdir=_LOGDIR.value,
-        **config.train_config)
+        *model, train_dataset, logdir=_LOGDIR.value, **config.train_config)
   elif _MODE.value == EVAL:
     sep_train.evaluate_loop(
-        model_bundle,
-        train_state,
+        *model,
         valid_dataset,
         workdir=_WORKDIR.value,
         logdir=_LOGDIR.value,
-        num_train_steps=config.train_config.num_train_steps,
         **config.eval_config)
 
 

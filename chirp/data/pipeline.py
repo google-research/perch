@@ -65,7 +65,7 @@ def mix_audio(dataset: tf.data.Dataset, mixin_prob: float) -> tf.data.Dataset:
     mixin_prob: The probability with which samples are mixed. Note that if we
       mix, e.g., 50% of samples, the final ratio between mixed and unmixed
       samples is 1:2. More formally, to get a fraction `p` of the samples to be
-        mixed, set `mixin_prob` to `2 * p / (p + 1)`.
+      mixed, set `mixin_prob` to `2 * p / (p + 1)`.
 
   Returns:
     A dataset with mixed audio examples.
@@ -109,8 +109,8 @@ def process_audio(example: Dict[str, tf.Tensor], sample_rate_hz: int,
     sample_rate_hz: audio example sample rate.
     window_size_s: window size (in seconds) for the random cropping operation.
     min_gain: minimum gain for the random renormalization operation.
-    max_gain: maximum gain for the random renormalization operation.
-      Set <=0 to disable gain randomization.
+    max_gain: maximum gain for the random renormalization operation. Set <=0 to
+      disable gain randomization.
 
   Returns:
     The processed example.

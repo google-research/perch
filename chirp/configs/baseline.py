@@ -14,51 +14,73 @@
 # limitations under the License.
 
 """Configuration to run baseline model."""
+from chirp import config_utils
 from ml_collections import config_dict
 
 
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
+  sample_rate_hz = config_dict.FieldReference(32_000)
+
   config = config_dict.ConfigDict()
-  config.batch_size = 64
-  config.rng_seed = 0
-  config.learning_rate = 0.01
-  config.sample_rate_hz = 32000
-  config.mixin_prob = 0.75
-  # config.input_size is added automatically during parsing.
+  config.sample_rate_hz = sample_rate_hz
 
-  train_config = config_dict.ConfigDict()
-  train_config.num_train_steps = 250_000
-  train_config.log_every_steps = 250
-  train_config.checkpoint_every_steps = 5_000
+  # Configure the data
+  batch_size = config_dict.FieldReference(64)
+  window_size_s = config_dict.FieldReference(5)
+  min_gain = config_dict.FieldReference(0.15)
+  max_gain = config_dict.FieldReference(0.25)
 
-  eval_config = config_dict.ConfigDict()
-  eval_config.eval_steps_per_loop = -1
-  eval_config.tflite_export = False
+  train_data_config = config_dict.ConfigDict()
+  train_data_config.batch_size = batch_size
+  train_data_config.window_size_s = window_size_s
+  train_data_config.min_gain = min_gain
+  train_data_config.max_gain = max_gain
+  train_data_config.mixin_prob = 0.75
+  config.train_data_config = train_data_config
 
-  data_config = config_dict.ConfigDict()
-  data_config.window_size_s = 5
-  data_config.min_gain = 0.15
-  data_config.max_gain = 0.25
+  eval_data_config = config_dict.ConfigDict()
+  eval_data_config.batch_size = batch_size
+  eval_data_config.window_size_s = window_size_s
+  eval_data_config.min_gain = (min_gain + max_gain) / 2
+  eval_data_config.max_gain = (min_gain + max_gain) / 2
+  eval_data_config.mixin_prob = 0.0
+  config.eval_data_config = eval_data_config
+
+  # Configure the experiment setup
+  init_config = config_dict.ConfigDict()
+  init_config.learning_rate = 0.01
+  init_config.input_size = window_size_s * sample_rate_hz
+  init_config.rng_seed = 0
+  config.init_config = init_config
 
   model_config = config_dict.ConfigDict()
-  model_config.bandwidth = 0
-  model_config.band_stride = 0
-  model_config.random_low_pass = False
-  model_config.robust_normalization = False
-  model_config.encoder_ = 'efficientnet-b1'
+  model_config.encoder = config_utils.callable_config(
+      "efficientnet.EfficientNet",
+      model=config_utils.callable_config(
+          "efficientnet.EfficientNetModel", value="b1"))
   model_config.taxonomy_loss_weight = 0.25
+  init_config.model_config = model_config
 
   melspec_config = config_dict.ConfigDict()
   melspec_config.melspec_depth = 160
   melspec_config.melspec_frequency = 100
-  melspec_config.scaling = 'pcen'
-  melspec_config.use_tf_stft = False
+  melspec_config.sample_rate_hz = sample_rate_hz
+  melspec_config.scaling_config = config_utils.callable_config(
+      "audio_utils.PCENScalingConfig")
+  model_config.melspec_config = melspec_config
 
-  config.data_config = data_config
-  config.model_config = model_config
-  config.model_config.melspec_config = melspec_config
+  # Configure the training loop
+  num_train_steps = config_dict.FieldReference(250_000)
+
+  train_config = config_dict.ConfigDict()
+  train_config.num_train_steps = num_train_steps
+  train_config.log_every_steps = 250
+  train_config.checkpoint_every_steps = 5_000
   config.train_config = train_config
+
+  eval_config = config_dict.ConfigDict()
+  eval_config.num_train_steps = num_train_steps
   config.eval_config = eval_config
 
   return config
