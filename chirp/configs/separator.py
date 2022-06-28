@@ -40,6 +40,8 @@ def get_config(bank_type) -> config_dict.ConfigDict:
   init_config.rng_seed = 0
   init_config.learning_rate = 0.0001
   init_config.input_size = sample_rate_hz * data_config.window_size_s
+  init_config.warmstart_checkpoint_path = ""
+  init_config.warmstart_keys = None
   config.init_config = init_config
 
   # Model Configuration

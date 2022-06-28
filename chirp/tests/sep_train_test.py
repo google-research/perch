@@ -26,6 +26,8 @@ from chirp.data import pipeline
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.tests import fake_dataset
 from clu import checkpoint
+import jax
+from jax import numpy as jnp
 from ml_collections import config_dict
 
 from absl.testing import absltest
@@ -128,6 +130,58 @@ class TrainSeparationTest(absltest.TestCase):
         **config.eval_config)
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)
     self.assertIsNotNone(ckpt.latest_checkpoint)
+
+  def test_warmstart(self):
+    config = self._get_test_config(use_small_encoder=True)
+    config.init_config.rng_seed = 0
+    _, train_state = sep_train.initialize_model(
+        workdir=self.train_dir, **config.init_config)
+
+    config.init_config.rng_seed = 1
+    config.init_config.warmstart_checkpoint_path = self.train_dir
+    other_train_dir = tempfile.TemporaryDirectory("other_train_dir").name
+    _, ws_train_state = sep_train.initialize_model(
+        workdir=other_train_dir, **config.init_config)
+    ckpt = checkpoint.MultihostCheckpoint(other_train_dir)
+    self.assertIsNotNone(ckpt.latest_checkpoint)
+
+    for v, w in zip(
+        jax.tree_util.tree_leaves(train_state.params),
+        jax.tree_util.tree_leaves(ws_train_state.params)):
+      self.assertEqual(jnp.sum(jnp.abs(v - w)), 0.0)
+
+  def test_partial_warmstart(self):
+    config = self._get_test_config(use_small_encoder=True)
+    config.init_config.rng_seed = 0
+    _, train_state = sep_train.initialize_model(
+        workdir=self.train_dir, **config.init_config)
+
+    config.init_config.rng_seed = 1
+    config.init_config.warmstart_checkpoint_path = self.train_dir
+    config.init_config.warmstart_keys = ["bank_transform"]
+    other_train_dir = tempfile.TemporaryDirectory("other_train_dir").name
+    _, ws_train_state = sep_train.initialize_model(
+        workdir=other_train_dir, **config.init_config)
+    ckpt = checkpoint.MultihostCheckpoint(other_train_dir)
+    self.assertIsNotNone(ckpt.latest_checkpoint)
+
+    # Check that we have restored the target weights.
+    for v, w in zip(
+        jax.tree_util.tree_leaves(train_state.params["bank_transform"]),
+        jax.tree_util.tree_leaves(ws_train_state.params["bank_transform"])):
+      self.assertEqual(jnp.sum(jnp.abs(v - w)), 0.0)
+
+    # Check that we have not restored non-target weights.
+    for k in train_state.params.keys():
+      if k == "bank_transform":
+        continue
+      for v, w in zip(
+          jax.tree_util.tree_leaves(train_state.params[k]),
+          jax.tree_util.tree_leaves(ws_train_state.params[k])):
+        # Skip bias variables, which usually initialize to zero.
+        if len(v.shape) == 1:
+          continue
+        self.assertNotEqual(jnp.sum(jnp.abs(v - w)), 0.0)
 
 
 if __name__ == "__main__":

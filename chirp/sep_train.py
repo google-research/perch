@@ -17,9 +17,11 @@
 
 import functools
 import time
+from typing import Optional, Sequence
 
 from absl import logging
 from chirp import audio_utils
+from chirp import train_utils
 from chirp.models import metrics
 from chirp.models import separation_model
 from clu import checkpoint
@@ -112,7 +114,9 @@ def construct_model(config: config_dict.ConfigDict):
 
 
 def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
-                     workdir: str, model_config: config_dict.ConfigDict):
+                     workdir: str, warmstart_checkpoint_path: str,
+                     warmstart_keys: Optional[Sequence[str]],
+                     model_config: config_dict.ConfigDict):
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
@@ -133,6 +137,11 @@ def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
   train_state = TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
   train_state = ckpt.restore_or_initialize(train_state)
+
+  if train_state.step == 0 and warmstart_checkpoint_path:
+    train_state = train_utils.selective_warmstart(train_state,
+                                                  warmstart_checkpoint_path,
+                                                  warmstart_keys)
   return ModelBundle(model, optimizer, key, ckpt), train_state
 
 
