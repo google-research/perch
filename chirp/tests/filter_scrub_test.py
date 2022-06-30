@@ -23,7 +23,6 @@ from chirp.data import filter_scrub_utils as fsu
 from chirp.tests import fake_dataset
 import pandas as pd
 import tensorflow_datasets as tfds
-
 from absl.testing import absltest
 
 
@@ -64,7 +63,7 @@ class NotInTests(FilterScrubTest):
     # 1) Tests on the toy dataFrame.
     test_df = self.toy_df.copy()
     fn_call = functools.partial(
-        fsu.not_in, key='Country', values=['France', 'Brazil'])
+        fsu.is_not_in, key='Country', values=['France', 'Brazil'])
 
     # Ensure we're properly filtering out species
     self.assertEqual(
@@ -79,7 +78,7 @@ class NotInTests(FilterScrubTest):
     # to test on. Check fake_dataset how the recordings are populated.
     self.assertIn(targeted_country, df['country'].unique())
     filtering_fn = functools.partial(
-        fsu.not_in, key='country', values=[targeted_country])
+        fsu.is_not_in, key='country', values=[targeted_country])
     filtered_df = df[df.apply(filtering_fn, axis=1, result_type='expand')]
     self.assertGreater(len(df), len(filtered_df))
 
@@ -98,7 +97,7 @@ class NotInTests(FilterScrubTest):
     with self.assertRaises(ValueError):
       test_df.apply(
           functools.partial(
-              fsu.not_in, key='county', values=['France', 'Brazil']),
+              fsu.is_not_in, key='county', values=['France', 'Brazil']),
           axis=1,
           result_type='expand')
 
@@ -108,7 +107,7 @@ class NotInTests(FilterScrubTest):
     with self.assertRaises(TypeError):
       test_df.apply(
           functools.partial(
-              fsu.not_in, key='Country', values=[b'France', b'Brazil']),
+              fsu.is_not_in, key='Country', values=[b'France', b'Brazil']),
           axis=1,
           result_type='expand')
 
@@ -181,6 +180,143 @@ class ScrubTest(FilterScrubTest):
     # If scrub function had side-effects, e.g. modified the row in-place,
     # the df would also change.
     self.assertTrue(self.fake_df.equals(df))
+
+
+class QueryTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    # We define a toy dataframe that is easy to manually check
+    self.toy_df = pd.DataFrame({
+        'species_code': ['ostric2', 'ostric3', 'grerhe1'],
+        'Common name': ['Common Ostrich', 'Somali Ostrich', 'Greater Rhea'],
+        'bg_labels': [['ostric3', 'grerhe1'], ['ostric2', 'grerhe1'],
+                      ['ostric2', 'ostric3']],
+        'Country': ['Colombia', 'Australia', 'France'],
+    })
+
+  def test_masking_query(self):
+    """Ensure masking queries (and completement) work as expected."""
+
+    # Test mask query and complement
+    mask_query = fsu.Query(
+        op=fsu.MaskOp.IN, kwargs={
+            'key': 'species_code',
+            'values': ['ostric2']
+        })
+    self.assertEqual(
+        fsu.apply_query(self.toy_df, mask_query).tolist(), [True, False, False])
+    mask_query = fsu.Query(
+        op=fsu.MaskOp.IN,
+        complement=True,
+        kwargs={
+            'key': 'species_code',
+            'values': ['ostric2']
+        })
+    self.assertEqual(
+        fsu.apply_query(self.toy_df, mask_query).tolist(), [False, True, True])
+
+  def test_transform_query(self):
+    """Ensure transform queries work as expected."""
+
+    scrub_query = fsu.Query(
+        op=fsu.TransformOp.SCRUB,
+        kwargs={
+            'key': 'bg_labels',
+            'values': ['ostric2']
+        })
+    df = fsu.apply_query(self.toy_df, scrub_query)
+    expected_df = self.toy_df.copy()
+    expected_df['bg_labels'] = [['ostric3', 'grerhe1'], ['grerhe1'],
+                                ['ostric3']]
+    self.assertEqual(expected_df.to_dict(), df.to_dict())
+    # Ensure that setting complement to True for a transform query raises an
+    # error
+    scrub_query = fsu.Query(
+        op=fsu.TransformOp.SCRUB,
+        complement=True,
+        kwargs={
+            'key': 'bg_labels',
+            'values': ['ostric2']
+        })
+    with self.assertRaises(ValueError):
+      fsu.apply_query(self.toy_df, scrub_query)
+
+
+class QuerySequenceTest(FilterScrubTest):
+
+  def test_untargeted_filter_scrub(self):
+    """Ensure that applying a QuerySequence (no masking specified) works."""
+    filter_args = {
+        'mask_op': fsu.MaskOp.IN,
+        'op_kwargs': {
+            'key': 'species_code',
+            'values': ['ostric3', 'ostric2']
+        },
+    }
+    filter_query = fsu.Query(op=fsu.TransformOp.FILTER, kwargs=filter_args)
+    scrub_query = fsu.Query(
+        op=fsu.TransformOp.SCRUB,
+        kwargs={
+            'key': 'bg_labels',
+            'values': ['ostric2']
+        })
+    query_sequence = fsu.QuerySequence(queries=[filter_query, scrub_query])
+    df = fsu.apply_sequence(self.toy_df, query_sequence)
+    expected_df = pd.DataFrame({
+        'species_code': ['ostric2', 'ostric3'],
+        'Common name': [
+            'Common Ostrich',
+            'Somali Ostrich',
+        ],
+        'bg_labels': [
+            ['ostric3', 'grerhe1'],
+            ['grerhe1'],
+        ],
+        'Country': ['Colombia', 'Australia'],
+    })
+    self.assertEqual(expected_df.to_dict(), df.to_dict())
+
+  def test_targeted_filter_scrub(self):
+    """Test QuerySequence on a subset of samples (w/ masking query)."""
+
+    filter_args = {
+        'mask_op': fsu.MaskOp.IN,
+        'op_kwargs': {
+            'key': 'species_code',
+            'values': ['ostric3', 'grerhe1']
+        }
+    }
+    filter_query = fsu.Query(op=fsu.TransformOp.FILTER, kwargs=filter_args)
+    scrub_query = fsu.Query(
+        op=fsu.TransformOp.SCRUB,
+        kwargs={
+            'key': 'bg_labels',
+            'values': ['ostric2']
+        })
+    query_sequence = fsu.QuerySequence(
+        queries=[filter_query, scrub_query],
+        mask_query=fsu.Query(
+            op=fsu.MaskOp.IN,
+            kwargs={
+                'key': 'Country',
+                'values': ['Colombia', 'Australia']
+            }))
+    df = fsu.apply_sequence(self.toy_df, query_sequence)
+    # In the example, only samples 1 and 3 have country values in
+    # ['Colombia', 'Australia']. Therefore, sample 2 will not be affected at all
+    # by any query. Sample 3 will be removed because of the first filtering
+    # query. Sample 1 will survive the first filtering query, but will be
+    # scrubbed out from its 'ostric2' bg_label.
+    expected_df = pd.DataFrame({
+        'species_code': ['ostric3', 'grerhe1'],
+        'Common name': ['Somali Ostrich', 'Greater Rhea'],
+        'bg_labels': [['grerhe1'], ['ostric2', 'ostric3']],
+        'Country': ['Australia', 'France'],
+    })
+    self.assertEqual(
+        expected_df.sort_values('species_code').to_dict('list'),
+        df.sort_values('species_code').to_dict('list'))
 
 
 if __name__ == '__main__':
