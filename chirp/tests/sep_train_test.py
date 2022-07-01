@@ -15,6 +15,7 @@
 
 """Tests for train."""
 
+import os
 import tempfile
 
 from chirp import audio_utils
@@ -27,6 +28,7 @@ from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.tests import fake_dataset
 from clu import checkpoint
 from ml_collections import config_dict
+import tensorflow as tf
 
 from absl.testing import absltest
 
@@ -60,7 +62,7 @@ class TrainSeparationTest(absltest.TestCase):
 
   def _get_test_config(self, use_small_encoder=True) -> config_dict.ConfigDict:
     """Create configuration dictionary for training."""
-    config = separator.get_config("learned")
+    config = separator.get_config()
 
     config.train_data_config.batch_size = 2
     config.train_data_config.window_size_s = 1
@@ -72,6 +74,7 @@ class TrainSeparationTest(absltest.TestCase):
     config.train_config.checkpoint_every_steps = 1
     config.train_config.log_every_steps = 1
     config.eval_config.eval_steps_per_checkpoint = 1
+    config.eval_config.tflite_export = False
 
     if use_small_encoder:
       soundstream_config = config_dict.ConfigDict()
@@ -89,7 +92,7 @@ class TrainSeparationTest(absltest.TestCase):
 
   def test_init_baseline(self):
     # Ensure that we can initialize the model with the baseline config.
-    config = separator.get_config("learned")
+    config = separator.get_config()
     config = config_utils.parse_config(config, config_globals.get_globals())
 
     model_bundle, train_state = sep_train.initialize_model(
@@ -128,6 +131,22 @@ class TrainSeparationTest(absltest.TestCase):
         **config.eval_config)
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)
     self.assertIsNotNone(ckpt.latest_checkpoint)
+
+  def test_export_model(self):
+    config = self._get_test_config(use_small_encoder=True)
+    # Note that TFLite export doesn't work with groups currently.
+    config.init_config.model_config.mask_generator.groups = (1, 1)
+    _, dataset_info = self._get_test_dataset("test", config.eval_data_config)
+    input_size = (
+        dataset_info.features["audio"].sample_rate *
+        config.eval_data_config.window_size_s)
+    model_bundle, train_state = sep_train.initialize_model(
+        workdir=self.train_dir, **config.init_config)
+
+    sep_train.export_tf_lite(model_bundle, train_state, self.train_dir,
+                             input_size)
+    self.assertTrue(
+        tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))
 
 
 if __name__ == "__main__":

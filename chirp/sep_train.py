@@ -16,7 +16,9 @@
 """Training loop for separation models."""
 
 import functools
+import os
 import time
+from typing import Optional
 
 from absl import logging
 from chirp.models import metrics
@@ -32,6 +34,7 @@ import jax
 from jax import lax
 from jax import numpy as jnp
 from jax import random
+from jax.experimental import jax2tf
 from ml_collections import config_dict
 import optax
 import tensorflow as tf
@@ -229,6 +232,7 @@ def evaluate_loop(model_bundle: ModelBundle,
                   num_train_steps: int,
                   eval_steps_per_checkpoint: int,
                   tflite_export: bool = False,
+                  input_size: Optional[int] = None,
                   eval_sleep_s: int = EVAL_LOOP_SLEEP_S):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -254,6 +258,47 @@ def evaluate_loop(model_bundle: ModelBundle,
     evaluate(model_bundle, train_state, valid_dataset, writer, reporter,
              eval_steps_per_checkpoint)
     if tflite_export:
-      raise NotImplementedError()
+      export_tf_lite(model_bundle, train_state, workdir, input_size)
     last_step = int(train_state.step)
     last_ckpt = ckpt.latest_checkpoint
+
+
+def export_tf_lite(model_bundle, train_state, workdir: str, input_size: int):
+  """Write a TFLite flatbuffer."""
+  variables = {"params": train_state.params, **train_state.model_state}
+
+  def infer_fn(audio_batch):
+    model_outputs = model_bundle.model.apply(
+        variables, audio_batch, train=False)
+    return model_outputs
+
+  # TODO(tomdenton): Figure out how to support polymorphic input sizes.
+  tf_predict = tf.function(
+      jax2tf.convert(infer_fn, enable_xla=False),
+      input_signature=[
+          tf.TensorSpec(shape=[1, input_size], dtype=tf.float32, name="input")
+      ],
+      autograph=False)
+
+  # Drop a saved_model while we're at it.
+  tf.saved_model.save(tf_predict.get_concrete_function(),
+                      os.path.join(workdir, "savedmodel"))
+  with tf.io.gfile.GFile(os.path.join(workdir, "savedmodel", "ckpt.txt"),
+                         "w") as f:
+    f.write(f"train_state.step: {train_state.step}")
+
+  converter = tf.lite.TFLiteConverter.from_concrete_functions(
+      [tf_predict.get_concrete_function()], tf_predict)
+
+  converter.target_spec.supported_ops = [
+      tf.lite.OpsSet.TFLITE_BUILTINS,  # enable TensorFlow Lite ops.
+      tf.lite.OpsSet.SELECT_TF_OPS,  # enable TensorFlow ops.
+  ]
+  tflite_float_model = converter.convert()
+
+  if not tf.io.gfile.exists(workdir):
+    tf.io.gfile.makedirs(workdir)
+  with tf.io.gfile.GFile(os.path.join(workdir, "model.tflite"), "wb") as f:
+    f.write(tflite_float_model)
+  with tf.io.gfile.GFile(os.path.join(workdir, "tflite_ckpt.txt"), "w") as f:
+    f.write(f"train_state.step: {train_state.step}")
