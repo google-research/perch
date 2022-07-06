@@ -24,6 +24,7 @@ from chirp.configs import baseline
 from chirp.configs import config_globals
 from chirp.data import pipeline
 from chirp.models import efficientnet
+from chirp.models import frontend
 from chirp.tests import fake_dataset
 from clu import checkpoint
 from flax import linen as nn
@@ -91,9 +92,12 @@ class TrainTest(absltest.TestCase):
       config.init_config.model_config.encoder = efficientnet.EfficientNet(
           efficientnet.EfficientNetModel.B0)
 
-    config.init_config.model_config.melspec_config.melspec_depth = 32
-    config.init_config.model_config.melspec_config.melspec_frequency = 25
-    config.init_config.model_config.melspec_config.use_tf_stft = False
+    config.init_config.model_config.frontend = frontend.MelSpectrogram(
+        features=32,
+        stride=32_000 // 25,
+        kernel_size=2_560,
+        sample_rate=32_000,
+        freq_range=(60, 10_000))
     return config
 
   def test_config_field_reference(self):
@@ -106,7 +110,7 @@ class TrainTest(absltest.TestCase):
     # CUDA is not linked (JAX will detect the GPU so jax2tf will try to create
     # a TF graph on the GPU and fail)
     config = self._get_test_config()
-    config.init_config.model_config.melspec_config.use_tf_stft = True
+    config.init_config.model_config.frontend.use_tf_stft = True
 
     _, dataset_info = self._get_test_dataset(config)
 

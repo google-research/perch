@@ -14,9 +14,8 @@
 # limitations under the License.
 
 """Taxonomy model."""
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
-from chirp import audio_utils
 from chirp.models import conformer
 import flax
 from flax import linen as nn
@@ -41,15 +40,15 @@ class TaxonomyModel(nn.Module):
 
   Attributes:
     num_classes: Number of classes for each output head.
+    frontend: The frontend to use to generate features.
     encoder: A network (e.g., a 2D convolutional network) that takes
       spectrograms and returns feature vectors.
     taxonomy_loss_weight: Weight for taxonomic label losses.
-    melspec_config: Configuration for the mel-spectrogram creation.
   """
   num_classes: Dict[str, int]
+  frontend: nn.Module
   encoder: nn.Module
   taxonomy_loss_weight: float
-  melspec_config: Dict[str, Any]
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool) -> ModelOutputs:
@@ -62,7 +61,7 @@ class TaxonomyModel(nn.Module):
     Returns:
       Logits for each output head.
     """
-    x = audio_utils.compute_melspec(inputs, **self.melspec_config)
+    x = self.frontend(inputs)
     # Treat the spectrogram as a gray-scale image
     x = self.encoder(x[..., jnp.newaxis], train=train)
     if isinstance(self.encoder, conformer.Conformer):

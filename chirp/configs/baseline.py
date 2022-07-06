@@ -62,13 +62,14 @@ def get_config() -> config_dict.ConfigDict:
   model_config.taxonomy_loss_weight = 0.25
   init_config.model_config = model_config
 
-  melspec_config = config_dict.ConfigDict()
-  melspec_config.melspec_depth = 160
-  melspec_config.melspec_frequency = 100
-  melspec_config.sample_rate_hz = sample_rate_hz
-  melspec_config.scaling_config = config_utils.callable_config(
-      "audio_utils.PCENScalingConfig")
-  model_config.melspec_config = melspec_config
+  model_config.frontend = config_utils.callable_config(
+      "frontend.MelSpectrogram",
+      features=160,
+      stride=sample_rate_hz // 100,
+      kernel_size=2_560,  # 0.08 * 32,000
+      sample_rate=sample_rate_hz,
+      freq_range=(60, 10_000),
+      scaling_config=config_utils.callable_config("frontend.PCENScalingConfig"))
 
   # Configure the training loop
   num_train_steps = config_dict.FieldReference(250_000)

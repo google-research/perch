@@ -17,218 +17,166 @@
 
 General utilities for processing audio and spectrograms.
 """
-import functools
-import math
-from typing import Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple
 
 from chirp import signal
-from flax import struct
-import jax
 from jax import lax
 from jax import numpy as jnp
 from jax import random
-from jax import scipy
+from jax import scipy as jsp
 from jax.experimental import jax2tf
+from numpy.core import multiarray
 from scipy import signal as scipy_signal
 import tensorflow as tf
 
-
-@struct.dataclass
-class LogScalingConfig:
-  """Configuration for log-scaling of mel-spectrogram."""
-  floor: float = 1e-2
-  offset: float = 0.0
-  scalar: float = 0.1
+_WINDOW_FNS = {
+    "hann": tf.signal.hann_window,
+    "hamming": tf.signal.hamming_window,
+}
+_BOUNDARY_TO_PADDING_MODE = {"zeros": "constant", "constant": "edge"}
 
 
-@struct.dataclass
-class PCENScalingConfig:
-  """Configuration for PCEN normalization of mel-spectrogram."""
-  smoothing_coef: float = 0.1
-  gain: float = 0.5
-  bias: float = 2.0
-  root: float = 2.0
-  eps: float = 1e-6
+# pylint: disable=g-doc-return-or-yield,g-doc-args
+def stft(x,
+         fs=1.0,
+         window="hann",
+         nperseg=256,
+         noverlap=None,
+         nfft=None,
+         detrend=False,
+         return_onesided=True,
+         boundary="zeros",
+         padded=True,
+         axis=-1) -> jnp.ndarray:
+  """Computes the Short Time Fourier Transform (STFT).
 
-
-@struct.dataclass
-class NoScalingConfig:
-  pass
-
-
-@struct.dataclass
-class STFTParams:
-  """STFT Parameters."""
-  frame_step: int
-  frame_length: int
-  nfft: int
-  num_padded_samples: int
-  overlap: int
-
-
-ScalingConfig = Union[LogScalingConfig, PCENScalingConfig, NoScalingConfig]
-
-
-def get_stft_params(sample_rate_hz: int,
-                    frame_rate: int,
-                    frame_length_secs: float = 0.08) -> STFTParams:
-  """Computes STFT parameters from high-level specifications (hz, seconds)."""
-  frame_step = sample_rate_hz // frame_rate
-  frame_length = int(sample_rate_hz * frame_length_secs)
-  # use math because nfft must be a static argument to signal.stft
-  nfft = 2**math.ceil(math.log2(frame_length))
-  num_padded_samples = (frame_length - frame_step) // 2
-  overlap = frame_length - frame_step
-  return STFTParams(frame_step, frame_length, nfft, num_padded_samples, overlap)
-
-
-@functools.partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
-def compute_stft(audio: jnp.ndarray,
-                 sample_rate_hz: int,
-                 frame_rate: int,
-                 frame_length_secs: float = 0.08,
-                 use_tf_stft: bool = True) -> jnp.ndarray:
-  """Computes the STFT of the audio."""
-  stft_params = get_stft_params(sample_rate_hz, frame_rate, frame_length_secs)
-  if stft_params.num_padded_samples > 0:
-    pad_width = ((0, 0),) * (audio.ndim - 1) + (
-        (stft_params.num_padded_samples,) * 2,)
-    audio = jnp.pad(audio, pad_width)
-
-  if use_tf_stft:
-    # The Jax stft uses a complex convolution which is not supported
-    # by TFLite.
-    def _tf_stft(x):
-      return tf.signal.stft(
-          x,
-          frame_length=stft_params.frame_length,
-          frame_step=stft_params.frame_step,
-          fft_length=stft_params.nfft,
-          pad_end=False)
-
-    stfts = jax2tf.call_tf(_tf_stft)(audio)
-  else:
-    _, _, stfts = scipy.signal.stft(
-        audio,
-        sample_rate_hz,
-        nperseg=stft_params.frame_length,
-        noverlap=stft_params.overlap,
-        nfft=stft_params.nfft,
-        return_onesided=True,
-        window="hann",
-        padded=False,
-        boundary=None)
-    # Scaling to match the tf.signal.stft output.
-    stfts = stft_params.frame_length / 2 * stfts
-    stfts = jnp.swapaxes(stfts, -1, -2)
-  return stfts
-
-
-def compute_istft(spectrogram: jnp.ndarray,
-                  sample_rate_hz: int,
-                  frame_rate: int,
-                  frame_length_secs: float = 0.08,
-                  use_tf_stft: bool = True) -> jnp.ndarray:
-  """Applies the inverse STFT."""
-  stft_params = get_stft_params(sample_rate_hz, frame_rate, frame_length_secs)
-
-  if use_tf_stft:
-    # The Jax stft uses a complex convolution which is not supported
-    # by TFLite.
-    def _tf_istft(x):
-      return tf.signal.inverse_stft(
-          x,
-          frame_length=stft_params.frame_length,
-          frame_step=stft_params.frame_step,
-          fft_length=stft_params.nfft,
-          window_fn=tf.signal.inverse_stft_window_fn(stft_params.frame_step))
-
-    waveform = jax2tf.call_tf(_tf_istft)(spectrogram)
-  else:
-    spectrogram = 2 / stft_params.frame_length * spectrogram
-    waveform = jax.scipy.signal.istft(
-        spectrogram,
-        nperseg=stft_params.frame_length,
-        nfft=stft_params.nfft,
-        boundary=False,
-        input_onesided=True,
-        time_axis=-2,
-        freq_axis=-1,
-        noverlap=stft_params.overlap)[1]
-
-  # Remove center padding added by the forward STFT.
-  if stft_params.num_padded_samples > 0:
-    pad = stft_params.num_padded_samples
-    waveform = waveform[..., pad:-pad]
-  return waveform
-
-
-@functools.partial(jax.jit, static_argnums=(1, 2, 3, 4, 7))
-def compute_melspec(
-    audio: jnp.ndarray,
-    sample_rate_hz: int,
-    melspec_depth: int,
-    melspec_frequency: int,
-    frame_length_secs: float = 0.08,
-    lower_edge_hz: float = 60.0,
-    upper_edge_hz: float = 10_000.0,
-    use_tf_stft: bool = False,
-    scaling_config: Optional[ScalingConfig] = None) -> jnp.ndarray:
-  """Converts audio to melspectrogram.
-
-  Args:
-    audio: input audio, with samples in the last dimension.
-    sample_rate_hz: sample rate of the input audio (Hz).
-    melspec_depth: number of bands in the mel spectrum.
-    melspec_frequency: used to determine the number of samples to step when
-      computing the stft (frame_step = sample_rate_hz / melspec_frequency).
-    frame_length_secs: the stft window length in seconds.
-    lower_edge_hz: lower bound on the frequencies to be included in the mel
-      spectrum.
-    upper_edge_hz: the desired top edge of the highest frequency band in the mel
-      spectrum.
-    use_tf_stft: if true, uses the Tensorflow STFT op.
-    scaling_config: Scaling configuration.
-
-  Returns:
-    The melspectrogram of the audio, shape `(melspec_frequency, melspec_depth)`.
+  This is a port of `scipy.signal.stft` which calls `tf.signal.stft` using
+  `jax2tf.call_tf`. This makes it easier to export the model to TF Lite, since
+  JAX's implementation of `scipy.signal.stft` uses a complex convolution, which
+  is not supported by TF Lite.
   """
-  scaling_config = scaling_config or NoScalingConfig()
 
-  stfts = compute_stft(audio, sample_rate_hz, melspec_frequency,
-                       frame_length_secs, use_tf_stft)
-  magnitude_spectrograms = jnp.abs(stfts)
+  # Use SciPy's original variable names
+  # pylint: disable=invalid-name
+  nfft = nperseg if nfft is None else nfft
+  noverlap = nperseg // 2 if noverlap is None else noverlap
+  nstep = nperseg - noverlap
+  if jnp.iscomplexobj(x):
+    raise ValueError("tf.signal.stft only supports real signals")
+  if window not in _WINDOW_FNS:
+    raise ValueError(f"tf.signal.stft does not support window {window}, "
+                     f"supported functions are {', '.join(_WINDOW_FNS)}")
+  if boundary is not None and boundary not in _BOUNDARY_TO_PADDING_MODE:
+    raise ValueError("tf.signal.stft only supports boundary modes None and "
+                     ", ".join(_BOUNDARY_TO_PADDING_MODE))
+  if detrend:
+    raise ValueError("tf.signal.stft only supports detrend = False")
+  if not return_onesided:
+    return ValueError("tf.signal.stft only supports return_onesided = True")
 
-  # An energy spectrogram is the magnitude of the complex-valued STFT.
-  # A float32 Tensor of shape [batch_size, ?, num_spectrogram_bins].
-  num_spectrogram_bins = magnitude_spectrograms.shape[-1]
-  mel_matrix = signal.linear_to_mel_weight_matrix(melspec_depth,
-                                                  num_spectrogram_bins,
-                                                  sample_rate_hz, lower_edge_hz,
-                                                  upper_edge_hz)
-  mel_spectrograms = jnp.tensordot(magnitude_spectrograms, mel_matrix, 1)
+  def _tf_stft(x):
+    return tf.signal.stft(
+        x,
+        frame_length=nperseg,
+        frame_step=nstep,
+        fft_length=nfft,
+        window_fn=_WINDOW_FNS[window],
+        pad_end=padded)
 
-  if isinstance(scaling_config, LogScalingConfig):
-    x = jnp.log(
-        jnp.maximum(mel_spectrograms, scaling_config.floor) +
-        scaling_config.offset)
-    x = scaling_config.scalar * x
-  elif isinstance(scaling_config, PCENScalingConfig):
-    x, _ = fixed_pcen(mel_spectrograms, scaling_config.smoothing_coef,
-                      scaling_config.gain, scaling_config.bias,
-                      scaling_config.root, scaling_config.eps)
-  elif isinstance(scaling_config, NoScalingConfig):
-    x = mel_spectrograms
-  else:
-    raise ValueError("Unrecognized scaling mode.")
+  # Put the time axis at the end and then put it back
+  axis = multiarray.normalize_axis_index(axis, x.ndim)
+  x = jnp.moveaxis(x, axis, -1)
+  if boundary in _BOUNDARY_TO_PADDING_MODE:
+    mode = _BOUNDARY_TO_PADDING_MODE[boundary]
+    x = jnp.pad(x, ((0, 0),) * (x.ndim - 1) + ((nperseg // 2, nperseg // 2),),
+                mode)
+  Zxx = jax2tf.call_tf(_tf_stft)(x)
+  Zxx = jnp.moveaxis(Zxx, -1, axis % x.ndim)
 
-  num_frames = audio.shape[-1] // sample_rate_hz * melspec_frequency
-  x = x[..., :num_frames, :]
-  return x
+  # Construct time and frequency like scipy.signal.stft
+  freqs = jnp.fft.rfftfreq(nfft, 1 / fs)
+  nadd = (-(x.shape[-1] - nperseg) % nstep) % nperseg if padded else 0
+  time = jnp.arange(nperseg / 2, x.shape[-1] + nadd - nperseg / 2 + 1,
+                    nperseg - noverlap) / fs
+  if boundary is not None:
+    time -= (nperseg / 2) / fs
+
+  # TODO(bartvm): tf.signal.frame seems to have a bug which sometimes adds
+  # too many frames, so we strip those if necessary
+  Zxx = Zxx[..., :len(time)]
+
+  # Scaling
+  Zxx *= 2 / nperseg
+
+  return freqs, time, Zxx
+
+
+def istft(
+    Zxx,  # pylint: disable=invalid-name
+    fs=1.0,
+    window="hann",
+    nperseg=None,
+    noverlap=None,
+    nfft=None,
+    input_onesided=True,
+    boundary=True,
+    time_axis=-1,
+    freq_axis=-2) -> jnp.ndarray:
+  """Perform the inverse Short Time Fourier transform (iSTFT).
+
+  This is a port of `scipy.signal.istft` which calls `tf.signal.inverse_stft`
+  using `jax2tf.call_tf`. This makes it easier to export the model to TF Lite,
+  since JAX's implementation of `scipy.signal.istft` uses a complex convolution,
+  which is not supported by TF Lite.
+
+  """
+  if not boundary:
+    raise ValueError("tf.signal.inverse_stft only supports boundary = True")
+  if not input_onesided:
+    raise ValueError("tf.signal.inverse_stft only supports "
+                     "input_onesided = True")
+
+  n_default = 2 * (Zxx.shape[freq_axis] - 1)
+  nperseg = n_default if nperseg is None else nperseg
+  if nfft is None:
+    if nperseg == n_default + 1:
+      nfft = nperseg
+    else:
+      nfft = n_default
+  noverlap = nperseg // 2 if noverlap is None else noverlap
+  nstep = nperseg - noverlap
+
+  def _tf_istft(x):
+    return tf.signal.inverse_stft(
+        x,
+        frame_length=nperseg,
+        frame_step=nstep,
+        fft_length=nfft,
+        window_fn=tf.signal.inverse_stft_window_fn(nstep, _WINDOW_FNS[window]))
+
+  # Scaling
+  Zxx /= 2 / nperseg
+
+  # Handle axes
+  time_axis = multiarray.normalize_axis_index(time_axis, Zxx.ndim)
+  freq_axis = multiarray.normalize_axis_index(freq_axis, Zxx.ndim)
+  new_time_axis = time_axis - (freq_axis < time_axis)
+
+  # Call tf.signal.inverse_stft
+  Zxx = jnp.moveaxis(Zxx, (time_axis, freq_axis), (-2, -1))
+  x = jax2tf.call_tf(_tf_istft)(Zxx)
+  x = x[..., nperseg // 2:-(nperseg // 2)]
+  x = jnp.moveaxis(x, -1, new_time_axis)
+
+  # TODO(bartvm): This differs from the SciPy/JAX implementations, which seem
+  # to use the wrong axis. Should file a bug with SciPy.
+  t = jnp.arange(x.shape[new_time_axis]) / fs
+
+  return t, x
 
 
 def ema(xs: jnp.ndarray,
-        gamma: float,
+        gamma: jnp.ndarray,
         initial_state: Optional[jnp.ndarray] = None,
         axis: int = 0) -> jnp.ndarray:
   """Computes the exponential moving average along one axis."""
@@ -251,7 +199,7 @@ def ema(xs: jnp.ndarray,
   return ys, final_state
 
 
-def fixed_pcen(
+def pcen(
     filterbank_energy: jnp.ndarray,
     smoothing_coef: float = 0.05638943879134889,
     gain: float = 0.98,
@@ -259,7 +207,7 @@ def fixed_pcen(
     root: float = 2.0,
     eps: float = 1e-6,
     state: Optional[jnp.ndarray] = None) -> Tuple[jnp.ndarray, jnp.ndarray]:
-  """Per-Channel Energy Normalization (PCEN) with fixed parameters.
+  """Per-Channel Energy Normalization (PCEN).
 
   See https://arxiv.org/abs/1607.05666 for details.
 
@@ -287,10 +235,13 @@ def fixed_pcen(
   if filterbank_energy.ndim < 2:
     raise ValueError("Filterbank energy must have rank >= 2.")
 
-  for name, arr, max_rank in (("gain", gain, 1), ("bias", bias, 1),
-                              ("root", root, 1), ("smoothing_coef",
-                                                  smoothing_coef, 0), ("eps",
-                                                                       eps, 0)):
+  for name, arr, max_rank in (
+      ("gain", gain, 1),
+      ("bias", bias, 1),
+      ("root", root, 1),
+      ("smoothing_coef", smoothing_coef, 1),
+      ("eps", eps, 0),
+  ):
     if jnp.ndim(arr) > max_rank:
       raise ValueError(f"{name} must have rank at most {max_rank}")
 
@@ -302,6 +253,25 @@ def fixed_pcen(
                  bias**inv_root)
 
   return pcen_output, filter_state
+
+
+def log_scale(x: jnp.ndarray, floor: float, offset: float,
+              scalar: float) -> jnp.ndarray:
+  """Apply log-scaling.
+
+  Args:
+    x: The data to scale.
+    floor: Clip input values below this value. This avoids taking the logarithm
+      of negative or very small numbers.
+    offset: Shift all values by this amount, after clipping. This too avoids
+      taking the logarithm of negative or very small numbers.
+    scalar: Scale the output by this value.
+
+  Returns:
+    The log-scaled data.
+  """
+  x = jnp.log(jnp.maximum(x, floor) + offset)
+  return scalar * x
 
 
 def random_low_pass_filter(key: jnp.ndarray,
@@ -406,12 +376,10 @@ def pad_to_length_if_shorter(audio: jnp.ndarray, target_length: int):
   return audio
 
 
-def slice_peaked_audio(
-    audio: jnp.ndarray,
-    sample_rate_hz: int,
-    interval_length_s: float = 6.0,
-    max_intervals: int = 5,
-    scaling_config: Optional[ScalingConfig] = None) -> Sequence[jnp.ndarray]:
+def slice_peaked_audio(audio: jnp.ndarray,
+                       sample_rate_hz: int,
+                       interval_length_s: float = 6.0,
+                       max_intervals: int = 5) -> Sequence[jnp.ndarray]:
   """Extracts audio intervals from melspec peaks.
 
   Args:
@@ -419,20 +387,17 @@ def slice_peaked_audio(
     sample_rate_hz: sample rate of the audio sequence (Hz).
     interval_length_s: length each extracted audio interval.
     max_intervals: upper-bound on the number of audio intervals to extract.
-    scaling_config: Scaling configuration for the melspectrogram computation.
 
   Returns:
     Sequence of extracted audio intervals, each of shape
     [sample_rate_hz * interval_length_s].
   """
-  scaling_config = scaling_config or LogScalingConfig()
   target_length = int(sample_rate_hz * interval_length_s)
 
   # Wrap audio to the target length if it's shorter than that.
   audio = pad_to_length_if_shorter(audio, target_length)
 
-  peaks = find_peaks_from_audio(audio, sample_rate_hz, max_intervals,
-                                scaling_config)
+  peaks = find_peaks_from_audio(audio, sample_rate_hz, max_intervals)
   left_shift = target_length // 2
   right_shift = target_length - left_shift
 
@@ -447,27 +412,37 @@ def slice_peaked_audio(
   return [audio[a:b] for (a, b) in start_stop]
 
 
-def find_peaks_from_audio(audio: jnp.ndarray, sample_rate_hz: int,
+def find_peaks_from_audio(audio: jnp.ndarray,
+                          sample_rate_hz: int,
                           max_peaks: int,
-                          scaling_config: ScalingConfig) -> jnp.ndarray:
+                          num_mel_bins: int = 160) -> jnp.ndarray:
   """Construct melspec and find peaks.
 
   Args:
     audio: input audio sequence of shape [num_samples].
     sample_rate_hz: sample rate of the audio sequence (Hz).
     max_peaks: upper-bound on the number of peaks to return.
-    scaling_config: Scaling configuration for the melspectrogram computation.
+    num_mel_bins: The number of mel-spectrogram bins to use.
 
   Returns:
     Sequence of scalar indices for the peaks found in the audio sequence.
   """
   melspec_rate_hz = 100
-  melspec = compute_melspec(
-      audio=audio,
-      sample_rate_hz=sample_rate_hz,
-      melspec_depth=160,
-      melspec_frequency=melspec_rate_hz,
-      scaling_config=scaling_config)
+  frame_length_s = 0.08
+  nperseg = int(frame_length_s * sample_rate_hz)
+  nstep = sample_rate_hz // melspec_rate_hz
+  _, _, spectrogram = jsp.signal.stft(
+      audio, nperseg=nperseg, noverlap=nperseg - nstep)
+  magnitude_spectrogram = jnp.abs(spectrogram)
+
+  # Construct mel-spectrogram
+  num_spectrogram_bins = magnitude_spectrogram.shape[-1]
+  mel_matrix = signal.linear_to_mel_weight_matrix(num_mel_bins,
+                                                  num_spectrogram_bins,
+                                                  sample_rate_hz)
+  mel_spectrograms = jnp.tensordot(magnitude_spectrogram, mel_matrix, 1)
+
+  melspec = log_scale(mel_spectrograms, floor=1e-2, offset=0.0, scalar=0.1)
   melspec = apply_mixture_denoising(melspec, 0.75)
 
   peaks = find_peaks_from_melspec(melspec, melspec_rate_hz)

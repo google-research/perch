@@ -245,10 +245,12 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
   writer.close()
 
 
-def evaluate(model_bundle: ModelBundle, train_state: TrainState,
+def evaluate(model_bundle: ModelBundle,
+             train_state: TrainState,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
-             reporter: periodic_actions.ReportProgress, max_eval_steps: int):
+             reporter: periodic_actions.ReportProgress,
+             eval_steps_per_checkpoint: Optional[int] = None):
   """Run evaluation."""
   valid_metrics = make_metrics_collection(
       "valid___", model_bundle.model.taxonomy_loss_weight)
@@ -268,13 +270,13 @@ def evaluate(model_bundle: ModelBundle, train_state: TrainState,
             taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
             axis_name="batch"))
 
-  step = flax_utils.unreplicate(train_state.step)
+  step = int(flax_utils.unreplicate(train_state.step))
   with reporter.timed("eval"):
     valid_metrics = flax_utils.replicate(valid_metrics.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
       valid_metrics = update_metrics(valid_metrics, batch, train_state)
-      if max_eval_steps > 0 and s >= max_eval_steps:
+      if eval_steps_per_checkpoint is not None and s >= eval_steps_per_checkpoint:
         break
 
     # Log validation loss
@@ -291,7 +293,7 @@ def evaluate_loop(model_bundle: ModelBundle,
                   workdir: str,
                   logdir: str,
                   num_train_steps: int,
-                  eval_steps_per_checkpoint: int,
+                  eval_steps_per_checkpoint: Optional[int] = None,
                   tflite_export: bool = False,
                   input_size: Optional[int] = None,
                   eval_sleep_s: int = EVAL_LOOP_SLEEP_S):

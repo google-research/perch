@@ -61,29 +61,30 @@ def get_config(bank_type) -> config_dict.ConfigDict:
   model_config.mask_generator = config_utils.callable_config(
       "soundstream_unet.SoundstreamUNet", soundstream_config)
 
-  # STFT
-  stft_config = config_dict.ConfigDict()
-  stft_config.sample_rate_hz = sample_rate_hz
-  stft_config.frame_rate = 100
-  stft_config.frame_length_secs = 0.08
-  # TODO(bartvm): Dynamic shape errors when set to True?
-  stft_config.use_tf_stft = False
+  # Frontend configuration
+  stride = config_dict.FieldReference(32)
 
-  # Learned filter banks
-  learned_fb_config = config_dict.ConfigDict()
-  learned_fb_config.features = 128
-  learned_fb_config.kernel_size = 128
-  learned_fb_config.strides = 32
+  frontend_config = config_dict.ConfigDict()
+  frontend_config.features = 128
+  frontend_config.stride = stride
+
+  inverse_frontend_config = config_dict.ConfigDict()
+  inverse_frontend_config.stride = stride
 
   if bank_type == "learned":
+    kernel_size = config_dict.FieldReference(128)
+    frontend_config.kernel_size = kernel_size
+    inverse_frontend_config.kernel_size = kernel_size
     model_config.bank_transform = config_utils.callable_config(
-        "layers.LearnedFilterbank", learned_fb_config)
+        "frontend.LearnedFrontend", frontend_config)
     model_config.unbank_transform = config_utils.callable_config(
-        "layers.LearnedFilterbankInverse", learned_fb_config)
+        "frontend.InverseLearnedFrontend", inverse_frontend_config)
     model_config.bank_is_real = True
   elif bank_type == "stft":
-    # TODO(bartvm): Remove once STFT module available
-    model_config.stft_config = stft_config
+    model_config.bank_transform = config_utils.callable_config(
+        "frontend.STFT", frontend_config)
+    model_config.unbank_transform = config_utils.callable_config(
+        "frontend.ISTFT", inverse_frontend_config)
     model_config.bank_is_real = False
 
   # Training loop configuration

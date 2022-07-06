@@ -18,6 +18,7 @@
 from chirp import audio_utils
 from jax import numpy as jnp
 from jax import random
+from jax import scipy as jsp
 from jax.experimental import jax2tf
 from librosa.core import spectrum
 import numpy as np
@@ -29,155 +30,59 @@ from absl.testing import parameterized
 
 class AudioUtilsTest(parameterized.TestCase):
 
-  def test_compute_melspec(self):
-    sample_rate_hz = 22050
-    audio = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, sample_rate_hz))
-    noise = 0.01 * random.normal(random.PRNGKey(0), (2, 3, sample_rate_hz))
+  @classmethod
+  def setUpClass(cls):
+    super().setUpClass()
+    cls.length_s = 2
+    cls.sample_rate_hz = 11_025
+    cls.num_frames = cls.sample_rate_hz * cls.length_s
+    cls.batch_dims = (2, 3)
+    cls.signal = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, cls.num_frames))
+    cls.noise = 0.5 * random.normal(
+        random.PRNGKey(0), cls.batch_dims + (cls.num_frames,))
+    cls.audio = cls.signal + cls.noise
 
-    kwargs = {
-        "sample_rate_hz": 22050,
-        "melspec_depth": 160,
-        "melspec_frequency": 100,
-        "frame_length_secs": 0.08,
-        "upper_edge_hz": 8000.0,
-        "lower_edge_hz": 60.0
-    }
+    _, _, cls.spectrogram = jsp.signal.stft(cls.audio)
 
-    # Test mel-spectrogram shape and batching
-    melspec = audio_utils.compute_melspec(
-        audio + noise[0, 0], scaling_config=None, **kwargs)
+  # NOTE: We don't test with odd values for nperseg or with a Hamming window
+  # since TF numerics are quite noisy in those cases
+  @parameterized.product(
+      fs=(1.0, 3.4),
+      noverlap=(None, 23),
+      nfft=(None, 263),  # nfft must be >= nperseg
+      boundary=(None, "zeros", "constant"),
+      padded=(True, False),
+      axis=(-1, 1))
+  def test_stft(self, **kwargs):
+    audio = jnp.swapaxes(self.audio, -1, kwargs["axis"])
 
-    self.assertEqual(melspec.shape, (100, 160))
+    f_jax, t_jax, stft_jax = jsp.signal.stft(audio, **kwargs)
+    f_tf, t_tf, stft_tf = audio_utils.stft(audio, **kwargs)
 
-    batch_melspec = audio_utils.compute_melspec(
-        audio + noise, scaling_config=None, **kwargs)
+    np.testing.assert_allclose(f_tf, f_jax, rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(t_tf, t_jax, rtol=1e-5, atol=1e-6)
+    rtol, atol = 1e-2, 1e-3
+    np.testing.assert_allclose(stft_tf, stft_jax, rtol=rtol, atol=atol)
 
-    self.assertEqual(batch_melspec.shape, (2, 3, 100, 160))
-    np.testing.assert_allclose(batch_melspec[0, 0], melspec, 1e-6)
+  @parameterized.product(
+      noverlap=(None, 23), nfft=(None, 263), boundary=(True,))
+  def test_istft(self, **kwargs):
 
-    # Test normalization
-    melspec = audio_utils.compute_melspec(
-        audio + noise[0, 0],
-        scaling_config=audio_utils.LogScalingConfig(),
-        **kwargs)
-    self.assertEqual(melspec.shape, (100, 160))
+    _, istft_jax = jsp.signal.istft(self.spectrogram, **kwargs)
+    _, istft_tf = audio_utils.istft(self.spectrogram, **kwargs)
 
-    melspec = audio_utils.compute_melspec(
-        audio + noise[0, 0],
-        scaling_config=audio_utils.PCENScalingConfig(),
-        **kwargs)
-    self.assertEqual(melspec.shape, (100, 160))
-
-  @parameterized.named_parameters(
-      {
-          "testcase_name": "_raw",
-          "scaling_config": None,
-          "atol": 2e-3
-      }, {
-          "testcase_name": "_log",
-          "scaling_config": audio_utils.LogScalingConfig(),
-          "atol": 2e-4
-      }, {
-          "testcase_name": "_pcen",
-          "scaling_config": audio_utils.PCENScalingConfig(),
-          "atol": 4e-4
-      })
-  def test_jax_tf_equivalence(self, scaling_config, atol):
-    sample_rate_hz = 22050
-    audio = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, sample_rate_hz))
-    noise = 0.01 * random.normal(random.PRNGKey(0), (2, 3, sample_rate_hz))
-
-    kwargs = {
-        "sample_rate_hz": 22050,
-        "melspec_depth": 160,
-        "melspec_frequency": 100,
-        "frame_length_secs": 0.08,
-        "upper_edge_hz": 8000.0,
-        "lower_edge_hz": 60.0
-    }
-    melspec_jax = audio_utils.compute_melspec(
-        audio + noise[0, 0],
-        scaling_config=scaling_config,
-        use_tf_stft=False,
-        **kwargs)
-    melspec_tf = audio_utils.compute_melspec(
-        audio + noise[0, 0],
-        scaling_config=scaling_config,
-        use_tf_stft=True,
-        **kwargs)
-    np.testing.assert_allclose(melspec_jax, melspec_tf, atol=atol)
-
-  @parameterized.named_parameters(
-      {
-          "testcase_name": "_tf",
-          "tf_forward": True,
-          "tf_inverse": True,
-      }, {
-          "testcase_name": "_jax",
-          "tf_forward": False,
-          "tf_inverse": False,
-      }, {
-          "testcase_name": "_tf_jax",
-          "tf_forward": True,
-          "tf_inverse": False,
-      }, {
-          "testcase_name": "_jax_tf",
-          "tf_forward": False,
-          "tf_inverse": True,
-      })
-  def test_stft(self, tf_forward, tf_inverse):
-    batch_size = 3
-    sample_rate_hz = 22050
-    frame_rate = 105
-    frame_length_secs = 0.08
-
-    time_size = 5 * sample_rate_hz
-    audio = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, time_size))
-    noise = 0.01 * random.normal(random.PRNGKey(0), (batch_size, time_size))
-    signal = audio + noise
-
-    stfts = audio_utils.compute_stft(
-        signal,
-        sample_rate_hz,
-        frame_rate,
-        frame_length_secs,
-        use_tf_stft=tf_forward)
-    recon = audio_utils.compute_istft(
-        stfts,
-        sample_rate_hz,
-        frame_rate,
-        frame_length_secs,
-        use_tf_stft=tf_inverse)
-    # Windowing effects concentrate error in the first and last half-frames.
-    half_frame = int(frame_length_secs * sample_rate_hz / 2)
-    residual = (signal - recon)[half_frame:-half_frame]
-    np.testing.assert_allclose(residual, np.zeros_like(residual), atol=1e-5)
+    np.testing.assert_allclose(istft_tf, istft_jax, rtol=1e-2, atol=1e-3)
 
   def test_tflite_melspec(self):
     # Demonstrate TFLite export of the melspec computation.
-    sample_rate_hz = 22050
-    batch_size = 3
-    time_size = 5 * sample_rate_hz
-    audio = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, time_size))
-    noise = 0.01 * random.normal(random.PRNGKey(0), (batch_size, time_size))
-
-    def melspec_model_fn(audio):
-      scaling_config = audio_utils.PCENScalingConfig()
-      msf = audio_utils.compute_melspec(
-          audio,
-          sample_rate_hz=sample_rate_hz,
-          melspec_depth=160,
-          melspec_frequency=100,
-          use_tf_stft=True,
-          scaling_config=scaling_config)
-      return msf
 
     # Export a TFLite model from the melspec model function.
     tf_predict = tf.function(
-        jax2tf.convert(melspec_model_fn, enable_xla=False),
+        jax2tf.convert(
+            lambda audio: audio_utils.stft(audio)[2], enable_xla=False),
         input_signature=[
             tf.TensorSpec(
-                shape=[batch_size, time_size], dtype=tf.float32, name="input")
+                shape=self.audio.shape, dtype=tf.float32, name="input")
         ],
         autograph=False)
     converter = tf.lite.TFLiteConverter.from_concrete_functions(
@@ -194,56 +99,42 @@ class AudioUtilsTest(parameterized.TestCase):
     interpreter.allocate_tensors()
     input_tensor = interpreter.get_input_details()[0]
     output_tensor = interpreter.get_output_details()[0]
-    interpreter.set_tensor(input_tensor["index"], audio + noise)
+    interpreter.set_tensor(input_tensor["index"], self.audio)
     interpreter.invoke()
-    output_array = interpreter.get_tensor(output_tensor["index"])[0]
+    output_array = interpreter.get_tensor(output_tensor["index"])
 
     # Check approximate agreement of TFLite output with the jax function.
-    melspec_jax = melspec_model_fn(audio + noise)
-    np.testing.assert_allclose(output_array, melspec_jax[0], 5e-3)
+    melspec_jax = audio_utils.stft(self.audio)[2]
+    np.testing.assert_allclose(output_array, melspec_jax, atol=1e-6)
 
-  def test_fixed_pcen(self):
-    sample_rate_hz = 22050
-    audio = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, sample_rate_hz))
-    noise = 0.01 * random.normal(random.PRNGKey(0), (
-        1,
-        sample_rate_hz,
-    ))
-    filterbank_energy = audio_utils.compute_melspec(
-        audio + noise[0, 0],
-        sample_rate_hz=sample_rate_hz,
-        melspec_depth=160,
-        melspec_frequency=100,
-        frame_length_secs=0.08,
-        upper_edge_hz=8000.0,
-        lower_edge_hz=60.0,
-        scaling_config=None)
-
+  def test_pcen(self):
     gain = 0.5
     smoothing_coef = 0.1
     bias = 2.0
     root = 2.0
     eps = 1e-6
 
-    out = audio_utils.fixed_pcen(
-        filterbank_energy,
+    spec = jnp.abs(self.spectrogram)
+
+    out = audio_utils.pcen(
+        spec,
         gain=gain,
         smoothing_coef=smoothing_coef,
         bias=bias,
         root=root,
         eps=eps)[0]
     librosa_out = spectrum.pcen(
-        filterbank_energy,
+        spec,
         b=smoothing_coef,
         gain=gain,
         bias=bias,
         power=1 / root,
         eps=eps,
         # librosa starts with an initial state of (1 - s), we start with x[0]
-        zi=[(1 - smoothing_coef) * filterbank_energy[..., 0, :]],
+        zi=(1 - smoothing_coef) * spec[..., 0:1, :],
         axis=-2)
 
-    np.testing.assert_allclose(out, librosa_out, rtol=1e-2)
+    np.testing.assert_allclose(out, librosa_out, rtol=5e-2)
 
   def test_pad_to_length_if_shorter(self):
     audio = jnp.asarray([-1, 0, 1, 0], dtype=jnp.float32)

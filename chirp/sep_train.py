@@ -19,7 +19,6 @@ import functools
 import time
 
 from absl import logging
-from chirp import audio_utils
 from chirp.models import metrics
 from chirp.models import separation_model
 from clu import checkpoint
@@ -96,21 +95,6 @@ class TrainingMetrics(clu_metrics.Collection):
   train_mixit_neg_snr: clu_metrics.LastValue.from_fun(p_log_snr_loss)
 
 
-def construct_model(config: config_dict.ConfigDict):
-  """Constructs the SeparationModel from the config."""
-  # TODO(bartvm): Remove this once STFT module available
-  if hasattr(config, "stft_config"):
-    with config.unlocked():
-      config.bank_transform = functools.partial(audio_utils.compute_stft,
-                                                **config.stft_config)
-      config.unbank_transform = functools.partial(audio_utils.compute_istft,
-                                                  **config.stft_config)
-      del config.stft_config
-
-  model = separation_model.SeparationModel(**config)
-  return model
-
-
 def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
                      workdir: str, model_config: config_dict.ConfigDict):
   """Creates model for training, eval, or inference."""
@@ -119,7 +103,7 @@ def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
 
   # Load model
   model_init_key, key = random.split(key)
-  model = construct_model(model_config)
+  model = separation_model.SeparationModel(**model_config)
   variables = model.init(
       model_init_key, jnp.zeros((1, input_size)), train=False)
   model_state, params = variables.pop("params")
