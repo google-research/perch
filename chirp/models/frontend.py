@@ -75,11 +75,8 @@ class STFT(Frontend):
 
   Attribute:
     power_spectrogram: If true, take the magnitude of the spectrogram.
-    use_tf_stft: For exporting to TF Lite, the STFT can optionally be done using
-      an external call to the TF op.
   """
   power_spectrogram: bool = True
-  use_tf_stft: bool = False
 
   @nn.compact
   def __call__(self, inputs):
@@ -87,8 +84,7 @@ class STFT(Frontend):
     # so we set the STFT window size to return the correct number of features.
     nfft = nperseg = (self.features - 1) * 2
 
-    stft = audio_utils.stft if self.use_tf_stft else jsp.signal.stft
-    _, _, stfts = stft(
+    _, _, stfts = jsp.signal.stft(
         inputs,
         nperseg=nperseg,
         noverlap=nperseg - self.stride,
@@ -117,18 +113,16 @@ class ISTFT(InverseFrontend):
     use_tf_istft: For exporting to TF Lite, the iSTFT can optionally be done
       using an external call to the TF op.
   """
-  use_tf_istft: bool = False
 
   @nn.compact
   def __call__(self, inputs):
     nfft = nperseg = (inputs.shape[-1] - 1) * 2
-    istft = audio_utils.istft if self.use_tf_istft else jsp.signal.istft
     # The STFT transformation threw away the last time step to match our output
     # shape expectations. We'll just pad it with zeros to get it back.
     inputs = jnp.swapaxes(inputs, -1, -2)
     pad_width = ((0, 0),) * (inputs.ndim - 1) + ((0, 1),)
     inputs = jnp.pad(inputs, pad_width, "edge")
-    _, istfts = istft(
+    _, istfts = jsp.signal.istft(
         inputs, nperseg=nperseg, noverlap=nperseg - self.stride, nfft=nfft)
     return istfts
 
@@ -181,20 +175,16 @@ class MelSpectrogram(Frontend):
     freq_range: The frequencies to include in the output. Frequencies outside of
       this range are simply discarded.
     scaling_config: The scaling configuration to use.
-    use_tf_stft: For exporting to TF Lite, the STFT can optionally be done using
-      an external call to the TF op.
   """
   kernel_size: int
   sample_rate: int
   freq_range: Tuple[int, int]
   scaling_config: Optional[ScalingConfig] = None
-  use_tf_stft: bool = False
 
   @nn.compact
   def __call__(self, inputs):
     # Calculate power spectrogram
-    stft = audio_utils.stft if self.use_tf_stft else jsp.signal.stft
-    _, _, stfts = stft(
+    _, _, stfts = jsp.signal.stft(
         inputs,
         nperseg=self.kernel_size,
         noverlap=self.kernel_size - self.stride,
