@@ -62,11 +62,13 @@ class TaxonomyModel(nn.Module):
       Logits for each output head.
     """
     x = self.frontend(inputs)
-    # Treat the spectrogram as a gray-scale image
-    x = self.encoder(x[..., jnp.newaxis], train=train)
     if isinstance(self.encoder, conformer.Conformer):
+      x = self.encoder(x, train=train)
       # Silly baseline: average over the time dimension.
       x = jnp.mean(x, axis=1)
+    else:
+      # Treat the spectrogram as a gray-scale image
+      x = self.encoder(x[..., jnp.newaxis], train=train)
 
     model_outputs = {}
     model_outputs["embedding"] = x
