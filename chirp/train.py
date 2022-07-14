@@ -28,10 +28,12 @@ from clu import metrics as clu_metrics
 from clu import periodic_actions
 import flax
 from flax import linen as nn
+from flax import traverse_util
 import flax.jax_utils as flax_utils
 import jax
 from jax import numpy as jnp
 from jax import random
+from jax import tree_util
 from jax.experimental import jax2tf
 from ml_collections import config_dict
 import numpy as np
@@ -42,6 +44,7 @@ import tensorflow_datasets as tfds
 EVAL_LOOP_SLEEP_S = 30
 
 
+# Metric and logging utilities
 def taxonomy_cross_entropy(outputs: taxonomy_model.ModelOutputs,
                            label: jnp.ndarray, genus: jnp.ndarray,
                            family: jnp.ndarray, order: jnp.ndarray,
@@ -109,6 +112,25 @@ def make_metrics_collection(prefix: str, taxonomy_loss_weight: float):
   return clu_metrics.Collection.create(**metrics_dict)
 
 
+# Projected gradient descent utilities
+# TODO(bartvm): Move to separate file.
+def mask_by_name(name, pytree):
+  """Create a mask which is only true for leaves with the given name."""
+  flat_tree = traverse_util.flatten_dict(pytree)
+  mask = {k: k[-1] == name for k in flat_tree}
+  return traverse_util.unflatten_dict(mask)
+
+
+def project(min_value: float, max_value: float) -> optax.GradientTransformation:
+  """Optax gradient transformation that projects values within a range."""
+
+  def clip_value(updates, params):
+    return tree_util.tree_map(
+        lambda p, u: jnp.clip(p + u, min_value, max_value) - p, params, updates)
+
+  return optax.stateless(clip_value)
+
+
 @flax.struct.dataclass
 class TrainState:
   step: int
@@ -142,9 +164,19 @@ def initialize_model(dataset_info: tfds.core.DatasetInfo,
   variables = model.init(
       model_init_key, jnp.zeros((1, input_size)), train=False)
   model_state, params = variables.pop("params")
+  # NOTE: https://github.com/deepmind/optax/issues/160
+  params = params.unfreeze()
 
-  # Initialize optimizer
-  optimizer = optax.adam(learning_rate=learning_rate)
+  # Initialize optimizer and handle constraints
+  std_to_fwhm = jnp.sqrt(2 * jnp.log(2)) / jnp.pi
+  optimizer = optax.chain(
+      optax.adam(learning_rate=learning_rate),
+      optax.masked(
+          project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)),
+      optax.masked(project(0.0, jnp.pi), mask_by_name("gabor_mean", params)),
+      optax.masked(
+          project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
+          mask_by_name("gabor_std", params)))
   opt_state = optimizer.init(params)
 
   # Load checkpoint
@@ -173,38 +205,39 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
   train_metrics_collection = make_metrics_collection(
       "train___", model_bundle.model.taxonomy_loss_weight)
 
+  # Forward pass and metrics
+  def forward(params, key, batch, model_state):
+    dropout_key, low_pass_key = random.split(key)
+    variables = {"params": params, **model_state}
+    model_outputs, model_state = model_bundle.model.apply(
+        variables,
+        batch["audio"],
+        train=True,
+        mutable=list(model_state.keys()),
+        rngs={
+            "dropout": dropout_key,
+            "low_pass": low_pass_key
+        })
+    taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
+    train_metrics = train_metrics_collection.gather_from_model_output(
+        outputs=model_outputs,
+        label=batch["label"],
+        genus=batch["genus"],
+        family=batch["family"],
+        order=batch["order"],
+        taxonomy_loss_weight=taxonomy_loss_weight).compute()
+    return train_metrics["train___loss"], (train_metrics, model_state)
+
   # Define update step
   @functools.partial(jax.pmap, axis_name="batch")
   def update_step(key, batch, train_state):
-
-    dropout_key, low_pass_key = random.split(key)
-
-    def step(params, model_state):
-      variables = {"params": params, **model_state}
-      model_outputs, model_state = model_bundle.model.apply(
-          variables,
-          batch["audio"],
-          train=True,
-          mutable=list(model_state.keys()),
-          rngs={
-              "dropout": dropout_key,
-              "low_pass": low_pass_key
-          })
-      taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
-      train_metrics = train_metrics_collection.gather_from_model_output(
-          outputs=model_outputs,
-          label=batch["label"],
-          genus=batch["genus"],
-          family=batch["family"],
-          order=batch["order"],
-          taxonomy_loss_weight=taxonomy_loss_weight).compute()
-      return train_metrics["train___loss"], (train_metrics, model_state)
-
-    (_, (train_metrics, model_state)), grads = jax.value_and_grad(
-        step, has_aux=True)(train_state.params, train_state.model_state)
+    grads, (train_metrics, model_state) = jax.grad(
+        forward, has_aux=True)(train_state.params, key, batch,
+                               train_state.model_state)
     grads = jax.lax.pmean(grads, axis_name="batch")
     updates, opt_state = model_bundle.optimizer.update(grads,
-                                                       train_state.opt_state)
+                                                       train_state.opt_state,
+                                                       train_state.params)
     params = optax.apply_updates(train_state.params, updates)
     train_state = TrainState(
         step=train_state.step + 1,

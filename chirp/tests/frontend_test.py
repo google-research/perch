@@ -51,6 +51,13 @@ class FrontendTest(parameterized.TestCase):
       "module_kwargs": {
           "kernel_size": 256
       }
+  }, {
+      "module_type": frontend.MorletWaveletTransform,
+      "module_kwargs": {
+          "kernel_size": 256,
+          "sample_rate": 11_025,
+          "freq_range": (60, 10_000)
+      }
   }),
                          stride=(10, 11))
   def test_output_size(self, module_type, module_kwargs, stride):

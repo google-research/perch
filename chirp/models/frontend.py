@@ -26,9 +26,32 @@ from typing import Optional, Tuple, Union
 
 from chirp import audio_utils
 from chirp import signal
+from chirp.models import cwt
 from flax import linen as nn
 from jax import numpy as jnp
 from jax import scipy as jsp
+
+
+@dataclasses.dataclass
+class LogScalingConfig:
+  """Configuration for log-scaling of mel-spectrogram."""
+  floor: float = 1e-2
+  offset: float = 0.0
+  scalar: float = 0.1
+
+
+@dataclasses.dataclass
+class PCENScalingConfig:
+  """Configuration for PCEN normalization of mel-spectrogram."""
+  smoothing_coef: float = 0.1
+  gain: float = 0.5
+  bias: float = 2.0
+  root: float = 2.0
+  eps: float = 1e-6
+  spcen: bool = False
+
+
+ScalingConfig = Union[LogScalingConfig, PCENScalingConfig]
 
 
 class Frontend(nn.Module):
@@ -46,6 +69,30 @@ class Frontend(nn.Module):
   """
   features: int
   stride: int
+
+  # TODO(bartvm): Add ScalingConfig with kw_only=True in Python 3.10
+  def _magnitude_scale(self, inputs):
+    # Apply frequency scaling
+    scaling_config = self.scaling_config
+    if isinstance(scaling_config, LogScalingConfig):
+      outputs = audio_utils.log_scale(inputs,
+                                      **dataclasses.asdict(scaling_config))
+    elif isinstance(scaling_config, PCENScalingConfig):
+      kwargs = dataclasses.asdict(scaling_config)
+      if kwargs.pop("spcen"):
+        init_smoothing_coef = jnp.ones(
+            (self.features,)) * scaling_config.smoothing_coef
+        smoothing_coef = self.param("spcen_smoothing_coef",
+                                    lambda _: init_smoothing_coef)
+        smoothing_coef = jnp.clip(smoothing_coef, 0, 1)
+        kwargs["smoothing_coef"] = smoothing_coef
+      outputs, _ = audio_utils.pcen(inputs, **kwargs)
+    elif scaling_config is None:
+      outputs = inputs
+    else:
+      raise ValueError("Unrecognized scaling mode.")
+
+    return outputs
 
 
 class InverseFrontend(nn.Module):
@@ -73,16 +120,24 @@ class STFT(Frontend):
   for some non-negative integer n. This will guarantee that the length of the
   FFT is a power of two.
 
+  Note that if magnitude scaling is used, this frontend is no longer invertible.
+
   Attribute:
-    power_spectrogram: If true, take the magnitude of the spectrogram.
+    power: If given, calculate the magnitude spectrogram using the given power.
+      The default is 2.0 for the power spectrogram. Pass 1.0 to get the energy
+      spectrogram. If `None`, then the complex-valued STFT will be returned.
     use_tf_stft: For exporting to TF Lite, the STFT can optionally be done using
       an external call to the TF op.
+    scaling_config: The magnitude scaling configuration to use.
   """
-  power_spectrogram: bool = True
+  power: Optional[float] = 2.0
   use_tf_stft: bool = False
+  scaling_config: Optional[ScalingConfig] = None
 
   @nn.compact
   def __call__(self, inputs):
+    if self.power is None and self.scaling_config is not None:
+      raise ValueError("magnitude scaling requires a magnitude spectrogram")
     # For a real-valued signal the number of frequencies returned is n // 2 + 1
     # so we set the STFT window size to return the correct number of features.
     nfft = nperseg = (self.features - 1) * 2
@@ -105,7 +160,8 @@ class STFT(Frontend):
       stfts = stfts[..., :-1]
 
     stfts = jnp.swapaxes(stfts, -1, -2)
-    return jnp.abs(stfts) if self.power_spectrogram else stfts
+    stfts = jnp.abs(stfts)**self.power if self.power is not None else stfts
+    return self._magnitude_scale(stfts)
 
 
 class ISTFT(InverseFrontend):
@@ -133,28 +189,6 @@ class ISTFT(InverseFrontend):
     return istfts
 
 
-@dataclasses.dataclass
-class LogScalingConfig:
-  """Configuration for log-scaling of mel-spectrogram."""
-  floor: float = 1e-2
-  offset: float = 0.0
-  scalar: float = 0.1
-
-
-@dataclasses.dataclass
-class PCENScalingConfig:
-  """Configuration for PCEN normalization of mel-spectrogram."""
-  smoothing_coef: float = 0.1
-  gain: float = 0.5
-  bias: float = 2.0
-  root: float = 2.0
-  eps: float = 1e-6
-  spcen: bool = False
-
-
-ScalingConfig = Union[LogScalingConfig, PCENScalingConfig]
-
-
 class MelSpectrogram(Frontend):
   """Mel-spectrogram frontend.
 
@@ -180,13 +214,14 @@ class MelSpectrogram(Frontend):
       conversion to mel-scale.
     freq_range: The frequencies to include in the output. Frequencies outside of
       this range are simply discarded.
-    scaling_config: The scaling configuration to use.
+    scaling_config: The magnitude scaling configuration to use.
     use_tf_stft: For exporting to TF Lite, the STFT can optionally be done using
       an external call to the TF op.
   """
   kernel_size: int
   sample_rate: int
   freq_range: Tuple[int, int]
+  power: float = 2.0
   scaling_config: Optional[ScalingConfig] = None
   use_tf_stft: bool = False
 
@@ -203,7 +238,7 @@ class MelSpectrogram(Frontend):
     if inputs.shape[-1] % self.stride == 0:
       stfts = stfts[..., :-1]
     stfts = jnp.swapaxes(stfts, -1, -2)
-    magnitude_spectrograms = jnp.abs(stfts)
+    magnitude_spectrograms = jnp.abs(stfts)**self.power
 
     # Construct mel-spectrogram
     num_spectrogram_bins = magnitude_spectrograms.shape[-1]
@@ -212,26 +247,7 @@ class MelSpectrogram(Frontend):
                                                     self.sample_rate,
                                                     *self.freq_range)
     mel_spectrograms = magnitude_spectrograms @ mel_matrix
-
-    # Apply frequency scaling
-    scaling_config = self.scaling_config
-    if isinstance(scaling_config, LogScalingConfig):
-      x = audio_utils.log_scale(mel_spectrograms,
-                                **dataclasses.asdict(scaling_config))
-    elif isinstance(scaling_config, PCENScalingConfig):
-      kwargs = dataclasses.asdict(scaling_config)
-      if kwargs.pop("spcen"):
-        init_smoothing_coef = jnp.ones(
-            (self.features,)) * scaling_config.smoothing_coef
-        kwargs["smoothing_coef"] = self.param("spcen_smoothing_coef",
-                                              lambda _: init_smoothing_coef)
-      x, _ = audio_utils.pcen(mel_spectrograms, **kwargs)
-    elif scaling_config is None:
-      x = mel_spectrograms
-    else:
-      raise ValueError("Unrecognized scaling mode.")
-
-    return x
+    return self._magnitude_scale(mel_spectrograms)
 
 
 class LearnedFrontend(Frontend):
@@ -240,10 +256,14 @@ class LearnedFrontend(Frontend):
   This frontend is a small wrapper around `nn.Conv`. It learns a filter bank
   where the filters are the convolutional kernels.
 
+  Note that if magnitude scaling is used, this frontend is no longer invertible.
+
   Attributes:
     kernel_size: The size of the convolutional filters.
+    scaling_config: The magnitude scaling configuration to use.
   """
   kernel_size: int
+  scaling_config: Optional[ScalingConfig] = None
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -252,9 +272,9 @@ class LearnedFrontend(Frontend):
         kernel_size=(self.kernel_size,),
         strides=(self.stride,))(
             # Collapse batch dimensions and add a single channel
-            jnp.reshape(inputs, (-1,) + inputs.shape[-1:])[..., jnp.newaxis])
+            jnp.reshape(inputs, (-1,) + inputs.shape[-1:] + (1,)))
     output = jnp.reshape(output, inputs.shape[:-1] + output.shape[-2:])
-    return output
+    return self._magnitude_scale(output)
 
 
 class InverseLearnedFrontend(InverseFrontend):
@@ -275,3 +295,61 @@ class InverseLearnedFrontend(InverseFrontend):
             jnp.reshape(inputs, (-1,) + inputs.shape[-2:]))
     output = jnp.reshape(output, inputs.shape[:-2] + output.shape[-2:])
     return jnp.squeeze(output, -1)
+
+
+class MorletWaveletTransform(Frontend):
+  """Morlet wavelet transform.
+
+  The Morlet wavelet transform is a wavelet transformation using Morlet
+  wavelets. This is like a short-term Fourier transform with Gaussian windows,
+  but where the window size is different for each frequency. This allows for
+  arbitrary trade-offs of the time- and frequency resolution.
+
+  Note that technically speaking this module uses Gabor filters instead of
+  Morlet wavelets. Gabor filters don't have the constant shift required to make
+  them invertible for low frequencies, but in practice this barely matters.
+
+  The LEAF frontend uses this transformation with stride 1 as the first step.
+  Like LEAF, we initialize the Gabor filters to resemble a mel-spectrogram with
+  the given frequency range.
+
+  Attributes:
+    kernel_size: The kernel size to use for the filters.
+    sample_rate: The sample rate of the input. Used to interpret the frequency
+      range for initilizing the filters.
+    freq_range: The filters are initialized to resemble a mel-spectrogram. These
+      values determine the minimum and maximum frequencies of those filters.
+  """
+  kernel_size: int
+  sample_rate: int
+  freq_range: Tuple[int, int]
+  power: float = 2.0
+  scaling_config: Optional[ScalingConfig] = None
+
+  @nn.compact
+  def __call__(self, inputs):
+    input_signal = jnp.reshape(inputs, (-1,) + inputs.shape[-1:] + (1,))
+
+    params = cwt.melspec_params(self.features, self.sample_rate,
+                                *self.freq_range)
+    gabor_mean = self.param("gabor_mean", lambda rng: params[0])
+    gabor_std = self.param("gabor_std", lambda rng: params[1])
+    sigma = gabor_mean * gabor_std
+    gabor_filter = cwt.gabor_filter(sigma, cwt.Domain.TIME,
+                                    cwt.Normalization.L1)
+    filtered_signal = cwt.convolve_filter(
+        gabor_filter,
+        input_signal,
+        gabor_std,
+        cwt.Normalization.L1,
+        self.kernel_size,
+        stride=(self.stride,))
+
+    power_signal = jnp.abs(filtered_signal)**self.power
+
+    scaled_signal = self._magnitude_scale(power_signal)
+
+    output = jnp.reshape(scaled_signal,
+                         inputs.shape[:-1] + scaled_signal.shape[-2:])
+
+    return output

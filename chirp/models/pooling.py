@@ -89,16 +89,16 @@ class WindowPool(nn.Module):
       `scipy.signal.windows` functions.
     window_size: The size of the pooling window.
     window_init: Initializer of the window parameters. It should take as an
-      argument an RNG key and the number of filters, and return a tuple of
-      parameters. Each parameter should have the number of filters as its first
-      axis.
+      argument an RNG key, the number of filters, and the width of the window,
+      and return a tuple of parameters. Each parameter should have the number of
+      filters as its first axis.
     normalize_window: Whether or not to normalize the window to sum to 1.
     stride: The stride to use.
     padding: Padding to use.
   """
   window: Callable[..., jnp.ndarray]
   window_size: int
-  window_init: Callable[[jnp.ndarray, int], jnp.ndarray]
+  window_init: Callable[[jnp.ndarray, int, int], jnp.ndarray]
   normalize_window: bool = True
   stride: int = 1
   padding: str = "SAME"

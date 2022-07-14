@@ -49,7 +49,7 @@ def get_config() -> config_dict.ConfigDict:
 
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
-  init_config.learning_rate = 0.01
+  init_config.learning_rate = 0.0001
   init_config.input_size = window_size_s * sample_rate_hz
   init_config.rng_seed = 0
   config.init_config = init_config
@@ -63,10 +63,10 @@ def get_config() -> config_dict.ConfigDict:
   init_config.model_config = model_config
 
   model_config.frontend = config_utils.callable_config(
-      "frontend.MelSpectrogram",
+      "frontend.MorletWaveletTransform",
       features=160,
       stride=sample_rate_hz // 100,
-      kernel_size=2_560,  # 0.08 * 32,000
+      kernel_size=2_048,  # ~0.025 * 32,000
       sample_rate=sample_rate_hz,
       freq_range=(60, 10_000),
       scaling_config=config_utils.callable_config("frontend.PCENScalingConfig"))
