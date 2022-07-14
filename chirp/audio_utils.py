@@ -433,14 +433,24 @@ def find_peaks_from_audio(audio: jnp.ndarray,
   nstep = sample_rate_hz // melspec_rate_hz
   _, _, spectrogram = jsp.signal.stft(
       audio, nperseg=nperseg, noverlap=nperseg - nstep)
+  # apply_mixture_denoising/find_peaks_from_melspec expect frequency axis last
+  spectrogram = jnp.swapaxes(spectrogram, -1, -2)
   magnitude_spectrogram = jnp.abs(spectrogram)
+
+  # For backwards compatibility, we scale the spectrogram here the same way
+  # that the TF spectrogram is scaled. If we don't, the values are too small and
+  # end up being clipped by the default configuration of the logarithmic scaling
+  magnitude_spectrogram *= nperseg / 2
 
   # Construct mel-spectrogram
   num_spectrogram_bins = magnitude_spectrogram.shape[-1]
-  mel_matrix = signal.linear_to_mel_weight_matrix(num_mel_bins,
-                                                  num_spectrogram_bins,
-                                                  sample_rate_hz)
-  mel_spectrograms = jnp.tensordot(magnitude_spectrogram, mel_matrix, 1)
+  mel_matrix = signal.linear_to_mel_weight_matrix(
+      num_mel_bins,
+      num_spectrogram_bins,
+      sample_rate_hz,
+      lower_edge_hertz=60,
+      upper_edge_hertz=10_000)
+  mel_spectrograms = magnitude_spectrogram @ mel_matrix
 
   melspec = log_scale(mel_spectrograms, floor=1e-2, offset=0.0, scalar=0.1)
   melspec = apply_mixture_denoising(melspec, 0.75)
