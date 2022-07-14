@@ -23,11 +23,12 @@ from chirp.data import filter_scrub_utils as fsu
 from chirp.tests import fake_dataset
 import pandas as pd
 import tensorflow_datasets as tfds
+
 from absl.testing import absltest
 
 
-class FilterScrubTest(absltest.TestCase):
-  """Used to factorize the common setup between different types of queries."""
+class DataProcessingTest(absltest.TestCase):
+  """Used to factorize the common setup between data processing tests."""
 
   def setUp(self):
     super().setUp()
@@ -48,6 +49,7 @@ class FilterScrubTest(absltest.TestCase):
     # Using `tempdir` instead and manually deleting the folder after test.
     fake_builder = fake_dataset.FakeDataset(data_dir=self.temp_dir)
     fake_builder.download_and_prepare()
+    self.fake_info = fake_builder.info
     self.fake_df = tfds.as_dataframe(fake_builder.as_dataset()['train'])
 
   def tearDown(self):
@@ -55,7 +57,7 @@ class FilterScrubTest(absltest.TestCase):
     shutil.rmtree(self.temp_dir)
 
 
-class NotInTests(FilterScrubTest):
+class NotInTests(DataProcessingTest):
 
   def test_filtering_ideal(self):
     """Ensure filtering produces expected results in nominal case."""
@@ -112,7 +114,27 @@ class NotInTests(FilterScrubTest):
           result_type='expand')
 
 
-class ScrubTest(FilterScrubTest):
+class SamplingTest(DataProcessingTest):
+
+  def test_sampling_under_constraints(self):
+
+    toy_df = pd.DataFrame({
+        'species_code': ['O', 'A', 'B', 'A', 'O', 'O'],
+        'bg_species_codes': [['O'], ['O', 'B'], ['A'], [], ['A'], ['A', 'B']],
+    })
+    species_of_interest = ['A', 'B']
+    target_fg = {k: 1 for k in species_of_interest}
+    target_bg = {k: 2 for k in species_of_interest}
+    query = fsu.Query(fsu.TransformOp.SAMPLE_UNDER_CONSTRAINTS, {
+        'target_fg': target_fg,
+        'target_bg': target_bg
+    })
+    df = fsu.apply_query(toy_df, query)
+    expected_df = toy_df.drop([0, 3, 4])
+    self.assertEqual(df.to_dict(), expected_df.to_dict())
+
+
+class ScrubTest(DataProcessingTest):
 
   def test_scrubbing_ideal(self):
     """Ensure scrubbing works as expected in nominal case."""
@@ -182,18 +204,7 @@ class ScrubTest(FilterScrubTest):
     self.assertTrue(self.fake_df.equals(df))
 
 
-class QueryTest(absltest.TestCase):
-
-  def setUp(self):
-    super().setUp()
-    # We define a toy dataframe that is easy to manually check
-    self.toy_df = pd.DataFrame({
-        'species_code': ['ostric2', 'ostric3', 'grerhe1'],
-        'Common name': ['Common Ostrich', 'Somali Ostrich', 'Greater Rhea'],
-        'bg_labels': [['ostric3', 'grerhe1'], ['ostric2', 'grerhe1'],
-                      ['ostric2', 'ostric3']],
-        'Country': ['Colombia', 'Australia', 'France'],
-    })
+class QueryTest(DataProcessingTest):
 
   def test_masking_query(self):
     """Ensure masking queries (and completement) work as expected."""
@@ -216,8 +227,8 @@ class QueryTest(absltest.TestCase):
     self.assertEqual(
         fsu.apply_query(self.toy_df, mask_query).tolist(), [False, True, True])
 
-  def test_transform_query(self):
-    """Ensure transform queries work as expected."""
+  def test_scrub_query(self):
+    """Ensure scrubbing queries work as expected."""
 
     scrub_query = fsu.Query(
         op=fsu.TransformOp.SCRUB,
@@ -243,7 +254,7 @@ class QueryTest(absltest.TestCase):
       fsu.apply_query(self.toy_df, scrub_query)
 
 
-class QuerySequenceTest(FilterScrubTest):
+class QuerySequenceTest(DataProcessingTest):
 
   def test_untargeted_filter_scrub(self):
     """Ensure that applying a QuerySequence (no masking specified) works."""

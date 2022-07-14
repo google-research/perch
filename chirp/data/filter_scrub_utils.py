@@ -18,6 +18,7 @@ import enum
 import functools
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Union
 
+from chirp.data import sampling_utils as su
 import numpy as np
 import pandas as pd
 
@@ -40,6 +41,7 @@ class TransformOp(enum.Enum):
   SCRUB = 'scrub'
   SCRUB_ALL_BUT = 'scrub_all_but'
   FILTER = 'filter'
+  SAMPLE_UNDER_CONSTRAINTS = 'sample_under_constraints'
 
 
 SerializableType = Union[List[Union[int, str, bytes]], MaskOp, TransformOp]
@@ -225,6 +227,8 @@ OPS = {
             functools.partial(is_not_in, **kwargs),
             axis=1,
             result_type='expand'),
+    TransformOp.SAMPLE_UNDER_CONSTRAINTS:
+        su.sample_recordings_under_constraints,
     TransformOp.SCRUB:
         lambda df, **kwargs: df.apply(
             functools.partial(scrub, **kwargs), axis=1, result_type='expand'),
