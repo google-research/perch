@@ -207,7 +207,7 @@ class ScrubTest(DataProcessingTest):
 class QueryTest(DataProcessingTest):
 
   def test_masking_query(self):
-    """Ensure masking queries (and completement) work as expected."""
+    """Ensure masking queries (and complement) work as expected."""
 
     # Test mask query and complement
     mask_query = fsu.Query(
@@ -328,6 +328,52 @@ class QuerySequenceTest(DataProcessingTest):
     self.assertEqual(
         expected_df.sort_values('species_code').to_dict('list'),
         df.sort_values('species_code').to_dict('list'))
+
+  def test_nested_query_sequence(self):
+    filter_args = {
+        'mask_op': fsu.MaskOp.IN,
+        'op_kwargs': {
+            'key': 'species_code',
+            'values': ['ostric3', 'grerhe1']
+        }
+    }
+    filter_query = fsu.Query(fsu.TransformOp.FILTER, filter_args)
+    mask_query = fsu.Query(fsu.MaskOp.IN, {
+        'key': 'species_code',
+        'values': ['grerhe1']
+    })
+    scrub_query = fsu.Query(fsu.TransformOp.SCRUB, {
+        'key': 'bg_labels',
+        'values': ['ostric2']
+    })
+    equivalent_queries = [
+        fsu.QuerySequence(
+            [filter_query,
+             fsu.QuerySequence([scrub_query], mask_query)]),
+        fsu.QuerySequence([
+            filter_query,
+            fsu.QuerySequence([filter_query]),
+            fsu.QuerySequence([scrub_query], mask_query)
+        ],),
+        fsu.QuerySequence([
+            fsu.QuerySequence([filter_query]), filter_query,
+            fsu.QuerySequence([scrub_query], mask_query)
+        ],),
+        fsu.QuerySequence([
+            fsu.QuerySequence([]), filter_query,
+            fsu.QuerySequence([scrub_query], mask_query)
+        ],),
+        fsu.QuerySequence([
+            filter_query,
+            fsu.QuerySequence([filter_query, scrub_query], mask_query)
+        ],)
+    ]
+    expected_df = self.toy_df.drop(0)
+    expected_df['bg_labels'] = [['ostric2', 'grerhe1'], ['ostric3']]
+    for query_sequence in equivalent_queries:
+      self.assertEqual(
+          expected_df.to_dict(),
+          fsu.apply_sequence(self.toy_df, query_sequence).to_dict())
 
 
 if __name__ == '__main__':

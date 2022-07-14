@@ -71,7 +71,7 @@ class QuerySequence(NamedTuple):
   a mask_query (i.e. a Query whose op is a MaskOp), for instance only
   scrubbing bg_labels from a specific subset of species.
   """
-  queries: Sequence[Query]
+  queries: Sequence[Union[Query, 'QuerySequence']]
   mask_query: Optional[Query] = None
 
 
@@ -114,16 +114,17 @@ def apply_sequence(
     have been sequentially applied in the specified order.
   """
   if query_sequence.mask_query is not None:
-    mask = apply_query(df, query_sequence.mask_query)
+    mask = APPLY_FN[type(query_sequence.mask_query)](df,
+                                                     query_sequence.mask_query)
     assert mask.dtype == bool
     modifiable_df = df[mask]
     frozen_df = df[~mask]
     for query in query_sequence.queries:
-      modifiable_df = apply_query(modifiable_df, query)
+      modifiable_df = APPLY_FN[type(query)](modifiable_df, query)
     return pd.concat([frozen_df, modifiable_df])
   else:
     for query in query_sequence.queries:
-      df = apply_query(df, query)
+      df = APPLY_FN[type(query)](df, query)
     return df
 
 
@@ -215,8 +216,13 @@ def filter_df(df: pd.DataFrame, mask_op: MaskOp,
     The filtered dataframe
   """
   mask_query = Query(op=mask_op, kwargs=op_kwargs, complement=False)
-  return df[apply_query(df, mask_query)]
+  return df[APPLY_FN[type(mask_query)](df, mask_query)]
 
+
+APPLY_FN = {
+    Query: apply_query,
+    QuerySequence: apply_sequence,
+}
 
 OPS = {
     MaskOp.IN:
