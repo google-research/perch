@@ -43,6 +43,10 @@ class LayersTest(absltest.TestCase):
     examples = {
         'audio':
             tf.random.uniform([2, 100], dtype=tf.float32),
+        'segment_start':
+            tf.convert_to_tensor([17, 64], dtype=tf.int64),
+        'segment_end':
+            tf.convert_to_tensor([117, 164], dtype=tf.int64),
         'label':
             tf.convert_to_tensor([[1], [2]], dtype=tf.int64),
         'label_str':
@@ -100,6 +104,7 @@ class LayersTest(absltest.TestCase):
   def test_process_example(self):
     sample_rate_hz = self._builder.info.features['audio'].sample_rate
     audio_length_s = 6
+    audio_length_samples = sample_rate_hz * audio_length_s
     input_gain = 10.0
     window_size_s = 5
     min_gain = 0.15
@@ -107,10 +112,16 @@ class LayersTest(absltest.TestCase):
 
     example = {
         'audio':
-            tf.random.uniform([sample_rate_hz * audio_length_s],
+            tf.random.uniform([audio_length_samples],
                               minval=-input_gain,
                               maxval=input_gain,
                               dtype=tf.float32),
+        'segment_start':
+            tf.convert_to_tensor([17, 64], dtype=tf.int64),
+        'segment_end':
+            tf.convert_to_tensor(
+                [17 + audio_length_samples, 64 + audio_length_samples],
+                dtype=tf.int64),
         'label':
             tf.convert_to_tensor([1], dtype=tf.int64),
         'label_str':

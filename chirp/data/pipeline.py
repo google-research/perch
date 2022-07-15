@@ -145,8 +145,8 @@ def multi_hot(
     The processed example with `bg_labels` replaced using a multi-hot
     representation.
   """
-  # Delete features which are not JAX-compatible.
-  del_keys = []
+  # Delete features which are not JAX-compatible or can't be batched.
+  del_keys = ['segment_start', 'segment_end']
   for k, v in example.items():
     if v.dtype == np.dtype('O'):
       logging.warning('Removing dataset feature %s with unsupported dtype %s',

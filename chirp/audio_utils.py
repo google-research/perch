@@ -379,7 +379,7 @@ def pad_to_length_if_shorter(audio: jnp.ndarray, target_length: int):
 def slice_peaked_audio(audio: jnp.ndarray,
                        sample_rate_hz: int,
                        interval_length_s: float = 6.0,
-                       max_intervals: int = 5) -> Sequence[jnp.ndarray]:
+                       max_intervals: int = 5) -> Sequence[Tuple[int, int]]:
   """Extracts audio intervals from melspec peaks.
 
   Args:
@@ -409,7 +409,7 @@ def slice_peaked_audio(audio: jnp.ndarray,
   start_stop = jnp.unique(
       jnp.stack([peaks - left_shift, peaks + right_shift], axis=-1), axis=0)
 
-  return [audio[a:b] for (a, b) in start_stop]
+  return start_stop
 
 
 def find_peaks_from_audio(audio: jnp.ndarray,

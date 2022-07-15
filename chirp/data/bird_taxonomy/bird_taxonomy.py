@@ -49,8 +49,7 @@ https://xeno-canto.org/{xeno_canto_id}, and a given example's Xeno-Canto ID can
 be retrieved from the 'filename' feature: 'XC{xeno_canto_id}.mp3'.
 """
 
-KeyExample = Tuple[Union[str, int], Dict[str, Any]]
-LocalizationFn = Callable[[KeyExample, int, float], Sequence[KeyExample]]
+LocalizationFn = Callable[[Any, int, float], Sequence[Tuple[int, int]]]
 
 
 @dataclasses.dataclass
@@ -263,6 +262,10 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                     sample_rate=self.builder_config.sample_rate_hz,
                     encoding=tfds.features.Encoding.ZLIB,
                 ),
+            'segment_start':
+                tfds.features.Scalar(dtype=tf.uint64),
+            'segment_end':
+                tfds.features.Scalar(dtype=tf.uint64),
             'label':
                 tfds.features.Sequence(
                     tfds.features.ClassLabel(names=class_names['species_code'])
@@ -404,6 +407,8 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
 
       return source['xeno_canto_id'], {
           'audio': audio,
+          'segment_start': 0,
+          'segment_end': len(audio),
           'label': [source['species_code']],
           'bg_labels': source['bg_species_codes'],
           'genus': [source['genus']],
@@ -435,18 +440,24 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
         interval_length_s = self.builder_config.interval_length_s
         target_length = int(sample_rate_hz * interval_length_s)
 
-        audio = example['audio']
-        audio_intervals = [
-            audio_utils.pad_to_length_if_shorter(audio,
-                                                 target_length)[:target_length]
-        ]
-        audio_intervals.extend(
-            self.builder_config.localization_fn(example['audio'],
-                                                sample_rate_hz,
-                                                interval_length_s))
-        common_features = [(k, v) for k, v in example.items() if k != 'audio']
-        return [(f'{key}_{i}', dict([('audio', interval)] + common_features))
-                for i, interval in enumerate(audio_intervals)]
+        audio = audio_utils.pad_to_length_if_shorter(example['audio'],
+                                                     target_length)
+        # Pass padded audio to avoid localization_fn having to pad again
+        audio_intervals = self.builder_config.localization_fn(
+            audio, sample_rate_hz, interval_length_s)
+
+        if not audio_intervals:
+          # If no peaks were found, we take the first segment of the
+          # recording to avoid discarding it entirely
+          audio_intervals = [(0, target_length)]
+        interval_examples = []
+        for i, (start, end) in enumerate(audio_intervals):
+          interval_examples.append((f'{key}_{i}', {
+              **example, 'audio': audio[start:end],
+              'segment_start': start,
+              'segment_end': end
+          }))
+        return interval_examples
 
       pipeline = pipeline | beam.FlatMap(_localize_intervals)
 

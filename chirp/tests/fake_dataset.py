@@ -36,6 +36,10 @@ class FakeDataset(bird_taxonomy.BirdTaxonomy):
               np.random.uniform(-1.0, 0.99,
                                 self.info.features['audio'].shape).astype(
                                     np.float32),
+          'segment_start':
+              17,
+          'segment_end':
+              17 + self.info.features['audio'].shape[0],
           'label':
               np.random.choice(self.info.features['label'].names, size=[3]),
           'bg_labels':
