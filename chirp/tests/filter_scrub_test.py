@@ -207,9 +207,9 @@ class ScrubTest(DataProcessingTest):
 class QueryTest(DataProcessingTest):
 
   def test_masking_query(self):
-    """Ensure masking queries (and complement) work as expected."""
+    """Ensure masking queries work as expected."""
 
-    # Test mask query and complement
+    # Test mask query
     mask_query = fsu.Query(
         op=fsu.MaskOp.IN, kwargs={
             'key': 'species_code',
@@ -217,15 +217,6 @@ class QueryTest(DataProcessingTest):
         })
     self.assertEqual(
         fsu.apply_query(self.toy_df, mask_query).tolist(), [True, False, False])
-    mask_query = fsu.Query(
-        op=fsu.MaskOp.IN,
-        complement=True,
-        kwargs={
-            'key': 'species_code',
-            'values': ['ostric2']
-        })
-    self.assertEqual(
-        fsu.apply_query(self.toy_df, mask_query).tolist(), [False, True, True])
 
   def test_scrub_query(self):
     """Ensure scrubbing queries work as expected."""
@@ -241,17 +232,44 @@ class QueryTest(DataProcessingTest):
     expected_df['bg_labels'] = [['ostric3', 'grerhe1'], ['grerhe1'],
                                 ['ostric3']]
     self.assertEqual(expected_df.to_dict(), df.to_dict())
-    # Ensure that setting complement to True for a transform query raises an
-    # error
+
+  def test_complement(self):
+    df = self.toy_df.copy()
+    df['unique_key'] = [0, 1, 2]
+
+    # Test nominal case with scrubbing query. Scrubbing does not remove any
+    # samples. Therefore check that setting complement to True returns an
+    # empty df.
     scrub_query = fsu.Query(
         op=fsu.TransformOp.SCRUB,
-        complement=True,
         kwargs={
             'key': 'bg_labels',
             'values': ['ostric2']
         })
+    new_df = fsu.apply_complement(
+        df, fsu.QueryComplement(scrub_query, 'unique_key'))
+    self.assertEmpty(new_df)
+
+    # Test nominal case with filtering query
+    filter_query = fsu.Query(
+        op=fsu.TransformOp.FILTER,
+        kwargs={
+            'mask_op': fsu.MaskOp.IN,
+            'op_kwargs': {
+                'key': 'species_code',
+                'values': ['ostric2']
+            }
+        })
+    self.assertEqual(
+        fsu.apply_complement(df, fsu.QueryComplement(filter_query,
+                                                     'unique_key')).to_dict(),
+        df.drop([0]).to_dict())
+
+    # Test that when values don't uniquely define each recording, an error
+    # is raised
     with self.assertRaises(ValueError):
-      fsu.apply_query(self.toy_df, scrub_query)
+      df['unique_key'] = [0, 1, 1]
+      fsu.apply_complement(df, fsu.QueryComplement(filter_query, 'unique_key'))
 
 
 class QuerySequenceTest(DataProcessingTest):

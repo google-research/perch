@@ -60,7 +60,6 @@ class Query(NamedTuple):
   """
   op: Union[MaskOp, TransformOp]
   kwargs: Dict[str, SerializableType]
-  complement: bool = False
 
 
 class QuerySequence(NamedTuple):
@@ -73,6 +72,57 @@ class QuerySequence(NamedTuple):
   """
   queries: Sequence[Union[Query, 'QuerySequence']]
   mask_query: Optional[Query] = None
+
+
+class QueryComplement(NamedTuple):
+  """Applies the complement of a query.
+
+  The unique_key is used to uniquely identify samples. Therefore, the values
+  at that field must remain **unchanged** throughout the application of query.
+  """
+  query: Union[Query, 'QuerySequence']
+  unique_key: str
+
+
+def apply_complement(df: pd.DataFrame,
+                     query_complement: QueryComplement) -> pd.DataFrame:
+  """Applies a QueryComplement.
+
+  If the query transforms the df into a boolean Series, we just return the
+  complement of the mask. For transform operations, we compare the values
+  at query_complement.unique_key of samples initially present, minus those
+  remaining after the application of query_complement.query. This assumes that
+  (i) values in df[query_complement.unique_key] bijectively map to recordings.
+  (ii) query_complement.query **does not** modify in-place this mapping.
+
+  Args:
+    df: The dataframe to apply the QueryComplement on.
+    query_complement: The QueryComplement to apply.
+
+  Returns:
+    The complemented query.
+
+  Raises:
+    ValueError: Some values in df[query_complement.unique_key] are duplicates,
+      which violates condition (i) above.
+  """
+
+  updated_df = APPLY_FN[type(query_complement.query)](df,
+                                                      query_complement.query)
+  # If the query used a MaskOp (yields a boolean Series), we return the
+  # complement of this boolean Series.
+  if isinstance(query_complement.query, MaskOp):
+    return ~updated_df
+  # For other transformations, we use the unique_key to return the complement.
+  else:
+    key = query_complement.unique_key
+    if df[key].duplicated().any():
+      raise ValueError(f'The values at {key} should uniquely define each'
+                       'recording. Currently, some recordings share a similar'
+                       'value.')
+    complement_values = set(df[key]) - set(updated_df[key])
+    comp_mask = df[key].apply(lambda v: v in complement_values)
+    return df[comp_mask]
 
 
 def apply_query(
@@ -88,14 +138,7 @@ def apply_query(
   Returns:
     The new version of the dataFrame (or Series) after applying the query.
   """
-  if query.complement and not isinstance(query.op, MaskOp):
-    raise ValueError(
-        'Taking the complement of a non masking query does not make sense.')
-  updated_df = OPS[query.op](df, **query.kwargs)
-  if query.complement:
-    return ~updated_df
-  else:
-    return updated_df
+  return OPS[query.op](df, **query.kwargs)
 
 
 def apply_sequence(
@@ -215,13 +258,14 @@ def filter_df(df: pd.DataFrame, mask_op: MaskOp,
   Returns:
     The filtered dataframe
   """
-  mask_query = Query(op=mask_op, kwargs=op_kwargs, complement=False)
+  mask_query = Query(op=mask_op, kwargs=op_kwargs)
   return df[APPLY_FN[type(mask_query)](df, mask_query)]
 
 
 APPLY_FN = {
     Query: apply_query,
     QuerySequence: apply_sequence,
+    QueryComplement: apply_complement,
 }
 
 OPS = {
