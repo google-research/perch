@@ -272,6 +272,98 @@ class QueryTest(DataProcessingTest):
       fsu.apply_complement(df, fsu.QueryComplement(filter_query, 'unique_key'))
 
 
+class QueryParallelTest(DataProcessingTest):
+
+  def test_merge_or(self):
+
+    # Add is mostly useful to simulate OR operations on masking queries
+    mask_query_1 = fsu.Query(fsu.MaskOp.IN, {
+        'key': 'Country',
+        'values': ['Colombia']
+    })
+    mask_query_2 = fsu.Query(fsu.MaskOp.IN, {
+        'key': 'species_code',
+        'values': ['grerhe1']
+    })
+
+    query_parallel = fsu.QueryParallel([mask_query_1, mask_query_2],
+                                       fsu.MergeStrategy.OR)
+    mask = fsu.apply_parallel(self.toy_df, query_parallel)
+    self.assertEqual(mask.tolist(), [True, False, True])
+    self.assertIn('Colombia', self.toy_df[mask]['Country'].tolist())
+    self.assertIn('grerhe1', self.toy_df[mask]['species_code'].tolist())
+
+    # Ensure an error is raised if any element is not a boolean Series.
+    with self.assertRaises(TypeError):
+      fsu.or_series([
+          self.toy_df['species_code'], self.toy_df['species_code'] == 'ostric2'
+      ])
+
+    # Ensure an error is raised if Series don't pertain to the same set of
+    # recordings.
+    with self.assertRaises(RuntimeError):
+      fsu.or_series([
+          self.toy_df.drop(0)['species_code'] == 'ostric2',
+          self.toy_df['species_code'] == 'ostric2'
+      ])
+
+  def test_merge_concat_no_duplicates(self):
+
+    filter_query_1 = fsu.Query(
+        fsu.TransformOp.FILTER, {
+            'mask_op': fsu.MaskOp.IN,
+            'op_kwargs': {
+                'key': 'Country',
+                'values': ['Colombia']
+            }
+        })
+    filter_query_2 = fsu.Query(
+        fsu.TransformOp.FILTER, {
+            'mask_op': fsu.MaskOp.IN,
+            'op_kwargs': {
+                'key': 'Country',
+                'values': ['Colombia', 'Australia']
+            }
+        })
+    scrub_query = fsu.Query(fsu.TransformOp.SCRUB, {
+        'key': 'bg_labels',
+        'values': ['ostric3']
+    })
+
+    # First recording will be selected by both queries (i.e. duplicate). The
+    # following ensures it only appears once in the result when using
+    # CONCAT_NO_DUPLICATES
+    query_parallel = fsu.QueryParallel([filter_query_1, filter_query_2],
+                                       fsu.MergeStrategy.CONCAT_NO_DUPLICATES)
+    self.assertTrue(
+        fsu.apply_parallel(self.toy_df,
+                           query_parallel).equals(self.toy_df.drop(2)))
+
+    # In the following, we also apply scrubbing in the second Query. This
+    # scrubbing will modify the first recording, and therefore it shouldn't be
+    # counted as a duplicate anymore. In the final df, we should find two
+    # versions of the first recording (the original, and the scrubbed one).
+    query_parallel = fsu.QueryParallel(
+        [filter_query_1,
+         fsu.QuerySequence([filter_query_2, scrub_query])],
+        fsu.MergeStrategy.CONCAT_NO_DUPLICATES)
+    scrubbed_r0 = self.toy_df.copy().loc[0]
+    scrubbed_r0['bg_labels'] = ['grerhe1']
+    # Here we don't use assertEqual with the .to_dict() because .to_dict()
+    # automatically removes duplicate indexes, making it impossible to know
+    # if duplicates were removed because of our merging strategy or because
+    # of .to_dict().
+    self.assertTrue(
+        fsu.apply_parallel(self.toy_df, query_parallel).equals(
+            self.toy_df.loc[[0]].append([scrubbed_r0, self.toy_df.loc[1]])))
+
+    # Ensure the concatenation raises an error if the two dataframes don't have
+    # the exact same columns.
+    with self.assertRaises(RuntimeError):
+      fsu.concat_no_duplicates(
+          [self.toy_df, self.toy_df[['species_code', 'bg_labels']]])
+
+
 class QuerySequenceTest(DataProcessingTest):
 
   def test_untargeted_filter_scrub(self):

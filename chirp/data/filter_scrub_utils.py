@@ -23,6 +23,12 @@ import numpy as np
 import pandas as pd
 
 
+class MergeStrategy(enum.Enum):
+  """Strategy used to merge the results of parallel queries in QueryParallel."""
+  OR = 'or'
+  CONCAT_NO_DUPLICATES = 'concat_no_duplicates'
+
+
 class MaskOp(enum.Enum):
   """Operations used for selecting samples.
 
@@ -63,15 +69,26 @@ class Query(NamedTuple):
 
 
 class QuerySequence(NamedTuple):
-  """A sequence of Queries.
+  """A sequence of Queries to be applied sequentially.
 
   Contains a sequence of Query to be applied sequentially on a dataframe.
   This sequence can be targeted to a subpopulation of samples through specifying
   a mask_query (i.e. a Query whose op is a MaskOp), for instance only
   scrubbing bg_labels from a specific subset of species.
   """
-  queries: Sequence[Union[Query, 'QuerySequence']]
-  mask_query: Optional[Query] = None
+  queries: Sequence[Union[Query, 'QuerySequence', 'QueryParallel']]
+  mask_query: Optional[Union[Query, 'QueryParallel']] = None
+
+
+class QueryParallel(NamedTuple):
+  """A sequence of Queries to be applied in parallel.
+
+  Contains a sequence of Query to be applied in parallel from a given dataframe.
+  Once all queries have been independently executed, we merge the resulting df
+  using the merge_strategy defined.
+  """
+  queries: Sequence[Union[Query, QuerySequence, 'QueryParallel']]
+  merge_strategy: MergeStrategy
 
 
 class QueryComplement(NamedTuple):
@@ -171,6 +188,29 @@ def apply_sequence(
     return df
 
 
+def apply_parallel(
+    df: pd.DataFrame,
+    query_parallel: QueryParallel,
+) -> Union[pd.DataFrame, pd.Series]:
+  """Applies a QueryParallel to a DataFrame.
+
+  Args:
+    df: The DataFrame on which to apply the query.
+    query_parallel: The QueryParallel to apply to df.
+
+  Returns:
+    The updated version of the df, where all the queries in
+    query_sequence.queries
+    have been sequentially applied in the specified order.
+  """
+  all_dfs = []
+  for query in query_parallel.queries:
+    all_dfs.append(APPLY_FN[type(query)](df, query))
+
+  final_df = MERGE_FN[query_parallel.merge_strategy](all_dfs)
+  return final_df
+
+
 def is_in(feature_dict: Dict[str, Any], key: str,
           values: List[SerializableType]) -> bool:
   """Ensures if feature_dict[key] is in values.
@@ -186,6 +226,11 @@ def is_in(feature_dict: Dict[str, Any], key: str,
 
   Returns:
     True if feature_dict[key] is in values, False otherwise.
+
+  Raises:
+    ValueError: 'key' does not exist in df.
+    TypeError: any element of 'values' has a type different from the type at
+      df[key].
   """
   if key not in feature_dict:
     raise ValueError(f'{key} is not a correct field. Please choose among'
@@ -219,6 +264,11 @@ def scrub(feature_dict: Dict[str, Any],
 
   Returns:
     A copy of feature_dict, where all values at key have been scrubbed.
+
+  Raises:
+    ValueError: 'key' does not exist in df.
+    TypeError: any element of 'values' has a type different from the type at
+      df[key], or feature_dict[key] is not a list or np.ndarray.
   """
 
   if key not in feature_dict:
@@ -262,10 +312,65 @@ def filter_df(df: pd.DataFrame, mask_op: MaskOp,
   return df[APPLY_FN[type(mask_query)](df, mask_query)]
 
 
+def or_series(series_list: List[pd.Series]) -> pd.Series:
+  """Performs an OR operation on a list of boolean pd.Series.
+
+  Args:
+    series_list: List of boolean pd.Series to perform OR on.
+
+  Returns:
+    The result of s_1 or ... or s_N, for s_i in series_list.
+
+  Raises:
+    TypeError: Some series in series_list is has non boolean values.
+    RuntimeError: The series's indexes in series_list don't match, potentially
+     meaning that series don't describe the same recordings.
+  """
+  reference_indexes = series_list[0].index
+  if any([not series.index.equals(reference_indexes) for series in series_list
+         ]):
+    raise RuntimeError('OR operation expects consistent Series as input')
+  if any([series.dtype != bool for series in series_list]):
+    raise TypeError('OR operation expects boolean Series as input.')
+  return functools.reduce(lambda s1, s2: s1.add(s2), series_list)
+
+
+def concat_no_duplicates(df_list: List[pd.DataFrame]) -> pd.DataFrame:
+  """Concatenates dataframes in df_list, then removes duplicates examples.
+
+  Args:
+    df_list: The list of dataframes to concatenate.
+
+  Returns:
+    The concatenated dataframe, where potential duplicated rows have been
+    dropped.
+
+  Raises:
+    RuntimeError: Some series in series_list don't share the same columns.
+  """
+  reference_columns = set(df_list[0].columns)
+  if any([set(df.columns) != reference_columns for df in df_list]):
+    raise RuntimeError('Concatenation expects dataframes to share the exact '
+                       'same set of columns.')
+  concat_df = pd.concat(df_list)
+  # List and np.ndarray are not hashable, therefore the method
+  # .duplicated() will raise an error if any of the value is of this type.
+  # Instead convert to tuples for the sake of duplicate verification.
+  duplicated = concat_df.applymap(
+      lambda e: tuple(e) if type(e) in [list, np.ndarray] else e).duplicated()
+  return concat_df[~duplicated]
+
+
 APPLY_FN = {
     Query: apply_query,
     QuerySequence: apply_sequence,
     QueryComplement: apply_complement,
+    QueryParallel: apply_parallel,
+}
+
+MERGE_FN = {
+    MergeStrategy.OR: or_series,
+    MergeStrategy.CONCAT_NO_DUPLICATES: concat_no_duplicates
 }
 
 OPS = {
