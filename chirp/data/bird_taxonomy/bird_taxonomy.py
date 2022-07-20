@@ -26,6 +26,7 @@ import warnings
 from absl import logging
 from chirp import audio_utils
 from chirp.data import filter_scrub_utils as fsu
+from chirp.data.bird_taxonomy import premade_queries
 from etils import epath
 import numpy as np
 import pandas as pd
@@ -132,7 +133,7 @@ class Int16AsFloatTensor(tfds.features.Audio):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.1.2')
+  VERSION = tfds.core.Version('1.2.0')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
       '1.1.0': ('Switched to higher sampling rate, added recording metadata '
@@ -140,6 +141,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       '1.1.1': 'Added slice_peaked_tiny config.',
       '1.1.2': 'Kept previous tiny_config as reference, but also added a tiny'
                'version generated with queries.',
+      '1.2.0': 'Added upstream data config.',
   }
   TINY_SPECIES = ('ostric2', 'piebar1')
   BUILDER_CONFIGS = [
@@ -193,8 +195,16 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                           'values': list(TINY_SPECIES)
                       }
                   }),
-          ]),
-      ),
+          ])),
+      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+          name='upstream_slice_peaked',
+          localization_fn=audio_utils.slice_peaked_audio,
+          interval_length_s=6.0,
+          data_processing_query=premade_queries.get_upstream_data_query(),
+          metadata_processing_query=premade_queries.get_upstream_metadata_query(
+          ),
+          description=('Upstream data version with chunked audio sequences '
+                       'processed with chirp.audio_utils.slice_peaked_audio.')),
       BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
           name='full_length',
           localization_fn=None,
@@ -202,7 +212,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   ]
 
   GCS_URL = epath.Path('gs://chirp-public-bucket/xeno-canto')
-  TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-05-31.json'
+  TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-07-07.json'
 
   def _load_taxonomy_metadata(self, disable_filtering=False) -> pd.DataFrame:
     file_path = (
@@ -366,7 +376,6 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       # We apply all the processing queries.
       source_info = fsu.apply_sequence(
           source_info, self.builder_config.data_processing_query)
-
     # Remap '' and 'no score' scores to 'E' (the worst score).
     source_info['quality_score'] = source_info['quality_score'].map(
         lambda s: 'E' if s in ('', 'no score') else s)

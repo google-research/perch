@@ -209,11 +209,30 @@ class QueryTest(DataProcessingTest):
   def test_masking_query(self):
     """Ensure masking queries work as expected."""
 
-    # Test mask query
     mask_query = fsu.Query(
         op=fsu.MaskOp.IN, kwargs={
             'key': 'species_code',
             'values': ['ostric2']
+        })
+    self.assertEqual(
+        fsu.apply_query(self.toy_df, mask_query).tolist(), [True, False, False])
+
+  def test_contains_query(self):
+
+    mask_query = fsu.Query(
+        op=fsu.MaskOp.CONTAINS_ANY,
+        kwargs={
+            'key': 'bg_labels',
+            'values': ['ostric2']
+        })
+    self.assertEqual(
+        fsu.apply_query(self.toy_df, mask_query).tolist(), [False, True, True])
+
+    mask_query = fsu.Query(
+        op=fsu.MaskOp.CONTAINS_NO,
+        kwargs={
+            'key': 'bg_labels',
+            'values': ['ostric1', 'ostric2']
         })
     self.assertEqual(
         fsu.apply_query(self.toy_df, mask_query).tolist(), [True, False, False])
@@ -233,7 +252,7 @@ class QueryTest(DataProcessingTest):
                                 ['ostric3']]
     self.assertEqual(expected_df.to_dict(), df.to_dict())
 
-  def test_complement(self):
+  def test_complemented_query(self):
     df = self.toy_df.copy()
     df['unique_key'] = [0, 1, 2]
 

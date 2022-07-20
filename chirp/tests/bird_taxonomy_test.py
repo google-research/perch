@@ -19,6 +19,7 @@ import shutil
 import tempfile
 from unittest import mock
 
+from chirp.data import filter_scrub_utils as fsu
 from chirp.data.bird_taxonomy import bird_taxonomy
 from etils import epath
 import numpy as np
@@ -56,10 +57,14 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
     mock_load_taxonomy_metadata.return_value = pd.read_json(
         cls.EXAMPLE_DIR /
         'taxonomy_info.json')[['species_code', 'genus', 'family', 'order']]
-
     cls.url_patcher = mock.patch.object(cls.DATASET_CLASS, 'GCS_URL',
                                         epath.Path(cls.tempdir))
+
+    cls.data_query_patcher = mock.patch.object(
+        cls.DATASET_CLASS.BUILDER_CONFIGS[3], 'data_processing_query',
+        fsu.QuerySequence([]))
     cls.url_patcher.start()
+    cls.data_query_patcher.start()
     subdir = epath.Path(cls.tempdir) / 'audio-data' / 'fakecode1'
     subdir.mkdir(parents=True)
     for i in range(4):
@@ -72,6 +77,7 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
 
     cls.metadata_patcher.stop()
     cls.url_patcher.stop()
+    cls.data_query_patcher.stop()
     shutil.rmtree(cls.tempdir)
 
 

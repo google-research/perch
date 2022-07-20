@@ -36,6 +36,8 @@ class MaskOp(enum.Enum):
   selected samples.
   """
   NOT_IN = 'not_in'
+  CONTAINS_NO = 'contains_no'
+  CONTAINS_ANY = 'contains_any'
   IN = 'in'
 
 
@@ -50,7 +52,8 @@ class TransformOp(enum.Enum):
   SAMPLE_UNDER_CONSTRAINTS = 'sample_under_constraints'
 
 
-SerializableType = Union[List[Union[int, str, bytes]], MaskOp, TransformOp]
+SerializableType = Union[List[Union[int, str, bytes]], MaskOp, TransformOp,
+                         Dict]
 
 
 class Query(NamedTuple):
@@ -244,6 +247,59 @@ def is_in(feature_dict: Dict[str, Any], key: str,
   return feature_dict[key] in values
 
 
+def contains_any(feature_dict: Dict[str, Any], key: str,
+                 values: List[SerializableType]) -> bool:
+  """Checks if feature_dict[key] contains any of the values.
+
+  Args:
+    feature_dict: A dictionary that represents a recording (row in the dataframe
+      of audios). Note that feature_dict[key] must be a Sequence, e.g. the
+      background labels.
+    key: The field from feature_dict used to check.
+    values: list of values such that if any element of this list is in
+      feature_dict[key], the function returns True
+
+  Returns:
+    True if any value in values is in feature_dict[key] , False otherwise.
+
+  Raises:
+    ValueError: key does not exist in df.
+    TypeError: feature_dict[key] is neither a list or np.ndarray, therefore
+      checking if it contains anything can have unexpected behaviour.
+  """
+  return not contains_no(feature_dict, key, values)
+
+
+def contains_no(feature_dict: Dict[str, Any], key: str,
+                values: List[SerializableType]) -> bool:
+  """Checks that feature_dict[key] contains none of the values.
+
+  Args:
+    feature_dict: A dictionary that represents a recording (row in the dataframe
+      of audios). Note that feature_dict[key] must be a Sequence, e.g. the
+      background labels.
+    key: The field from feature_dict used to check.
+    values: The values that must not be in feature_dict[key] in order to trigger
+      a True response.
+
+  Returns:
+    True if feature_dict[key] contains no element in values, False otherwise.
+
+  Raises:
+    ValueError: key does not exist in df.
+    TypeError: feature_dict[key] is neither a list or np.ndarray, therefore
+      checking if it contains anything can have unexpected behaviour.
+  """
+  if key not in feature_dict:
+    raise ValueError(f'{key} is not a correct field. Please choose among'
+                     f'{list(feature_dict.keys())}')
+  if type(feature_dict[key]) not in [list, np.ndarray]:
+    raise TypeError(
+        f'{feature_dict[key]} must be a Sequence to check if it contains anything.'
+    )
+  return all([v not in feature_dict[key] for v in values])
+
+
 def is_not_in(feature_dict: Dict[str, Any], key: str,
               values: List[SerializableType]) -> bool:
   return not is_in(feature_dict, key, values)
@@ -377,6 +433,16 @@ OPS = {
     MaskOp.IN:
         lambda df, **kwargs: df.apply(
             functools.partial(is_in, **kwargs), axis=1, result_type='expand'),
+    MaskOp.CONTAINS_NO:
+        lambda df, **kwargs: df.apply(
+            functools.partial(contains_no, **kwargs),
+            axis=1,
+            result_type='expand'),
+    MaskOp.CONTAINS_ANY:
+        lambda df, **kwargs: df.apply(
+            functools.partial(contains_any, **kwargs),
+            axis=1,
+            result_type='expand'),
     MaskOp.NOT_IN:
         lambda df, **kwargs: df.apply(
             functools.partial(is_not_in, **kwargs),
