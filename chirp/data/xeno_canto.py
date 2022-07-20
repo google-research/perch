@@ -784,12 +784,20 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
   xeno_canto_query_to_species_code = dict(
       zip(taxonomy_info['xeno_canto_query'], taxonomy_info['species_code']))
 
+  # Assume some species s has had naming collisions. At this stage, all rows
+  # pertaining to species s have been merged into a single row, with merged
+  # xeno_canto_queries "name_s1, name_s2, ...". When a background annotation
+  # uses e.g. name_s1 to describe species s,
+  # checking "name_s1" in ["name_0", .., "name_s1, name_s2, ...", ..]returns
+  # False, while we'd be expecting True. Therefore, we split on ',' before
+  # checking if an annotation is in xeno_canto_query's keys.
   def _to_species_codes(background_species):
-    return [
-        xeno_canto_query_to_species_code[q]
-        for q in background_species
-        if q in xeno_canto_query_to_species_code
-    ]
+    result = []
+    for q in background_species:
+      for s in xeno_canto_query_to_species_code:
+        if q in s.split(','):
+          result.append(xeno_canto_query_to_species_code[s])
+    return result
 
   taxonomy_info['bg_species_codes'] = taxonomy_info['species_code'].map({
       code: [_to_species_codes(info.background_species) for info in metadata
