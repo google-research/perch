@@ -59,6 +59,7 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
         'rec': '',
         'rmk': '',
         'type': 'song',
+        'length': '1:10',
     }, {
         'file': '',
         'file-name': '',
@@ -79,6 +80,7 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
         'rec': '',
         'rmk': '',
         'type': 'song',
+        'length': '1:10',
     }, {
         'file': f'XC{i:05d}{suffix}',
         'file-name': f'XC{i:05d}{suffix}',
@@ -99,6 +101,7 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
         'rec': '',
         'rmk': '',
         'type': 'song',
+        'length': '1:10',
     }]
 
   # Return recordings in two pages to test resiliency to multi-page results.
@@ -407,6 +410,7 @@ class XenoCantoTest(parameterized.TestCase):
                   ][i]],
                   xc_license='cc-by',
                   altitude='0',
+                  length='1:10',
                   bird_seen='yes',
                   country='',
                   latitude='0.0',
@@ -497,6 +501,7 @@ class XenoCantoTest(parameterized.TestCase):
     expected = taxonomy_info.copy().drop(columns=['No.'])
     expected['xeno_canto_ids'] = [['00000'], ['00001'], ['00002']]
     expected['altitudes'] = [['0'], ['0'], ['0']]
+    expected['lengths'] = [['1:10'], ['1:10'], ['1:10']]
     expected['bird_seen'] = [['yes'], ['yes'], ['yes']]
     expected['countries'] = [[''], [''], ['']]
     expected['file_formats'] = [['mp3'], ['mp3'], ['mp3']]

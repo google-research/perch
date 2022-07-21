@@ -16,7 +16,7 @@
 """Scrapes the Xeno-Canto website for taxonomy and audio data."""
 
 import functools
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Union
 
 from absl import app
 from absl import flags
@@ -48,7 +48,7 @@ def collect_info(output_dir: str, taxonomy_info_filename: str,
     include_nd_recordings: whether to include ND-licensed recordings.
   """
   taxonomy_info = xeno_canto.create_taxonomy_info(
-      xeno_canto.SpeciesMappingConfig())
+      xeno_canto.SpeciesMappingConfig(), output_dir)
   taxonomy_info = xeno_canto.retrieve_recording_metadata(
       taxonomy_info, include_nd_recordings)
   with (epath.Path(output_dir) / taxonomy_info_filename).open('w') as f:

@@ -212,7 +212,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   ]
 
   GCS_URL = epath.Path('gs://chirp-public-bucket/xeno-canto')
-  TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-07-07.json'
+  TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-07-18.json'
 
   def _load_taxonomy_metadata(self, disable_filtering=False) -> pd.DataFrame:
     file_path = (
@@ -301,6 +301,8 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                 tfds.features.Text(),
             'altitude':
                 tfds.features.Text(),
+            'length':
+                tfds.features.Text(),
             'bird_seen':
                 tfds.features.Text(),
             'country':
@@ -346,14 +348,21 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     # to the other columns and resetting the index.
     source_info = taxonomy_info[taxonomy_info['xeno_canto_ids'].map(
         lambda xc_ids: bool(len(xc_ids)))].set_index([
-            'species_code', 'xeno_canto_query', 'scientific_name', 'species',
-            'genus', 'family', 'order', 'common_name'
+            'species_code',
+            'xeno_canto_query',
+            'scientific_name',
+            'species',
+            'genus',
+            'family',
+            'order',
+            'common_name',
         ]).apply(
             pd.Series.explode, axis=0).reset_index()
     # Rename columns to reflect the fact that they contain one value per row.
     renames = {
         'xeno_canto_ids': 'xeno_canto_id',
         'altitudes': 'altitude',
+        'lengths': 'length',
         'countries': 'country',
         'file_formats': 'file_format',
         'latitudes': 'latitude',
@@ -427,6 +436,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           'quality_score': source['quality_score'],
           'license': source['license'],
           'altitude': source['altitude'],
+          'length': source['length'],
           'bird_seen': source['bird_seen'],
           'country': source['country'],
           'latitude': source['latitude'],
@@ -453,7 +463,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                                                      target_length)
         # Pass padded audio to avoid localization_fn having to pad again
         audio_intervals = self.builder_config.localization_fn(
-            audio, sample_rate_hz, interval_length_s)
+            audio, sample_rate_hz, interval_length_s).tolist()
 
         if not audio_intervals:
           # If no peaks were found, we take the first segment of the

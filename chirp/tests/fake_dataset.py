@@ -60,6 +60,8 @@ class FakeDataset(bird_taxonomy.BirdTaxonomy):
               np.random.choice(['South Africa', 'Colombia', 'Namibia']),
           'altitude':
               str(np.random.uniform(0, 3000)),
+          'length':
+              np.random.choice(['1:10', '0:01']),
           'bird_seen':
               np.random.choice(['yes', 'no']),
           'latitude':

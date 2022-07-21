@@ -20,11 +20,13 @@ import concurrent.futures
 import dataclasses
 import hashlib
 import io
+import math
 import re
 import subprocess
 import sys
-from typing import cast, Dict, FrozenSet, Sequence, Tuple, Union
+from typing import Dict, FrozenSet, Optional, Sequence, Tuple, Union, cast
 
+from absl import flags
 from absl import logging
 from etils import epath
 import pandas as pd
@@ -33,12 +35,15 @@ import requests
 import SPARQLWrapper
 import tqdm
 
+FLAGS = flags.FLAGS
 _EBIRD_TAXONOMY_CHECKSUM = (
     'b007a53bf43e401b6f217b15f78d574669af63dae913c670717bde2c56ea829b')
 _EBIRD_TAXONOMY_URL = ('https://www.birds.cornell.edu/clementschecklist/'
                        'wp-content/uploads/2021/08/eBird_Taxonomy_v2021.csv')
+# OLD_WIKIDATA_CHECKSUM = (
+#     '9b54e3a35dc6b2fae34ae22f3b16458ea5348d97dd0b2230073679041ba22eb3')
 _WIKIDATA_CHECKSUM = (
-    '9b54e3a35dc6b2fae34ae22f3b16458ea5348d97dd0b2230073679041ba22eb3')
+    '1889353e1b7a484771c6233ee8a3b5cf4cbac4682748ef5d95324c209412fb31')
 _WIKIDATA_QUERY = """\
 SELECT DISTINCT ?item ?itemLabel ?Xeno_canto_species_ID ?eBird_taxon_ID WHERE {
   SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE]". }
@@ -179,7 +184,8 @@ _ALLOWED_SPECIES_CODE_COLLISIONS = {
 }
 # These Xeno-Canto recordings are unavailable despite having an associated
 # filename.
-_SKIP_XC_IDS = ('104022', '727818')
+_SKIP_XC_IDS = ('104022', '727818', '731297', '737035', '738016', '737986',
+                '737993')
 
 
 @dataclasses.dataclass
@@ -219,6 +225,7 @@ class RecordingInfo:
   xc_license: str  # Recording license.
   background_species: Sequence[str]  # Background species (scientific names).
   altitude: str
+  length: str
   bird_seen: str
   country: str
   latitude: str
@@ -252,17 +259,22 @@ class RecordingInfo:
         quality_score=info_dict['q'],
         recordist=info_dict['rec'],
         remarks=info_dict['rmk'],
-        sound_type=info_dict['type'])
+        sound_type=info_dict['type'],
+        length=info_dict['length'])
 
 
-def _infer_species_codes_from_wikidata(taxonomy_info: pd.DataFrame,
-                                       overrides: Dict[str, str]) -> pd.Series:
+def _infer_species_codes_from_wikidata(
+    taxonomy_info: pd.DataFrame,
+    overrides: Dict[str, str],
+    output_dir: Optional[str] = None) -> pd.Series:
   """Infers each species' code from data obtained through a Wikidata query.
 
   Args:
     taxonomy_info: Xeno-Canto taxonomy DataFrame.
     overrides: dict used to override species code mappings obtained from
       Wikidata.
+    output_dir: An optional directory to write a checksum of the result of the
+      wikidata query.
 
   Returns:
     The species codes for each row in the species table, with NaN values when
@@ -282,8 +294,15 @@ def _infer_species_codes_from_wikidata(taxonomy_info: pd.DataFrame,
       (item['eBird_taxon_ID']['value'], item['Xeno_canto_species_ID']['value'])
       for item in sparql.queryAndConvert()['results']['bindings'])
 
-  if hashlib.sha256(
-      str(matches).encode('utf-8')).hexdigest() != _WIKIDATA_CHECKSUM:
+  current_checksum = hashlib.sha256(str(matches).encode('utf-8')).hexdigest()
+
+  if output_dir is not None:
+    # Serialize the current matches for potentially inspection.
+    with (epath.Path(output_dir) /
+          f'wiki_matches_{current_checksum}.txt').open('w') as f:
+      f.writelines([f'{((t[0], t[1]))}\n' for t in matches])
+  # Still raising an error if checksums are different !
+  if current_checksum != _WIKIDATA_CHECKSUM:
     raise RuntimeError('Return value for the Wikidata SPARQL query has the '
                        'wrong checksum value.')
 
@@ -499,6 +518,7 @@ def _scrape_xeno_canto_recording_metadata(
   @ratelimiter.RateLimiter(max_calls=_XC_API_RATE_LIMIT, period=1)
   def retrieve_recording_info_dicts(row):
     species_code = row['species_code']
+    logging.info(species_code)
     recording_info_dicts = []
     for query in row['xeno_canto_query'].replace(' ', '%20').split(','):
       genus = query.split('%20')[0]
@@ -566,8 +586,8 @@ def _scrape_xeno_canto_recording_metadata(
   return species_code_to_recording_metadata
 
 
-def create_taxonomy_info(
-    species_mapping_config: SpeciesMappingConfig) -> pd.DataFrame:
+def create_taxonomy_info(species_mapping_config: SpeciesMappingConfig,
+                         output_dir: Optional[str] = None) -> pd.DataFrame:
   """Creates a taxonomy DataFrame for Xeno-Canto species.
 
   The DataFrame is populated with the following columns:
@@ -584,6 +604,8 @@ def create_taxonomy_info(
   Args:
     species_mapping_config: configuration values used to create the mapping from
       species name to species code.
+    output_dir: An optional path for the called functions to write potential
+      checksums.
 
   Returns:
     A taxonomy DataFrame for Xeno-Canto species.
@@ -606,7 +628,7 @@ def create_taxonomy_info(
   logging.info('Querying Wikidata to infer species codes...')
   overrides = species_mapping_config.scientific_name_to_species_code_overrides
   taxonomy_info['species_code'] = _infer_species_codes_from_wikidata(
-      taxonomy_info, overrides=overrides)
+      taxonomy_info, overrides=overrides, output_dir=output_dir)
 
   # Sometimes Wikidata causes false positives by matching a Xeno-Canto species
   # to a nonexistent eBird code. To remove false positives, we create an
@@ -736,6 +758,7 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
   * 'quality_scores': list of recording quality scores.
   * 'licenses': list of licenses.
   * 'altitudes': list of recording altitudes.
+  * 'lengths': list of recording's lenghts.
   * 'bird_seen': list of booleans indicating whether the bird was seen.
   * 'countries': list of recording countries.
   * 'latitudes': list of recording latitudes.
@@ -763,6 +786,7 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
   column_and_attribute_names = (
       ('xeno_canto_ids', 'xc_id'),
       ('altitudes', 'altitude'),
+      ('lengths', 'length'),
       ('bird_seen', 'bird_seen'),
       ('countries', 'country'),
       ('file_formats', 'xc_format'),
