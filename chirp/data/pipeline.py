@@ -152,6 +152,7 @@ def multi_hot(
       logging.warning('Removing dataset feature %s with unsupported dtype %s',
                       k, v.dtype)
       del_keys.append(k)
+  del_keys = [k for k in del_keys if k in example]
   for k in del_keys:
     del example[k]
 
@@ -214,7 +215,7 @@ def get_dataset(split: str,
   ds = ds.batch(per_device_batch_size, drop_remainder=True)
 
   ds = ds.map(process_batch, num_parallel_calls=tf.data.AUTOTUNE)
-  ds = ds.batch(jax.device_count(), drop_remainder=True)
+  ds = ds.batch(jax.local_device_count(), drop_remainder=True)
   if 'train' in split:
     ds = ds.repeat()
   if 'train' in split and tf_data_service_address:
