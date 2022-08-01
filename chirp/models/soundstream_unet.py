@@ -124,8 +124,7 @@ class SeparatorBlock(nn.Module):
           groups=self.groups,
           residual_scalar=self.residual_scalar,
           padding=self.padding)(x, train)
-    # TODO(tomdenton): Change to reduction_axes=(-2, -1) ASAP.
-    x = nn.normalization.LayerNorm(reduction_axis=-2)(x)
+    x = nn.normalization.LayerNorm(reduction_axes=(-2, -1))(x)
     x = nn.swish(x)
 
     if self.is_encoder:
@@ -190,8 +189,7 @@ class SoundstreamUNet(nn.Module):
         use_bias=True,
         padding=self.padding)(
             inputs)
-    # TODO(tomdenton): Change to reduction_axes=(-2, -1) ASAP.
-    x = nn.normalization.LayerNorm(reduction_axis=-2)(x)
+    x = nn.normalization.LayerNorm(reduction_axes=(-2, -1))(x)
     x = nn.swish(x)
 
     # Encoder!
