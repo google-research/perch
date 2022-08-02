@@ -109,18 +109,21 @@ class TrainTest(absltest.TestCase):
     # NOTE: This test might fail when run on a machine that has a GPU but when
     # CUDA is not linked (JAX will detect the GPU so jax2tf will try to create
     # a TF graph on the GPU and fail)
-    config = self._get_test_config()
-    config.init_config.model_config.frontend.use_tf_stft = True
+    config = self._get_test_config(use_const_encoder=True)
+    config.init_config.model_config.frontend.use_tf_stft = False
 
     _, dataset_info = self._get_test_dataset(config)
 
     model_bundle, train_state = train.initialize_model(
         dataset_info, workdir=self.train_dir, **config.init_config)
 
-    train.export_tf_lite(model_bundle, train_state, self.train_dir,
-                         config.init_config.input_size)
+    train.export_tf(model_bundle, train_state, self.train_dir,
+                    config.init_config.input_size)
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))
+    self.assertTrue(
+        tf.io.gfile.exists(
+            os.path.join(self.train_dir, "savedmodel/saved_model.pb")))
 
   def test_init_baseline(self):
     # Ensure that we can initialize the model with the baseline config.

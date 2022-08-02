@@ -61,7 +61,7 @@ def main(argv: Sequence[str]) -> None:
   elif _MODE.value == EVAL:
     # TODO(tomdenton): Better eval scheme for separation.
     valid_dataset, dataset_info = pipeline.get_dataset(
-        "test_caples", **config.eval_data_config)
+        TRAIN, **config.eval_data_config)
   if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
     raise ValueError("Dataset sample rate must match config sample rate.")
 

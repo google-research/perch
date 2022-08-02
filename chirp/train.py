@@ -15,10 +15,11 @@
 
 """Training loop."""
 import functools
-import os
 import time
 from typing import Optional
+
 from absl import logging
+from chirp import export_utils
 from chirp.models import class_average
 from chirp.models import metrics
 from chirp.models import taxonomy_model
@@ -34,7 +35,6 @@ import jax
 from jax import numpy as jnp
 from jax import random
 from jax import tree_util
-from jax.experimental import jax2tf
 from ml_collections import config_dict
 import numpy as np
 import optax
@@ -261,7 +261,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
     with jax.profiler.StepTraceAnnotation("train", step_num=step):
       batch = next(train_iterator)
       step_key, key = random.split(key)
-      step_key = random.split(step_key, num=jax.device_count())
+      step_key = random.split(step_key, num=jax.local_device_count())
       train_metrics, train_state = update_step(step_key, batch, train_state)
       train_metrics = flax_utils.unreplicate(train_metrics)
 
@@ -334,7 +334,7 @@ def evaluate_loop(model_bundle: ModelBundle,
   writer = metric_writers.create_default_writer(logdir)
   reporter = periodic_actions.ReportProgress(
       num_train_steps=num_train_steps, writer=writer)
-  # Initialize last_step to zero so we always run at least one eval.
+  # Initialize last_step to -1 so we always run at least one eval.
   last_step = -1
   last_ckpt = ""
 
@@ -354,38 +354,23 @@ def evaluate_loop(model_bundle: ModelBundle,
     evaluate(model_bundle, flax_utils.replicate(train_state), valid_dataset,
              writer, reporter, eval_steps_per_checkpoint)
     if tflite_export:
-      export_tf_lite(model_bundle, train_state, workdir, input_size)
+      export_tf(model_bundle, train_state, workdir, input_size)
     last_step = int(train_state.step)
     last_ckpt = ckpt.latest_checkpoint
 
 
-def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,
-                   workdir: str, input_size: int):
-  """Write a TFLite flatbuffer."""
+def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
+              input_size: int):
+  """Export SavedModel and TFLite."""
   variables = {"params": train_state.params, **train_state.model_state}
 
-  def infer_fn(audio_batch):
+  def infer_fn(audio_batch, variables):
     model_outputs = model_bundle.model.apply(
         variables, audio_batch, train=False)
-    return model_outputs.label
+    return model_outputs.label, model_outputs.embedding
 
-  tf_predict = tf.function(
-      jax2tf.convert(infer_fn, enable_xla=False),
-      input_signature=[
-          tf.TensorSpec(shape=[1, input_size], dtype=tf.float32, name="input")
-      ],
-      autograph=False)
-
-  converter = tf.lite.TFLiteConverter.from_concrete_functions(
-      [tf_predict.get_concrete_function()], tf_predict)
-
-  converter.target_spec.supported_ops = [
-      tf.lite.OpsSet.TFLITE_BUILTINS,  # enable TensorFlow Lite ops.
-      tf.lite.OpsSet.SELECT_TF_OPS  # enable TensorFlow ops.
-  ]
-  tflite_float_model = converter.convert()
-
-  if not tf.io.gfile.exists(workdir):
-    tf.io.gfile.makedirs(workdir)
-  with tf.io.gfile.GFile(os.path.join(workdir, "model.tflite"), "wb") as f:
-    f.write(tflite_float_model)
+  # Note: Polymorphic batch size currently isn't working with the STFT op,
+  # so we provide a static batch size.
+  converted_model = export_utils.Jax2TfModelWrapper(infer_fn, variables,
+                                                    [1, input_size], False)
+  converted_model.export_converted_model(workdir, train_state.step)

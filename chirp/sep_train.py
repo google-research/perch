@@ -17,8 +17,10 @@
 
 import functools
 import time
+from typing import Optional
 
 from absl import logging
+from chirp import export_utils
 from chirp.models import metrics
 from chirp.models import separation_model
 from clu import checkpoint
@@ -229,6 +231,7 @@ def evaluate_loop(model_bundle: ModelBundle,
                   num_train_steps: int,
                   eval_steps_per_checkpoint: int,
                   tflite_export: bool = False,
+                  frame_size: Optional[int] = None,
                   eval_sleep_s: int = EVAL_LOOP_SLEEP_S):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -254,6 +257,35 @@ def evaluate_loop(model_bundle: ModelBundle,
     evaluate(model_bundle, train_state, valid_dataset, writer, reporter,
              eval_steps_per_checkpoint)
     if tflite_export:
-      raise NotImplementedError()
+      export_tf(model_bundle, train_state, workdir, frame_size)
     last_step = int(train_state.step)
     last_ckpt = ckpt.latest_checkpoint
+
+
+def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
+              frame_size: int):
+  """Write a TFLite flatbuffer.
+
+  Args:
+    model_bundle: The model bundle.
+    train_state: The train state.
+    workdir: Where to place the exported model.
+    frame_size: Frame size for input audio. The exported model will take inputs
+      with shape [B, T//frame_size, frame_size]. This ensures that the time
+      dimension is divisible by the product of all model strides, which allows
+      us to set a polymorphic time dimension. Thus, the frame_size must be
+      divisible by the product of all strides in the model.
+  """
+  variables = {"params": train_state.params, **train_state.model_state}
+
+  def infer_fn(framed_audio_batch, variables):
+    flat_inputs = jnp.reshape(framed_audio_batch,
+                              [framed_audio_batch.shape[0], -1])
+    model_outputs = model_bundle.model.apply(
+        variables, flat_inputs, train=False)
+    return model_outputs
+
+  converted_model = export_utils.Jax2TfModelWrapper(infer_fn, variables,
+                                                    [None, None, frame_size],
+                                                    False)
+  converted_model.export_converted_model(workdir, train_state.step)

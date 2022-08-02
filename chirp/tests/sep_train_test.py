@@ -15,6 +15,7 @@
 
 """Tests for train."""
 
+import os
 import tempfile
 
 from chirp import audio_utils
@@ -27,6 +28,7 @@ from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.tests import fake_dataset
 from clu import checkpoint
 from ml_collections import config_dict
+import tensorflow as tf
 
 from absl.testing import absltest
 
@@ -60,7 +62,7 @@ class TrainSeparationTest(absltest.TestCase):
 
   def _get_test_config(self, use_small_encoder=True) -> config_dict.ConfigDict:
     """Create configuration dictionary for training."""
-    config = separator.get_config("learned")
+    config = separator.get_config()
 
     config.train_data_config.batch_size = 2
     config.train_data_config.window_size_s = 1
@@ -89,7 +91,7 @@ class TrainSeparationTest(absltest.TestCase):
 
   def test_init_baseline(self):
     # Ensure that we can initialize the model with the baseline config.
-    config = separator.get_config("learned")
+    config = separator.get_config()
     config = config_utils.parse_config(config, config_globals.get_globals())
 
     model_bundle, train_state = sep_train.initialize_model(
@@ -110,6 +112,7 @@ class TrainSeparationTest(absltest.TestCase):
 
   def test_eval_one_step(self):
     config = self._get_test_config(use_small_encoder=True)
+    config.init_config.model_config.mask_generator.groups = (1, 1)
     config.eval_config.num_train_steps = 0
 
     ds, _ = self._get_test_dataset("test", config.eval_data_config)
@@ -129,6 +132,19 @@ class TrainSeparationTest(absltest.TestCase):
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)
     self.assertIsNotNone(ckpt.latest_checkpoint)
 
+  def test_export_model(self):
+    config = self._get_test_config(use_small_encoder=True)
+    config.init_config.model_config.mask_generator.groups = (1, 1)
+    model_bundle, train_state = sep_train.initialize_model(
+        workdir=self.train_dir, **config.init_config)
+
+    frame_size = 32 * 2 * 2
+    sep_train.export_tf(model_bundle, train_state, self.train_dir, frame_size)
+    self.assertTrue(
+        tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))
+    self.assertTrue(
+        tf.io.gfile.exists(
+            os.path.join(self.train_dir, "savedmodel/saved_model.pb")))
 
 if __name__ == "__main__":
   absltest.main()
