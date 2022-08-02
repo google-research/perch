@@ -370,7 +370,9 @@ def get_dataset(
     dataset_directory: str = _DEFAULT_DATASET_DIR,
     tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
     tf_data_service_address: Optional[Any] = None,
-    pipeline: Optional[Pipeline] = None
+    pipeline: Optional[Pipeline] = None,
+    shuffle: Optional[bool] = None,
+    repeat: Optional[bool] = None,
 ) -> Tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
   """Returns the placeholder dataset.
 
@@ -381,10 +383,17 @@ def get_dataset(
       instead of using the tfds.builder_from_directory.
     tf_data_service_address: Address for TFDataService.
     pipeline: The preprocessing pipeline to apply to the data.
+    shuffle: Whether to apply shuffling.
+    repeat: Whether to repeat the dataset.
 
   Returns:
     The placeholder dataset.
   """
+  if shuffle is None:
+    shuffle = 'train' in split
+  if repeat is None:
+    repeat = 'train' in split
+
   if tfds_data_dir:
     tfds.core.add_data_dir(tfds_data_dir)
     ds, dataset_info = tfds.load(dataset_directory, split=split, with_info=True)
@@ -392,7 +401,7 @@ def get_dataset(
     builder = tfds.builder_from_directory(dataset_directory)
     ds = builder.as_dataset(split=split)
     dataset_info = builder.info
-  if 'train' in split:
+  if shuffle:
     ds = ds.shuffle(512)
   if pipeline is None:
     pipeline = Pipeline([
@@ -405,7 +414,7 @@ def get_dataset(
     ])
   ds = pipeline(ds, dataset_info)
 
-  if 'train' in split:
+  if repeat:
     ds = ds.repeat()
   if 'train' in split and tf_data_service_address:
     ds = ds.apply(

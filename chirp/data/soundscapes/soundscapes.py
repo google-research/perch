@@ -15,13 +15,15 @@
 
 """Soundscape datasets."""
 
+import collections
 import dataclasses
 import json
 import tempfile
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Set, Tuple
 import warnings
 
 from absl import logging
+from chirp import audio_utils
 from chirp import path_utils
 from chirp.data.bird_taxonomy import bird_taxonomy
 from etils import epath
@@ -105,6 +107,12 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
   }
   BUILDER_CONFIGS = [
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
+          name='caples', # TODO(mboudiaf) Try to interface caples metadata.
+          audio_source='caples',
+          interval_length_s=5.0,
+          localization_fn=audio_utils.slice_peaked_audio,
+          description=('Caples recordings.')),
+      SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
           name='birdclef2019_colombia',
           audio_source='birdclef2019',
           metadata_load_fn=load_birdclef_metadata,
@@ -116,13 +124,14 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
               'altitude': 'Elevation',
               'recordist': 'AuthorID'
           },
+          localization_fn=audio_utils.slice_peaked_audio,
           description=(
               'Colombian recordings from the Birdclef 2019 challenge.')),
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
           name='birdclef2019_ssw',
           audio_source='birdclef2019',
           metadata_load_fn=load_birdclef_metadata,
-          interval_length_s=6.0,
+          interval_length_s=5.0,
           metadata_fields={
               'country': 'Country',
               'longitude': 'Longitude',
@@ -130,53 +139,16 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
               'altitude': 'Elevation',
               'recordist': 'AuthorID'
           },
+          localization_fn=audio_utils.slice_peaked_audio,
           description=('SSW recordings from the Birdclef 2019 challenge.')),
-      SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
-          name='caples', # TODO(mboudiaf) Try to interface caples metadata.
-          audio_source='caples',
-          interval_length_s=6.0,
-          description=('Caples recordings.')),
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
           name='high_sierras',
           audio_source='high_sierras',
-          interval_length_s=6.0,
+          interval_length_s=5.0,
+          localization_fn=audio_utils.slice_peaked_audio,
           description=('High Sierras recordings.')),
   ]
   GCS_URL = epath.Path('gs://chirp-public-bucket/soundscapes')
-
-  def _midpoint2interval(self, midpoint: int, target_length: int, min_t: int,
-                         max_t: int) -> Tuple[int, int]:
-    """Find an interval of a given length that contains the midpoint.
-
-    The three hard constraint are (i) the startpoint of the interval must be
-    >= than min_t, (ii) the endpoint of the interval must be <= max_t and (iii)
-    `midpoint` must be contained in the final interval. Ideally, the interval
-    should be of length target_length, but it may be shorter if the
-    constraints do not permit it.
-
-    Args:
-      midpoint: The point that must be contained in the final interval.
-      target_length: The desired length of the interval.
-      min_t: The lower bound for the startpoint of the interval.
-      max_t: The upper bound for the endpoint of the interval.
-
-    Returns:
-      left_endpoint: The start point of the interval
-      right_endpoint: The end point of the interval
-    """
-    left_endpoint = midpoint - target_length / 2
-    right_endpoint = midpoint + target_length / 2
-
-    # Shift endpoints + crop to ensure constraints (i), (ii) and (iii) in
-    # docstring are satisfied.
-    right_overhang = max(right_endpoint - max_t, 0)
-    left_endpoint -= right_overhang
-    left_overhang = max(min_t - left_endpoint, 0)
-    right_endpoint += left_overhang
-
-    left_endpoint = int(max(min_t, left_endpoint))
-    right_endpoint = int(min(max_t, right_endpoint))
-    return (left_endpoint, right_endpoint)
 
   def _load_segments(self, dl_manager):
     """Load the dataframe of all segments from metadata/."""
@@ -390,15 +362,74 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         'train': self._generate_examples(segments=segments),
     }
 
+  def get_labeled_intervals(
+      self,
+      audio: np.ndarray,
+      file_segments: pd.DataFrame,
+  ) -> Dict[Tuple[int, int], Dict[str, Set[str]]]:
+    """Slices the given audio, and produces labels intervals.
+
+    `file_segments` corresponds to the segments annotated by recordists. The
+    final intervals correspond to slices of the audio where actual signal
+    is observed (according to the `slice_peaked_audio` function), and the
+    corresponding labels correspond to the label from annotated segments which
+    overlap with the slice.
+
+    Args:
+      audio: The full audio file, already loaded.
+      file_segments: The annotated segments for this audio.
+
+    Returns:
+      labeled_intervals: A Dict mapping a (start, end) time of the recording to
+      the sets of species/genus/orders/families present in that interval.
+    """
+    print('Found %d annotations for target file.' % len(file_segments))
+
+    # Slice the audio into intervals
+    sr = self.builder_config.sample_rate_hz
+    # Returns `interval_length_s` long intervals. TODO: change max_intervals to -1
+    # for infinity upper bound.
+    audio_intervals = [
+        (int(st), int(end))
+        for (st, end) in self.builder_config.localization_fn(
+            audio, sr, self.builder_config.interval_length_s, max_intervals=200)
+    ]
+    interval_timestamps = sorted(audio_intervals)
+
+    # Search for intervals with annotations.
+    def _st_end_key(seg):
+      return (int(sr * seg['start_time_s']), int(sr * seg['end_time_s']))
+
+    segments_by_timestamp = {
+        _st_end_key(seg): seg for _, seg in file_segments.iterrows()
+    }
+    labeled_intervals = {}
+    for (st, end) in interval_timestamps:
+      interval_labels = collections.defaultdict(lambda: set([]))
+      for (curr_anno_st, curr_anno_end), seg in segments_by_timestamp.items():
+        # no overlap, interval < anno
+        if end < curr_anno_st:
+          continue
+        # no overlap, interval > anno
+        if curr_anno_end < st:
+          continue
+        # found an overlap!
+        for level in ['label', 'order', 'family', 'genus']:
+          for label in seg[level]:
+            interval_labels[level].add(label)
+      if interval_labels['label']:
+        labeled_intervals[(st, end)] = interval_labels
+    return labeled_intervals
+
   def _generate_examples(self, segments: pd.DataFrame):
     librosa = tfds.core.lazy_imports.librosa
     segment_groups = segments.groupby('filename')
 
     def _process_group(segment_group: pd.DataFrame):
 
-      # Each segment in segment_group will generate a tf.Example. All fields,
-      # except the audio, segment_start and segment_end will be shared between
-      # segments. Therefore, we create a template.
+      # Each segment in segment_group will generate a tf.Example. A lot of
+      # fields, especially metadata ones will be shared between segments.
+      # Therefore, we create a template.
       recording_template = segment_group.iloc[0].copy()
 
       # Load the audio associated with this group of segments
@@ -415,29 +446,27 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           # Resampling can introduce artifacts that push the signal outside the
           # [-1, 1) interval.
           audio = np.clip(audio, -1.0, 1.0 - (1.0 / float(1 << 15)))
-      valid_segments = []
+
+      labeled_intervals = self.get_labeled_intervals(audio, segment_group)
 
       # Remove all the fields we don't need from the recording_template.
       recording_template = recording_template.drop(
           ['stem', 'url', 'start_time_s', 'end_time_s']).to_dict()
 
       # Create a tf.Example for every segment.
-      for index, (_, segment) in enumerate(segment_group.iterrows()):
-        start_s, end_s = segment['start_time_s'], segment['end_time_s']
+      valid_segments = []
+      for index, ((start, end),
+                  segment_labels) in enumerate(labeled_intervals.items()):
         key = f"{recording_template['filename']}_{index}"
-        # Some annotations have end < start. We skip those.
-        if not 0 <= int(start_s * sr) < int(end_s * sr) <= len(audio) - 1:
-          logging.warning('Segment %s\' has end < start. Skipping it.', key)
-        else:
-          midpoint = (int(start_s * sr) + int(end_s * sr)) // 2
-          left, right = self._midpoint2interval(
-              midpoint, int(self.builder_config.interval_length_s * sr), 0,
-              audio.shape[0])
-          valid_segments.append((key, {
-              **recording_template, 'audio': audio[left:right],
-              'segment_start': int(start_s * sr),
-              'segment_end': int(start_s * sr)
-          }))
+        valid_segments.append((key, {
+            **recording_template, 'label': list(segment_labels['label']),
+            'genus': list(segment_labels['genus']),
+            'family': list(segment_labels['family']),
+            'order': list(segment_labels['order']),
+            'audio': audio[start:end],
+            'segment_start': start,
+            'segment_end': end
+        }))
       return valid_segments
 
     for _, group in tqdm.tqdm(segment_groups, total=len(segment_groups)):

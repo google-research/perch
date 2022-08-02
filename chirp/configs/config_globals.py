@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """Define the globals that can be used in configuration files."""
+
 from typing import Any, Dict
 
 from chirp import audio_utils
@@ -23,6 +24,8 @@ from chirp.models import efficientnet
 from chirp.models import frontend
 from chirp.models import layers
 from chirp.models import soundstream_unet
+from chirp.sfda_methods import oracle
+from chirp.sfda_methods import source_only
 from flax import linen as nn
 
 
@@ -31,6 +34,8 @@ def get_globals() -> Dict[str, Any]:
       "audio_utils": audio_utils,
       "conformer": conformer,
       "efficientnet": efficientnet,
+      "source_only": source_only,
+      "oracle": oracle,
       "frontend": frontend,
       "layers": layers,
       "nn": nn,
