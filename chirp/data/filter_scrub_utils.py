@@ -26,6 +26,7 @@ import pandas as pd
 class MergeStrategy(enum.Enum):
   """Strategy used to merge the results of parallel queries in QueryParallel."""
   OR = 'or'
+  AND = 'and'
   CONCAT_NO_DUPLICATES = 'concat_no_duplicates'
 
 
@@ -50,6 +51,7 @@ class TransformOp(enum.Enum):
   SCRUB_ALL_BUT = 'scrub_all_but'
   FILTER = 'filter'
   SAMPLE_UNDER_CONSTRAINTS = 'sample_under_constraints'
+  APPEND = 'append'
 
 
 SerializableType = Union[List[Union[int, str, bytes]], MaskOp, TransformOp,
@@ -305,10 +307,18 @@ def is_not_in(feature_dict: Dict[str, Any], key: str,
   return not is_in(feature_dict, key, values)
 
 
+def append(df: pd.DataFrame, row: Dict[str, Any]):
+  if set(row.keys()) != set(df.columns):
+    raise ValueError
+  new_df = df.append(row, ignore_index=True)
+  return new_df
+
+
 def scrub(feature_dict: Dict[str, Any],
           key: str,
           values: Sequence[SerializableType],
-          all_but: bool = False) -> Dict[str, Any]:
+          all_but: bool = False,
+          replace_value: Optional[SerializableType] = None) -> Dict[str, Any]:
   """Removes any occurence of any value in values from feature_dict[key].
 
   Args:
@@ -317,6 +327,8 @@ def scrub(feature_dict: Dict[str, Any],
     key: The field from feature_dict used for scrubbing.
     values: The values that will be scrubbed from feature_dict[key].
     all_but: If activated, will scrub every value, except those specified.
+    replace_value: If specified, used as a placeholder wherever a value was
+      scrubbed.
 
   Returns:
     A copy of feature_dict, where all values at key have been scrubbed.
@@ -324,31 +336,46 @@ def scrub(feature_dict: Dict[str, Any],
   Raises:
     ValueError: 'key' does not exist in df.
     TypeError: any element of 'values' has a type different from the type at
-      df[key], or feature_dict[key] is not a list or np.ndarray.
+      df[key], or feature_dict[key] is not a str, list or np.ndarray.
   """
 
   if key not in feature_dict:
     raise ValueError(f'{key} is not a correct field.'
                      f'Please choose among {list(feature_dict.keys())}')
-  if type(feature_dict[key]) not in [list, np.ndarray]:
-    raise TypeError('Can only scrub values from lists/ndarrays. Current column'
-                    'is of type {}'.format(type(feature_dict[key])))
+  if type(feature_dict[key]) not in [list, np.ndarray, str]:
+    raise TypeError(
+        'Can only scrub values from str/lists/ndarrays. Current column'
+        'is of type {}'.format(type(feature_dict[key])))
   # Using this 'dirty' syntax because values and feature_dict[key] could be
   # list or ndarray -> using the 'not values' to check emptiness does not work.
   if len(values) == 0 or len(feature_dict[key]) == 0:
     return feature_dict
-  data_type = type(feature_dict[key][0])
+  field_type = type(feature_dict[key][0])
   for index, val in enumerate(values):
-    if not isinstance(val, data_type):
+    if not isinstance(val, field_type):
       raise TypeError(
           'Values[{}] has type {}, while values in feature_dict[{}] have type {}'
-          .format(index, type(val), key, data_type))
+          .format(index, type(val), key, field_type))
   # Avoid changing the feature_dict in-place.
   new_feature_dict = feature_dict.copy()
+  key_type = type(new_feature_dict[key])
+  if key_type == str:
+    new_feature_dict[key] = new_feature_dict[key].split(' ')
+
+  scrub_mask = [True if x in values else False for x in new_feature_dict[key]]
   if all_but:
-    new_feature_dict[key] = [x for x in feature_dict[key] if x in values]
+    scrub_mask = [not x for x in scrub_mask]
+  if replace_value is None:
+    new_feature_dict[key] = [
+        x for x, scrub in zip(new_feature_dict[key], scrub_mask) if not scrub
+    ]
   else:
-    new_feature_dict[key] = [x for x in feature_dict[key] if x not in values]
+    new_feature_dict[key] = [
+        x if not scrub else replace_value
+        for x, scrub in zip(new_feature_dict[key], scrub_mask)
+    ]
+  if key_type == str:
+    new_feature_dict[key] = ' '.join(new_feature_dict[key])
   return new_feature_dict
 
 
@@ -391,6 +418,29 @@ def or_series(series_list: List[pd.Series]) -> pd.Series:
   return functools.reduce(lambda s1, s2: s1.add(s2), series_list)
 
 
+def and_series(series_list: List[pd.Series]) -> pd.Series:
+  """Performs an AND operation on a list of boolean pd.Series.
+
+  Args:
+    series_list: List of boolean pd.Series to perform AND on.
+
+  Returns:
+    The result of s_1 and ... and s_N, for s_i in series_list.
+
+  Raises:
+    TypeError: Some series in series_list is has non boolean values.
+    RuntimeError: The series's indexes in series_list don't match, potentially
+     meaning that series don't describe the same recordings.
+  """
+  reference_indexes = series_list[0].index
+  if any([not series.index.equals(reference_indexes) for series in series_list
+         ]):
+    raise RuntimeError('AND operation expects consistent Series as input')
+  if any([series.dtype != bool for series in series_list]):
+    raise RuntimeError('AND operation expects boolean Series as input.')
+  return functools.reduce(lambda s1, s2: s1 * s2, series_list)
+
+
 def concat_no_duplicates(df_list: List[pd.DataFrame]) -> pd.DataFrame:
   """Concatenates dataframes in df_list, then removes duplicates examples.
 
@@ -426,6 +476,7 @@ APPLY_FN = {
 
 MERGE_FN = {
     MergeStrategy.OR: or_series,
+    MergeStrategy.AND: and_series,
     MergeStrategy.CONCAT_NO_DUPLICATES: concat_no_duplicates
 }
 
@@ -459,5 +510,7 @@ OPS = {
             axis=1,
             result_type='expand'),
     TransformOp.FILTER:
-        filter_df
+        filter_df,
+    TransformOp.APPEND:
+        append
 }
