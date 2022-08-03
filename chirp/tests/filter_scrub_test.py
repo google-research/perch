@@ -240,6 +240,7 @@ class QueryTest(DataProcessingTest):
   def test_scrub_query(self):
     """Ensure scrubbing queries work as expected."""
 
+    # Test scrubbing on list-typed fields.
     scrub_query = fsu.Query(
         op=fsu.TransformOp.SCRUB,
         kwargs={
@@ -250,6 +251,54 @@ class QueryTest(DataProcessingTest):
     expected_df = self.toy_df.copy()
     expected_df['bg_labels'] = [['ostric3', 'grerhe1'], ['grerhe1'],
                                 ['ostric3']]
+
+    # Test scrubbing on str-typed fields.
+    scrub_query = fsu.Query(
+        op=fsu.TransformOp.SCRUB,
+        kwargs={
+            'key': 'species_code',
+            'values': ['ostric2', 'ostric3']
+        })
+    df = fsu.apply_query(self.toy_df, scrub_query)
+    expected_df = self.toy_df.copy()
+    expected_df['species_code'] = ['', '', 'grerhe1']
+    self.assertEqual(expected_df.to_dict(), df.to_dict())
+
+    scrub_query = fsu.Query(
+        op=fsu.TransformOp.SCRUB_ALL_BUT,
+        kwargs={
+            'key': 'species_code',
+            'values': ['ostric2', 'ostric3']
+        })
+    df = fsu.apply_query(self.toy_df, scrub_query)
+    expected_df = self.toy_df.copy()
+    expected_df['species_code'] = ['ostric2', 'ostric3', '']
+    self.assertEqual(expected_df.to_dict(), df.to_dict())
+
+    # Test with a replace value
+    scrub_query = fsu.Query(
+        op=fsu.TransformOp.SCRUB,
+        kwargs={
+            'key': 'species_code',
+            'values': ['ostric2', 'ostric3'],
+            'replace_value': 'unknown'
+        })
+    df = fsu.apply_query(self.toy_df, scrub_query)
+    expected_df = self.toy_df.copy()
+    expected_df['species_code'] = ['unknown', 'unknown', 'grerhe1']
+    self.assertEqual(expected_df.to_dict(), df.to_dict())
+
+    scrub_query = fsu.Query(
+        op=fsu.TransformOp.SCRUB,
+        kwargs={
+            'key': 'bg_labels',
+            'values': ['ostric2', 'ostric3'],
+            'replace_value': 'unknown'
+        })
+    df = fsu.apply_query(self.toy_df, scrub_query)
+    expected_df = self.toy_df.copy()
+    expected_df['bg_labels'] = [['unknown', 'grerhe1'], ['unknown', 'grerhe1'],
+                                ['unknown', 'unknown']]
     self.assertEqual(expected_df.to_dict(), df.to_dict())
 
   def test_complemented_query(self):
@@ -290,12 +339,28 @@ class QueryTest(DataProcessingTest):
       df['unique_key'] = [0, 1, 1]
       fsu.apply_complement(df, fsu.QueryComplement(filter_query, 'unique_key'))
 
+  def test_append_query(self):
+    new_row = {
+        'bg_labels': 'ignore',
+        'species_code': 'ignore',
+        'Common name': 'ignore',
+        'Country': 'ignore'
+    }
+    append_query = fsu.Query(fsu.TransformOp.APPEND, {'row': new_row})
+    new_df = fsu.apply_query(self.toy_df, append_query)
+    self.assertEqual(new_df.to_dict(),
+                     self.toy_df.append(new_row, ignore_index=True).to_dict())
+
+    # Append query with keys not matching the dataframe
+    append_query = fsu.Query(fsu.TransformOp.APPEND, {'row': {'a': 'b'}})
+    with self.assertRaises(ValueError):
+      fsu.apply_query(self.toy_df, append_query)
+
 
 class QueryParallelTest(DataProcessingTest):
 
   def test_merge_or(self):
 
-    # Add is mostly useful to simulate OR operations on masking queries
     mask_query_1 = fsu.Query(fsu.MaskOp.IN, {
         'key': 'Country',
         'values': ['Colombia']
@@ -322,6 +387,36 @@ class QueryParallelTest(DataProcessingTest):
     # recordings.
     with self.assertRaises(RuntimeError):
       fsu.or_series([
+          self.toy_df.drop(0)['species_code'] == 'ostric2',
+          self.toy_df['species_code'] == 'ostric2'
+      ])
+
+  def test_merge_and(self):
+
+    mask_query_1 = fsu.Query(fsu.MaskOp.IN, {
+        'key': 'Country',
+        'values': ['Colombia', 'France']
+    })
+    mask_query_2 = fsu.Query(fsu.MaskOp.IN, {
+        'key': 'species_code',
+        'values': ['grerhe1']
+    })
+
+    query_parallel = fsu.QueryParallel([mask_query_1, mask_query_2],
+                                       fsu.MergeStrategy.AND)
+    mask = fsu.apply_parallel(self.toy_df, query_parallel)
+    self.assertEqual(mask.tolist(), [False, False, True])
+
+    # Ensure an error is raised if any element is not a boolean Series.
+    with self.assertRaises(RuntimeError):
+      fsu.and_series([
+          self.toy_df['species_code'], self.toy_df['species_code'] == 'ostric2'
+      ])
+
+    # Ensure an error is raised if Series don't pertain to the same set of
+    # recordings.
+    with self.assertRaises(RuntimeError):
+      fsu.and_series([
           self.toy_df.drop(0)['species_code'] == 'ostric2',
           self.toy_df['species_code'] == 'ostric2'
       ])

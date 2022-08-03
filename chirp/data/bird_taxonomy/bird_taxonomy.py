@@ -133,7 +133,7 @@ class Int16AsFloatTensor(tfds.features.Audio):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.2.0')
+  VERSION = tfds.core.Version('1.2.2')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
       '1.1.0': ('Switched to higher sampling rate, added recording metadata '
@@ -142,6 +142,11 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       '1.1.2': 'Kept previous tiny_config as reference, but also added a tiny'
                'version generated with queries.',
       '1.2.0': 'Added upstream data config.',
+      '1.2.1': 'Added downstream data config. Fixed the upstream query.'
+               'Bumped the taxonomy_info to 2022-07-18.',
+      '1.2.2': 'Replacing any non-relevant foreground annotation in the'
+               'downstream data with "ignore" class: downstream data only'
+               'contains relevant annotations + "ignore" class.',
   }
   TINY_SPECIES = ('ostric2', 'piebar1')
   BUILDER_CONFIGS = [
@@ -204,6 +209,15 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           metadata_processing_query=premade_queries.get_upstream_metadata_query(
           ),
           description=('Upstream data version with chunked audio sequences '
+                       'processed with chirp.audio_utils.slice_peaked_audio.')),
+      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+          name='downstream_slice_peaked',
+          localization_fn=audio_utils.slice_peaked_audio,
+          interval_length_s=6.0,
+          data_processing_query=premade_queries.get_downstream_data_query(),
+          metadata_processing_query=premade_queries
+          .get_downstream_metadata_query(),
+          description=('Downstream data version with chunked audio sequences '
                        'processed with chirp.audio_utils.slice_peaked_audio.')),
       BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
           name='full_length',
@@ -326,6 +340,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     )
 
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
+    # No checksum is found for the new taxonomy_info. dl_manager may raise
+    # an error when removing the line below.
+    dl_manager._force_checksums_validation = False
     paths = dl_manager.download_and_extract({
         'taxonomy_info':
             (self.GCS_URL / self.TAXONOMY_INFO_FILENAME).as_posix(),
@@ -374,6 +391,12 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     }
     source_info = source_info.rename(renames, axis=1)
 
+    get_format = lambda s: s['file_format']
+    get_xc_id = lambda s: s['xeno_canto_id']
+    to_name = lambda s: f"{s['species_code']}/XC{get_xc_id(s)}.{get_format(s)}"
+    source_info['url'] = source_info.apply(
+        lambda s: self.GCS_URL / f'audio-data/{to_name(s)}', axis=1)
+
     # To generate the reference tiny version, we filter/scrub using built-in
     # dataframe functions only, not queries.
     if self.builder_config.tiny_reference:
@@ -393,11 +416,12 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     for column in ['latitude', 'longitude']:
       source_info[column] = source_info[column].map(lambda s: s or '')
 
-    get_format = lambda s: s['file_format']
-    get_xc_id = lambda s: s['xeno_canto_id']
-    to_name = lambda s: f"{s['species_code']}/XC{get_xc_id(s)}.{get_format(s)}"
-    source_info['url'] = source_info.apply(
-        lambda s: self.GCS_URL / f'audio-data/{to_name(s)}', axis=1)
+    # Propagate "ignore" label to genus, family and order metadata.
+    for column in ['genus', 'family', 'order']:
+      source_info[column] = source_info.apply(
+          lambda rec: 'ignore'
+          if rec['species_code'] == 'ignore' else rec[column],
+          axis=1)
 
     return {
         'train': self._generate_examples(source_info=source_info),

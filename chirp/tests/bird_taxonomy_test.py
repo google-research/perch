@@ -59,12 +59,14 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
         'taxonomy_info.json')[['species_code', 'genus', 'family', 'order']]
     cls.url_patcher = mock.patch.object(cls.DATASET_CLASS, 'GCS_URL',
                                         epath.Path(cls.tempdir))
-
-    cls.data_query_patcher = mock.patch.object(
-        cls.DATASET_CLASS.BUILDER_CONFIGS[3], 'data_processing_query',
-        fsu.QuerySequence([]))
+    cls.query_patchers = []
+    for i in [3, 4]:
+      cls.query_patchers.append(
+          mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[i],
+                            'data_processing_query', fsu.QuerySequence([])))
     cls.url_patcher.start()
-    cls.data_query_patcher.start()
+    for patcher in cls.query_patchers:
+      patcher.start()
     subdir = epath.Path(cls.tempdir) / 'audio-data' / 'fakecode1'
     subdir.mkdir(parents=True)
     for i in range(4):
@@ -77,7 +79,8 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
 
     cls.metadata_patcher.stop()
     cls.url_patcher.stop()
-    cls.data_query_patcher.stop()
+    for patcher in cls.query_patchers:
+      patcher.stop()
     shutil.rmtree(cls.tempdir)
 
 
