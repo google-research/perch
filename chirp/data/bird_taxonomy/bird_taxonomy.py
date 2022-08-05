@@ -18,13 +18,12 @@
 import dataclasses
 import functools
 import json
-import os
 import tempfile
 from typing import Any, Callable, Optional, Sequence, Tuple, Union
 import warnings
 
-from absl import logging
 from chirp import audio_utils
+from chirp import path_utils
 from chirp.data import filter_scrub_utils as fsu
 from chirp.data.bird_taxonomy import premade_queries
 from etils import epath
@@ -229,8 +228,8 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-07-18.json'
 
   def _load_taxonomy_metadata(self, disable_filtering=False) -> pd.DataFrame:
-    file_path = (
-        epath.Path(__file__).parent / f'metadata/taxonomy_metadata.json')
+    file_path = path_utils.get_absolute_epath('data/bird_taxonomy/metadata/'
+                                              'taxonomy_metadata.json')
     # The taxonomy_metadata.json file contains a taxonomy tree organized as
     # Dict[str, Dict[str, Dict[str, Sequence[str]]]] which maps order name
     # to family name to genus name to a list of species codes.

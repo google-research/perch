@@ -14,33 +14,20 @@
 # limitations under the License.
 
 """A set of premade queries to generate stable data configs."""
+
 import json
 import logging
 
+from chirp import path_utils
 from chirp.data import filter_scrub_utils as fsu
-from etils import epath
 
 # SSW_STATS_PATH contains useful statistics for SSW species, used to guide our
 # DFS search in chirp.data.sampling_utils.sample_recordings_under_constraints.
 # Those statistics were computed after removing all recordings with foreground
 # and background labels belonging to downstream_species.txt
 # (mimicking the conditions under which the sampling happens).
-DOWNSTREAM_SPECIES_PATH = "metadata/downstream_species.txt"
-SSW_STATS_PATH = "metadata/ssw_stats.json"
-
-
-def get_absolute_epath(relative_path: str) -> epath.Path:
-  """Returns the absolute epath.Path associated with the relative_path.
-
-  Args:
-    relative_path: The relative path (w.r.t. bird_taxonomy directory) to the
-      resource.
-
-  Returns:
-    The absolute path to the resource.
-  """
-  file_path = epath.Path(__file__).parent / relative_path
-  return file_path
+DOWNSTREAM_SPECIES_PATH = "data/bird_taxonomy/metadata/downstream_species.txt"
+SSW_STATS_PATH = "data/bird_taxonomy/metadata/ssw_stats.json"
 
 
 def get_upstream_metadata_query() -> fsu.QuerySequence:
@@ -48,7 +35,7 @@ def get_upstream_metadata_query() -> fsu.QuerySequence:
   _, _, _, unfeasible_ar_species = get_artificially_rare_species_constraints(
       5, 5)
 
-  with open(get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
+  with open(path_utils.get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
     downstream_species = list(map(lambda x: x.strip(), f.readlines()))
   return fsu.QuerySequence([
       fsu.Query(
@@ -90,7 +77,7 @@ def get_artificially_rare_species_constraints(num_foreground: int,
     feasible_ar_species: The set of feasible species.
     unfeasible_ar_species: The set of unfeasible species.
   """
-  with open(get_absolute_epath(SSW_STATS_PATH), "rb") as f:
+  with open(path_utils.get_absolute_epath(SSW_STATS_PATH), "rb") as f:
     ssw_stats = json.load(f)
 
   # Fix the target foreground/background for SSW species
@@ -122,11 +109,11 @@ def get_upstream_data_query() -> fsu.QuerySequence:
   Returns:
     The QuerySequence to apply
   """
-  with open(get_absolute_epath(SSW_STATS_PATH), "rb") as f:
+  with open(path_utils.get_absolute_epath(SSW_STATS_PATH), "rb") as f:
     ssw_stats = json.load(f)
   (target_fg, target_bg, feasible_ar_species,
    unfeasible_ar_species) = get_artificially_rare_species_constraints(5, 5)
-  with open(get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
+  with open(path_utils.get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
     downstream_species = list(map(lambda x: x.strip(), f.readlines()))
 
   return fsu.QuerySequence([
@@ -198,7 +185,7 @@ def get_downstream_metadata_query() -> fsu.QuerySequence:
   ignore_row = {
       level: "ignore" for level in ["species_code", "genus", "family", "order"]
   }
-  with open(get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
+  with open(path_utils.get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
     downstream_species = list(map(lambda x: x.strip(), f.readlines()))
   return fsu.QuerySequence([
       fsu.Query(
@@ -222,7 +209,7 @@ def get_downstream_data_query() -> fsu.QuerySequence:
   Returns:
     The QuerySequence to apply.
   """
-  with open(get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
+  with open(path_utils.get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
     downstream_species = list(map(lambda x: x.strip(), f.readlines()))
   (_, _, feasible_ar_species,
    unfeasible_ar_species) = get_artificially_rare_species_constraints(5, 5)
