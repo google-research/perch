@@ -32,6 +32,8 @@ import tensorflow as tf
 
 from absl.testing import absltest
 
+_c = config_utils.callable_config
+
 
 class TrainSeparationTest(absltest.TestCase):
 
@@ -57,18 +59,44 @@ class TrainSeparationTest(absltest.TestCase):
   def _get_test_dataset(self, split, config):
     config.dataset_directory = self.builder.data_dir
     config.tfds_data_dir = ""
-    ds, dataset_info = pipeline.get_dataset(split, **config)
+    if "train" in split:
+      pipeline_ = config.train_pipeline
+    else:
+      pipeline_ = config.eval_pipeline
+    ds, dataset_info = pipeline.get_dataset(
+        split,
+        dataset_directory=config.dataset_directory,
+        tfds_data_dir=config.tfds_data_dir,
+        pipeline=pipeline_)
     return ds, dataset_info
 
   def _get_test_config(self, use_small_encoder=True) -> config_dict.ConfigDict:
     """Create configuration dictionary for training."""
     config = separator.get_config()
 
-    config.train_data_config.batch_size = 2
-    config.train_data_config.window_size_s = 1
+    window_size_s = config_dict.FieldReference(1)
+    config.train_pipeline = _c(
+        "pipeline.Pipeline",
+        ops=[
+            _c("pipeline.OnlyJaxTypes"),
+            _c("pipeline.MultiHot"),
+            _c("pipeline.MixAudio", mixin_prob=1.0),
+            _c("pipeline.Batch", batch_size=2, split_across_devices=True),
+            _c("pipeline.RandomSlice", window_size=window_size_s),
+        ])
 
-    config.eval_data_config.batch_size = 2
-    config.eval_data_config.window_size_s = 1
+    config.eval_pipeline = _c(
+        "pipeline.Pipeline",
+        ops=[
+            _c("pipeline.OnlyJaxTypes"),
+            _c("pipeline.MultiHot"),
+            _c("pipeline.MixAudio", mixin_prob=1.0),
+            _c("pipeline.Batch", batch_size=2, split_across_devices=True),
+            _c("pipeline.Slice",
+               window_size=window_size_s,
+               start=0,
+               names=("audio",)),
+        ])
 
     config.train_config.num_train_steps = 1
     config.train_config.checkpoint_every_steps = 1
@@ -83,7 +111,7 @@ class TrainSeparationTest(absltest.TestCase):
       soundstream_config.strides = (2, 2)
       soundstream_config.feature_mults = (2, 2)
       soundstream_config.groups = (1, 2)
-      config.init_config.model_config.mask_generator = config_utils.callable_config(
+      config.init_config.model_config.mask_generator = _c(
           "soundstream_unet.SoundstreamUNet", soundstream_config)
 
     config = config_utils.parse_config(config, config_globals.get_globals())
@@ -101,7 +129,10 @@ class TrainSeparationTest(absltest.TestCase):
 
   def test_train_one_step(self):
     config = self._get_test_config(use_small_encoder=True)
-    ds, _ = self._get_test_dataset("train", config.train_data_config)
+    ds, _ = self._get_test_dataset(
+        "train",
+        config,
+    )
     model = sep_train.initialize_model(
         workdir=self.train_dir, **config.init_config)
 
@@ -115,7 +146,7 @@ class TrainSeparationTest(absltest.TestCase):
     config.init_config.model_config.mask_generator.groups = (1, 1)
     config.eval_config.num_train_steps = 0
 
-    ds, _ = self._get_test_dataset("test", config.eval_data_config)
+    ds, _ = self._get_test_dataset("test", config)
     model_bundle, train_state = sep_train.initialize_model(
         workdir=self.train_dir, **config.init_config)
     # Write a chekcpoint, or else the eval will hang.
@@ -145,6 +176,7 @@ class TrainSeparationTest(absltest.TestCase):
     self.assertTrue(
         tf.io.gfile.exists(
             os.path.join(self.train_dir, "savedmodel/saved_model.pb")))
+
 
 if __name__ == "__main__":
   absltest.main()

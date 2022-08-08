@@ -14,20 +14,18 @@
 # limitations under the License.
 
 """Tests for pipeline."""
-import functools
 import os
 import tempfile
 
 from chirp.data import pipeline
 from chirp.tests import fake_dataset
-import jax
 import numpy as np
 import tensorflow as tf
 
 from absl.testing import absltest
 
 
-class LayersTest(absltest.TestCase):
+class PipelineTest(absltest.TestCase):
 
   @classmethod
   def setUpClass(cls):
@@ -65,39 +63,45 @@ class LayersTest(absltest.TestCase):
                                  dtype=tf.string),
     }
     ds = tf.data.Dataset.from_tensor_slices(examples)
-    ds = ds.map(functools.partial(pipeline.multi_hot, info=self._builder.info))
-    mixed_ds = pipeline.mix_audio(ds, mixin_prob=1.0)
-    mixed_example = mixed_ds.get_single_element()
+    ds = pipeline.Pipeline([
+        pipeline.OnlyJaxTypes(),
+        pipeline.MultiHot(),
+    ])(ds, self._builder.info)
+    mixed_ds = pipeline.Pipeline([
+        pipeline.MixAudio(1.0),
+    ])(ds, self._builder.info)
+    mixed_example = next(mixed_ds.as_numpy_iterator())
     np.testing.assert_allclose(mixed_example['audio'],
                                examples['audio'][0] + examples['audio'][1])
     np.testing.assert_equal(
-        mixed_example['genus'].numpy(),
+        mixed_example['genus'],
         np.asarray(
             [0, 1, 0, 1] + [0] *
             (self._builder.info.features['genus'].num_classes - 4),
             dtype=np.int32))
 
     np.testing.assert_equal(
-        mixed_example['family'].numpy(),
+        mixed_example['family'],
         np.asarray(
             [0, 1] + [0] *
             (self._builder.info.features['family'].num_classes - 2),
             dtype=np.int32))
 
     np.testing.assert_equal(
-        mixed_example['bg_labels'].numpy(),
+        mixed_example['bg_labels'],
         np.asarray(
             [0, 0, 1, 1, 1, 1] + [0] *
             (self._builder.info.features['bg_labels'].num_classes - 6),
             dtype=np.int32))
 
-    unmixed_ds = pipeline.mix_audio(ds, mixin_prob=0.0)
+    unmixed_ds = pipeline.Pipeline([
+        pipeline.MixAudio(mixin_prob=0.0),
+    ])(ds, self._builder.info)
     for x, y in tf.data.Dataset.zip((ds, unmixed_ds)).as_numpy_iterator():
       for key in x:
-        if key == 'source_audio':
-          np.testing.assert_equal(x['source_audio'], y['source_audio'][:1])
-          np.testing.assert_equal(
-              np.zeros_like(x['source_audio']), y['source_audio'][1:])
+        if key in ('source_audio', 'segment_start', 'segment_end'):
+          np.testing.assert_equal(x[key], y[key][:1])
+          np.testing.assert_equal(np.zeros_like(x[key]), y[key][1:])
         else:
           np.testing.assert_equal(x[key], y[key])
 
@@ -137,8 +141,8 @@ class LayersTest(absltest.TestCase):
         'filename':
             tf.convert_to_tensor('placeholder', dtype=tf.string),
     }
-
-    example = pipeline.multi_hot(example=example, info=self._builder.info)
+    example = pipeline.OnlyJaxTypes()(example, self._builder.info)
+    example = pipeline.MultiHot()(example, self._builder.info)
 
     # The bg_labels feature should be multi-hot encoded.
     num_classes = self._builder.info.features['bg_labels'].feature.num_classes
@@ -146,12 +150,10 @@ class LayersTest(absltest.TestCase):
         example['bg_labels'].numpy(),
         np.asarray([0, 0, 1, 1] + [0] * (num_classes - 4), dtype=np.int32))
 
-    example = pipeline.process_audio(
-        example=example,
-        sample_rate_hz=sample_rate_hz,
-        window_size_s=window_size_s,
-        min_gain=min_gain,
-        max_gain=max_gain)
+    example = pipeline.RandomSlice(
+        window_size_s, names=('audio',))(example, self._builder.info)
+    example = pipeline.RandomNormalizeAudio(
+        min_gain, max_gain, names=('audio',))(example, self._builder.info)
 
     # The audio feature should be trimmed to the requested length, and its
     # maximum absolute value should be within [min_gain, max_gain].
@@ -178,31 +180,18 @@ class LayersTest(absltest.TestCase):
       self.assertNotIn(key, example)
 
   def test_get_dataset(self):
-    batch_size = 4
-
-    window_size_s = 5
-    min_gain = 0.15
-    max_gain = 0.25
 
     for split in self._builder.info.splits.values():
       dataset, _ = pipeline.get_dataset(
-          split.name,
-          dataset_directory=self._builder.data_dir,
-          batch_size=batch_size,
-          window_size_s=window_size_s,
-          min_gain=min_gain,
-          max_gain=max_gain,
-          mixin_prob=0.5)
+          split.name, dataset_directory=self._builder.data_dir)
 
       example = next(dataset.as_numpy_iterator())
-      self.assertLen(example['audio'].shape, 3)
-      self.assertLen(jax.devices(), example['audio'].shape[0])
-      self.assertEqual(example['audio'].shape[1],
-                       batch_size // len(jax.devices()))
+      self.assertLen(example['audio'].shape, 2)
+      self.assertLen(example['source_audio'].shape, 3)
       self.assertSetEqual(
           set(example.keys()), {
               'audio', 'source_audio', 'bg_labels', 'family', 'genus', 'label',
-              'order'
+              'order', 'segment_start', 'segment_end'
           })
 
 

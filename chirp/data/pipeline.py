@@ -14,179 +14,373 @@
 # limitations under the License.
 
 """Data pipeline functions."""
+import dataclasses
+from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
-import functools
-from typing import Any, Dict, Optional, Tuple
-
-from absl import logging
 # Import bird_taxonomy to register the custom tfds.features.FeatureConnector.
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
 import jax
-import numpy as np
+from jax import numpy as jnp
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
 _DEFAULT_DATASET_DIR = None
 _DEFAULT_TFDS_DATADIR = None
 
-
-def _trim(audio: tf.Tensor,
-          window_size: int) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
-  """Trims an audio sequence."""
-  max_start_index = tf.shape(audio)[0] - window_size
-  max_start_index = tf.maximum(max_start_index, 1)
-  start_index = tf.random.uniform(
-      shape=[], minval=0, maxval=max_start_index, dtype=tf.int32)
-  end_index = start_index + window_size
-  trimmed = audio[start_index:start_index + window_size]
-
-  pad_length = window_size - tf.shape(trimmed)[0]
-  pads = [[0, pad_length]]
-  trimmed = tf.pad(trimmed, pads)
-  trimmed = tf.reshape(trimmed, [window_size])
-  return trimmed, start_index, end_index
+Features = Dict[str, tf.Tensor]
 
 
-def _normalize_audio(audio: tf.Tensor,
-                     target_gain: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
-  """Renormalizes an audio sequence to a max absolute value of target_gain."""
-  max_gain = tf.reduce_max(tf.abs(audio), axis=0, keepdims=True)
-  gain_scalar = target_gain / (max_gain + 0.01)
-  audio = audio * gain_scalar
-  return audio, gain_scalar
+class FeaturesPreprocessOp:
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    return features.copy()
 
 
-def mix_audio(dataset: tf.data.Dataset, mixin_prob: float) -> tf.data.Dataset:
+class DatasetPreprocessOp:
+
+  def __call__(self, dataset: tf.data.Dataset,
+               dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
+    return dataset
+
+
+@dataclasses.dataclass
+class Pipeline:
+  """Construct a pipeline of preprocessing operations.
+
+  This is modelled after `clu.preprocess_spec`, but rewritten to allow for
+  processing operations which cannot be expressed per sample (e.g., mixing
+  samples). Additionally, preprocessing operations will have access to the
+  metadata in the DatasetInfo object.
+
+  Attributes:
+    ops: The preprocessing operations to apply.
+    num_parallel_calls: Passed to `dataset.map`.
+  """
+  ops: Sequence[Union[FeaturesPreprocessOp, DatasetPreprocessOp]]
+  num_parallel_calls: int = tf.data.AUTOTUNE
+
+  def __call__(self, dataset: tf.data.Dataset,
+               dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
+    # We group feature preprocessing operations into a single map operation to
+    # reduce the number of threads
+    feature_preprocess_ops = []
+    for op in self.ops:
+      if isinstance(op, FeaturesPreprocessOp):
+        feature_preprocess_ops.append(op)
+      else:
+        if feature_preprocess_ops:
+          dataset = dataset.map(
+              map_func=self.chain(feature_preprocess_ops, dataset_info),
+              num_parallel_calls=self.num_parallel_calls)
+          feature_preprocess_ops.clear()
+        dataset = op(dataset, dataset_info)
+    if feature_preprocess_ops:
+      dataset = dataset.map(
+          map_func=self.chain(feature_preprocess_ops, dataset_info),
+          num_parallel_calls=self.num_parallel_calls)
+    return dataset
+
+  @staticmethod
+  def chain(ops: Sequence[FeaturesPreprocessOp],
+            dataset_info: tfds.core.DatasetInfo):
+
+    def map_func(features: Features) -> Features:
+      for op in ops:
+        features = op(features, dataset_info)
+      return features
+
+    return map_func
+
+
+@dataclasses.dataclass
+class Slice(FeaturesPreprocessOp):
+  """Slices a window of the input.
+
+  Selects a window of the input data. Slices over the last axis.
+
+  Attributes:
+    window_size: The size of the window to take, in seconds.
+    start: The starting point of the window, in seconds.
+    names: The name of the features to slice. Each will be sliced the same way.
+  """
+  window_size: float
+  start: float
+  names: Tuple[str, ...] = ('audio', 'source_audio')
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    sample_rate = dataset_info.features[self.names[0]].sample_rate
+    window_size = tf.cast(self.window_size * sample_rate, tf.int64)
+    start = tf.cast(self.start * sample_rate, tf.int64)
+
+    features = features.copy()
+    for name in self.names:
+      if name not in features:
+        continue
+      features[name] = features[name][..., start:start + window_size]
+    return features
+
+
+@dataclasses.dataclass
+class RandomSlice(FeaturesPreprocessOp):
+  """Slices a random window of the input.
+
+  Selects a random window of the input data. Slices over the last axis.
+
+  Attributes:
+    window_size: The size of the window to take, in seconds.
+    names: The name of the features to slice. Each will be sliced the same way.
+  """
+  window_size: float
+  names: Tuple[str, ...] = ('audio', 'source_audio')
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    sample_rate = dataset_info.features[self.names[0]].sample_rate
+    audio_len = tf.shape(features[self.names[0]])[-1] / sample_rate
+    max_start = tf.cast(audio_len - self.window_size, tf.float32)
+    start = tf.random.uniform(shape=(), minval=0, maxval=max_start)
+
+    return Slice(self.window_size, start, self.names)(features, dataset_info)
+
+
+@dataclasses.dataclass
+class NormalizeAudio(FeaturesPreprocessOp):
+  """Normalize audio.
+
+  Scales the signal so that the gain (maximum amplitude of the signal) is
+  equal to the target gain. Assumes the signal is on the last axis.
+
+  Attributes:
+    target_gain: The target gain.
+    names: The name of the features to normalize. The first will be used to
+      calculate the normalization standard.
+    eps: An epsilon that is used to avoid division by zero.
+  """
+  target_gain: float
+  names: Tuple[str, ...] = ('audio', 'source_audio')
+  eps: float = 0.01
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    del dataset_info  # Unused
+
+    max_gain = tf.reduce_max(
+        tf.abs(features[self.names[0]]), axis=-1, keepdims=True)
+    gain_scalar = self.target_gain / (max_gain + self.eps)
+    features = features.copy()
+    for name in self.names:
+      if name not in features:
+        continue
+      features[name] = features[name] * tf.reshape(
+          gain_scalar,
+          tf.concat([
+              tf.shape(gain_scalar),
+              tf.ones([tf.rank(features[name]) - tf.rank(gain_scalar)],
+                      dtype=tf.int32)
+          ],
+                    axis=0))
+    return features
+
+
+@dataclasses.dataclass
+class RandomNormalizeAudio(FeaturesPreprocessOp):
+  """Normalize audio using a random target gain.
+
+  Scales the signal so that the gain (maximum amplitude of the signal) is
+  equal to a target gain selected uniformly at random.
+
+  Attributes:
+    min_gain: The minimum target gain.
+    max_gain: The minimum target gain.
+    names: The name of the features to normalize. The first will be used to
+      calculate the normalization standard.
+    eps: An epsilon that is used to avoid division by zero.
+  """
+  min_gain: float
+  max_gain: float
+  names: Tuple[str, ...] = ('audio', 'source_audio')
+  eps: float = 0.01
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    target_gain = tf.random.uniform([],
+                                    minval=self.min_gain,
+                                    maxval=self.max_gain)
+    return NormalizeAudio(
+        target_gain=target_gain, names=self.names, eps=self.eps)(features,
+                                                                 dataset_info)
+
+
+@dataclasses.dataclass
+class MixAudio(DatasetPreprocessOp):
   """Mix audio samples.
 
-  Args:
-    dataset: The dataset of normalized audio samples. Must be before
-      mel-spectrogram creation.
+  Attributes:
     mixin_prob: The probability with which samples are mixed. Note that if we
       mix, e.g., 50% of samples, the final ratio between mixed and unmixed
       samples is 1:2. More formally, to get a fraction `p` of the samples to be
       mixed, set `mixin_prob` to `2 * p / (p + 1)`.
-
-  Returns:
-    A dataset with mixed audio examples.
+    name: The name of the featuere to be mixed.
+    source_name: The unmixed channels will be stored in this feature.
+    pad_names: These labels must be padded to zeros.
+    label_names: The names of the labels, which will be combined using an OR
+      operation in the case of mixing.
+    axis: The axis that should contain the mixed samples (for the source audio
+      feature as well as the padded features). This should be set to the number
+      of batch axes (e.g., 0 if this is applied before batching, 1 if applied
+      after batching, and 2 if applied after batching with splitting across
+      devices).
   """
+  mixin_prob: float
+  name: str = 'audio'
+  source_name: str = 'source_audio'
+  pad_names: Tuple[str, ...] = ('segment_start', 'segment_end')
+  label_names: Tuple[str,
+                     ...] = ('label', 'genus', 'family', 'order', 'bg_labels')
+  axis: int = 0
 
-  def key_func(_):
-    return tf.cast(tf.less(tf.random.uniform([]), mixin_prob), tf.int64)
+  def __call__(self, dataset: tf.data.Dataset,
+               dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
+    del dataset_info  # Unused
+    return dataset.group_by_window(
+        self._key_func, self._reduce_func, window_size=2)
 
-  def reduce_func(key, dataset):
+  def _key_func(self, features: Features) -> tf.Tensor:
+    del features
+    return tf.cast(tf.less(tf.random.uniform([]), self.mixin_prob), tf.int64)
+
+  def _reduce_func(self, key: tf.Tensor,
+                   dataset: tf.data.Dataset) -> tf.data.Dataset:
     key = tf.equal(key, 0)
     return tf.cond(
-        key, lambda: dataset.batch(1, drop_remainder=True).map(_mix_audio),
-        lambda: dataset.batch(2, drop_remainder=True).map(_mix_audio))
+        key, lambda: dataset.batch(1, drop_remainder=True).map(self._mix_audio),
+        lambda: dataset.batch(2, drop_remainder=True).map(self._mix_audio))
 
-  def _mix_audio(examples: Dict[str, tf.Tensor]) -> Dict[str, tf.Tensor]:
-    if examples['source_audio'].shape[0] == 1:
-      examples['source_audio'] = tf.concat(
-          [examples['source_audio'],
-           tf.zeros_like(examples['source_audio'])],
-          axis=0)
-    # Remove the dummy batch dimension added by multi_hot.
-    examples['source_audio'] = examples['source_audio'][:, 0]
+  @staticmethod
+  def _pad_along_axis(tensor, paddings, axis, **kwargs):
+    zero_paddings = tf.zeros([tf.rank(tensor), 2], dtype=tf.int32)
+    paddings = tf.concat(
+        [zero_paddings[:axis], [paddings], zero_paddings[axis + 1:]], axis=0)
+    return tf.pad(tensor, paddings, **kwargs)
 
-    for key in ('label', 'genus', 'family', 'order', 'bg_labels'):
-      examples[key] = tf.reduce_max(examples[key], axis=0)
-    # TODO(bartvm): Replace averaging with leaving first example untouched and
-    # mixing in second example with a random gain
-    examples['audio'] = tf.reduce_sum(examples['audio'], axis=0)
-    return examples
+  def _mix_audio(self, features: Features) -> Features:
+    """Mixes the samples."""
+    for name in self.label_names:
+      if name not in features:
+        continue
+      features[name] = tf.reduce_max(features[name], axis=0)
 
-  return dataset.group_by_window(key_func, reduce_func, window_size=2)
+    source_audio = features[self.name]
+    features[self.name] = tf.reduce_sum(source_audio, axis=0)
 
+    # To enable batching we pad with zeros
+    if source_audio.shape[0] == 1:
+      source_audio = self._pad_along_axis(source_audio, [0, 1], axis=0)
+      if self.axis:
+        source_audio = tf.experimental.numpy.swapaxes(source_audio, 0,
+                                                      self.axis)
+      for name in self.pad_names:
+        if name not in features:
+          continue
+        features[name] = self._pad_along_axis(features[name], [0, 1], axis=0)
+        if self.axis:
+          features[name] = tf.experimental.numpy.swapaxes(
+              features[name], 0, self.axis)
 
-def process_audio(example: Dict[str, tf.Tensor], sample_rate_hz: int,
-                  window_size_s: int, min_gain: float,
-                  max_gain: float) -> Dict[str, tf.Tensor]:
-  """Processes an example.
-
-  Args:
-    example: the input example.
-    sample_rate_hz: audio example sample rate.
-    window_size_s: window size (in seconds) for the random cropping operation.
-    min_gain: minimum gain for the random renormalization operation.
-    max_gain: maximum gain for the random renormalization operation. Set <=0 to
-      disable gain randomization.
-
-  Returns:
-    The processed example.
-  """
-  example['audio'], start_ind, end_ind = _trim(
-      example['audio'], window_size=window_size_s * sample_rate_hz)
-  if max_gain > 0.0:
-    example['audio'], gain_scalar = _normalize_audio(
-        example['audio'],
-        target_gain=tf.random.uniform([], minval=min_gain, maxval=max_gain))
-  else:
-    gain_scalar = 1.0
-  example['source_audio'] = (
-      example['source_audio'][:, start_ind:end_ind] * gain_scalar)
-
-  return example
+    features[self.source_name] = source_audio
+    return features
 
 
-def multi_hot(
-    example: Dict[str, tf.Tensor],
-    info: tfds.core.DatasetInfo,
-) -> Dict[str, tf.Tensor]:
+@dataclasses.dataclass
+class MultiHot(FeaturesPreprocessOp):
   """Convert labels to multi-hot representation.
 
   This must be done before batching.
 
-  Args:
-    example: the input example.
-    info: dataset information.
-
-  Returns:
-    The processed example with `bg_labels` replaced using a multi-hot
-    representation.
+  Attributes:
+    names: The labels to conver to multi-hot representations.
   """
-  # Delete features which are not JAX-compatible or can't be batched.
-  del_keys = ['segment_start', 'segment_end']
-  for k, v in example.items():
-    if v.dtype == np.dtype('O'):
-      logging.warning('Removing dataset feature %s with unsupported dtype %s',
-                      k, v.dtype)
-      del_keys.append(k)
-  del_keys = [k for k in del_keys if k in example]
-  for k in del_keys:
-    del example[k]
+  names: Tuple[str, ...] = ('label', 'genus', 'family', 'order', 'bg_labels')
 
-  for key, feature in info.features.items():
-    if (isinstance(feature, tfds.features.Sequence) and
-        isinstance(feature.feature, tfds.features.ClassLabel)):
-      example[key] = tf.clip_by_value(
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    features = features.copy()
+    for name in self.names:
+      if name not in features:
+        continue
+      features[name] = tf.clip_by_value(
           tf.reduce_sum(
               tf.one_hot(
-                  example[key], feature.feature.num_classes, dtype=tf.int32),
+                  features[name],
+                  dataset_info.features[name].feature.num_classes,
+                  dtype=tf.int32),
               axis=0), 0, 1)
-  # Add a dummy batch dimension so that source_audio has shape [num_sources, T]
-  example['source_audio'] = example['audio'][tf.newaxis, ...]
-  return example
+
+    return features
 
 
-def get_dataset(split: str,
-                batch_size: int,
-                dataset_directory: str = _DEFAULT_DATASET_DIR,
-                tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
-                tf_data_service_address: Optional[Any] = None,
-                mixin_prob: float = 0.0,
-                **data_config) -> Tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
+@dataclasses.dataclass
+class OnlyJaxTypes(FeaturesPreprocessOp):
+  """Discards tensors that are not supported by JAX (e.g., non-numeric).
+
+  This must be done before batching.
+  """
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    new_features = {}
+    for name, feature in features.items():
+      if isinstance(feature, tf.Tensor) and hasattr(
+          jnp, feature.dtype.name) or feature.dtype is tf.bool:
+        new_features[name] = feature
+    return new_features
+
+
+@dataclasses.dataclass
+class Batch(DatasetPreprocessOp):
+  """Collects samples into batches.
+
+  This preprocessing operation drops the remainder by default.
+
+  Attributes:
+    batch_size: The batch size to use.
+    split_across_devices: If true, the minibatch will be split into smaller
+      minibatches to be distributed across the local devices present. This is
+      useful for distributed training.
+  """
+  batch_size: int
+  split_across_devices: bool = False
+
+  def __call__(self, dataset: tf.data.Dataset,
+               dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
+    if self.split_across_devices:
+      if self.batch_size % jax.local_device_count():
+        raise ValueError('batch size must be divisible by number of devices')
+      dataset = dataset.batch(
+          self.batch_size // jax.local_device_count(), drop_remainder=True)
+      return dataset.batch(jax.local_device_count(), drop_remainder=True)
+    else:
+      return dataset.batch(self.batch_size, drop_remainder=True)
+
+
+def get_dataset(
+    split: str,
+    dataset_directory: str = _DEFAULT_DATASET_DIR,
+    tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
+    tf_data_service_address: Optional[Any] = None,
+    pipeline: Optional[Pipeline] = None
+) -> Tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
   """Returns the placeholder dataset.
 
   Args:
     split: data split, e.g. 'train', 'test', 'train[:80%]', etc.
-    batch_size: batch size.
     dataset_directory: dataset directory.
     tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
       instead of using the tfds.builder_from_directory.
     tf_data_service_address: Address for TFDataService.
-    mixin_prob: Probability of mixing in a second example.
-    **data_config: Data configuration, passed on to `process_audio`.
+    pipeline: The preprocessing pipeline to apply to the data.
 
   Returns:
     The placeholder dataset.
@@ -198,24 +392,19 @@ def get_dataset(split: str,
     builder = tfds.builder_from_directory(dataset_directory)
     ds = builder.as_dataset(split=split)
     dataset_info = builder.info
-  sample_rate_hz = dataset_info.features['audio'].sample_rate
-
-  ds = ds.map(functools.partial(multi_hot, info=dataset_info))
-  # TODO(bartvm): Pass `train` argument instead of relying on split name.
   if 'train' in split:
-    ds = ds.shuffle(batch_size * 10)
-  ds = mix_audio(ds, mixin_prob)
+    ds = ds.shuffle(512)
+  if pipeline is None:
+    pipeline = Pipeline([
+        OnlyJaxTypes(),
+        MultiHot(),
+        MixAudio(mixin_prob=0.25),
+        Batch(8),
+        RandomSlice(window_size=5),
+        RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
+    ])
+  ds = pipeline(ds, dataset_info)
 
-  def process_batch(batch):
-    return tf.vectorized_map(
-        functools.partial(
-            process_audio, sample_rate_hz=sample_rate_hz, **data_config), batch)
-
-  per_device_batch_size = batch_size // jax.device_count()
-  ds = ds.batch(per_device_batch_size, drop_remainder=True)
-
-  ds = ds.map(process_batch, num_parallel_calls=tf.data.AUTOTUNE)
-  ds = ds.batch(jax.local_device_count(), drop_remainder=True)
   if 'train' in split:
     ds = ds.repeat()
   if 'train' in split and tf_data_service_address:

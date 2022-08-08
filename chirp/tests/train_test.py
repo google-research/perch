@@ -60,7 +60,7 @@ class TrainTest(absltest.TestCase):
     ds, dataset_info = pipeline.get_dataset(
         "train",
         dataset_directory=self.builder.data_dir,
-        **config.train_data_config)
+        pipeline=config.train_pipeline)
     return ds, dataset_info
 
   def _get_test_config(self, use_const_encoder=False) -> config_dict.ConfigDict:
@@ -68,19 +68,24 @@ class TrainTest(absltest.TestCase):
     config = baseline.get_config()
     config = config_utils.parse_config(config, config_globals.get_globals())
 
-    batch_size = config_dict.FieldReference(1)
-    window_size_s = config_dict.FieldReference(1)
-    mixin_prob = config_dict.FieldReference(0.)
-
     config.sample_rate_hz = 11_025
 
-    config.train_data_config.batch_size = batch_size
-    config.train_data_config.window_size_s = window_size_s
-    config.train_data_config.mixin_prob = mixin_prob
+    config.train_pipeline = pipeline.Pipeline(ops=[
+        pipeline.OnlyJaxTypes(),
+        pipeline.MultiHot(),
+        pipeline.MixAudio(mixin_prob=0.0),
+        pipeline.Batch(batch_size=1, split_across_devices=True),
+        pipeline.RandomSlice(window_size=1),
+        pipeline.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
+    ])
 
-    config.eval_data_config.batch_size = batch_size
-    config.eval_data_config.window_size_s = window_size_s
-    config.eval_data_config.mixin_prob = mixin_prob
+    config.eval_pipeline = pipeline.Pipeline(ops=[
+        pipeline.OnlyJaxTypes(),
+        pipeline.MultiHot(),
+        pipeline.Batch(batch_size=1, split_across_devices=True),
+        pipeline.Slice(window_size=1, start=0.5, names=("audio",)),
+        pipeline.NormalizeAudio(target_gain=0.2, names=("audio",)),
+    ])
 
     config.train_config.num_train_steps = 1
     config.train_config.log_every_steps = 1

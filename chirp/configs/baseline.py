@@ -17,35 +17,49 @@
 from chirp import config_utils
 from ml_collections import config_dict
 
+_c = config_utils.callable_config
+
 
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
+  batch_size = config_dict.FieldReference(64)
 
   config = config_dict.ConfigDict()
   config.sample_rate_hz = sample_rate_hz
+  config.batch_size = batch_size
 
   # Configure the data
-  batch_size = config_dict.FieldReference(64)
   window_size_s = config_dict.FieldReference(5)
-  min_gain = config_dict.FieldReference(0.15)
-  max_gain = config_dict.FieldReference(0.25)
 
-  train_data_config = config_dict.ConfigDict()
-  train_data_config.batch_size = batch_size
-  train_data_config.window_size_s = window_size_s
-  train_data_config.min_gain = min_gain
-  train_data_config.max_gain = max_gain
-  train_data_config.mixin_prob = 0.75
-  config.train_data_config = train_data_config
+  train_dataset_config = config_dict.ConfigDict()
+  train_dataset_config.pipeline = _c(
+      "pipeline.Pipeline",
+      ops=[
+          _c("pipeline.OnlyJaxTypes"),
+          _c("pipeline.MultiHot"),
+          _c("pipeline.MixAudio", mixin_prob=0.75),
+          _c("pipeline.Batch", batch_size=batch_size,
+             split_across_devices=True),
+          _c("pipeline.RandomSlice", window_size=window_size_s),
+          _c("pipeline.RandomNormalizeAudio", min_gain=0.15, max_gain=0.25),
+      ])
+  train_dataset_config.split = "train"
+  config.train_dataset_config = train_dataset_config
 
-  eval_data_config = config_dict.ConfigDict()
-  eval_data_config.batch_size = batch_size
-  eval_data_config.window_size_s = window_size_s
-  eval_data_config.min_gain = (min_gain + max_gain) / 2
-  eval_data_config.max_gain = (min_gain + max_gain) / 2
-  eval_data_config.mixin_prob = 0.0
-  config.eval_data_config = eval_data_config
+  eval_dataset_config = config_dict.ConfigDict()
+  eval_dataset_config.pipeline = _c(
+      "pipeline.Pipeline",
+      ops=[
+          _c("pipeline.OnlyJaxTypes"),
+          _c("pipeline.MultiHot"),
+          _c("pipeline.Batch", batch_size=batch_size,
+             split_across_devices=True),
+          _c("pipeline.Slice", window_size=window_size_s, start=0.5),
+          _c("pipeline.NormalizeAudio", target_gain=0.2),
+      ])
+  eval_dataset_config.split = "train"
+  config.eval_dataset_config = eval_dataset_config
 
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
@@ -55,21 +69,20 @@ def get_config() -> config_dict.ConfigDict:
   config.init_config = init_config
 
   model_config = config_dict.ConfigDict()
-  model_config.encoder = config_utils.callable_config(
+  model_config.encoder = _c(
       "efficientnet.EfficientNet",
-      model=config_utils.callable_config(
-          "efficientnet.EfficientNetModel", value="b1"))
+      model=_c("efficientnet.EfficientNetModel", value="b1"))
   model_config.taxonomy_loss_weight = 0.25
   init_config.model_config = model_config
 
-  model_config.frontend = config_utils.callable_config(
+  model_config.frontend = _c(
       "frontend.MorletWaveletTransform",
       features=160,
       stride=sample_rate_hz // 100,
-      kernel_size=2_048,  # ~0.025 * 32,000
+      kernel_size=2_048,  # ~0.08 * 32,000
       sample_rate=sample_rate_hz,
       freq_range=(60, 10_000),
-      scaling_config=config_utils.callable_config("frontend.PCENScalingConfig"))
+      scaling_config=_c("frontend.PCENScalingConfig"))
 
   # Configure the training loop
   num_train_steps = config_dict.FieldReference(250_000)

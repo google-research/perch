@@ -55,13 +55,12 @@ def main(argv: Sequence[str]) -> None:
 
   if _MODE.value == TRAIN:
     train_dataset, dataset_info = pipeline.get_dataset(
-        TRAIN,
         tf_data_service_address=_TF_DATA_SERVICE_ADDRESS.value,
-        **config.train_data_config)
+        **config.train_dataset_config)
   elif _MODE.value == EVAL:
     # TODO(tomdenton): Better eval scheme for separation.
     valid_dataset, dataset_info = pipeline.get_dataset(
-        TRAIN, **config.eval_data_config)
+        **config.eval_dataset_config)
   if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
     raise ValueError("Dataset sample rate must match config sample rate.")
 

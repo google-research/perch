@@ -90,6 +90,10 @@ def parse_config(config: config_dict.ConfigDict,
                  globals_: Dict[str, Any]) -> config_dict.ConfigDict:
   """Parse a configuration.
 
+  This handles nested configurations, as long as the values are callables
+  created using `callable_config`, or if the values are lists or tuples
+  containing elements created the same way.
+
   Args:
     config: A configuration object, potentially containing callables which were
       created using `callable_config`.
@@ -98,14 +102,23 @@ def parse_config(config: config_dict.ConfigDict,
   Returns:
     The parsed configuration dictionary.
   """
+
+  def _parse_value(value: config_dict.ConfigDict) -> Any:
+    if set(value.keys()) == {_CALLABLE, _KWARGS}:
+      return eval(value[_CALLABLE], globals_)(  # pylint: disable=eval-used
+          **parse_config(value[_KWARGS], globals_).to_dict())
+    elif set(value.keys()) == {_OBJECT}:
+      return eval(value[_OBJECT], globals_)  # pylint: disable=eval-used
+    else:
+      return parse_config(value, globals_)
+
   with config.ignore_type():
     for key, value in config.items():
       if isinstance(value, config_dict.ConfigDict):
-        if set(value.keys()) == {_CALLABLE, _KWARGS}:
-          config[key] = eval(value[_CALLABLE], globals_)(  # pylint: disable=eval-used
-              **parse_config(value[_KWARGS], globals_).to_dict())
-        elif set(value.keys()) == {_OBJECT}:
-          config[key] = eval(value[_OBJECT], globals_)  # pylint: disable=eval-used
-        else:
-          config[key] = parse_config(value, globals_)
+        config[key] = _parse_value(value)
+      elif isinstance(value, (list, tuple)):
+        config[key] = [
+            _parse_value(v) if isinstance(v, config_dict.ConfigDict) else v
+            for v in value
+        ]
     return config

@@ -17,6 +17,7 @@
 from typing import Any, Dict
 
 from chirp import audio_utils
+from chirp.data import pipeline
 from chirp.models import conformer
 from chirp.models import efficientnet
 from chirp.models import frontend
@@ -33,5 +34,6 @@ def get_globals() -> Dict[str, Any]:
       "frontend": frontend,
       "layers": layers,
       "nn": nn,
+      "pipeline": pipeline,
       "soundstream_unet": soundstream_unet
   }

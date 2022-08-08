@@ -17,29 +17,56 @@
 from chirp import config_utils
 from ml_collections import config_dict
 
+_c = config_utils.callable_config
+
 
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
+  batch_size = config_dict.FieldReference(64)
 
   config = config_dict.ConfigDict()
   config.sample_rate_hz = sample_rate_hz
+  config.batch_size = batch_size
 
-  # Data config
-  data_config = config_dict.ConfigDict()
-  data_config.window_size_s = 5
-  # TODO(bartvm): min_gain and max_gain should be deterministic for eval data
-  data_config.min_gain = 0.15
-  data_config.max_gain = 0.75
-  data_config.batch_size = 128
-  data_config.mixin_prob = 1.0
-  config.train_data_config = config.eval_data_config = data_config
+  # Configure the data
+  window_size_s = config_dict.FieldReference(5)
+
+  train_dataset_config = config_dict.ConfigDict()
+  train_dataset_config.pipeline = _c(
+      "pipeline.Pipeline",
+      ops=[
+          _c("pipeline.OnlyJaxTypes"),
+          _c("pipeline.MultiHot"),
+          _c("pipeline.MixAudio", mixin_prob=1.0),
+          _c("pipeline.Batch", batch_size=batch_size,
+             split_across_devices=True),
+          _c("pipeline.RandomSlice", window_size=window_size_s),
+          _c("pipeline.RandomNormalizeAudio", min_gain=0.15, max_gain=0.75),
+      ])
+  train_dataset_config.split = "train"
+  config.train_dataset_config = train_dataset_config
+
+  eval_dataset_config = config_dict.ConfigDict()
+  eval_dataset_config.pipeline = _c(
+      "pipeline.Pipeline",
+      ops=[
+          _c("pipeline.OnlyJaxTypes"),
+          _c("pipeline.MultiHot"),
+          _c("pipeline.MixAudio", mixin_prob=1.0),
+          _c("pipeline.Batch", batch_size=batch_size,
+             split_across_devices=True),
+          _c("pipeline.Slice", window_size=window_size_s, start=0.5),
+          _c("pipeline.NormalizeAudio", target_gain=0.45),
+      ])
+  eval_dataset_config.split = "train"
+  config.eval_dataset_config = eval_dataset_config
 
   # Experiment configuration
   init_config = config_dict.ConfigDict()
   init_config.rng_seed = 0
   init_config.learning_rate = 0.0001
-  init_config.input_size = sample_rate_hz * data_config.window_size_s
+  init_config.input_size = sample_rate_hz * window_size_s
   config.init_config = init_config
 
   # Model Configuration
