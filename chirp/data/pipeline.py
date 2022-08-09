@@ -367,6 +367,7 @@ class Batch(DatasetPreprocessOp):
 
 def get_dataset(
     split: str,
+    is_train: bool = False,
     dataset_directory: str = _DEFAULT_DATASET_DIR,
     tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
     tf_data_service_address: Optional[Any] = None,
@@ -376,10 +377,13 @@ def get_dataset(
 
   Args:
     split: data split, e.g. 'train', 'test', 'train[:80%]', etc.
+    is_train: If the dataset will be used for training. In this case, the
+      dataset will be shuffled and will repeat infinitely.
     dataset_directory: dataset directory.
     tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
       instead of using the tfds.builder_from_directory.
-    tf_data_service_address: Address for TFDataService.
+    tf_data_service_address: Address for TFDataService. Only used if is_train is
+      set.
     pipeline: The preprocessing pipeline to apply to the data.
 
   Returns:
@@ -392,7 +396,7 @@ def get_dataset(
     builder = tfds.builder_from_directory(dataset_directory)
     ds = builder.as_dataset(split=split)
     dataset_info = builder.info
-  if 'train' in split:
+  if is_train:
     ds = ds.shuffle(512)
   if pipeline is None:
     pipeline = Pipeline([
@@ -405,9 +409,9 @@ def get_dataset(
     ])
   ds = pipeline(ds, dataset_info)
 
-  if 'train' in split:
+  if is_train:
     ds = ds.repeat()
-  if 'train' in split and tf_data_service_address:
+  if is_train and tf_data_service_address:
     ds = ds.apply(
         tf.data.experimental.service.distribute(
             processing_mode=tf.data.experimental.service.ShardingPolicy.DYNAMIC,

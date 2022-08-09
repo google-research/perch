@@ -55,6 +55,7 @@ def main(argv: Sequence[str]) -> None:
 
   if _MODE.value == TRAIN:
     train_dataset, dataset_info = pipeline.get_dataset(
+        is_train=True,
         tf_data_service_address=_TF_DATA_SERVICE_ADDRESS.value,
         **config.train_dataset_config)
   elif _MODE.value == EVAL:
