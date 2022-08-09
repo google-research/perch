@@ -1,4 +1,4 @@
 fid,start_time_s,end_time_s,ebird_codes
 soundscape_1.flac,0,2,fakecode1
-soundscape_1.flac,1,3,fakecode1 fakecode2
+soundscape_1.flac,0,3,fakecode1 fakecode2
 soundscape_2.wav,2,3,fakecode1

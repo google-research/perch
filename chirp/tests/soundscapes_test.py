@@ -27,8 +27,13 @@ import tensorflow_datasets as tfds
 from absl.testing import absltest
 
 
+def mock_localization_fn(audio, sr, interval_length_s, max_intervals=200):
+  target_length = sr * interval_length_s
+  return [(0, target_length)]
+
+
 class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
-  """Tests for the bird taxonomy dataset."""
+  """Tests for the soundscape dataset."""
   DATASET_CLASS = soundscapes.Soundscapes
   BUILDER_CONFIG_NAMES_TO_TEST = [
       config.name
@@ -36,7 +41,7 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
       if config.name in ['caples']
   ]
   EXAMPLE_DIR = DATASET_CLASS.code_path.parent / 'placeholder_data'
-  SPLITS = {'train': 3}
+  SPLITS = {'train': 2}
   SKIP_CHECKSUMS = True
 
   @classmethod
@@ -53,7 +58,14 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
                                              '_load_taxonomy_metadata')
     cls.segments_patcher = mock.patch.object(cls.DATASET_CLASS,
                                              '_load_segments')
+    cls.loc_patcher = mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[0],
+                                        'localization_fn', mock_localization_fn)
     mock_load_segments = cls.segments_patcher.start()
+
+    # We mock the localization part with a function that finds signal in the
+    # first interval_length_s (5 sec.). This means that fake segments 1 and 2
+    # should be selected, but no the third.
+    cls.loc_patcher.start()
     mock_load_taxonomy_metadata = cls.metadata_patcher.start()
     mock_load_taxonomy_metadata.return_value = pd.read_json(
         cls.EXAMPLE_DIR / 'taxonomy_info.json')
@@ -79,6 +91,7 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     super().tearDownClass()
     cls.segments_patcher.stop()
     cls.metadata_patcher.stop()
+    cls.loc_patcher.stop()
     # _ = [patcher.stop() for patcher in cls.config_patcher]
     cls.url_patcher.stop()
     shutil.rmtree(cls.tempdir)
