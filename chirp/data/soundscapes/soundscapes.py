@@ -95,7 +95,7 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
   metadata_fields: Optional[Dict[str, str]] = None
   metadata_load_fn: Optional[Callable[[epath.Path], pd.DataFrame]] = None
   keep_unknown_annotation: bool = False
-  restrict_label_space: bool = False
+  restrict_label_space: bool = True
 
 
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
