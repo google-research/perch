@@ -17,7 +17,7 @@
 
 import functools
 import os
-from chirp.models import class_average
+from chirp.models import cmap
 from chirp.models import cwt
 from chirp.models import metrics
 from clu import metrics as clu_metrics
@@ -30,7 +30,6 @@ from absl.testing import absltest
 @flax.struct.dataclass
 class ValidationMetrics(clu_metrics.Collection):
   valid_map: clu_metrics.Average.from_fun(metrics.map_)
-  valid_cmap: class_average.ClassAverage.from_fun(metrics.cmap)
 
 
 class MetricsTest(absltest.TestCase):
@@ -73,7 +72,7 @@ class MetricsTest(absltest.TestCase):
     valid_metrics = p_update_metrics(valid_metrics, labels_repl, logits_repl)
     repl_metrics = flax.jax_utils.unreplicate(valid_metrics).compute()
 
-    for k in ["valid_map", "valid_cmap"]:
+    for k in ["valid_map"]:
       self.assertEqual(serial_metrics[k], repl_metrics[k])
       self.assertGreaterEqual(serial_metrics[k], 0.0)
       self.assertLessEqual(serial_metrics[k], 1.0)
@@ -115,6 +114,46 @@ class MetricsTest(absltest.TestCase):
     # The best_mix should recover the mixture channels exactly.
     self.assertEqual(l1_err(best_mix[0, 0], mix1), 0.0)
     self.assertEqual(l1_err(best_mix[0, 1], mix2), 0.0)
+
+  def test_cmap(self):
+    # The following example was worked out manually and verified.
+    scores = jnp.array([
+        [1.0, 1.2, 1.3],
+        [0.9, 1.7, 1.2],
+        [0.0, 1.0, 1.4],
+        [0.3, 1.4, 0.6],
+        [0.2, 0.8, 1.0],
+        [0.4, 0.6, 2.9],
+        [1.1, 0.0, 0.0],
+        [0.7, 0.7, 1.8],
+        [1.5, 2.0, 2.4],
+        [2.2, 1.8, 1.1],
+    ])
+    labels = jnp.array([
+        [1, 1, 0],
+        [0, 0, 0],
+        [0, 1, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 1, 0],
+        [1, 1, 0],
+        [0, 0, 0],
+        [1, 0, 0],
+    ])
+
+    full_cmap_metric = cmap.CMAP.from_model_output((scores, labels))
+    full_cmap_value = full_cmap_metric.compute()
+    # Check against the manually verified outcome.
+    self.assertEqual(full_cmap_value, 0.49687502)
+
+    batched_cmap_metric = cmap.CMAP.empty()
+    batched_cmap_metric = batched_cmap_metric.merge(
+        cmap.CMAP.from_model_output((scores[:5], labels[:5])))
+    batched_cmap_metric = batched_cmap_metric.merge(
+        cmap.CMAP.from_model_output((scores[5:], labels[5:])))
+    batched_cmap_value = batched_cmap_metric.compute()
+    self.assertEqual(batched_cmap_value, full_cmap_value)
 
 
 if __name__ == "__main__":

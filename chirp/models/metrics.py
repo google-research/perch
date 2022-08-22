@@ -30,8 +30,8 @@ def map_(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
   return average_precision(scores=logits, labels=labels)
 
 
-def cmap(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
-  return average_precision(scores=logits, labels=labels), labels
+def cmap_(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
+  return average_precision(scores=logits.T, labels=labels.T)
 
 
 def log_mse_loss(source: jnp.ndarray,
@@ -116,39 +116,36 @@ def source_sparsity_l1l2ratio_loss(separated_waveforms: jnp.ndarray,
 
 def average_precision(scores: jnp.ndarray,
                       labels: jnp.ndarray,
-                      interpolated: bool = False,
-                      axis: int = -1) -> jnp.ndarray:
+                      interpolated: bool = False) -> jnp.ndarray:
   """Average precision.
 
   The average precision is the area under the precision-recall curve. When
   using interpolation we take the maximum precision over all smaller recalls.
   The intuition is that it often makes sense to evaluate more documents if the
   total percentage of relevant documents increases.
+  Average precision is computed over the last axis.
 
   Args:
     scores: A score for each label which can be ranked.
     labels: A multi-hot encoding of the ground truth positives. Must match the
       shape of scores.
     interpolated: Whether to use interpolation.
-    axis: The axis containing the scores and class labels.
 
   Returns:
     The average precision.
   """
-  idx = jnp.flip(jnp.argsort(scores), axis)
-  scores = jnp.take_along_axis(scores, idx, axis=axis)
-  labels = jnp.take_along_axis(labels, idx, axis=axis)
-  pr_curve = jnp.cumsum(
-      labels, axis=axis) / (
-          jnp.arange(labels.shape[axis]) + 1)
+  idx = jnp.flip(jnp.argsort(scores), axis=-1)
+  scores = jnp.take_along_axis(scores, idx, axis=-1)
+  labels = jnp.take_along_axis(labels, idx, axis=-1)
+  pr_curve = jnp.cumsum(labels, axis=-1) / (jnp.arange(labels.shape[-1]) + 1)
   if interpolated:
-    pr_curve = lax.cummax(pr_curve, reverse=True, axis=axis)
+    pr_curve = lax.cummax(pr_curve, reverse=True, axis=-1)
 
   # In case of an empty row, assign precision = 1, and avoid dividing by zero.
-  mask = jnp.float32(jnp.sum(labels, axis=axis) == 0)
+  mask = jnp.float32(jnp.sum(labels, axis=-1) == 0)
   raw_av_prec = (
-      jnp.sum(pr_curve * labels, axis=axis) /
-      jnp.maximum(jnp.sum(labels, axis=axis), 1.0))
+      jnp.sum(pr_curve * labels, axis=-1) /
+      jnp.maximum(jnp.sum(labels, axis=-1), 1.0))
   return mask + (1 - mask) * raw_av_prec
 
 

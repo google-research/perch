@@ -21,6 +21,7 @@ from typing import Optional
 from absl import logging
 from chirp import export_utils
 from chirp.models import class_average
+from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import taxonomy_model
 from clu import checkpoint
@@ -78,12 +79,6 @@ def keyed_map(key: str, outputs: taxonomy_model.ModelOutputs,
       scores=getattr(outputs, key), labels=kwargs[key])
 
 
-def keyed_cmap(key: str, outputs: taxonomy_model.ModelOutputs,
-               **kwargs) -> Optional[jnp.ndarray]:
-  return metrics.average_precision(
-      scores=getattr(outputs, key), labels=kwargs[key]), kwargs[key]
-
-
 def make_metrics_collection(prefix: str, taxonomy_loss_weight: float):
   """Create metrics collection."""
   # pylint: disable=g-long-lambda
@@ -100,9 +95,6 @@ def make_metrics_collection(prefix: str, taxonomy_loss_weight: float):
                 functools.partial(keyed_cross_entropy, key=key)),
         key + "_map":
             clu_metrics.Average.from_fun(functools.partial(keyed_map, key=key)),
-        key + "_cmap":
-            class_average.ClassAverage.from_fun(
-                functools.partial(keyed_cmap, key=key)),
     })
   if taxonomy_loss_weight != 0.0:
     metrics_dict["loss"] = clu_metrics.Average.from_fun(taxonomy_cross_entropy)
@@ -293,7 +285,7 @@ def evaluate(model_bundle: ModelBundle,
     variables = {"params": train_state.params, **train_state.model_state}
     model_outputs = model_bundle.model.apply(
         variables, batch["audio"], train=False)
-    return valid_metrics.merge(
+    return model_outputs, valid_metrics.merge(
         valid_metrics.gather_from_model_output(
             outputs=model_outputs,
             label=batch["label"],
@@ -304,11 +296,16 @@ def evaluate(model_bundle: ModelBundle,
             axis_name="batch"))
 
   step = int(flax_utils.unreplicate(train_state.step))
+  cmap_metrics = cmap.make_cmap_metrics_dict(
+      ("label", "genus", "family", "order"))
   with reporter.timed("eval"):
     valid_metrics = flax_utils.replicate(valid_metrics.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
-      valid_metrics = update_metrics(valid_metrics, batch, train_state)
+      model_outputs, valid_metrics = update_metrics(valid_metrics, batch,
+                                                    train_state)
+      cmap_metrics = cmap.update_cmap_metrics_dict(cmap_metrics, model_outputs,
+                                                   batch)
       if eval_steps_per_checkpoint is not None and s >= eval_steps_per_checkpoint:
         break
 
@@ -316,6 +313,9 @@ def evaluate(model_bundle: ModelBundle,
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
 
   valid_metrics = {k.replace("___", "/"): v for k, v in valid_metrics.items()}
+  cmap_metrics = flax_utils.unreplicate(cmap_metrics)
+  for key in cmap_metrics:
+    valid_metrics[f"valid/{key}_cmap"] = cmap_metrics[key].compute()
   writer.write_scalars(step, valid_metrics)
   writer.flush()
 
