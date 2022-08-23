@@ -28,6 +28,7 @@ from chirp.models import frontend
 from chirp.tests import fake_dataset
 from clu import checkpoint
 from flax import linen as nn
+import jax
 from jax import numpy as jnp
 from ml_collections import config_dict
 import tensorflow as tf
@@ -60,7 +61,7 @@ class TrainTest(absltest.TestCase):
     ds, dataset_info = pipeline.get_dataset(
         "train",
         dataset_directory=self.builder.data_dir,
-        pipeline=config.train_pipeline)
+        pipeline=config.train_dataset_config.pipeline)
     return ds, dataset_info
 
   def _get_test_config(self, use_const_encoder=False) -> config_dict.ConfigDict:
@@ -70,7 +71,7 @@ class TrainTest(absltest.TestCase):
 
     config.sample_rate_hz = 11_025
 
-    config.train_pipeline = pipeline.Pipeline(ops=[
+    config.train_dataset_config.pipeline = pipeline.Pipeline(ops=[
         pipeline.OnlyJaxTypes(),
         pipeline.MultiHot(),
         pipeline.MixAudio(mixin_prob=0.0),
@@ -79,7 +80,7 @@ class TrainTest(absltest.TestCase):
         pipeline.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
     ])
 
-    config.eval_pipeline = pipeline.Pipeline(ops=[
+    config.eval_dataset_config.pipeline = pipeline.Pipeline(ops=[
         pipeline.OnlyJaxTypes(),
         pipeline.MultiHot(),
         pipeline.Batch(batch_size=1, split_across_devices=True),
@@ -104,6 +105,20 @@ class TrainTest(absltest.TestCase):
         sample_rate=32_000,
         freq_range=(60, 10_000))
     return config
+
+  def test_config_structure(self):
+    # Check that the test config and model config have similar structure.
+    # This helps ensure that the test configs don't drift too far from the
+    # actual configs we use for training.
+    raw_config = baseline.get_config()
+    parsed_config = config_utils.parse_config(raw_config,
+                                              config_globals.get_globals())
+    test_config = self._get_test_config()
+    print(jax.tree_util.tree_structure(parsed_config.to_dict()))
+    print(jax.tree_util.tree_structure(test_config.to_dict()))
+    self.assertEqual(
+        jax.tree_util.tree_structure(parsed_config.to_dict()),
+        jax.tree_util.tree_structure(test_config.to_dict()))
 
   def test_config_field_reference(self):
     config = self._get_test_config()

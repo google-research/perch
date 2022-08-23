@@ -27,6 +27,7 @@ from chirp.data import pipeline
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.tests import fake_dataset
 from clu import checkpoint
+import jax
 from ml_collections import config_dict
 import tensorflow as tf
 
@@ -60,9 +61,9 @@ class TrainSeparationTest(absltest.TestCase):
     config.dataset_directory = self.builder.data_dir
     config.tfds_data_dir = ""
     if "train" in split:
-      pipeline_ = config.train_pipeline
+      pipeline_ = config.train_dataset_config.pipeline
     else:
-      pipeline_ = config.eval_pipeline
+      pipeline_ = config.eval_dataset_config.pipeline
     ds, dataset_info = pipeline.get_dataset(
         split,
         dataset_directory=config.dataset_directory,
@@ -75,7 +76,7 @@ class TrainSeparationTest(absltest.TestCase):
     config = separator.get_config()
 
     window_size_s = config_dict.FieldReference(1)
-    config.train_pipeline = _c(
+    config.train_dataset_config.pipeline = _c(
         "pipeline.Pipeline",
         ops=[
             _c("pipeline.OnlyJaxTypes"),
@@ -85,7 +86,7 @@ class TrainSeparationTest(absltest.TestCase):
             _c("pipeline.RandomSlice", window_size=window_size_s),
         ])
 
-    config.eval_pipeline = _c(
+    config.eval_dataset_config.pipeline = _c(
         "pipeline.Pipeline",
         ops=[
             _c("pipeline.OnlyJaxTypes"),
@@ -116,6 +117,16 @@ class TrainSeparationTest(absltest.TestCase):
 
     config = config_utils.parse_config(config, config_globals.get_globals())
     return config
+
+  def test_config_structure(self):
+    # Check that the test config and model config have similar structure.
+    raw_config = separator.get_config()
+    parsed_config = config_utils.parse_config(raw_config,
+                                              config_globals.get_globals())
+    test_config = self._get_test_config()
+    self.assertEqual(
+        jax.tree_util.tree_structure(parsed_config.to_dict()),
+        jax.tree_util.tree_structure(test_config.to_dict()))
 
   def test_init_baseline(self):
     # Ensure that we can initialize the model with the baseline config.

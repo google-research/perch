@@ -95,6 +95,7 @@ def get_config() -> config_dict.ConfigDict:
 
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = num_train_steps
+  eval_config.eval_steps_per_checkpoint = 1000
   config.eval_config = eval_config
 
   return config
