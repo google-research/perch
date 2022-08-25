@@ -17,6 +17,8 @@
 
 General utilities to help with handling paths.
 """
+import os
+from typing import Iterable
 from absl import logging
 from etils import epath
 
@@ -32,3 +34,9 @@ def get_absolute_epath(relative_path: str) -> epath.Path:
   """
   file_path = epath.Path(__file__).parent / relative_path
   return file_path
+
+
+def listdir(relative_path: str) -> Iterable[str]:
+  """List the contents of a directory in the Chirp project."""
+  absolute_path = get_absolute_epath(relative_path).as_posix()
+  return os.listdir(absolute_path)
