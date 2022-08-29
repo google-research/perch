@@ -492,8 +492,21 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         with warnings.catch_warnings():
           warnings.simplefilter('ignore')
           sr = self.builder_config.sample_rate_hz
-          audio, _ = librosa.load(
-              f.name, sr=sr, res_type=self.builder_config.resampling_method)
+          try:
+            audio, _ = librosa.load(
+                f.name, sr=sr, res_type=self.builder_config.resampling_method)
+          except Exception as inst:
+            logging.warning(
+                'The audio at %s could not be loaded. Following'
+                'exception occured: %s', url, inst)
+            return []
+          # We remove all short audios. These short audios are only observed
+          # among caples_2020 unlabelled recordings.
+          target_length = int(sr * self.builder_config.interval_length_s)
+          if len(audio) < target_length:
+            logging.warning('Skipping audio at %s because too short.', url)
+            return []
+
           # Resampling can introduce artifacts that push the signal outside the
           # [-1, 1) interval.
           audio = np.clip(audio, -1.0, 1.0 - (1.0 / float(1 << 15)))

@@ -340,7 +340,7 @@ def apply_mixture_denoising(melspec: jnp.ndarray,
   is_noise = (x - feature_mean) < 2 * threshold * feature_std
 
   noise_counts = jnp.sum(is_noise.astype(x.dtype), axis=0, keepdims=True)
-  noise_mean = jnp.sum(x * is_noise, axis=1, keepdims=True) / (noise_counts + 1)
+  noise_mean = jnp.sum(x * is_noise, axis=0, keepdims=True) / (noise_counts + 1)
   noise_var = jnp.sum(
       is_noise * jnp.square(x - noise_mean), axis=0, keepdims=True)
   noise_std = jnp.sqrt(noise_var / (noise_counts + 1))
