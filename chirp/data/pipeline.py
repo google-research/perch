@@ -462,6 +462,26 @@ class OnlyJaxTypes(FeaturesPreprocessOp):
 
 
 @dataclasses.dataclass
+class Shuffle(DatasetPreprocessOp):
+  """Shuffles the dataset."""
+  shuffle_buffer_size: int
+  seed: Optional[int] = None
+
+  def __call__(self, dataset: tf.data.Dataset,
+               dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
+    return dataset.shuffle(self.shuffle_buffer_size, seed=self.seed)
+
+
+@dataclasses.dataclass
+class Repeat(DatasetPreprocessOp):
+  """Repeats the data infinitely."""
+
+  def __call__(self, dataset: tf.data.Dataset,
+               dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
+    return dataset.repeat()
+
+
+@dataclasses.dataclass
 class Batch(DatasetPreprocessOp):
   """Collects samples into batches.
 
@@ -500,8 +520,9 @@ def get_dataset(
 
   Args:
     split: data split, e.g. 'train', 'test', 'train[:80%]', etc.
-    is_train: If the dataset will be used for training. In this case, the
-      dataset will be shuffled and will repeat infinitely.
+    is_train: If the dataset will be used for training. This only affects
+      whether data will be distributed or not in case tf_data_service_address 
+      is provided.
     dataset_directory: dataset directory.
     tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
       instead of using the tfds.builder_from_directory.
@@ -520,8 +541,7 @@ def get_dataset(
     builder = tfds.builder_from_directory(dataset_directory)
     ds = builder.as_dataset(split=split)
     dataset_info = builder.info
-  if is_train:
-    ds = ds.shuffle(512)
+
   if pipeline is None:
     pipeline = Pipeline([
         OnlyJaxTypes(),
@@ -533,8 +553,6 @@ def get_dataset(
     ])
   ds = pipeline(ds, dataset_info)
 
-  if is_train:
-    ds = ds.repeat()
   if is_train and tf_data_service_address:
     ds = ds.apply(
         tf.data.experimental.service.distribute(

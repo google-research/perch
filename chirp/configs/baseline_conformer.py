@@ -32,12 +32,14 @@ def get_config() -> config_dict.ConfigDict:
   config.train_pipeline = _c(
       "pipeline.Pipeline",
       ops=[
+          _c("pipeline.Shuffle", shuffle_buffer_size=512),
           _c("pipeline.OnlyJaxTypes"),
           _c("pipeline.MultiHot"),
           _c("pipeline.MixAudio", mixin_prob=0.25),
           _c("pipeline.Batch", batch_size=64),
           _c("pipeline.RandomSlice", window_size=window_size_s),
           _c("pipeline.RandomNormalizeAudio", min_gain=0.15, max_gain=0.25),
+          _c("pipeline.Repeat")
       ])
 
   config.eval_pipeline = _c(
