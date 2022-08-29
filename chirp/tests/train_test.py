@@ -132,10 +132,8 @@ class TrainTest(absltest.TestCase):
     config = self._get_test_config(use_const_encoder=True)
     config.init_config.model_config.frontend.use_tf_stft = False
 
-    _, dataset_info = self._get_test_dataset(config)
-
     model_bundle, train_state = train.initialize_model(
-        dataset_info, workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config)
 
     train.export_tf(model_bundle, train_state, self.train_dir,
                     config.init_config.input_size)
@@ -148,18 +146,16 @@ class TrainTest(absltest.TestCase):
   def test_init_baseline(self):
     # Ensure that we can initialize the model with the baseline config.
     config = self._get_test_config()
-    _, dataset_info = self._get_test_dataset(config)
-
     model_bundle, train_state = train.initialize_model(
-        dataset_info, workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config)
     self.assertIsNotNone(model_bundle)
     self.assertIsNotNone(train_state)
 
   def test_train_one_step(self):
     config = self._get_test_config(use_const_encoder=True)
-    ds, dataset_info = self._get_test_dataset(config)
+    ds, _ = self._get_test_dataset(config)
     model_bundle, train_state = train.initialize_model(
-        dataset_info, workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config)
 
     train.train(
         model_bundle=model_bundle,
@@ -172,9 +168,9 @@ class TrainTest(absltest.TestCase):
 
   def test_eval_one_step(self):
     config = self._get_test_config(use_const_encoder=True)
-    ds, dataset_info = self._get_test_dataset(config)
+    ds, _ = self._get_test_dataset(config)
     model_bundle, train_state = train.initialize_model(
-        dataset_info, workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config)
     # Write a chekcpoint, or else the eval will hang.
     model_bundle.ckpt.save(train_state)
 

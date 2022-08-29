@@ -67,8 +67,7 @@ def main(argv: Sequence[str]) -> None:
         "need to set the sample rate in the config to {}.".format(
             dataset_info.features["audio"].sample_rate))
 
-  model = train.initialize_model(
-      dataset_info, workdir=_WORKDIR.value, **config.init_config)
+  model = train.initialize_model(workdir=_WORKDIR.value, **config.init_config)
   if _MODE.value == TRAIN:
     train.train(
         *model, train_dataset, logdir=_LOGDIR.value, **config.train_config)

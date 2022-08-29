@@ -15,6 +15,8 @@
 
 """Metrics for training and validation."""
 
+from typing import Optional
+
 from jax import lax
 from jax import numpy as jnp
 from jax import scipy
@@ -26,8 +28,10 @@ def mean_cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
   return lax.pmean(mean, axis_name="batch")
 
 
-def map_(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
-  return average_precision(scores=logits, labels=labels)
+def map_(logits: jnp.ndarray,
+         labels: jnp.ndarray,
+         label_mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
+  return average_precision(scores=logits, labels=labels, label_mask=label_mask)
 
 
 def cmap_(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
@@ -116,6 +120,7 @@ def source_sparsity_l1l2ratio_loss(separated_waveforms: jnp.ndarray,
 
 def average_precision(scores: jnp.ndarray,
                       labels: jnp.ndarray,
+                      label_mask: Optional[jnp.ndarray] = None,
                       interpolated: bool = False) -> jnp.ndarray:
   """Average precision.
 
@@ -129,11 +134,19 @@ def average_precision(scores: jnp.ndarray,
     scores: A score for each label which can be ranked.
     labels: A multi-hot encoding of the ground truth positives. Must match the
       shape of scores.
+    label_mask: A mask indicating which labels to involve in the calculation.
     interpolated: Whether to use interpolation.
 
   Returns:
     The average precision.
   """
+  if label_mask is not None:
+    # Set all masked labels to zero, and send the scores for those labels to
+    # a low value. Then the masked scores+labels will not impact the
+    # average precision calculation.
+    labels = labels * label_mask
+    min_score = jnp.min(scores) - 1.0
+    scores = scores * label_mask + min_score * (1 - label_mask)
   idx = jnp.flip(jnp.argsort(scores), axis=-1)
   scores = jnp.take_along_axis(scores, idx, axis=-1)
   labels = jnp.take_along_axis(labels, idx, axis=-1)

@@ -18,6 +18,7 @@ import os
 import tempfile
 
 from chirp.data import pipeline
+from chirp.taxonomy import namespace_db
 from chirp.tests import fake_dataset
 import numpy as np
 import tensorflow as tf
@@ -193,6 +194,44 @@ class PipelineTest(absltest.TestCase):
               'audio', 'source_audio', 'bg_labels', 'family', 'genus', 'label',
               'order', 'segment_start', 'segment_end'
           })
+
+  def test_convert_bird_taxonomy_labels(self):
+    db = namespace_db.NamespaceDatabase.load_csvs()
+    source_class_set = db.class_lists['caples']
+    target_class_set = db.class_lists['ebird2021']
+    self.assertEqual(source_class_set.size, 79)
+    self.assertEqual(target_class_set.size, 10932)
+
+    # example labels include three 'good' labels and many out of range labels.
+    # Good classes are 'amedip', 'comnig', 'macwar', and 'yerwar'.
+    # The following table lists their index in the source_class_list,
+    # label, genus, family, and order.
+    # 0  amedip cinclus    cinclidae     passeriformes
+    # 20 comnig chordeiles caprimulgidae caprimulgiformes
+    # 40 macwar geothlypis parulidae     passeriformes
+    # 78 yerwar setophaga  parulidae     passeriformes
+    example = {
+        'label': tf.constant([0, 20, 40, 78, 79, 10931, 10932, -1], tf.int64),
+        'bg_labels': tf.constant([18, 1000], tf.int64),
+    }
+    converter = pipeline.ConvertBirdTaxonomyLabels()
+    converted = converter.convert_features(example, source_class_set)
+    for name, shape, num in (('label', 10932, 4), ('bg_labels', 10932, 1),
+                             ('genus', 2333, 4), ('family', 249, 3), ('order',
+                                                                      41, 2)):
+      print(name, shape, num, sum(converted[name].numpy()))
+      self.assertIn(name, converted)
+      self.assertLen(converted[name].shape, 1)
+      self.assertEqual(converted[name].shape[0], shape)
+      self.assertEqual(converted[name].shape[0],
+                       converted[name + '_mask'].shape[0])
+      self.assertEqual(sum(converted[name].numpy()), num)
+
+    for image_name, image_size in (('label_mask', 79), ('genus_mask', 62),
+                                   ('family_mask', 30), ('order_mask', 11)):
+      self.assertIn(image_name, converted)
+      self.assertLen(converted[image_name].shape, 1)
+      self.assertEqual(np.sum(converted[image_name].numpy()), image_size)
 
 
 if __name__ == '__main__':

@@ -19,6 +19,8 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 # Import bird_taxonomy to register the custom tfds.features.FeatureConnector.
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
+from chirp.taxonomy import namespace
+from chirp.taxonomy import namespace_db
 import jax
 from jax import numpy as jnp
 import tensorflow as tf
@@ -237,8 +239,9 @@ class MixAudio(DatasetPreprocessOp):
   name: str = 'audio'
   source_name: str = 'source_audio'
   pad_names: Tuple[str, ...] = ('segment_start', 'segment_end')
-  label_names: Tuple[str,
-                     ...] = ('label', 'genus', 'family', 'order', 'bg_labels')
+  label_names: Tuple[str, ...] = ('label', 'genus', 'family', 'order',
+                                  'bg_labels', 'label_mask', 'genus_mask',
+                                  'family_mask', 'order_mask', 'bg_labels_mask')
   axis: int = 0
 
   def __call__(self, dataset: tf.data.Dataset,
@@ -322,6 +325,126 @@ class MultiHot(FeaturesPreprocessOp):
 
 
 @dataclasses.dataclass
+class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
+  """Convert to a target set of classes and generate taxonomy labels."""
+  source_namespace: str = 'ebird2021'
+  target_class_list: str = 'ebird2021'
+  species_feature_name: str = 'label'
+  species_bg_label_name: str = 'bg_labels'
+  add_taxonomic_labels: bool = True
+  # Whether to add output features indicating which classes are represented
+  # in the source dataset.
+  output_masks: bool = True
+  # Ideally we will read the source namespace from the dataset_info eventually.
+  db: Optional[namespace_db.NamespaceDatabase] = None
+  tables: Optional[Dict[str, tf.lookup.StaticHashTable]] = None
+  images: Optional[Dict[str, tf.Tensor]] = None
+
+  def __post_init__(self):
+    # Create TF StaticHashTables in post_init to avoid running construction
+    # code repeatedly.
+    self.db = namespace_db.NamespaceDatabase.load_csvs()
+    self.tables = {}
+    self.images = {}
+
+  def load_tables(self, source_class_list: namespace.ClassList):
+    """Construct TF StaticHashTables from namespace db info.
+
+    Populates self.tables with TF StaticHashTables for label conversion, and
+    self.images with the image masks for the translated labels.
+
+    Args:
+      source_class_list: ClassList for the soruce dataset.
+    """
+    target_classes = self.db.class_lists[self.target_class_list]
+
+    label_table, label_mask = (
+        source_class_list.get_class_map_tf_lookup(target_classes))
+    self.tables[self.species_feature_name] = label_table
+    self.images[self.species_feature_name] = label_mask
+    self.tables[self.species_bg_label_name] = label_table
+    self.images[self.species_bg_label_name] = label_mask
+
+    for key in ['genus', 'family', 'order']:
+      # This is surprisingly tricky to get right for mismatched eval sets.
+      # First map the source and target classes (eg, eval dataset species and
+      # model ClassList) into the target namespace (eg, genera). This creates
+      # two different ClassLists of genera. We then map the source genera to the
+      # target genera to obtain an appropriate image_mask.
+      namespace_mapping = self.db.mappings[self.source_namespace + '_to_' + key]
+      source_taxa_classes = source_class_list.apply_namespace_mapping(
+          namespace_mapping)
+      target_taxa_classes = target_classes.apply_namespace_mapping(
+          namespace_mapping)
+      namespace_table, _ = source_class_list.get_namespace_map_tf_lookup(
+          namespace_mapping)
+      class_table, image_mask = source_taxa_classes.get_class_map_tf_lookup(
+          target_taxa_classes)
+      self.tables[key + '_namespace'] = namespace_table
+      self.tables[key + '_class'] = class_table
+      self.images[key] = image_mask
+
+  def convert_labels(self, features: Features, key: str,
+                     output_key: str) -> Features:
+    """Get a transformation for a given ClassList."""
+    if output_key in (self.species_feature_name, self.species_bg_label_name):
+      table = self.tables[key]
+      image_mask = self.images[key]
+      output_labels = table.lookup(features[key])
+    else:
+      namespace_table = self.tables[output_key + '_namespace']
+      class_table = self.tables[output_key + '_class']
+      output_labels = class_table.lookup(namespace_table.lookup(features[key]))
+      image_mask = self.images[output_key]
+
+    # Drop unknown labels.
+    output_labels = tf.gather(output_labels, tf.where(output_labels >= 0)[:, 0])
+    # Convert to MultiHot encoding.
+    class_list_size = image_mask.shape[0]
+    output_labels = tf.clip_by_value(
+        tf.reduce_sum(
+            tf.one_hot(output_labels, class_list_size, dtype=tf.int64), axis=0),
+        0, 1)
+    return {output_key: output_labels, output_key + '_mask': image_mask}
+
+  def convert_features(self, features: Features,
+                       source_classes: namespace.ClassList) -> Features:
+    """Convert features to target class list and add taxonomy labels."""
+    output_features = features.copy()
+    if not self.tables:
+      self.load_tables(source_classes)
+
+    output_features.update(
+        self.convert_labels(features, self.species_feature_name,
+                            self.species_feature_name))
+
+    if self.species_bg_label_name in features:
+      output_features.update(
+          self.convert_labels(features, self.species_bg_label_name,
+                              self.species_bg_label_name))
+
+    if not self.add_taxonomic_labels:
+      return output_features
+
+    output_features.update(
+        self.convert_labels(features, self.species_feature_name, 'genus'))
+    output_features.update(
+        self.convert_labels(features, self.species_feature_name, 'family'))
+    output_features.update(
+        self.convert_labels(features, self.species_feature_name, 'order'))
+
+    return output_features
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    source_classes = namespace.ClassList(
+        'dataset', self.source_namespace,
+        dataset_info.features[self.species_feature_name].names)
+    output_features = self.convert_features(features, source_classes)
+    return output_features
+
+
+@dataclasses.dataclass
 class OnlyJaxTypes(FeaturesPreprocessOp):
   """Discards tensors that are not supported by JAX (e.g., non-numeric).
 
@@ -391,7 +514,8 @@ def get_dataset(
   """
   if tfds_data_dir:
     tfds.core.add_data_dir(tfds_data_dir)
-    ds, dataset_info = tfds.load(dataset_directory, split=split, with_info=True)
+    ds, dataset_info = tfds.load(
+        dataset_directory, data_dir=tfds_data_dir, split=split, with_info=True)
   else:
     builder = tfds.builder_from_directory(dataset_directory)
     ds = builder.as_dataset(split=split)

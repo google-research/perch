@@ -126,12 +126,14 @@ class ClassList:
     target_idxs = target_class_list.get_index_lookup()
     keys = [source_idxs[k] for k in intersection]
     values = [target_idxs[k] for k in intersection]
+    initializer = tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64,
+                                                      tf.int64)
     table = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64, tf.int64),
+        initializer,
         default_value=-1,
     )
     image_mask = [k in source_idxs for k in target_class_list.classes]
-    image_mask = tf.constant(image_mask, tf.int32)
+    image_mask = tf.constant(image_mask, tf.int64)
     return table, image_mask
 
   def get_namespace_map_tf_lookup(
@@ -155,9 +157,10 @@ class ClassList:
         target_cl = mapping_dict[cl]
         keys.append(i)
         values.append(target_class_idxs[target_cl])
-
+    initializer = tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64,
+                                                      tf.int64)
     table = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64, tf.int64),
+        initializer=initializer,
         default_value=-1,
     )
     return table, target_class_list

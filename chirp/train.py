@@ -20,10 +20,10 @@ from typing import Optional
 
 from absl import logging
 from chirp import export_utils
-from chirp.models import class_average
 from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import taxonomy_model
+from chirp.taxonomy import namespace_db
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -40,7 +40,6 @@ from ml_collections import config_dict
 import numpy as np
 import optax
 import tensorflow as tf
-import tensorflow_datasets as tfds
 
 EVAL_LOOP_SLEEP_S = 30
 
@@ -67,16 +66,19 @@ def taxonomy_cross_entropy(outputs: taxonomy_model.ModelOutputs,
 def keyed_cross_entropy(key: str, outputs: taxonomy_model.ModelOutputs,
                         **kwargs) -> Optional[jnp.ndarray]:
   """Cross entropy for the specified taxonomic label set."""
-  mean = jnp.mean(
-      optax.sigmoid_binary_cross_entropy(getattr(outputs, key), kwargs[key]),
-      axis=-1)
+  cross_entropy = optax.sigmoid_binary_cross_entropy(
+      getattr(outputs, key), kwargs[key])
+  label_mask = kwargs.get(key + "_mask", 1)
+  cross_entropy = label_mask * cross_entropy
+  mean = jnp.mean(cross_entropy, axis=-1)
   return mean
 
 
 def keyed_map(key: str, outputs: taxonomy_model.ModelOutputs,
               **kwargs) -> Optional[jnp.ndarray]:
+  label_mask = kwargs.get(key + "_mask", None)
   return metrics.average_precision(
-      scores=getattr(outputs, key), labels=kwargs[key])
+      scores=getattr(outputs, key), labels=kwargs[key], label_mask=label_mask)
 
 
 def make_metrics_collection(prefix: str, taxonomy_loss_weight: float):
@@ -139,19 +141,33 @@ class ModelBundle:
   ckpt: checkpoint.Checkpoint
 
 
-def initialize_model(dataset_info: tfds.core.DatasetInfo,
-                     model_config: config_dict.ConfigDict, rng_seed: int,
-                     input_size: int, learning_rate: float, workdir: str):
+def get_class_sizes(species_class_list_name: str):
+  """Get the number of classes for the target class outputs."""
+  db = namespace_db.NamespaceDatabase.load_csvs()
+  species_classes = db.class_lists[species_class_list_name]
+  num_classes = {
+      "label": species_classes.size,
+  }
+  for name in ["genus", "family", "order"]:
+    mapping_name = f"{species_classes.namespace}_to_{name}"
+    if mapping_name not in db.mappings:
+      continue
+    mapping = db.mappings[mapping_name]
+    taxa_class_list = species_classes.apply_namespace_mapping(mapping)
+    num_classes[name] = taxa_class_list.size
+  return num_classes
+
+
+def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
+                     input_size: int, learning_rate: float, workdir: str,
+                     target_class_list: str):
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
 
   # Load model
   model_init_key, key = random.split(key)
-  num_classes = {
-      k: dataset_info.features[k].num_classes
-      for k in ("label", "genus", "family", "order")
-  }
+  num_classes = get_class_sizes(target_class_list)
   model = taxonomy_model.TaxonomyModel(num_classes=num_classes, **model_config)
   variables = model.init(
       model_init_key, jnp.zeros((1, input_size)), train=False)
@@ -213,11 +229,8 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
     taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
     train_metrics = train_metrics_collection.gather_from_model_output(
         outputs=model_outputs,
-        label=batch["label"],
-        genus=batch["genus"],
-        family=batch["family"],
-        order=batch["order"],
-        taxonomy_loss_weight=taxonomy_loss_weight).compute()
+        taxonomy_loss_weight=taxonomy_loss_weight,
+        **batch).compute()
     return train_metrics["train___loss"], (train_metrics, model_state)
 
   # Define update step
@@ -288,12 +301,9 @@ def evaluate(model_bundle: ModelBundle,
     return model_outputs, valid_metrics.merge(
         valid_metrics.gather_from_model_output(
             outputs=model_outputs,
-            label=batch["label"],
-            genus=batch["genus"],
-            family=batch["family"],
-            order=batch["order"],
             taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
-            axis_name="batch"))
+            axis_name="batch",
+            **batch))
 
   step = int(flax_utils.unreplicate(train_state.step))
   cmap_metrics = cmap.make_cmap_metrics_dict(
