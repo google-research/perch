@@ -19,7 +19,7 @@ import collections
 import dataclasses
 import json
 import tempfile
-from typing import Callable, Dict, Optional, Set, Tuple
+from typing import Callable, Dict, Optional, Set, Tuple, List, Any
 import warnings
 
 from absl import logging
@@ -48,6 +48,8 @@ _CITATION = """
   organization={CEUR}
 }
 """
+
+_AUDIO_EXTENSIONS = ['.flac', '.wav']
 
 _DEPRECATED2NEW = {'reevir1': 'reevir'}
 
@@ -96,25 +98,30 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
   metadata_load_fn: Optional[Callable[[epath.Path], pd.DataFrame]] = None
   keep_unknown_annotation: bool = False
   restrict_label_space: bool = True
+  supervised: bool = True
+  audio_dir = epath.Path('gs://chirp-public-bucket/soundscapes')
 
 
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
   """DatasetBuilder for soundscapes data."""
 
-  VERSION = tfds.core.Version('1.0.0')
+  VERSION = tfds.core.Version('1.0.1')
   RELEASE_NOTES = {
-      '1.0.0': 'Initial release.',
+      '1.0.0': 'Initial release. The label set corresponds to the full '
+               'set of ~11 000 Xeno-Canto species.',
+      '1.0.1': 'The label set is now restricted to the species present in each'
+               'dataset.',
   }
   BUILDER_CONFIGS = [
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
-          name='caples', # TODO(mboudiaf) Try to interface caples metadata.
-          audio_source='caples',
+          name='caples',  # TODO(mboudiaf) Try to interface caples metadata.
+          audio_source='caples/audio',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          description=('Caples recordings.')),
+          description=('Annotated Caples recordings from 2018/2019.')),
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
           name='birdclef2019_colombia',
-          audio_source='birdclef2019',
+          audio_source='birdclef2019/audio',
           metadata_load_fn=load_birdclef_metadata,
           interval_length_s=5.0,
           metadata_fields={
@@ -129,7 +136,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
               'Colombian recordings from the Birdclef 2019 challenge.')),
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
           name='birdclef2019_ssw',
-          audio_source='birdclef2019',
+          audio_source='birdclef2019/audio',
           metadata_load_fn=load_birdclef_metadata,
           interval_length_s=5.0,
           metadata_fields={
@@ -143,18 +150,17 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           description=('SSW recordings from the Birdclef 2019 challenge.')),
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
           name='high_sierras',
-          audio_source='high_sierras',
+          audio_source='high_sierras/audio',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           description=('High Sierras recordings.')),
   ]
-  GCS_URL = epath.Path('gs://chirp-public-bucket/soundscapes')
 
   def _load_segments(self, dl_manager):
     """Load the dataframe of all segments from metadata/."""
 
     paths = dl_manager.download_and_extract({
-        'segments': (self.GCS_URL / 'metadata' /
+        'segments': (self.builder_config.audio_dir / 'metadata' /
                      f'{self.builder_config.name}.csv').as_posix(),
     })
     segment_path = paths['segments']
@@ -303,7 +309,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
     # Load the dataframe containing the metadata. Each row describes some audio
     # file, and the dataframe should contain the 'fid' column, which acts as the
     # key to match with segments.
-    metadata_df = self.builder_config.metadata_load_fn(self.GCS_URL)
+    metadata_df = self.builder_config.metadata_load_fn(
+        self.builder_config.audio_dir)
     fid_to_metadata_index = metadata_df.groupby('fid').groups
     combined_segments = []
     bar = tqdm.tqdm(segments.iterrows(), total=len(segments))
@@ -323,41 +330,65 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
 
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
 
-    segments = self._load_segments(dl_manager)
-
-    # Add genus, family, order information for each segment.
-    segments = self._combine_with_full_taxonomy(segments)
-
-    # If specified, combine the segments with additional metadata (e.g Country).
-    if self.builder_config.metadata_load_fn is not None:
-      segments = self._combine_with_metadata(segments)
-
-    segments = segments.rename({
-        'fid': 'filename',
-        'ebird_codes': 'label'
-    },
-                               axis=1)
-
-    # Match filename with actual audio paths.
-    audio_path = self.GCS_URL / self.builder_config.audio_source / 'audio'
+    dl_manager._force_checksums_validation = False
+    # Find all file present in the audio/directory
+    audio_path = self.builder_config.audio_dir / self.builder_config.audio_source
     all_audio_filenames = list(audio_path.iterdir())
-    stem2path = {
-        fpath.stem.split('.')[0]: fpath.parts[-1]
-        for fpath in all_audio_filenames
-    }
-    segments['stem'] = segments['filename'].apply(
-        lambda filename: filename.split('.')[0])
 
-    # Log all segments that could not be matched to an actual audio file.
-    audio_not_found = segments[segments['stem'].apply(
-        lambda stem: stem not in stem2path)]
-    logging.info('Audios that could not be found: %s.',
-                 audio_not_found['stem'].unique())
+    if self.builder_config.supervised:
+      # For supervised data, we first grab the annotated segments.
+      segments = self._load_segments(dl_manager)
 
-    # Filter out all segments that could not be matched to an actual audio file.
-    segments = segments[segments['stem'].apply(lambda stem: stem in stem2path)]
-    segments['url'] = segments.apply(
-        lambda rec: audio_path / stem2path[rec['stem']], axis=1)
+      # Add genus, family, order information for each segment.
+      segments = self._combine_with_full_taxonomy(segments)
+
+      # If specified, combine the segments with additional metadata
+      # (e.g Country).
+      if self.builder_config.metadata_load_fn is not None:
+        segments = self._combine_with_metadata(segments)
+
+      segments = segments.rename({
+          'fid': 'filename',
+          'ebird_codes': 'label'
+      },
+                                 axis=1)
+
+      stem2path = {
+          fpath.stem.split('.')[0]: fpath.parts[-1]
+          for fpath in all_audio_filenames
+      }
+      segments['stem'] = segments['filename'].apply(
+          lambda filename: filename.split('.')[0])
+
+      # Log all segments that could not be matched to an actual audio file.
+      audio_not_found = segments[segments['stem'].apply(
+          lambda stem: stem not in stem2path)]
+      logging.info('Audios that could not be found: %s.',
+                   audio_not_found['stem'].unique())
+
+      # Filter out all segments that could not be matched to an actual
+      # audio file.
+      segments = segments[segments['stem'].apply(
+          lambda stem: stem in stem2path)]
+      segments['url'] = segments.apply(
+          lambda rec: audio_path / stem2path[rec['stem']], axis=1)
+    else:
+      # For unsupervised data, we have access to a set of non-annotated audio
+      # files. Therefore, we collect them, and attach an "unknown" labelled
+      # segment to each of the audio files.
+      segments = pd.DataFrame(
+          [x for x in all_audio_filenames if x.suffix in _AUDIO_EXTENSIONS],
+          columns=['url'])
+      segments['filename'] = segments['url'].apply(lambda x: x.stem)
+      # For compatibility, we add an "unknown" annotation to the recording
+      # dataframe that goes from start to end. That ensures that any interval
+      # detected as signal by our localization function will appear in the
+      # final audio set, with the 'unknown' annotation.
+      segments['start_time_s'] = 0
+      segments['end_time_s'] = -1
+      for level in ['label', 'order', 'family', 'genus']:
+        segments[level] = [['unknown'] for _ in range(len(segments))]
+    logging.info('%s annotated segments detected', len(segments))
     return {
         'train': self._generate_examples(segments=segments),
     }
@@ -377,18 +408,19 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
 
     Args:
       audio: The full audio file, already loaded.
-      file_segments: The annotated segments for this audio.
+      file_segments: The annotated segments for this audio. Each row (=segment)
+        must minimally contain the following fields: ['label', 'genus', 'order',
+        'family', 'start_time_s', 'end_time_s'].
 
     Returns:
       labeled_intervals: A Dict mapping a (start, end) time of the recording to
       the sets of species/genus/orders/families present in that interval.
     """
-    print('Found %d annotations for target file.' % len(file_segments))
+    logging.info('Found %d annotations for target file.', len(file_segments))
 
     # Slice the audio into intervals
     sr = self.builder_config.sample_rate_hz
-    # Returns `interval_length_s` long intervals. TODO: change max_intervals to -1
-    # for infinity upper bound.
+    # Returns `interval_length_s` long intervals.
     audio_intervals = [
         (int(st), int(end))
         for (st, end) in self.builder_config.localization_fn(
@@ -396,12 +428,23 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
     ]
     interval_timestamps = sorted(audio_intervals)
 
-    # Search for intervals with annotations.
     def _st_end_key(seg):
-      return (int(sr * seg['start_time_s']), int(sr * seg['end_time_s']))
+      if seg['end_time_s'] == -1:
+        end = audio.shape[-1]
+      else:
+        end = int(sr * seg['end_time_s'])
+        if seg['end_time_s'] < seg['start_time_s']:
+          logging.warning(
+              'Skipping annotated segment because end time is anterior to start time.'
+          )
+          return ()
+      return (int(sr * seg['start_time_s']), end)
 
+    # Search for intervals with annotations.
     segments_by_timestamp = {
-        _st_end_key(seg): seg for _, seg in file_segments.iterrows()
+        _st_end_key(seg): seg
+        for _, seg in file_segments.iterrows()
+        if _st_end_key(seg)
     }
     labeled_intervals = {}
     for (st, end) in interval_timestamps:
@@ -422,10 +465,18 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
     return labeled_intervals
 
   def _generate_examples(self, segments: pd.DataFrame):
-    librosa = tfds.core.lazy_imports.librosa
-    segment_groups = segments.groupby('filename')
+    """Generate examples from the dataframe of segments.
 
-    def _process_group(segment_group: pd.DataFrame):
+    Args:
+      segments: Dataframe of segments. Each row (=segment) must minimally
+        contain the following fields ['filename', 'url', 'label', 'genus',
+        'order', 'start_time_s', 'end_time_s'].
+    """
+    beam = tfds.core.lazy_imports.apache_beam
+    librosa = tfds.core.lazy_imports.librosa
+
+    def _process_group(
+        segment_group: pd.DataFrame) -> List[Tuple[str, Dict[str, Any]]]:
 
       # Each segment in segment_group will generate a tf.Example. A lot of
       # fields, especially metadata ones will be shared between segments.
@@ -449,9 +500,11 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
 
       labeled_intervals = self.get_labeled_intervals(audio, segment_group)
 
-      # Remove all the fields we don't need from the recording_template.
+      # Remove all the fields we don't need from the recording_template. We set
+      # errors='ignore' as some fields to be dropped may already not exist.
       recording_template = recording_template.drop(
-          ['stem', 'url', 'start_time_s', 'end_time_s']).to_dict()
+          ['stem', 'url', 'start_time_s', 'end_time_s'],
+          errors='ignore').to_dict()
 
       # Create a tf.Example for every segment.
       valid_segments = []
@@ -459,16 +512,18 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
                   segment_labels) in enumerate(labeled_intervals.items()):
         key = f"{recording_template['filename']}_{index}"
         valid_segments.append((key, {
-            **recording_template, 'label': list(segment_labels['label']),
+            **recording_template,
+            'label': list(segment_labels['label']),
             'genus': list(segment_labels['genus']),
             'family': list(segment_labels['family']),
             'order': list(segment_labels['order']),
             'audio': audio[start:end],
             'segment_start': start,
-            'segment_end': end
+            'segment_end': end,
         }))
       return valid_segments
 
-    for _, group in tqdm.tqdm(segment_groups, total=len(segment_groups)):
-      for ex in _process_group(group):
-        yield ex
+    pipeline = (
+        beam.Create(group for _, group in segments.groupby('filename'))
+        | beam.FlatMap(_process_group))
+    return pipeline

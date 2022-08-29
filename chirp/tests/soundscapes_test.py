@@ -27,7 +27,8 @@ import tensorflow_datasets as tfds
 from absl.testing import absltest
 
 
-def mock_localization_fn(audio, sr, interval_length_s, max_intervals=200):
+def mock_localization_fn(audio, sr, interval_length_s, **unused_kwargs):
+  del audio
   target_length = sr * interval_length_s
   return [(0, target_length)]
 
@@ -41,7 +42,7 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
       if config.name in ['caples']
   ]
   EXAMPLE_DIR = DATASET_CLASS.code_path.parent / 'placeholder_data'
-  SPLITS = {'train': 2}
+  SPLITS = {'train': 3}
   SKIP_CHECKSUMS = True
 
   @classmethod
@@ -60,11 +61,16 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
                                              '_load_segments')
     cls.loc_patcher = mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[0],
                                         'localization_fn', mock_localization_fn)
+    cls.url_patcher = mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[0],
+                                        'audio_dir', epath.Path(cls.tempdir))
     mock_load_segments = cls.segments_patcher.start()
 
     # We mock the localization part with a function that finds signal in the
-    # first interval_length_s (5 sec.). This means that fake segments 1 and 2
-    # should be selected, but no the third.
+    # first interval_length_s (5 sec.). This means that fake segments 1, 2 and 4
+    # should be selected. Segment 3 should not be selected (not overlap with
+    # the localization_fn output) and segment 5 should also be skipped because
+    # the annotation is invalid (end < start). So we should end up with 3
+    # recordings.
     cls.loc_patcher.start()
     mock_load_taxonomy_metadata = cls.metadata_patcher.start()
     mock_load_taxonomy_metadata.return_value = pd.read_json(
@@ -74,17 +80,17 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
         lambda codes: codes.split())
     mock_load_segments.return_value = fake_segments
 
-    cls.url_patcher = mock.patch.object(cls.DATASET_CLASS, 'GCS_URL',
-                                        epath.Path(cls.tempdir))
-
     cls.url_patcher.start()
-    # _ = [patcher.start() for patcher in cls.config_patcher]
     subdir = epath.Path(cls.tempdir) / 'caples' / 'audio'
     subdir.mkdir(parents=True)
     tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
         subdir / 'soundscape_1.flac', format='flac')
     tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
         subdir / 'soundscape_2.wav', format='wav')
+    tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
+        subdir / 'soundscape_3.wav', format='wav')
+    tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
+        subdir / 'soundscape_4.wav', format='wav')
 
   @classmethod
   def tearDownClass(cls):
@@ -92,7 +98,6 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     cls.segments_patcher.stop()
     cls.metadata_patcher.stop()
     cls.loc_patcher.stop()
-    # _ = [patcher.stop() for patcher in cls.config_patcher]
     cls.url_patcher.stop()
     shutil.rmtree(cls.tempdir)
 
