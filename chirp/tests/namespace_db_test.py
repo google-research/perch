@@ -47,16 +47,17 @@ class NamespaceDbTest(absltest.TestCase):
     self.assertEqual(caples_genera.namespace, 'bird_genera')
     self.assertEqual(caples_genera.size, 62)
 
-    family_mapping = db.mappings['genus_to_family']
-    caples_families = caples_genera.apply_namespace_mapping(
+    family_mapping = db.mappings['ebird2021_to_family']
+    caples_families = caples_list.apply_namespace_mapping(
         family_mapping, 'caples_families')
     self.assertEqual(caples_families.name, 'caples_families')
     self.assertEqual(caples_families.namespace, 'bird_families')
     self.assertEqual(caples_families.size, 30)
 
-    order_mapping = db.mappings['family_to_order']
-    caples_orders = caples_families.apply_namespace_mapping(order_mapping)
-    self.assertEqual(caples_orders.name, 'caples_families_bird_orders')
+    order_mapping = db.mappings['ebird2021_to_order']
+    caples_orders = caples_list.apply_namespace_mapping(order_mapping,
+                                                        'caples_orders')
+    self.assertEqual(caples_orders.name, 'caples_orders')
     self.assertEqual(caples_orders.namespace, 'bird_orders')
     self.assertEqual(caples_orders.size, 11)
 
