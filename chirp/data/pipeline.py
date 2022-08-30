@@ -462,6 +462,18 @@ class OnlyJaxTypes(FeaturesPreprocessOp):
 
 
 @dataclasses.dataclass
+class HashId(FeaturesPreprocessOp):
+  """Hashes a tfds_id into a unique integer."""
+  num_buckets: int = int(1e9)
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    features['tfds_id'] = tf.strings.to_hash_bucket_fast(
+        features['tfds_id'], self.num_buckets)
+    return features
+
+
+@dataclasses.dataclass
 class Shuffle(DatasetPreprocessOp):
   """Shuffles the dataset."""
   shuffle_buffer_size: int
@@ -533,13 +545,18 @@ def get_dataset(
   Returns:
     The placeholder dataset.
   """
+  read_config = tfds.ReadConfig(add_tfds_id=True)
   if tfds_data_dir:
     tfds.core.add_data_dir(tfds_data_dir)
     ds, dataset_info = tfds.load(
-        dataset_directory, data_dir=tfds_data_dir, split=split, with_info=True)
+        dataset_directory,
+        split=split,
+        data_dir=tfds_data_dir,
+        with_info=True,
+        read_config=read_config)
   else:
     builder = tfds.builder_from_directory(dataset_directory)
-    ds = builder.as_dataset(split=split)
+    ds = builder.as_dataset(split=split, read_config=read_config)
     dataset_info = builder.info
 
   if pipeline is None:
