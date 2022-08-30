@@ -60,9 +60,14 @@ class CMAP(clu_metrics.Metric):
       return other
     if other.scores is None:
       return self
+    if other.scores.ndim not in [2, 3]:
+      raise ValueError("Expecting the scores to be in one of the following"
+                       "formats: [n_devices, batch_size, n_classes] or"
+                       "[batch_size, n_classes]. Current shape is"
+                       f"{self.scores.shape}")
     return type(self)(
-        scores=jnp.concatenate((self.scores, other.scores), axis=0),
-        labels=jnp.concatenate((self.labels, other.labels), axis=0),
+        scores=jnp.concatenate((self.scores, other.scores), axis=-2),
+        labels=jnp.concatenate((self.labels, other.labels), axis=-2),
     )
 
   def compute(self) -> Any:
