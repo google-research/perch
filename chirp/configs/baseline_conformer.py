@@ -23,6 +23,8 @@ _c = config_utils.callable_config
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
+  target_class_list = config_dict.FieldReference("ebird2021")
+  add_taxonomic_labels = config_dict.FieldReference(True)
 
   config = config_dict.ConfigDict()
   config.sample_rate_hz = sample_rate_hz
@@ -34,7 +36,10 @@ def get_config() -> config_dict.ConfigDict:
       ops=[
           _c("pipeline.Shuffle", shuffle_buffer_size=512),
           _c("pipeline.OnlyJaxTypes"),
-          _c("pipeline.MultiHot"),
+          _c("pipeline.ConvertBirdTaxonomyLabels",
+             source_namespace="ebird2021",
+             target_class_list=target_class_list,
+             add_taxonomic_labels=add_taxonomic_labels),
           _c("pipeline.MixAudio", mixin_prob=0.25),
           _c("pipeline.Batch", batch_size=64),
           _c("pipeline.RandomSlice", window_size=window_size_s),
@@ -46,7 +51,10 @@ def get_config() -> config_dict.ConfigDict:
       "pipeline.Pipeline",
       ops=[
           _c("pipeline.OnlyJaxTypes"),
-          _c("pipeline.MultiHot"),
+          _c("pipeline.ConvertBirdTaxonomyLabels",
+             source_namespace="ebird2021",
+             target_class_list=target_class_list,
+             add_taxonomic_labels=add_taxonomic_labels),
           _c("pipeline.Batch", batch_size=64),
           _c("pipeline.Slice",
              window_size=window_size_s,

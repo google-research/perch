@@ -83,7 +83,7 @@ def get_config() -> config_dict.ConfigDict:
   model_config.encoder = _c(
       "efficientnet.EfficientNet",
       model=_c("efficientnet.EfficientNetModel", value="b1"))
-  model_config.taxonomy_loss_weight = 0.25
+  model_config.taxonomy_loss_weight = 0.001
   init_config.model_config = model_config
 
   model_config.frontend = _c(
@@ -96,12 +96,12 @@ def get_config() -> config_dict.ConfigDict:
       scaling_config=_c("frontend.PCENScalingConfig"))
 
   # Configure the training loop
-  num_train_steps = config_dict.FieldReference(250_000)
+  num_train_steps = config_dict.FieldReference(1_000_000)
 
   train_config = config_dict.ConfigDict()
   train_config.num_train_steps = num_train_steps
   train_config.log_every_steps = 250
-  train_config.checkpoint_every_steps = 5_000
+  train_config.checkpoint_every_steps = 25_000
   config.train_config = train_config
 
   eval_config = config_dict.ConfigDict()
