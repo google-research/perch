@@ -15,17 +15,16 @@
 
 """Soundscape datasets."""
 
-import collections
 import dataclasses
-import json
 import tempfile
 from typing import Callable, Dict, Optional, Set, Tuple, List, Any
 import warnings
 
 from absl import logging
 from chirp import audio_utils
-from chirp import path_utils
 from chirp.data.bird_taxonomy import bird_taxonomy
+from chirp.taxonomy import namespace
+from chirp.taxonomy import namespace_db
 from etils import epath
 import numpy as np
 import pandas as pd
@@ -74,6 +73,10 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
 
   Attributes:
     audio_source: The name of the folder from where the audio will be fetched.
+    class_list_name: The name of the ClassList to use for labels. This is
+      typically a list of either all regionally feasible species in the area
+      (for fully-annotated datasets) or the list of all species annotated
+      (if only a subset has been labeled).
     metadata_fields: Because the metadata fields don't always appear with the
       same names, and because we don't necesarily care about every field, we
       specify the fields we're interested in keeping, as well how to map fields'
@@ -88,16 +91,12 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
       This boolean decides whether it should keep this annotation (and
       therefore) add a species named "unknown" in the label space, or just scrub
       all "unknown" annotations.
-    restrict_label_space: If set to True, the label space will only include the
-      species that are actually present in the current dataset, plus an eventual
-      "unknown" class. If set to False, the label space will include the full
-      Xeno-Canto taxonomy (~ 11k species).
   """
   audio_source: str = ''
+  class_list_name: str = ''
   metadata_fields: Optional[Dict[str, str]] = None
   metadata_load_fn: Optional[Callable[[epath.Path], pd.DataFrame]] = None
   keep_unknown_annotation: bool = False
-  restrict_label_space: bool = True
   supervised: bool = True
   audio_dir = epath.Path('gs://chirp-public-bucket/soundscapes')
 
@@ -115,6 +114,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
   BUILDER_CONFIGS = [
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
           name='caples',  # TODO(mboudiaf) Try to interface caples metadata.
+          class_list_name='caples',
           audio_source='caples/audio',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
@@ -133,7 +133,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           },
           localization_fn=audio_utils.slice_peaked_audio,
           description=(
-              'Colombian recordings from the Birdclef 2019 challenge.')),
+              'Colombian recordings from the Birdclef 2019 challenge.'),
+          class_list_name='birdclef2019_colombia'),
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
           name='birdclef2019_ssw',
           audio_source='birdclef2019/audio',
@@ -147,13 +148,15 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
               'recordist': 'AuthorID'
           },
           localization_fn=audio_utils.slice_peaked_audio,
-          description=('SSW recordings from the Birdclef 2019 challenge.')),
+          description=('SSW recordings from the Birdclef 2019 challenge.'),
+          class_list_name='new_york'),
       SoundscapesConfig(  # pylint: disable=unexpected-keyword-arg
           name='high_sierras',
           audio_source='high_sierras/audio',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          description=('High Sierras recordings.')),
+          description=('High Sierras recordings.'),
+          class_list_name='high_sierras'),
   ]
 
   def _load_segments(self, dl_manager):
@@ -169,7 +172,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         lambda codes: codes.split())
 
     # Map deprecated ebird codes to new ones.
-    segments['ebird_codes'] = segments['ebird_codes'].apply(lambda codes: [
+    segments['ebird_codes'] = segments['ebird_codes'].apply(lambda codes: [  # pylint: disable=g-long-lambda
         code if code not in _DEPRECATED2NEW else _DEPRECATED2NEW[code]
         for code in codes
     ])
@@ -185,52 +188,23 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
 
     return segments
 
-  def _load_taxonomy_metadata(self):
-    """Loads the taxonomy containing currently present species."""
+  def _load_class_list(self):
+    """Loads the namespace.ClassList for the dataset."""
+    db = namespace_db.NamespaceDatabase.load_csvs()
+    dataset_class_list = db.class_lists[self.builder_config.class_list_name]
 
-    # Load full taxonomy data
-    taxonomy_metadata = super()._load_taxonomy_metadata()
-
-    if self.builder_config.keep_unknown_annotation:
-      # Add the 'unknown' spepcies
-      taxonomy_metadata = taxonomy_metadata.append(
-          {
-              level: 'unknown'
-              for level in ['species_code', 'genus', 'family', 'order']
-          },
-          ignore_index=True)
-
-    if self.builder_config.restrict_label_space:
-      # Load the set of species that are present in the current configuration
-      present_species_path = path_utils.get_absolute_epath(
-          'data/soundscapes/metadata/present_species.json')
-      with open(present_species_path, 'r') as f:
-        present_species = set(json.load(f)[self.builder_config.name])
-
-      present_species = {
-          _DEPRECATED2NEW[s] if s in _DEPRECATED2NEW else s
-          for s in present_species
-      }
-      # Ensure that present species are part of the global taxonomy.
-      all_species = set(taxonomy_metadata['species_code'].unique().tolist())
-      if not present_species.issubset(all_species):
-        logging.warning(
-            'The following species do not belong to the global taxonomy %s',
-            str(present_species.difference(all_species)))
-
-      taxonomy_metadata = taxonomy_metadata[taxonomy_metadata[
-          'species_code'].apply(lambda x: x in present_species)]
-    return taxonomy_metadata
+    if (self.builder_config.keep_unknown_annotation and
+        'unknown' not in dataset_class_list.classes):
+      # Create a new class list which includes the 'unknown' class.
+      dataset_class_list = namespace.ClassList(
+          dataset_class_list.name + '_unknown', dataset_class_list.namespace,
+          ['unknown'] + list(dataset_class_list.classes))
+    return dataset_class_list
 
   def _info(self) -> tfds.core.DatasetInfo:
-
-    taxonomy_metadata = self._load_taxonomy_metadata()
-    class_names = {
-        level: sorted(set(taxonomy_metadata[level]))
-        for level in ('species_code', 'genus', 'family', 'order')
-    }
+    dataset_class_list = self._load_class_list()
     logging.info('Currently considering a total of %s species.',
-                 len(class_names['species_code']))
+                 dataset_class_list.size)
     audio_feature_shape = (int(self.builder_config.interval_length_s *
                                self.builder_config.sample_rate_hz),)
     common_features = {
@@ -242,16 +216,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
             ),
         'label':
             tfds.features.Sequence(
-                tfds.features.ClassLabel(names=class_names['species_code'])),
-        'genus':
-            tfds.features.Sequence(
-                tfds.features.ClassLabel(names=class_names['genus'])),
-        'family':
-            tfds.features.Sequence(
-                tfds.features.ClassLabel(names=class_names['family'])),
-        'order':
-            tfds.features.Sequence(
-                tfds.features.ClassLabel(names=class_names['order'])),
+                tfds.features.ClassLabel(names=dataset_class_list.classes)),
         'filename':
             tfds.features.Text(),
         'segment_start':
@@ -275,33 +240,6 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         homepage='https://github.com/google-research/chirp',
         citation=_CITATION,
     )
-
-  def _combine_with_full_taxonomy(self, segments):
-    """Combine the segment with genus, family and order information.
-
-    Args:
-      segments: The dataframe containing the segments, each of which is
-        described by 4 fields: 'fid', 'start_time_s', 'end_time_s' and
-        'ebird_codes'.
-
-    Returns:
-      segments: The dataframe containing the segmens, now described by the 4
-      columns described in Args, plus 'genus', 'family' and 'order'.
-    """
-    species2taxonomy = {
-        species: metadata for species, metadata in
-        self._load_taxonomy_metadata().groupby('species_code')
-    }
-    for level in ['family', 'genus', 'order']:
-
-      def species2level(species, level=level):
-        # `species2taxonomy[s][level]` yields a pd.Series with a single
-        # element containing the level (e.g. order) associated to this species.
-        # To recover the string element, we take the first element.
-        return [species2taxonomy[s][level].iloc[0] for s in species]
-
-      segments[level] = segments['ebird_codes'].apply(species2level)
-    return segments
 
   def _combine_with_metadata(self, segments):
     """Combine segments with whatever metadata is available for this dataset."""
@@ -330,7 +268,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
 
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
 
-    dl_manager._force_checksums_validation = False
+    dl_manager._force_checksums_validation = False  # pylint: disable=protected-access
     # Find all file present in the audio/directory
     audio_path = self.builder_config.audio_dir / self.builder_config.audio_source
     all_audio_filenames = list(audio_path.iterdir())
@@ -339,11 +277,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       # For supervised data, we first grab the annotated segments.
       segments = self._load_segments(dl_manager)
 
-      # Add genus, family, order information for each segment.
-      segments = self._combine_with_full_taxonomy(segments)
-
-      # If specified, combine the segments with additional metadata
-      # (e.g Country).
+      # If specified, combine segments with additional metadata (e.g Country).
       if self.builder_config.metadata_load_fn is not None:
         segments = self._combine_with_metadata(segments)
 
@@ -386,8 +320,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       # final audio set, with the 'unknown' annotation.
       segments['start_time_s'] = 0
       segments['end_time_s'] = -1
-      for level in ['label', 'order', 'family', 'genus']:
-        segments[level] = [['unknown'] for _ in range(len(segments))]
+      segments['label'] = [['unknown'] for _ in range(len(segments))]
     logging.info('%s annotated segments detected', len(segments))
     return {
         'train': self._generate_examples(segments=segments),
@@ -397,7 +330,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       self,
       audio: np.ndarray,
       file_segments: pd.DataFrame,
-  ) -> Dict[Tuple[int, int], Dict[str, Set[str]]]:
+      class_list: namespace.ClassList,
+  ) -> Dict[Tuple[int, int], Set[str]]:
     """Slices the given audio, and produces labels intervals.
 
     `file_segments` corresponds to the segments annotated by recordists. The
@@ -409,12 +343,13 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
     Args:
       audio: The full audio file, already loaded.
       file_segments: The annotated segments for this audio. Each row (=segment)
-        must minimally contain the following fields: ['label', 'genus', 'order',
-        'family', 'start_time_s', 'end_time_s'].
+        must minimally contain the following fields:
+        ['label', 'start_time_s', 'end_time_s'].
+      class_list: List of labels which will appear in the processed dataset.
 
     Returns:
       labeled_intervals: A Dict mapping a (start, end) time of the recording to
-      the sets of species/genus/orders/families present in that interval.
+      the set of classes present in that interval.
     """
     logging.info('Found %d annotations for target file.', len(file_segments))
 
@@ -448,7 +383,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
     }
     labeled_intervals = {}
     for (st, end) in interval_timestamps:
-      interval_labels = collections.defaultdict(lambda: set([]))
+      interval_labels = set([])
       for (curr_anno_st, curr_anno_end), seg in segments_by_timestamp.items():
         # no overlap, interval < anno
         if end < curr_anno_st:
@@ -457,10 +392,13 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         if curr_anno_end < st:
           continue
         # found an overlap!
-        for level in ['label', 'order', 'family', 'genus']:
-          for label in seg[level]:
-            interval_labels[level].add(label)
-      if interval_labels['label']:
+        for label in seg['label']:
+          if label not in class_list.classes:
+            logging.warning('Found label "%s" not in the dataset classlist.',
+                            label)
+            continue
+          interval_labels.add(label)
+      if interval_labels:
         labeled_intervals[(st, end)] = interval_labels
     return labeled_intervals
 
@@ -469,11 +407,14 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
 
     Args:
       segments: Dataframe of segments. Each row (=segment) must minimally
-        contain the following fields ['filename', 'url', 'label', 'genus',
-        'order', 'start_time_s', 'end_time_s'].
+        contain the following fields:
+        ['filename', 'url', 'label', 'start_time_s', 'end_time_s'].
+    Returns:
+      List of valid segments.
     """
     beam = tfds.core.lazy_imports.apache_beam
     librosa = tfds.core.lazy_imports.librosa
+    class_list = self._load_class_list()
 
     def _process_group(
         segment_group: pd.DataFrame) -> List[Tuple[str, Dict[str, Any]]]:
@@ -495,7 +436,9 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           try:
             audio, _ = librosa.load(
                 f.name, sr=sr, res_type=self.builder_config.resampling_method)
-          except Exception as inst:
+          except Exception as inst:  # pylint: disable=broad-except
+            # We have no idea what can go wrong in librosa, so we catch a braod
+            # exception here.
             logging.warning(
                 'The audio at %s could not be loaded. Following'
                 'exception occured: %s', url, inst)
@@ -511,7 +454,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           # [-1, 1) interval.
           audio = np.clip(audio, -1.0, 1.0 - (1.0 / float(1 << 15)))
 
-      labeled_intervals = self.get_labeled_intervals(audio, segment_group)
+      labeled_intervals = self.get_labeled_intervals(audio, segment_group,
+                                                     class_list)
 
       # Remove all the fields we don't need from the recording_template. We set
       # errors='ignore' as some fields to be dropped may already not exist.
@@ -526,10 +470,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         key = f"{recording_template['filename']}_{index}"
         valid_segments.append((key, {
             **recording_template,
-            'label': list(segment_labels['label']),
-            'genus': list(segment_labels['genus']),
-            'family': list(segment_labels['family']),
-            'order': list(segment_labels['order']),
+            'label': list(segment_labels),
             'audio': audio[start:end],
             'segment_start': start,
             'segment_end': end,

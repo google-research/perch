@@ -20,6 +20,7 @@ import tempfile
 from unittest import mock
 
 from chirp.data.soundscapes import soundscapes
+from chirp.taxonomy import namespace
 from etils import epath
 import pandas as pd
 import tensorflow_datasets as tfds
@@ -56,7 +57,7 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     _ = tfds.core.lazy_imports.librosa
 
     cls.metadata_patcher = mock.patch.object(cls.DATASET_CLASS,
-                                             '_load_taxonomy_metadata')
+                                             '_load_class_list')
     cls.segments_patcher = mock.patch.object(cls.DATASET_CLASS,
                                              '_load_segments')
     cls.loc_patcher = mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[0],
@@ -72,9 +73,12 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     # the annotation is invalid (end < start). So we should end up with 3
     # recordings.
     cls.loc_patcher.start()
-    mock_load_taxonomy_metadata = cls.metadata_patcher.start()
-    mock_load_taxonomy_metadata.return_value = pd.read_json(
-        cls.EXAMPLE_DIR / 'taxonomy_info.json')
+    mock_load_class_list = cls.metadata_patcher.start()
+    mock_load_class_list.return_value = namespace.ClassList(
+        'testlist',
+        'test_namespace',
+        ['fakecode1', 'fakecode2', 'superrare', 'superfly'],
+    )
     fake_segments = pd.read_csv(cls.EXAMPLE_DIR / 'test.csv')
     fake_segments['ebird_codes'] = fake_segments['ebird_codes'].apply(
         lambda codes: codes.split())
