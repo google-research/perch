@@ -335,7 +335,8 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
   # Whether to add output features indicating which classes are represented
   # in the source dataset.
   output_masks: bool = True
-  # Ideally we will read the source namespace from the dataset_info eventually.
+
+  # The following members are for cached / stateful data.
   db: Optional[namespace_db.NamespaceDatabase] = None
   tables: Optional[Dict[str, tf.lookup.StaticHashTable]] = None
   images: Optional[Dict[str, tf.Tensor]] = None
