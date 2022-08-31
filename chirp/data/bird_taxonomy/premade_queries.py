@@ -182,9 +182,6 @@ def get_downstream_metadata_query() -> fsu.QuerySequence:
   (_, _, feasible_ar_species,
    _) = get_artificially_rare_species_constraints(5, 5)
 
-  ignore_row = {
-      level: "ignore" for level in ["species_code", "genus", "family", "order"]
-  }
   with open(path_utils.get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
     downstream_species = list(map(lambda x: x.strip(), f.readlines()))
   return fsu.QuerySequence([
@@ -197,9 +194,6 @@ def get_downstream_metadata_query() -> fsu.QuerySequence:
                   "values": downstream_species + feasible_ar_species
               }
           }),
-      fsu.Query(op=fsu.TransformOp.APPEND, kwargs={
-          "row": ignore_row,
-      })
   ])
 
 
@@ -215,17 +209,7 @@ def get_downstream_data_query() -> fsu.QuerySequence:
    unfeasible_ar_species) = get_artificially_rare_species_constraints(5, 5)
   upstream_query = get_upstream_data_query()
   return fsu.QuerySequence([
-      fsu.QueryParallel([
-          fsu.QueryComplement(upstream_query, "xeno_canto_id"),
-          fsu.Query(
-              fsu.TransformOp.FILTER, {
-                  "mask_op": fsu.MaskOp.CONTAINS_ANY,
-                  "op_kwargs": {
-                      "key": "bg_species_codes",
-                      "values": downstream_species
-                  }
-              })
-      ], fsu.MergeStrategy.CONCAT_NO_DUPLICATES),
+      fsu.QueryComplement(upstream_query, "xeno_canto_id"),
       # We remove unfeasible AR species. For the nominal (5, 5) scenario,
       # this group is empty.
       fsu.Query(
@@ -237,9 +221,8 @@ def get_downstream_data_query() -> fsu.QuerySequence:
               }
           }),
       # Annotations of species that are not part of the downstream evaluation
-      # are scrubbed if they appear in the background, and replaced by "ignore"
-      # if they appear in the foreground. Therefore, we're only left with
-      # relevant species annotated + "ignore".
+      # are scrubbed if they appear in the background or foreground.
+      # Therefore, we're only left with relevant species annotated.
       fsu.Query(
           op=fsu.TransformOp.SCRUB_ALL_BUT,
           kwargs={
@@ -251,6 +234,5 @@ def get_downstream_data_query() -> fsu.QuerySequence:
           kwargs={
               "key": "species_code",
               "values": downstream_species + feasible_ar_species,
-              "replace_value": "ignore"
           })
   ])

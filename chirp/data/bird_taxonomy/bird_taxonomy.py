@@ -132,7 +132,7 @@ class Int16AsFloatTensor(tfds.features.Audio):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.2.2')
+  VERSION = tfds.core.Version('1.2.3')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
       '1.1.0': ('Switched to higher sampling rate, added recording metadata '
@@ -146,6 +146,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       '1.2.2': 'Replacing any non-relevant foreground annotation in the'
                'downstream data with "ignore" class: downstream data only'
                'contains relevant annotations + "ignore" class.',
+      '1.2.3': 'Removing any non-relevant annotation from foreground or '
+               'background in downstream data: downstream data only'
+               'contains relevant annotations.'
   }
   TINY_SPECIES = ('ostric2', 'piebar1')
   BUILDER_CONFIGS = [
@@ -415,13 +418,6 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     for column in ['latitude', 'longitude']:
       source_info[column] = source_info[column].map(lambda s: s or '')
 
-    # Propagate "ignore" label to genus, family and order metadata.
-    for column in ['genus', 'family', 'order']:
-      source_info[column] = source_info.apply(
-          lambda rec: 'ignore'
-          if rec['species_code'] == 'ignore' else rec[column],
-          axis=1)
-
     return {
         'train': self._generate_examples(source_info=source_info),
     }
@@ -445,12 +441,15 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           # Resampling can introduce artifacts that push the signal outside the
           # [-1, 1) interval.
           audio = np.clip(audio, -1.0, 1.0 - (1.0 / float(1 << 15)))
-
+      # The scrubbed foreground annotations are replaced by ''. When this is the
+      # case, we translate this annotation into []  rather than [''].
+      foreground_label = [source['species_code']
+                         ] if source['species_code'] else []
       return source['xeno_canto_id'], {
           'audio': audio,
           'segment_start': 0,
           'segment_end': len(audio),
-          'label': [source['species_code']],
+          'label': foreground_label,
           'bg_labels': source['bg_species_codes'],
           'genus': [source['genus']],
           'family': [source['family']],
