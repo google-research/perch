@@ -155,6 +155,15 @@ class MetricsTest(absltest.TestCase):
     batched_cmap_value = batched_cmap_metric.compute()
     self.assertEqual(batched_cmap_value, full_cmap_value)
 
+    # Check that when setting a threshold to 3, the cmap is only computed
+    # taking into account column 1 (the only one with >3 samples).
+    full_cmap_metric = cmap.CMAP.from_model_output((scores, labels))
+    restricted_cmap_metric = cmap.CMAP.from_model_output(
+        (scores[:, 1:2], labels[:, 1:2]))
+    self.assertEqual(
+        full_cmap_metric.compute(sample_threshold=3),
+        restricted_cmap_metric.compute())
+
 
 if __name__ == "__main__":
   absltest.main()
