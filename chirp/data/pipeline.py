@@ -325,6 +325,18 @@ class MultiHot(FeaturesPreprocessOp):
 
 
 @dataclasses.dataclass
+class LabelConversionConstants:
+  """TF constants created while executing `ConvertBirdTaxonomyLabels`.
+
+  Attributes:
+    tables: a mapping from feature name to StaticHashTable for label conversion.
+    masks: a mapping from feature name to mask for the translated labels.
+  """
+  tables: Dict[str, tf.lookup.StaticHashTable]
+  masks: Dict[str, tf.Tensor]
+
+
+@dataclasses.dataclass
 class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
   """Convert to a target set of classes and generate taxonomy labels."""
   source_namespace: str = 'ebird2021'
@@ -338,109 +350,136 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
 
   # The following members are for cached / stateful data.
   db: Optional[namespace_db.NamespaceDatabase] = None
-  tables: Optional[Dict[str, tf.lookup.StaticHashTable]] = None
-  images: Optional[Dict[str, tf.Tensor]] = None
 
   def __post_init__(self):
-    # Create TF StaticHashTables in post_init to avoid running construction
-    # code repeatedly.
+    # Create NamespaceDatabase in post_init to avoid loading CSVs repeatedly.
+    # Note that we purposefully avoid creating TF constants here. All TF
+    # constant need to be created within the scope of `tf.data.Dataset.map`
+    # (which in this case means inside __call__) so that the pipeline can be
+    # applied multiple times on different datasets. Otherwise, in subsequent
+    # pipeline applications TF will attempt to re-use previous constants
+    # belonging to a different tf.function.
     self.db = namespace_db.NamespaceDatabase.load_csvs()
-    self.tables = {}
-    self.images = {}
 
-  def load_tables(self, source_class_list: namespace.ClassList):
+  def load_tables(
+      self, source_class_list: namespace.ClassList) -> LabelConversionConstants:
     """Construct TF StaticHashTables from namespace db info.
-
-    Populates self.tables with TF StaticHashTables for label conversion, and
-    self.images with the image masks for the translated labels.
 
     Args:
       source_class_list: ClassList for the soruce dataset.
+
+    Returns:
+      TF constants needed for the execution of this preprocessing op.
     """
+    tables = {}
+    masks = {}
     target_classes = self.db.class_lists[self.target_class_list]
 
     label_table, label_mask = (
         source_class_list.get_class_map_tf_lookup(target_classes))
-    self.tables[self.species_feature_name] = label_table
-    self.images[self.species_feature_name] = label_mask
-    self.tables[self.species_bg_label_name] = label_table
-    self.images[self.species_bg_label_name] = label_mask
+    tables[self.species_feature_name] = label_table
+    masks[self.species_feature_name] = label_mask
+    tables[self.species_bg_label_name] = label_table
+    masks[self.species_bg_label_name] = label_mask
 
-    for key in ['genus', 'family', 'order']:
-      # This is surprisingly tricky to get right for mismatched eval sets.
-      # First map the source and target classes (eg, eval dataset species and
-      # model ClassList) into the target namespace (eg, genera). This creates
-      # two different ClassLists of genera. We then map the source genera to the
-      # target genera to obtain an appropriate image_mask.
-      namespace_mapping = self.db.mappings[self.source_namespace + '_to_' + key]
-      source_taxa_classes = source_class_list.apply_namespace_mapping(
-          namespace_mapping)
-      target_taxa_classes = target_classes.apply_namespace_mapping(
-          namespace_mapping)
-      namespace_table, _ = source_class_list.get_namespace_map_tf_lookup(
-          namespace_mapping)
-      class_table, image_mask = source_taxa_classes.get_class_map_tf_lookup(
-          target_taxa_classes)
-      self.tables[key + '_namespace'] = namespace_table
-      self.tables[key + '_class'] = class_table
-      self.images[key] = image_mask
+    # Avoid searching for taxonomic mappings if `self.add_taxonomic_labels ==
+    # False`, because it's possible that such a mapping doesn't exist.
+    if self.add_taxonomic_labels:
+      for key in ['genus', 'family', 'order']:
+        # This is surprisingly tricky to get right for mismatched eval sets.
+        # First map the source and target classes (eg, eval dataset species and
+        # model ClassList) into the target namespace (eg, genera). This creates
+        # two different ClassLists of genera. We then map the source genera to
+        # the target genera to obtain an appropriate label_mask.
+        namespace_mapping = self.db.mappings[self.source_namespace + '_to_' +
+                                             key]
+        source_taxa_classes = source_class_list.apply_namespace_mapping(
+            namespace_mapping)
+        target_taxa_classes = target_classes.apply_namespace_mapping(
+            namespace_mapping)
+        namespace_table, _ = source_class_list.get_namespace_map_tf_lookup(
+            namespace_mapping)
+        class_table, label_mask = source_taxa_classes.get_class_map_tf_lookup(
+            target_taxa_classes)
+        tables[key + '_namespace'] = namespace_table
+        tables[key + '_class'] = class_table
+        masks[key] = label_mask
 
-  def convert_labels(self, features: Features, key: str,
-                     output_key: str) -> Features:
+    return LabelConversionConstants(tables=tables, masks=masks)
+
+  def convert_labels(
+      self, features: Features, key: str, output_key: str,
+      label_conversion_constants: LabelConversionConstants) -> Features:
     """Get a transformation for a given ClassList."""
+    tables = label_conversion_constants.tables
+    masks = label_conversion_constants.masks
     if output_key in (self.species_feature_name, self.species_bg_label_name):
-      table = self.tables[key]
-      image_mask = self.images[key]
+      table = tables[key]
+      label_mask = masks[key]
       output_labels = table.lookup(features[key])
     else:
-      namespace_table = self.tables[output_key + '_namespace']
-      class_table = self.tables[output_key + '_class']
+      namespace_table = tables[output_key + '_namespace']
+      class_table = tables[output_key + '_class']
       output_labels = class_table.lookup(namespace_table.lookup(features[key]))
-      image_mask = self.images[output_key]
+      label_mask = masks[output_key]
 
     # Drop unknown labels.
     output_labels = tf.gather(output_labels, tf.where(output_labels >= 0)[:, 0])
     # Convert to MultiHot encoding.
-    class_list_size = image_mask.shape[0]
+    class_list_size = label_mask.shape[0]
     output_labels = tf.clip_by_value(
         tf.reduce_sum(
             tf.one_hot(output_labels, class_list_size, dtype=tf.int64), axis=0),
         0, 1)
-    return {output_key: output_labels, output_key + '_mask': image_mask}
+    return {output_key: output_labels, output_key + '_mask': label_mask}
 
   def convert_features(self, features: Features,
                        source_classes: namespace.ClassList) -> Features:
     """Convert features to target class list and add taxonomy labels."""
     output_features = features.copy()
-    if not self.tables:
-      self.load_tables(source_classes)
+    label_conversion_constants = self.load_tables(source_classes)
 
     output_features.update(
         self.convert_labels(features, self.species_feature_name,
-                            self.species_feature_name))
+                            self.species_feature_name,
+                            label_conversion_constants))
 
     if self.species_bg_label_name in features:
       output_features.update(
           self.convert_labels(features, self.species_bg_label_name,
-                              self.species_bg_label_name))
+                              self.species_bg_label_name,
+                              label_conversion_constants))
 
     if not self.add_taxonomic_labels:
       return output_features
 
     output_features.update(
-        self.convert_labels(features, self.species_feature_name, 'genus'))
+        self.convert_labels(features, self.species_feature_name, 'genus',
+                            label_conversion_constants))
     output_features.update(
-        self.convert_labels(features, self.species_feature_name, 'family'))
+        self.convert_labels(features, self.species_feature_name, 'family',
+                            label_conversion_constants))
     output_features.update(
-        self.convert_labels(features, self.species_feature_name, 'order'))
+        self.convert_labels(features, self.species_feature_name, 'order',
+                            label_conversion_constants))
 
     return output_features
 
   def __call__(self, features: Features,
                dataset_info: tfds.core.DatasetInfo) -> Features:
     source_classes = namespace.ClassList(
-        'dataset', self.source_namespace,
-        dataset_info.features[self.species_feature_name].names)
+        'dataset',
+        self.source_namespace,
+        # TODO(vdumoulin): generalize this to labels beyond 'ignore'.
+        # Some dataset variants (e.g. bird_taxonomy/downstream_slice_peaked)
+        # use an 'ignore' label which is not part of the eBirds taxonomy. We
+        # ignore this label; the mapping tables return an 'unknown' default
+        # value, so all 'ignore' labels will naturally be converted to
+        # 'unknown'.
+        [
+            n for n in dataset_info.features[self.species_feature_name].names
+            if n != 'ignore'
+        ])
     output_features = self.convert_features(features, source_classes)
     return output_features
 
