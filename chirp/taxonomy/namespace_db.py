@@ -53,6 +53,13 @@ class NamespaceDatabase:
       filepath = path_utils.get_absolute_epath(os.path.join(MAPPINGS_PATH, c))
       with open(filepath, 'r') as f:
         mapping = namespace.Mapping.from_csv(c[:-4], f)
+        if mapping.source_namespace not in namespaces:
+          raise ValueError(f'Mapping {c} has an unknown source namespace '
+                           '{mapping.source_namespace}.')
+        if mapping.target_namespace not in namespaces:
+          raise ValueError(f'Mapping {c} has an unknown target namespace '
+                           '{mapping.target_namespace}.')
+
         mappings[mapping.name] = mapping
 
     class_list_csvs = path_utils.listdir(CLASS_LISTS_PATH)
@@ -63,6 +70,9 @@ class NamespaceDatabase:
           os.path.join(CLASS_LISTS_PATH, c))
       with open(filepath, 'r') as f:
         class_list = namespace.ClassList.from_csv(c[:-4], f)
+        if class_list.namespace not in namespaces:
+          raise ValueError(
+              f'ClassList {c} has an unknown namespace {class_list.namespace}.')
         class_lists[class_list.name] = class_list
 
     db = NamespaceDatabase(namespaces, mappings, class_lists)
