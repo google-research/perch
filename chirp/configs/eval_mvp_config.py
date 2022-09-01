@@ -60,7 +60,6 @@ def get_config() -> config_dict.ConfigDict:
           'is_xc': False,
           'tfds_name': 'soundscapes/birdclef2019_colombia'
       },
-      # TODO(vdumoulin): add Hawaii once b/243792097 is fixed.
   )
 
   dataset_configs = {}
