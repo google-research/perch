@@ -87,6 +87,7 @@ class ClassList:
 
   @classmethod
   def from_csv(cls, name: str, csv_data: Iterable[str]) -> 'ClassList':
+    """Parse a ClassList from a CSV."""
     reader = csv.DictReader(csv_data)
     namespace = reader.fieldnames[0].strip()
     classes = []
