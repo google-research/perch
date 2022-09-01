@@ -573,7 +573,7 @@ def get_dataset(
   Args:
     split: data split, e.g. 'train', 'test', 'train[:80%]', etc.
     is_train: If the dataset will be used for training. This only affects
-      whether data will be distributed or not in case tf_data_service_address 
+      whether data will be distributed or not in case tf_data_service_address
       is provided.
     dataset_directory: dataset directory.
     tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
