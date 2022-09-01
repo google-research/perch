@@ -1,0 +1,13 @@
+Selection	View	Channel	Begin Time (s)	End Time (s)	Low Freq (Hz)	High Freq (Hz)	Begin File	Delta Time (s)	Delta Freq (Hz)	Peak Freq (Hz)	Species	CallType	Overlap	OverlapDetails	Quality	Notes
+1	Waveform 1	1	2.189500604	2.638238136	2120.896	4936.567	hawaii_example.wav	0.4487	2815.672		Iiwi	Meme	0		Low
+1	Spectrogram 1	1	2.189500604	2.638238136	2120.896	4936.567	hawaii_example.wav	0.4487	2815.672	3273.047	Iiwi	Meme	0		Low
+2	Waveform 1	1	2.716767204	2.933657010	3565.299	5375.373	hawaii_example.wav	0.2169	1810.075		Iiwi	Meme	0		Low
+2	Spectrogram 1	1	2.716767204	2.933657010	3565.299	5375.373	hawaii_example.wav	0.2169	1810.075	4220.508	Iiwi	Meme	0		Low
+3	Waveform 1	1	3.150546817	3.348739227	3382.463	5704.478	hawaii_example.wav	0.1982	2322.015		Iiwi	Meme	0		Low
+3	Spectrogram 1	1	3.150546817	3.348739227	3382.463	5704.478	hawaii_example.wav	0.1982	2322.015	3962.109	Iiwi	Meme	0		Low
+4	Waveform 1	1	3.958274374	4.369617111	3327.612	4808.582	hawaii_example.wav	0.4113	1480.970		Iiwi	Meme	0		Low
+4	Spectrogram 1	1	3.958274374	4.369617111	3327.612	4808.582	hawaii_example.wav	0.4113	1480.970	3962.109	Iiwi	Meme	0		Low
+5	Waveform 1	1	6.375059561	7.336105775	365.672	7697.388	hawaii_example.wav	0.9610	7331.716		Omao	Call	0		High
+5	Spectrogram 1	1	6.375059561	7.336105775	365.672	7697.388	hawaii_example.wav	0.9610	7331.716	2756.250	Omao	Call	0		High
+6	Waveform 1	1	7.807280183	8.319588865	2559.701	4132.090	hawaii_example.wav	0.5123	1572.388		Iiwi	Meme	0		Medium
+6	Spectrogram 1	1	7.807280183	8.319588865	2559.701	4132.090	hawaii_example.wav	0.5123	1572.388	3445.312	Iiwi	Meme	0		Medium
