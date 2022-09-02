@@ -44,12 +44,6 @@ class FakeDataset(bird_taxonomy.BirdTaxonomy):
               np.random.choice(self.info.features['label'].names, size=[3]),
           'bg_labels':
               np.random.choice(self.info.features['bg_labels'].names, size=[2]),
-          'genus':
-              np.random.choice(self.info.features['genus'].names, size=[3]),
-          'family':
-              np.random.choice(self.info.features['family'].names, size=[3]),
-          'order':
-              np.random.choice(self.info.features['order'].names, size=[3]),
           'filename':
               'placeholder',
           'quality_score':

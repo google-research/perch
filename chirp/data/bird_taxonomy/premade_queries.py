@@ -20,6 +20,7 @@ import logging
 
 from chirp import path_utils
 from chirp.data import filter_scrub_utils as fsu
+from chirp.taxonomy import namespace_db
 
 # SSW_STATS_PATH contains useful statistics for SSW species, used to guide our
 # DFS search in chirp.data.sampling_utils.sample_recordings_under_constraints.
@@ -34,9 +35,8 @@ def get_upstream_metadata_query() -> fsu.QuerySequence:
 
   _, _, _, unfeasible_ar_species = get_artificially_rare_species_constraints(
       5, 5)
-
-  with open(path_utils.get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
-    downstream_species = list(map(lambda x: x.strip(), f.readlines()))
+  db = namespace_db.NamespaceDatabase.load_csvs()
+  downstream_species = list(db.class_lists["downstream_species"].classes)
   return fsu.QuerySequence([
       fsu.Query(
           op=fsu.TransformOp.FILTER,
@@ -113,8 +113,8 @@ def get_upstream_data_query() -> fsu.QuerySequence:
     ssw_stats = json.load(f)
   (target_fg, target_bg, feasible_ar_species,
    unfeasible_ar_species) = get_artificially_rare_species_constraints(5, 5)
-  with open(path_utils.get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
-    downstream_species = list(map(lambda x: x.strip(), f.readlines()))
+  db = namespace_db.NamespaceDatabase.load_csvs()
+  downstream_species = list(db.class_lists["downstream_species"].classes)
 
   return fsu.QuerySequence([
       # Filter all samples from downstream species
@@ -182,8 +182,8 @@ def get_downstream_metadata_query() -> fsu.QuerySequence:
   (_, _, feasible_ar_species,
    _) = get_artificially_rare_species_constraints(5, 5)
 
-  with open(path_utils.get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
-    downstream_species = list(map(lambda x: x.strip(), f.readlines()))
+  db = namespace_db.NamespaceDatabase.load_csvs()
+  downstream_species = list(db.class_lists["downstream_species"].classes)
   return fsu.QuerySequence([
       fsu.Query(
           op=fsu.TransformOp.FILTER,
@@ -203,8 +203,8 @@ def get_downstream_data_query() -> fsu.QuerySequence:
   Returns:
     The QuerySequence to apply.
   """
-  with open(path_utils.get_absolute_epath(DOWNSTREAM_SPECIES_PATH), "r") as f:
-    downstream_species = list(map(lambda x: x.strip(), f.readlines()))
+  db = namespace_db.NamespaceDatabase.load_csvs()
+  downstream_species = list(db.class_lists["downstream_species"].classes)
   (_, _, feasible_ar_species,
    unfeasible_ar_species) = get_artificially_rare_species_constraints(5, 5)
   upstream_query = get_upstream_data_query()

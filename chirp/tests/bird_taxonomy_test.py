@@ -55,8 +55,7 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
                                              '_load_taxonomy_metadata')
     mock_load_taxonomy_metadata = cls.metadata_patcher.start()
     mock_load_taxonomy_metadata.return_value = pd.read_json(
-        cls.EXAMPLE_DIR /
-        'taxonomy_info.json')[['species_code', 'genus', 'family', 'order']]
+        cls.EXAMPLE_DIR / 'taxonomy_info.json')[['species_code']]
     cls.url_patcher = mock.patch.object(cls.DATASET_CLASS, 'GCS_URL',
                                         epath.Path(cls.tempdir))
     cls.query_patchers = []

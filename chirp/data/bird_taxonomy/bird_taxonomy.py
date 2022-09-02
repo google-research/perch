@@ -17,15 +17,14 @@
 
 import dataclasses
 import functools
-import json
 import tempfile
 from typing import Any, Callable, Optional, Sequence, Tuple, Union
 import warnings
 
 from chirp import audio_utils
-from chirp import path_utils
 from chirp.data import filter_scrub_utils as fsu
 from chirp.data.bird_taxonomy import premade_queries
+from chirp.taxonomy import namespace_db
 from etils import epath
 import numpy as np
 import pandas as pd
@@ -148,7 +147,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                'contains relevant annotations + "ignore" class.',
       '1.2.3': 'Removing any non-relevant annotation from foreground or '
                'background in downstream data: downstream data only'
-               'contains relevant annotations.'
+               'contains relevant annotations. Also removing order, family and'
+               'genus metadata, as those will be added in the TF-based'
+               'processing pipeline.'
   }
   TINY_SPECIES = ('ostric2', 'piebar1')
   BUILDER_CONFIGS = [
@@ -230,47 +231,23 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   GCS_URL = epath.Path('gs://chirp-public-bucket/xeno-canto')
   TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-07-18.json'
 
-  def _load_taxonomy_metadata(self, disable_filtering=False) -> pd.DataFrame:
-    file_path = path_utils.get_absolute_epath('data/bird_taxonomy/metadata/'
-                                              'taxonomy_metadata.json')
-    # The taxonomy_metadata.json file contains a taxonomy tree organized as
-    # Dict[str, Dict[str, Dict[str, Sequence[str]]]] which maps order name
-    # to family name to genus name to a list of species codes.
-    order_to_families = json.loads(file_path.read_text())
-    rows = []
-    for order, family_to_genera in order_to_families.items():
-      for family, genus_to_species_codes in family_to_genera.items():
-        for genus, species_codes in genus_to_species_codes.items():
-          for species_code in species_codes:
-            # When building tiny reference, we ensure upfront that only
-            # TINY_SPECIES are added. Instead, the `query-based` tiny version
-            # first adds everything, and filters out afterwards.
-            if disable_filtering or not self.builder_config.tiny_reference or species_code in self.TINY_SPECIES:
-              rows.append({
-                  'species_code': species_code,
-                  'genus': genus,
-                  'family': family,
-                  'order': order
-              })
-    df = pd.DataFrame(rows)
-    # At that point, the dataframe contains all possible species. Now we apply
-    # filtering operations.
+  def _load_taxonomy_metadata(self, disable_filtering: bool = False):
+    """Loads the taxonomy for the dataset."""
+    db = namespace_db.NamespaceDatabase.load_csvs()
+    dataset_classes = list(db.class_lists['xenocanto'].classes)
+    taxonomy_df = pd.DataFrame(dataset_classes, columns=['species_code'])
     if not disable_filtering and not self.builder_config.tiny_reference:
       # We apply all the metadata processing queries
-      df = fsu.apply_sequence(df, self.builder_config.metadata_processing_query)
-    return df
+      taxonomy_df = fsu.apply_sequence(
+          taxonomy_df, self.builder_config.metadata_processing_query)
+    return taxonomy_df
 
   def _info(self) -> tfds.core.DatasetInfo:
-    # The taxonomy_metadata dataframe is a lightweight subset of the
-    # TAXONOMY_INFO_FILENAME dataframe stored on GCS. More specifically, it
-    # drops all columns that are not needed to construct the 'label', 'genus',
-    # 'family', and 'order' class sets. This lets us avoid downloading any data
-    # outside of the _split_generators function.
-    taxonomy_metadata = self._load_taxonomy_metadata()
-    class_names = {
-        level: sorted(set(taxonomy_metadata[level]))
-        for level in ('species_code', 'genus', 'family', 'order')
-    }
+
+    if self.builder_config.tiny_reference:
+      class_names = self.TINY_SPECIES
+    else:
+      class_names = self._load_taxonomy_metadata()['species_code'].tolist()
 
     full_length = self.builder_config.localization_fn is None
     audio_feature_shape = [
@@ -294,21 +271,10 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                 tfds.features.Scalar(dtype=tf.uint64),
             'label':
                 tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=class_names['species_code'])
-                ),
+                    tfds.features.ClassLabel(names=class_names)),
             'bg_labels':
                 tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=class_names['species_code'])
-                ),
-            'genus':
-                tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=class_names['genus'])),
-            'family':
-                tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=class_names['family'])),
-            'order':
-                tfds.features.Sequence(
-                    tfds.features.ClassLabel(names=class_names['order'])),
+                    tfds.features.ClassLabel(names=class_names)),
             'filename':
                 tfds.features.Text(),
             'quality_score':
@@ -344,7 +310,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
     # No checksum is found for the new taxonomy_info. dl_manager may raise
     # an error when removing the line below.
-    dl_manager._force_checksums_validation = False
+    dl_manager._force_checksums_validation = False  # pylint: disable=protected-access
     paths = dl_manager.download_and_extract({
         'taxonomy_info':
             (self.GCS_URL / self.TAXONOMY_INFO_FILENAME).as_posix(),
@@ -353,9 +319,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     # includes information on the Xeno-Canto files associated with each
     # species.
     taxonomy_info = pd.read_json(paths['taxonomy_info'])
-    if not taxonomy_info[[
-        'species_code', 'genus', 'family', 'order'
-    ]].sort_values(
+    if not taxonomy_info[['species_code']].sort_values(
         by='species_code', axis=0, ignore_index=True).equals(
             self._load_taxonomy_metadata(disable_filtering=True).sort_values(
                 by='species_code', axis=0, ignore_index=True)):
@@ -451,9 +415,6 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           'segment_end': len(audio),
           'label': foreground_label,
           'bg_labels': source['bg_species_codes'],
-          'genus': [source['genus']],
-          'family': [source['family']],
-          'order': [source['order']],
           'filename': source['url'].name,
           'quality_score': source['quality_score'],
           'license': source['license'],

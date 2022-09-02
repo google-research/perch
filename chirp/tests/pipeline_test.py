@@ -53,12 +53,6 @@ class PipelineTest(absltest.TestCase):
                                  dtype=tf.string),
         'bg_labels':
             tf.convert_to_tensor([[2, 3], [4, 5]], dtype=tf.int64),
-        'genus':
-            tf.convert_to_tensor([[1], [3]], dtype=tf.int64),
-        'family':
-            tf.convert_to_tensor([[1], [1]], dtype=tf.int64),
-        'order':
-            tf.convert_to_tensor([[1], [5]], dtype=tf.int64),
         'filename':
             tf.convert_to_tensor(['placeholder', 'placeholder'],
                                  dtype=tf.string),
@@ -74,19 +68,6 @@ class PipelineTest(absltest.TestCase):
     mixed_example = next(mixed_ds.as_numpy_iterator())
     np.testing.assert_allclose(mixed_example['audio'],
                                examples['audio'][0] + examples['audio'][1])
-    np.testing.assert_equal(
-        mixed_example['genus'],
-        np.asarray(
-            [0, 1, 0, 1] + [0] *
-            (self._builder.info.features['genus'].num_classes - 4),
-            dtype=np.int32))
-
-    np.testing.assert_equal(
-        mixed_example['family'],
-        np.asarray(
-            [0, 1] + [0] *
-            (self._builder.info.features['family'].num_classes - 2),
-            dtype=np.int32))
 
     np.testing.assert_equal(
         mixed_example['bg_labels'],
@@ -133,12 +114,6 @@ class PipelineTest(absltest.TestCase):
             tf.convert_to_tensor(['placeholder'], dtype=tf.string),
         'bg_labels':
             tf.convert_to_tensor([2, 3], dtype=tf.int64),
-        'genus':
-            tf.convert_to_tensor([1], dtype=tf.int64),
-        'family':
-            tf.convert_to_tensor([1], dtype=tf.int64),
-        'order':
-            tf.convert_to_tensor([1], dtype=tf.int64),
         'filename':
             tf.convert_to_tensor('placeholder', dtype=tf.string),
     }
@@ -167,14 +142,14 @@ class PipelineTest(absltest.TestCase):
         (input_gain + 0.01) * min_gain <= np.abs(audio).max() <= input_gain /
         (input_gain + 0.01) * max_gain)
 
-    # The label, genus, family, and order features should be one-hot encoded.
-    for key in ('label', 'genus', 'family', 'order'):
-      np.testing.assert_equal(
-          example[key].numpy(),
-          np.asarray(
-              [0, 1, 0] + [0] *
-              (self._builder.info.features[key].num_classes - 3),
-              dtype=np.int32))
+    # The label feature should be one-hot encoded.
+    key = 'label'
+    np.testing.assert_equal(
+        example[key].numpy(),
+        np.asarray(
+            [0, 1, 0] + [0] *
+            (self._builder.info.features[key].num_classes - 3),
+            dtype=np.int32))
 
     # The label_str and filename features should be deleted.
     for key in ('label_str', 'filename'):
@@ -191,8 +166,8 @@ class PipelineTest(absltest.TestCase):
       self.assertLen(example['source_audio'].shape, 3)
       self.assertSetEqual(
           set(example.keys()), {
-              'audio', 'source_audio', 'bg_labels', 'family', 'genus', 'label',
-              'order', 'segment_start', 'segment_end'
+              'audio', 'source_audio', 'bg_labels', 'label', 'segment_start',
+              'segment_end'
           })
 
   def test_convert_bird_taxonomy_labels(self):
