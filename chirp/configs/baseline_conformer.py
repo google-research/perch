@@ -58,7 +58,7 @@ def get_config() -> config_dict.ConfigDict:
           _c("pipeline.Batch", batch_size=64),
           _c("pipeline.Slice",
              window_size=window_size_s,
-             start=0.5,
+             start=0.0,
              names=("audio",)),
           _c("pipeline.NormalizeAudio", target_gain=0.2, names=("audio",)),
       ])

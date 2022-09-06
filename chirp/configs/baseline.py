@@ -65,7 +65,7 @@ def get_config() -> config_dict.ConfigDict:
              add_taxonomic_labels=add_taxonomic_labels),
           _c("pipeline.Batch", batch_size=batch_size,
              split_across_devices=True),
-          _c("pipeline.Slice", window_size=window_size_s, start=0.5),
+          _c("pipeline.Slice", window_size=window_size_s, start=0.0),
           _c("pipeline.NormalizeAudio", target_gain=0.2),
       ])
   eval_dataset_config.split = "train"
