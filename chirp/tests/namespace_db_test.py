@@ -15,6 +15,7 @@
 
 """Tests for namespace_db."""
 
+from absl import logging
 from chirp.taxonomy import namespace_db
 import numpy as np
 import tensorflow as tf
@@ -72,6 +73,43 @@ class NamespaceDbTest(absltest.TestCase):
     for i in range(caples_list.size):
       self.assertGreaterEqual(
           table.lookup(tf.constant([i], dtype=tf.int64)).numpy()[0], 0)
+
+  def test_namespace_closure(self):
+    # Ensure that all classes in class lists appear in their namespace.
+    db = namespace_db.NamespaceDatabase.load_csvs()
+
+    for list_name, class_list in db.class_lists.items():
+      missing_classes = set()
+      namespace = db.namespaces[class_list.namespace]
+      for cl in class_list.classes:
+        if cl not in namespace.classes:
+          missing_classes.add(cl)
+      if missing_classes:
+        logging.warning(
+            'The classes %s in class list %s did not appear in'
+            ' namespace %s.', missing_classes, list_name, namespace)
+      self.assertEmpty(missing_classes)
+
+  def test_taxonomic_mappings(self):
+    # Ensure that all ebird2021 species appear in taxonomic mappings.
+    db = namespace_db.NamespaceDatabase.load_csvs()
+    ebird = db.class_lists['ebird2021']
+    genera = db.mappings['ebird2021_to_genus'].to_dict()
+    families = db.mappings['ebird2021_to_family'].to_dict()
+    orders = db.mappings['ebird2021_to_order'].to_dict()
+    missing_genera = set()
+    missing_families = set()
+    missing_orders = set()
+    for cl in ebird.classes:
+      if cl not in genera:
+        missing_genera.add(cl)
+      if cl not in families:
+        missing_families.add(cl)
+      if cl not in orders:
+        missing_orders.add(cl)
+    self.assertEmpty(missing_genera)
+    self.assertEmpty(missing_families)
+    self.assertEmpty(missing_orders)
 
 
 if __name__ == '__main__':
