@@ -185,30 +185,46 @@ class ClassList:
     if mapped_name is None:
       mapped_name = self.name + '_' + mapping.target_namespace
     mapping_dict = mapping.to_dict()
-    mapped_classes = sorted(set([mapping_dict[cl] for cl in self.classes]))
+    mapped_classes = sorted(
+        set([mapping_dict[cl] for cl in self.classes if cl in mapping_dict]))
     return ClassList(mapped_name, mapping.target_namespace, mapped_classes)
 
   def get_class_map_matrix(
-      self, target_class_list: 'ClassList') -> Tuple[jnp.ndarray, jnp.ndarray]:
+      self,
+      target_class_list: 'ClassList',
+      mapping: Optional[Mapping] = None) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Construct a binary matrix for mapping to another ClassList.
 
     Args:
       target_class_list: ClassList to map into.
+      mapping: Namespace mapping, required if the source and target are in
+        different namespaces.
 
     Returns:
       A binary matrix mapping self to target_class_list and an indicator vector
       for the image of the mapping.
     """
+    if self.namespace != target_class_list.namespace and mapping is None:
+      raise ValueError('If source and target classes are from different '
+                       'namespaces, a namespace mapping must be provided.')
+    elif mapping is not None:
+      mapping_dict = mapping.to_dict()
+    else:
+      mapping_dict = {}
     matrix = jnp.zeros([self.size, target_class_list.size])
     image_mask = jnp.zeros([target_class_list.size])
 
-    source_idxs = self.get_index_lookup()
     target_idxs = target_class_list.get_index_lookup()
     for i, cl in enumerate(self.classes):
+      if mapping is not None and cl in mapping_dict:
+        # Consider the class as a member of the target namespace.
+        cl = mapping_dict[cl]
+      elif mapping is not None:
+        # Source class does not exist in the target namespace, so ignore it.
+        continue
+
       if cl in target_class_list.classes:
         j = target_idxs[cl]
         matrix = matrix.at[i, j].set(1)
-    for j, cl in enumerate(target_class_list.classes):
-      if cl in source_idxs:
         image_mask = image_mask.at[j].set(1)
     return matrix, image_mask
