@@ -20,6 +20,7 @@ import tempfile
 from unittest import mock
 
 from chirp.data.soundscapes import soundscapes
+from chirp.data.soundscapes import soundscapes_lib
 from chirp.taxonomy import namespace
 from etils import epath
 import pandas as pd
@@ -28,8 +29,9 @@ import tensorflow_datasets as tfds
 from absl.testing import absltest
 
 
-def mock_localization_fn(audio, sr, interval_length_s, **unused_kwargs):
+def mock_localization_fn(audio, sr, interval_length_s, max_intervals):
   del audio
+  del max_intervals
   target_length = sr * interval_length_s
   return [(0, target_length)]
 
@@ -43,6 +45,9 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
       if config.name in ['caples']
   ]
   EXAMPLE_DIR = DATASET_CLASS.code_path.parent / 'placeholder_data'
+  DL_EXTRACT_RESULT = {
+      'segments': EXAMPLE_DIR / 'test.csv',
+  }
   SPLITS = {'train': 3}
   SKIP_CHECKSUMS = True
 
@@ -56,16 +61,11 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
 
     _ = tfds.core.lazy_imports.librosa
 
-    cls.metadata_patcher = mock.patch.object(cls.DATASET_CLASS,
-                                             '_load_class_list')
-    cls.segments_patcher = mock.patch.object(cls.DATASET_CLASS,
-                                             '_load_segments')
+    cls.metadata_patcher = mock.patch.object(soundscapes_lib, 'load_class_list')
     cls.loc_patcher = mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[0],
                                         'localization_fn', mock_localization_fn)
     cls.url_patcher = mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[0],
                                         'audio_dir', epath.Path(cls.tempdir))
-    mock_load_segments = cls.segments_patcher.start()
-
     # We mock the localization part with a function that finds signal in the
     # first interval_length_s (5 sec.). This means that fake segments 1, 2 and 4
     # should be selected. Segment 3 should not be selected (not overlap with
@@ -82,7 +82,6 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     fake_segments = pd.read_csv(cls.EXAMPLE_DIR / 'test.csv')
     fake_segments['ebird_codes'] = fake_segments['ebird_codes'].apply(
         lambda codes: codes.split())
-    mock_load_segments.return_value = fake_segments
 
     cls.url_patcher.start()
     subdir = epath.Path(cls.tempdir) / 'caples' / 'audio'
@@ -99,7 +98,6 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
   @classmethod
   def tearDownClass(cls):
     super().tearDownClass()
-    cls.segments_patcher.stop()
     cls.metadata_patcher.stop()
     cls.loc_patcher.stop()
     cls.url_patcher.stop()

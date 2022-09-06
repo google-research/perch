@@ -17,11 +17,9 @@
 
 import csv
 import dataclasses
-import glob
-import os
 from typing import Callable, Dict, Optional, Sequence
 
-from chirp.taxonomy import namespace_db
+from etils import epath
 import pandas as pd
 
 
@@ -52,7 +50,7 @@ def annotations_to_dataframe(
 def write_annotations_csv(filepath, annotations):
   fieldnames = [f.name for f in dataclasses.fields(TimeWindowAnnotation)]
   fieldnames.remove('namespace')
-  with open(filepath, 'w') as f:
+  with epath.Path(filepath).open('w') as f:
     dr = csv.DictWriter(f, fieldnames)
     dr.writeheader()
     for anno in annotations:
@@ -62,8 +60,8 @@ def write_annotations_csv(filepath, annotations):
 
 
 def read_dataset_annotations_csvs(
-    filepaths: Sequence[str],
-    filename_fn: Callable[[str, Dict[str, str]], str],
+    filepaths: Sequence[epath.Path],
+    filename_fn: Callable[[epath.Path, Dict[str, str]], str],
     namespace: str,
     class_fn: Callable[[Dict[str, str]], Sequence[str]],
     start_time_fn: Callable[[Dict[str, str]], float],
@@ -90,7 +88,7 @@ def read_dataset_annotations_csvs(
   """
   annotations = []
   for filepath in filepaths:
-    with open(filepath, 'r') as f:
+    with filepath.open('r') as f:
       reader = csv.DictReader(f, delimiter=delimiter)
       for row in reader:
         if filter_fn and filter_fn(row):
@@ -102,123 +100,3 @@ def read_dataset_annotations_csvs(
         annotations.append(
             TimeWindowAnnotation(filename, start, end, namespace, classes))
   return annotations
-
-
-#   +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
-#  /  Dataset-specific annotation handling. /
-# +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
-
-
-def combine_hawaii_dataset_annotations(dataset_path: str, output_filepath: str):
-  """Combine all Hawaii dataset annotations into a single csv."""
-  tables = glob.glob(os.path.join(dataset_path, '*', '*.txt'))
-  rows = []
-  for table_fp in tables:
-    with open(table_fp) as f:
-      reader = csv.DictReader(f, delimiter='\t')
-      for row in reader:
-        # The filename in the row doesn't include the directory.
-        row['Begin File'] = os.path.join(
-            os.path.basename(os.path.dirname(table_fp)), row['Begin File'])
-        # The Spectrogram rows are redundant with the Waveform rows, but contain
-        # a couple extra columns.
-        if 'Spectrogram' not in row['View']:
-          rows.append(row)
-
-  with open(output_filepath, 'w') as f:
-    writer = csv.DictWriter(f, rows[0].keys())
-    writer.writeheader()
-    writer.writerows(rows)
-
-
-def read_hawaii_dataset_annotations(
-    dataset_path: str,
-    use_combined_csv=False) -> Sequence[TimeWindowAnnotation]:
-  """Read annotations from Raven Selection Tables for the Hawaii dataset."""
-  start_time_fn = lambda row: float(row['Begin Time (s)'])
-  end_time_fn = lambda row: float(row['End Time (s)'])
-  filter_fn = lambda row: 'Spectrogram' in row['View']
-
-  # Convert dataset labels to ebird2021.
-  db = namespace_db.NamespaceDatabase.load_csvs()
-  ebird_mapping = db.mappings['hawaii_dataset_to_ebird2021'].to_dict()
-  class_fn = lambda row: [ebird_mapping.get(row['Species'].strip(), '')]
-
-  if use_combined_csv:
-    annotation_filepaths = [dataset_path]
-    filename_fn = lambda filepath, row: row['Begin File'].strip()
-    delimiter = ','
-  else:
-    annotation_filepaths = glob.glob(os.path.join(dataset_path, '*/*.txt'))
-    # Audio files are in per-island subdirectories.
-    dir_name = lambda filepath: os.path.basename(os.path.dirname(filepath))
-    filename_fn = lambda filepath, row: os.path.join(  # pylint: disable=g-long-lambda
-        dir_name(filepath), row['Begin File'].strip())
-    delimiter = '\t'
-
-  annotations = read_dataset_annotations_csvs(
-      annotation_filepaths,
-      filename_fn=filename_fn,
-      namespace='ebird2021',
-      class_fn=class_fn,
-      start_time_fn=start_time_fn,
-      end_time_fn=end_time_fn,
-      filter_fn=filter_fn,
-      delimiter=delimiter)
-  return annotations
-
-
-def read_ssw_dataset_annotations(
-    annotations_path: str) -> Sequence[TimeWindowAnnotation]:
-  """Read annotations from Raven Selection Tables for the SSW dataset."""
-  start_time_fn = lambda row: float(row['Start Time (s)'])
-  end_time_fn = lambda row: float(row['End Time (s)'])
-  filter_fn = lambda row: False
-  # SSW data are already using ebird codes.
-  class_fn = lambda row: [row['Species eBird Code'].strip()]
-  filename_fn = lambda filepath, row: row['Filename'].strip()
-
-  annotations = read_dataset_annotations_csvs([annotations_path],
-                                              filename_fn=filename_fn,
-                                              namespace='ebird2021',
-                                              class_fn=class_fn,
-                                              start_time_fn=start_time_fn,
-                                              end_time_fn=end_time_fn,
-                                              filter_fn=filter_fn)
-  return annotations
-
-
-def read_caples_dataset_annotations(
-    dataset_path: str) -> Sequence[TimeWindowAnnotation]:
-  """Read annotations from ornithology2 annotations of the Caples data."""
-  annotations_path = os.path.join(dataset_path, 'caples.csv')
-  filename_fn = lambda _, row: row['fid'].strip() + '.wav'
-  start_time_fn = lambda row: float(row['start_time_s'])
-  end_time_fn = lambda row: float(row['end_time_s'])
-  # Get rid of the one bad label in the dataset...
-  filter_fn = lambda row: 'comros' in row['ebird_codes']
-  class_fn = lambda row: ' '.split(row['ebird_codes'].strip())
-  return read_dataset_annotations_csvs([annotations_path],
-                                       filename_fn=filename_fn,
-                                       namespace='ebird2021',
-                                       class_fn=class_fn,
-                                       start_time_fn=start_time_fn,
-                                       end_time_fn=end_time_fn,
-                                       filter_fn=filter_fn)
-
-
-def read_birdclef_dataset_annotations(
-    annotations_path: str) -> Sequence[TimeWindowAnnotation]:
-  """Read annotations from ornithology2 annotations in a single csv file."""
-  filename_fn = lambda _, row: row['fid'].strip() + '.wav'
-  start_time_fn = lambda row: float(row['start_time_s'])
-  end_time_fn = lambda row: float(row['end_time_s'])
-  filter_fn = lambda row: row['end_time_s'] <= row['start_time_s']
-  class_fn = lambda row: ' '.split(row['ebird_codes'].strip())
-  return read_dataset_annotations_csvs([annotations_path],
-                                       filename_fn=filename_fn,
-                                       namespace='ebird2021',
-                                       class_fn=class_fn,
-                                       start_time_fn=start_time_fn,
-                                       end_time_fn=end_time_fn,
-                                       filter_fn=filter_fn)
