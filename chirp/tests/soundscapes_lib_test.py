@@ -115,6 +115,41 @@ class SoundscapesLibTest(parameterized.TestCase):
       self.assertEqual(anno.namespace, 'ebird2021')
       self.assertEqual(anno.label, [expected_label])
 
+  def test_load_sierras_kahl_annotations(self):
+    annos_csv_path = path_utils.get_absolute_epath(
+        'tests/testdata/sierras_kahl.csv')
+    annos = dataset_fns.load_sierras_kahl_annotations(annos_csv_path)
+    self.assertLen(annos, 4)
+    expected_labels = [
+        'amerob',
+        'amerob',
+        'herthr',
+        'herthr',
+    ]
+    for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
+      self.assertTrue(anno.filename.endswith('.flac'))
+      self.assertLen(anno.filename.split('.'), 2)
+      self.assertEqual(anno.namespace, 'ebird2021')
+      self.assertEqual(anno.label, [expected_label])
+
+  def test_load_powdermill_annotations(self):
+    annos_csv_path = path_utils.get_absolute_epath(
+        'tests/testdata/powdermill.csv')
+    annos = dataset_fns.load_powdermill_annotations(annos_csv_path)
+    self.assertLen(annos, 5)
+    expected_labels = [
+        'norcar',
+        'woothr',
+        'eastow',
+        'eastow',
+        'eastow',
+    ]
+    for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
+      self.assertTrue(anno.filename.endswith('.wav'))
+      self.assertLen(anno.filename.split('.'), 2)
+      self.assertEqual(anno.namespace, 'ebird2021')
+      self.assertEqual(anno.label, [expected_label])
+
   def test_load_birdclef_metadata(self):
     md_features = dataset_fns.birdclef_metadata_features()
     metadata = dataset_fns.load_birdclef_metadata(self.testdata_dir,

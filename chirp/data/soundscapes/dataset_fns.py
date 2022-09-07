@@ -177,22 +177,102 @@ def combine_hawaii_annotations(dataset_path: str, output_filepath: str) -> None:
 
 
 def load_hawaii_annotations(annotations_path: epath.Path) -> pd.DataFrame:
-  """Load the dataframe of all hawaii annotations from annotation CSV."""
+  """Load the dataframe of all Hawaii annotations from annotation CSV."""
   start_time_fn = lambda row: float(row['Begin Time (s)'])
   end_time_fn = lambda row: float(row['End Time (s)'])
   filter_fn = lambda row: 'Spectrogram' in row['View']
 
   # Convert dataset labels to ebird2021.
   db = namespace_db.NamespaceDatabase.load_csvs()
-  ebird_mapping = db.mappings['hawaii_dataset_to_ebird2021'].to_dict()
-  class_fn = lambda row: [ebird_mapping.get(row['Species'].strip(), '')]
+  ebird_mapping = db.mappings['hawaii_dataset_to_ebird2021']
+  ebird_mapping_dict = ebird_mapping.to_dict()
+  class_fn = lambda row: [ebird_mapping_dict.get(row['Species'].strip(), '')]
 
   annotation_filepaths = [annotations_path]
   filename_fn = lambda filepath, row: row['Begin File'].strip()
   annos = annotations.read_dataset_annotations_csvs(
       annotation_filepaths,
       filename_fn=filename_fn,
+      namespace=ebird_mapping.target_namespace,
+      class_fn=class_fn,
+      start_time_fn=start_time_fn,
+      end_time_fn=end_time_fn,
+      filter_fn=filter_fn)
+  segments = annotations.annotations_to_dataframe(annos)
+  return segments
+
+
+def load_sierras_kahl_annotations(annotations_path: epath.Path) -> pd.DataFrame:
+  """Load the dataframe of all Powdermill annotations from annotation CSV."""
+  start_time_fn = lambda row: float(row['Start Time (s)'])
+  end_time_fn = lambda row: float(row['End Time (s)'])
+  filter_fn = lambda row: False
+  class_fn = lambda row: [row['Species eBird Code'].strip()]
+
+  annotation_filepaths = [annotations_path]
+  filename_fn = lambda filepath, row: row['Filename'].strip()
+  annos = annotations.read_dataset_annotations_csvs(
+      annotation_filepaths,
+      filename_fn=filename_fn,
       namespace='ebird2021',
+      class_fn=class_fn,
+      start_time_fn=start_time_fn,
+      end_time_fn=end_time_fn,
+      filter_fn=filter_fn)
+  segments = annotations.annotations_to_dataframe(annos)
+  return segments
+
+
+# TODO(tomdenton): Eliminate these 'combine' functions.
+# Reading directly from the set of annotation files will be more direct and
+# less error prone when updating datasets.
+def combine_powdermill_annotations(dataset_path: epath.Path,
+                                   output_filepath: str) -> None:
+  """Combine all Powdermill dataset annotations into a single csv."""
+  tables = dataset_path.glob('*/*.txt')
+  fieldnames = [
+      'Selection', 'View', 'Channel', 'Begin Time (s)', 'End Time (s)',
+      'High Freq (Hz)', 'Low Freq (Hz)', 'Species'
+  ]
+  rows = []
+  for table_fp in tables:
+    with table_fp.open('r') as f:
+      reader = csv.DictReader(f, delimiter='\t', fieldnames=fieldnames)
+      audio_filename = os.path.basename(table_fp).split('.')[0] + '.wav'
+      for row in reader:
+        # Some annotation files have a header, and some do not.
+        # So we skip the headers when present.
+        if row['View'] == 'View':
+          continue
+        # The filename in the row doesn't include the file's directory.
+        row['Filename'] = audio_filename
+        rows.append(row)
+
+  with epath.Path(output_filepath).open('w') as f:
+    fieldnames.append('Filename')
+    writer = csv.DictWriter(f, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(rows)
+
+
+def load_powdermill_annotations(annotations_path: epath.Path) -> pd.DataFrame:
+  """Load the dataframe of all Powdermill annotations from annotation CSV."""
+  start_time_fn = lambda row: float(row['Begin Time (s)'])
+  end_time_fn = lambda row: float(row['End Time (s)'])
+  filter_fn = lambda row: False
+
+  # Convert dataset labels to ebird2021.
+  db = namespace_db.NamespaceDatabase.load_csvs()
+  ebird_mapping = db.mappings['ibp2019_to_ebird2021']
+  ebird_mapping_dict = ebird_mapping.to_dict()
+  class_fn = lambda row: [ebird_mapping_dict.get(row['Species'].strip(), '')]
+
+  annotation_filepaths = [annotations_path]
+  filename_fn = lambda filepath, row: row['Filename'].strip()
+  annos = annotations.read_dataset_annotations_csvs(
+      annotation_filepaths,
+      filename_fn=filename_fn,
+      namespace=ebird_mapping.target_namespace,
       class_fn=class_fn,
       start_time_fn=start_time_fn,
       end_time_fn=end_time_fn,

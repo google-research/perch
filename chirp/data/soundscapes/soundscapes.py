@@ -85,12 +85,16 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
   """DatasetBuilder for soundscapes data."""
 
-  VERSION = tfds.core.Version('1.0.2')
+  VERSION = tfds.core.Version('1.0.3')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release. The label set corresponds to the full '
                'set of ~11 000 Xeno-Canto species.',
       '1.0.1': 'The label set is now restricted to the species present in each'
                'dataset.',
+      '1.0.2': 'Streamlines data handling, and adds handling for a new '
+               'Sapsucker Woods dataset.',
+      '1.0.3': 'Adds handling for the new Cornell Sierra Nevadas dataset and '
+               'the Kitzeslab Powdermill dataset.',
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
@@ -116,7 +120,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=dataset_fns.load_ssw_annotations,
-          description=('Annotated Sapsucker Woods recordings.'),
+          description=('Annotated Sapsucker Woods recordings. '
+                       'https://zenodo.org/record/7018484'),
           class_list_name='new_york'),
       SoundscapesConfig(
           name='birdclef2019_colombia',
@@ -137,6 +142,24 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           annotation_load_fn=dataset_fns.load_birdclef_annotations,
           description=('High Sierras recordings.'),
           class_list_name='high_sierras'),
+      SoundscapesConfig(
+          name='sierras_kahl',
+          audio_glob='sierras_kahl/audio/*.flac',
+          interval_length_s=5.0,
+          localization_fn=audio_utils.slice_peaked_audio,
+          annotation_load_fn=dataset_fns.load_sierras_kahl_annotations,
+          description=('Sierra Nevada recordings. '
+                       'https://zenodo.org/record/7050014'),
+          class_list_name='sierras_kahl'),
+      SoundscapesConfig(
+          name='powdermill',
+          audio_glob='powdermill/*/*.flac',
+          interval_length_s=5.0,
+          localization_fn=audio_utils.slice_peaked_audio,
+          annotation_load_fn=dataset_fns.load_powdermill_annotations,
+          description=('New England recordings from Powdermill Nature Reserve, '
+                       'Rector, PA. https://doi.org/10.1002/ecy.3329'),
+          class_list_name='powdermill'),
   ]
 
   def _info(self) -> tfds.core.DatasetInfo:
