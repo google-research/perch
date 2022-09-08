@@ -36,6 +36,7 @@ def get_config() -> config_dict.ConfigDict:
   train_dataset_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
+          _c("pipeline.Shuffle", shuffle_buffer_size=512),
           _c("pipeline.OnlyJaxTypes"),
           _c("pipeline.MultiHot"),
           _c("pipeline.MixAudio", mixin_prob=1.0),
@@ -43,6 +44,7 @@ def get_config() -> config_dict.ConfigDict:
              split_across_devices=True),
           _c("pipeline.RandomSlice", window_size=window_size_s),
           _c("pipeline.RandomNormalizeAudio", min_gain=0.15, max_gain=0.75),
+          _c("pipeline.Repeat"),
       ])
   train_dataset_config.split = "train"
   config.train_dataset_config = train_dataset_config
