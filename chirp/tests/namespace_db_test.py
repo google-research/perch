@@ -87,8 +87,35 @@ class NamespaceDbTest(absltest.TestCase):
       if missing_classes:
         logging.warning(
             'The classes %s in class list %s did not appear in'
-            ' namespace %s.', missing_classes, list_name, namespace)
+            ' namespace %s.', missing_classes, list_name, namespace.name)
       self.assertEmpty(missing_classes)
+
+  def test_namespace_mapping_closure(self):
+    # Ensure that all classes in mappings appear in their namespace.
+    db = namespace_db.NamespaceDatabase.load_csvs()
+
+    for mapping_name, mapping in db.mappings.items():
+      missing_source_classes = set()
+      missing_target_classes = set()
+      source_namespace = db.namespaces[mapping.source_namespace]
+      target_namespace = db.namespaces[mapping.target_namespace]
+      for source_cl, target_cl in mapping.to_dict().items():
+        if source_cl not in source_namespace.classes:
+          missing_source_classes.add(source_cl)
+        if target_cl not in target_namespace.classes:
+          missing_target_classes.add(target_cl)
+      if missing_source_classes:
+        logging.warning(
+            'The classes %s in mapping %s did not appear in'
+            ' namespace %s.', missing_source_classes, mapping_name,
+            source_namespace.name)
+      if missing_target_classes:
+        logging.warning(
+            'The classes %s in mapping %s did not appear in'
+            ' namespace %s.', missing_target_classes, mapping_name,
+            target_namespace.name)
+      self.assertEmpty(missing_source_classes)
+      self.assertEmpty(missing_target_classes)
 
   def test_taxonomic_mappings(self):
     # Ensure that all ebird2021 species appear in taxonomic mappings.
