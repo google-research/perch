@@ -532,3 +532,64 @@ class Conformer(nn.Module):
 
     inputs = final_ln(inputs)
     return inputs
+
+
+class EarlyFeatureExtractor(nn.Module):
+  """Network used as the "early feature extractor" for HuBERT.
+
+  This module is comprised of a number of convolutional layers. It also uses
+  group normalization after the first layer only. It is based on the
+  architecture used for wav2vec 2.0 / HuBERT, and using the defaults of the
+  implementation from
+  https://github.com/facebookresearch/fairseq/blob/5307a0e078d7460003a86f4e2246d459d4706a1d/fairseq/models/wav2vec/wav2vec2.py
+
+    Attributes:
+      dropout_prob: A float. The dropout probability.
+      activation: The activation to apply after each convolutional "block".
+      conv_layer_tuples: A List of (dim, kernel size, stride) tuples, one for
+        each of the convolutional layers.
+  """
+  dropout_prob: float = 0.
+  activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu
+  conv_layer_tuples: Tuple[Tuple[int, int, int]] = tuple([(512, 10, 5),
+                                                          (512, 3, 2),
+                                                          (512, 3, 2),
+                                                          (512, 3, 2),
+                                                          (512, 3, 2),
+                                                          (512, 2, 2),
+                                                          (512, 2, 2)])
+
+  @nn.compact
+  def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
+    """Convolutional feature extractor used for "early" feature extraction.
+
+    Args:
+      inputs: Input sequence jnp.ndarray of shape [B, T, H].
+      train: Whether we are in training mode. Affects dropout.
+
+    Returns:
+      A jnp.ndarray with shape [B, T, D].
+    """
+    model_dims = self.conv_layer_tuples[0][0]
+    if inputs.shape[-1] != model_dims:
+      inputs = FeedForward(output_dims=model_dims)(inputs)
+
+    for i, (dim, k, stride) in enumerate(self.conv_layer_tuples):
+      print("i {}, inputs {}".format(i, inputs.shape))
+      inputs = nn.Conv(
+          features=dim,
+          kernel_size=(k,),
+          strides=(stride,),
+          feature_group_count=dim,
+          use_bias=False,
+          name="conv_layer_{}".format(i))(
+              inputs)
+
+      inputs = nn.Dropout(self.dropout_prob)(inputs, deterministic=not train)
+
+      if i == 0:
+        inputs = nn.GroupNorm(num_groups=None, group_size=dim)(inputs)
+
+      inputs = self.activation(inputs)
+
+    return inputs

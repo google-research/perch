@@ -39,14 +39,18 @@ class Conformer(nn.Module):
   atten_dropout: Optional[float] = None
   ffn_relu_dropout: Optional[float] = None
   fflayer_weight_sharing: bool = False
+  num_blocks: int = 1
 
   @nn.compact
-  def __call__(self, inputs: JTensor, train: bool) -> JTensor:
+  def __call__(self, inputs: JTensor, train: bool,
+               return_intermediate_list: bool) -> JTensor:
     """Projection followed by a conformer layer.
 
     Args:
       inputs: Input sequence JTensor of shape [B, T, H].
       train: Whether we are in train mode. Affects dropout and batch norm.
+      return_intermediate_list: Whether to return a list of the activations
+        after each conformer block, instead of only the final ones.
 
     Returns:
       The conformer output with shape [B, T, D].
@@ -77,20 +81,26 @@ class Conformer(nn.Module):
       ffn_residual_dropout = self.ffn_residual_dropout
       ffn_relu_dropout = self.ffn_relu_dropout
 
-    inputs = layers.Conformer(
-        model_dims=self.model_dims,
-        kernel_size=self.kernel_size,
-        ff_activation=self.ff_activation,
-        ff_residual_weight=self.ff_residual_weight,
-        ffn_dim_multiplier=self.ffn_dim_multiplier,
-        atten_num_heads=self.atten_num_heads,
-        layer_order=self.layer_order,
-        dropout_prob=self.dropout_prob,
-        conv_residual_dropout=conv_residual_dropout,
-        atten_residual_dropout=atten_residual_dropout,
-        ffn_residual_dropout=ffn_residual_dropout,
-        atten_dropout=atten_dropout,
-        ffn_relu_dropout=ffn_relu_dropout,
-        fflayer_weight_sharing=self.fflayer_weight_sharing,
-        name='conformer')(inputs, train)
-    return inputs
+    intermediate = []
+    for i in range(self.num_blocks):
+      inputs = layers.Conformer(
+          model_dims=self.model_dims,
+          kernel_size=self.kernel_size,
+          ff_activation=self.ff_activation,
+          ff_residual_weight=self.ff_residual_weight,
+          ffn_dim_multiplier=self.ffn_dim_multiplier,
+          atten_num_heads=self.atten_num_heads,
+          layer_order=self.layer_order,
+          dropout_prob=self.dropout_prob,
+          conv_residual_dropout=conv_residual_dropout,
+          atten_residual_dropout=atten_residual_dropout,
+          ffn_residual_dropout=ffn_residual_dropout,
+          atten_dropout=atten_dropout,
+          ffn_relu_dropout=ffn_relu_dropout,
+          fflayer_weight_sharing=self.fflayer_weight_sharing,
+          name='conformer_block_{}'.format(i))(inputs, train)
+      intermediate.append(inputs)
+    if return_intermediate_list:
+      return intermediate
+    else:
+      return inputs
