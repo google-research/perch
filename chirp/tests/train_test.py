@@ -75,7 +75,7 @@ class TrainTest(absltest.TestCase):
         pipeline.OnlyJaxTypes(),
         pipeline.ConvertBirdTaxonomyLabels(
             source_namespace="ebird2021",
-            target_class_list="ebird2021",
+            target_class_list="xenocanto",
             add_taxonomic_labels=True),
         pipeline.MixAudio(mixin_prob=0.0),
         pipeline.Batch(batch_size=1, split_across_devices=True),

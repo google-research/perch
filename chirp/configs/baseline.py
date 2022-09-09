@@ -24,7 +24,7 @@ def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
   batch_size = config_dict.FieldReference(64)
-  target_class_list = config_dict.FieldReference("ebird2021")
+  target_class_list = config_dict.FieldReference("xenocanto")
   add_taxonomic_labels = config_dict.FieldReference(True)
 
   config = config_dict.ConfigDict()
