@@ -41,7 +41,6 @@ class TrainSeparationTest(absltest.TestCase):
   def setUp(self):
     super().setUp()
     self.train_dir = tempfile.TemporaryDirectory("train_dir").name
-
     self.data_dir = tempfile.TemporaryDirectory("data_dir").name
 
     # The following config should be practically equivalent to what was done
@@ -66,9 +65,12 @@ class TrainSeparationTest(absltest.TestCase):
       pipeline_ = config.eval_dataset_config.pipeline
     ds, dataset_info = pipeline.get_dataset(
         split,
+        is_train=False,  # Avoid shuffle in tests.
         dataset_directory=config.dataset_directory,
         tfds_data_dir=config.tfds_data_dir,
         pipeline=pipeline_)
+    if "train" in split:
+      ds = ds.repeat()
     return ds, dataset_info
 
   def _get_test_config(self, use_small_encoder=True) -> config_dict.ConfigDict:
@@ -80,7 +82,10 @@ class TrainSeparationTest(absltest.TestCase):
         "pipeline.Pipeline",
         ops=[
             _c("pipeline.OnlyJaxTypes"),
-            _c("pipeline.MultiHot"),
+            _c("pipeline.ConvertBirdTaxonomyLabels",
+               source_namespace="ebird2021",
+               target_class_list="xenocanto",
+               add_taxonomic_labels=True),
             _c("pipeline.MixAudio", mixin_prob=1.0),
             _c("pipeline.Batch", batch_size=2, split_across_devices=True),
             _c("pipeline.RandomSlice", window_size=window_size_s),
@@ -90,7 +95,10 @@ class TrainSeparationTest(absltest.TestCase):
         "pipeline.Pipeline",
         ops=[
             _c("pipeline.OnlyJaxTypes"),
-            _c("pipeline.MultiHot"),
+            _c("pipeline.ConvertBirdTaxonomyLabels",
+               source_namespace="ebird2021",
+               target_class_list="xenocanto",
+               add_taxonomic_labels=True),
             _c("pipeline.MixAudio", mixin_prob=1.0),
             _c("pipeline.Batch", batch_size=2, split_across_devices=True),
             _c("pipeline.Slice",
@@ -103,6 +111,7 @@ class TrainSeparationTest(absltest.TestCase):
     config.train_config.checkpoint_every_steps = 1
     config.train_config.log_every_steps = 1
     config.eval_config.eval_steps_per_checkpoint = 1
+    config.eval_config.tflite_export = False
 
     if use_small_encoder:
       soundstream_config = config_dict.ConfigDict()
@@ -132,7 +141,6 @@ class TrainSeparationTest(absltest.TestCase):
     # Ensure that we can initialize the model with the baseline config.
     config = separator.get_config()
     config = config_utils.parse_config(config, config_globals.get_globals())
-
     model_bundle, train_state = sep_train.initialize_model(
         workdir=self.train_dir, **config.init_config)
     self.assertIsNotNone(model_bundle)
@@ -180,7 +188,7 @@ class TrainSeparationTest(absltest.TestCase):
     model_bundle, train_state = sep_train.initialize_model(
         workdir=self.train_dir, **config.init_config)
 
-    frame_size = 32 * 2 * 2
+    frame_size = 32 * 2 * 2 * 250
     sep_train.export_tf(model_bundle, train_state, self.train_dir, frame_size)
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))

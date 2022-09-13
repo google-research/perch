@@ -532,3 +532,30 @@ class Conformer(nn.Module):
 
     inputs = final_ln(inputs)
     return inputs
+
+
+class StridedAutopool(nn.Module):
+  """Strided 1D Autopool over an array of shape [B, T, D].
+
+  See https://arxiv.org/abs/1804.10070 for basic Autopool derivation.
+  This implementation applies autopool to strided time windows.
+  """
+  alpha_0: float
+  pool_width: int
+  pool_stride: int
+  padding: str
+
+  @nn.compact
+  def __call__(self, inputs):
+    alpha_shape = [1] * (len(inputs.shape) - 1) + [inputs.shape[-1]]
+    alpha = self.param("alpha", nn.initializers.constant(self.alpha_0),
+                       alpha_shape)
+
+    pool_fn = lambda x: nn.pooling.avg_pool(  # pylint: disable=g-long-lambda
+        x,
+        window_shape=(self.pool_width,),
+        strides=(self.pool_stride,),
+        padding=self.padding)
+    exp_inputs = jnp.exp(alpha * inputs)
+    auto_pooled = pool_fn(exp_inputs * inputs) / pool_fn(exp_inputs)
+    return auto_pooled

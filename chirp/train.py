@@ -23,7 +23,7 @@ from chirp import export_utils
 from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import taxonomy_model
-from chirp.taxonomy import namespace_db
+from chirp.taxonomy import class_utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -141,23 +141,6 @@ class ModelBundle:
   ckpt: checkpoint.Checkpoint
 
 
-def get_class_sizes(species_class_list_name: str):
-  """Get the number of classes for the target class outputs."""
-  db = namespace_db.NamespaceDatabase.load_csvs()
-  species_classes = db.class_lists[species_class_list_name]
-  num_classes = {
-      "label": species_classes.size,
-  }
-  for name in ["genus", "family", "order"]:
-    mapping_name = f"{species_classes.namespace}_to_{name}"
-    if mapping_name not in db.mappings:
-      continue
-    mapping = db.mappings[mapping_name]
-    taxa_class_list = species_classes.apply_namespace_mapping(mapping)
-    num_classes[name] = taxa_class_list.size
-  return num_classes
-
-
 def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
                      input_size: int, learning_rate: float, workdir: str,
                      target_class_list: str):
@@ -167,7 +150,7 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
 
   # Load model
   model_init_key, key = random.split(key)
-  num_classes = get_class_sizes(target_class_list)
+  num_classes = class_utils.get_class_sizes(target_class_list, True)
   model = taxonomy_model.TaxonomyModel(num_classes=num_classes, **model_config)
   variables = model.init(
       model_init_key, jnp.zeros((1, input_size)), train=False)

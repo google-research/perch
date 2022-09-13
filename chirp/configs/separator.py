@@ -23,7 +23,8 @@ _c = config_utils.callable_config
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
-  batch_size = config_dict.FieldReference(64)
+  batch_size = config_dict.FieldReference(128)
+  target_class_list = config_dict.FieldReference("xenocanto")
 
   config = config_dict.ConfigDict()
   config.sample_rate_hz = sample_rate_hz
@@ -38,7 +39,10 @@ def get_config() -> config_dict.ConfigDict:
       ops=[
           _c("pipeline.Shuffle", shuffle_buffer_size=512),
           _c("pipeline.OnlyJaxTypes"),
-          _c("pipeline.MultiHot"),
+          _c("pipeline.ConvertBirdTaxonomyLabels",
+             source_namespace="ebird2021",
+             target_class_list=target_class_list,
+             add_taxonomic_labels=True),
           _c("pipeline.MixAudio", mixin_prob=1.0),
           _c("pipeline.Batch", batch_size=batch_size,
              split_across_devices=True),
@@ -46,7 +50,7 @@ def get_config() -> config_dict.ConfigDict:
           _c("pipeline.RandomNormalizeAudio", min_gain=0.15, max_gain=0.75),
           _c("pipeline.Repeat"),
       ])
-  train_dataset_config.split = "train"
+  train_dataset_config.split = "train[:99%]"
   config.train_dataset_config = train_dataset_config
 
   eval_dataset_config = config_dict.ConfigDict()
@@ -54,14 +58,17 @@ def get_config() -> config_dict.ConfigDict:
       "pipeline.Pipeline",
       ops=[
           _c("pipeline.OnlyJaxTypes"),
-          _c("pipeline.MultiHot"),
+          _c("pipeline.ConvertBirdTaxonomyLabels",
+             source_namespace="ebird2021",
+             target_class_list=target_class_list,
+             add_taxonomic_labels=True),
           _c("pipeline.MixAudio", mixin_prob=1.0),
           _c("pipeline.Batch", batch_size=batch_size,
              split_across_devices=True),
           _c("pipeline.Slice", window_size=window_size_s, start=0.0),
           _c("pipeline.NormalizeAudio", target_gain=0.45),
       ])
-  eval_dataset_config.split = "train"
+  eval_dataset_config.split = "train[99%:]"
   config.eval_dataset_config = eval_dataset_config
 
   # Experiment configuration
@@ -69,12 +76,17 @@ def get_config() -> config_dict.ConfigDict:
   init_config.rng_seed = 0
   init_config.learning_rate = 0.0001
   init_config.input_size = sample_rate_hz * window_size_s
+  init_config.target_class_list = target_class_list
   config.init_config = init_config
 
   # Model Configuration
   model_config = config_dict.ConfigDict()
   model_config.num_mask_channels = 4
   model_config.mask_kernel_size = 3
+  model_config.classify_bottleneck = True
+  model_config.classify_pool_width = 50
+  model_config.classify_stride = 50
+  model_config.classify_features = 512
   init_config.model_config = model_config
 
   # Mask generator model configuration
@@ -87,6 +99,7 @@ def get_config() -> config_dict.ConfigDict:
   soundstream_config.strides = (5, 2, 2)
   soundstream_config.feature_mults = (2, 2, 2)
   soundstream_config.groups = (1, 1, 1)
+  soundstream_config.unet_scalar = 1.0
   model_config.mask_generator = config_utils.callable_config(
       "soundstream_unet.SoundstreamUNet", soundstream_config)
 
@@ -110,22 +123,25 @@ def get_config() -> config_dict.ConfigDict:
   model_config.bank_is_real = True
 
   # Training loop configuration
-  num_train_steps = config_dict.FieldReference(2_000_000)
+  num_train_steps = config_dict.FieldReference(5_000_000)
 
   train_config = config_dict.ConfigDict()
   train_config.num_train_steps = num_train_steps
   train_config.log_every_steps = 500
   train_config.checkpoint_every_steps = 25_000
   train_config.loss_max_snr = 30.0
+  train_config.classify_bottleneck_weight = 100.0
+  train_config.taxonomy_labels_weight = 1.0
   config.train_config = train_config
 
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = num_train_steps
   eval_config.eval_steps_per_checkpoint = 100
   # Note: frame_size should be divisible by the product of all downsampling
-  # strides in the model architecture (eg, 32 * 5 * 2 * 2, for
-  # frontend_config.stride=32, and soundstream_config.strides=[5, 2, 2]).
-  eval_config.frame_size = 640
+  # strides in the model architecture (eg, 32 * 5 * 2 * 2 * 50, for
+  # frontend_config.stride=32, and soundstream_config.strides=[5, 2, 2]),
+  # and classify_stride=50.
+  eval_config.frame_size = 32000
   eval_config.tflite_export = True
   config.eval_config = eval_config
 

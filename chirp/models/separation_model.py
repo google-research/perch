@@ -15,13 +15,54 @@
 
 """Separation model."""
 
-from typing import Callable, Sequence
+from typing import Callable, Dict, Optional
 
+from chirp.models import layers
+import flax
 from flax import linen as nn
 import jax
 from jax import numpy as jnp
 
-SOUNDSTREAM_UNET = "soundstream_unet"
+SOUNDSTREAM_UNET = 'soundstream_unet'
+
+
+@flax.struct.dataclass
+class ModelOutputs:
+  """Separation model outputs."""
+  separated_audio: jnp.ndarray
+  bottleneck: Optional[jnp.ndarray] = None
+  embedding: Optional[jnp.ndarray] = None
+  label: Optional[jnp.ndarray] = None
+  genus: Optional[jnp.ndarray] = None
+  family: Optional[jnp.ndarray] = None
+  order: Optional[jnp.ndarray] = None
+
+  def time_reduce_logits(self, reduction: str = 'AVG') -> 'ModelOutputs':
+    """Returns a new ModelOutputs with scores reduced over the time axis.
+
+    Args:
+      reduction: Type of reduction to use. One of AVG (promotes precision), MAX
+        (promotes recall), or MIDPOINT (unbiased, but probably useless for very
+        long sequences).
+    """
+    if reduction == 'AVG':
+      reduce_fn = lambda x: jnp.mean(x, axis=1)
+    elif reduction == 'MAX':
+      reduce_fn = lambda x: jnp.max(x, axis=1)
+    elif reduction == 'MIDPOINT':
+      midpt = self.label.shape[1] // 2
+      reduce_fn = lambda x: x[:, midpt, :]
+    else:
+      raise ValueError(f'Reduction {reduction} not recognized.')
+    return ModelOutputs(
+        self.separated_audio,
+        self.bottleneck,
+        self.embedding,
+        reduce_fn(self.label) if self.label is not None else None,
+        reduce_fn(self.genus) if self.genus is not None else None,
+        reduce_fn(self.family) if self.family is not None else None,
+        reduce_fn(self.order) if self.order is not None else None,
+    )
 
 
 def enforce_mixture_consistency_time_domain(mixture_waveforms,
@@ -97,16 +138,41 @@ class SeparationModel(nn.Module):
   num_mask_channels: int = 4
   mask_kernel_size: int = 3
   bank_is_real: bool = False
+  num_classes: Optional[Dict[str, int]] = None
+  classify_bottleneck: bool = False
+  classify_pool_width: int = 250
+  classify_stride: int = 50
+  classify_features: int = 512
 
   def check_shapes(self, banked_inputs, mask_hiddens):
     if mask_hiddens.shape[-3] != banked_inputs.shape[-3]:
       raise ValueError(
-          "Output mask_hiddens must have the same time dimensionality as the "
-          "banked_inputs. Got shapes: %s vs %s" %
+          'Output mask_hiddens must have the same time dimensionality as the '
+          'banked_inputs. Got shapes: %s vs %s' %
           (mask_hiddens.shape, banked_inputs.shape))
 
+  def bottleneck_classifier(self, bottleneck, train: bool):
+    """Create classification layer over the bottleneck."""
+    # TODO(tomdenton): Experiment with removing this layernorm.
+    bottleneck = nn.normalization.LayerNorm(reduction_axes=(-2, -1))(bottleneck)
+    classify_hiddens = layers.StridedAutopool(
+        0.5, self.classify_pool_width, self.classify_stride, padding='SAME')(
+            bottleneck)
+    classify_hiddens = nn.Conv(
+        features=self.classify_features,
+        kernel_size=(1,),
+        strides=(1,),
+        padding='SAME')(
+            classify_hiddens)
+    classify_hiddens = nn.swish(classify_hiddens)
+    classify_outputs = {}
+    for k, n in self.num_classes.items():
+      classify_outputs[k] = nn.Conv(n, (1,), (1,), 'SAME')(classify_hiddens)
+    classify_outputs['embedding'] = classify_hiddens
+    return classify_outputs
+
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> Sequence[jnp.ndarray]:
+  def __call__(self, inputs: jnp.ndarray, train: bool) -> ModelOutputs:
     """Apply the separation model."""
     banked_inputs = self.bank_transform(inputs)
     num_banked_filters = banked_inputs.shape[-1]
@@ -115,7 +181,7 @@ class SeparationModel(nn.Module):
       mask_inputs = banked_inputs
     else:
       mask_inputs = jnp.abs(banked_inputs)
-    mask_hiddens, _ = self.mask_generator(mask_inputs, train=train)
+    mask_hiddens, bottleneck = self.mask_generator(mask_inputs, train=train)
     self.check_shapes(banked_inputs, mask_hiddens)
 
     # Convert mask_hiddens to actual mask values.
@@ -138,4 +204,10 @@ class SeparationModel(nn.Module):
     masked_banked_inputs = jnp.swapaxes(masked_banked_inputs, -2, -3)
     unbanked = self.unbank_transform(masked_banked_inputs)
     unbanked = enforce_mixture_consistency_time_domain(inputs, unbanked)
-    return unbanked
+    model_outputs = {
+        'separated_audio': unbanked,
+        'bottleneck': bottleneck,
+    }
+    if self.classify_bottleneck:
+      model_outputs.update(self.bottleneck_classifier(bottleneck, train=train))
+    return ModelOutputs(**model_outputs)
