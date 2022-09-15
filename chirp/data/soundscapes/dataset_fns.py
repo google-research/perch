@@ -154,23 +154,24 @@ def load_ssw_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   return segments
 
 
-def combine_hawaii_annotations(dataset_path: str, output_filepath: str) -> None:
+def combine_hawaii_annotations(dataset_path: epath.Path,
+                               output_filepath: epath.Path) -> None:
   """Combine all Hawaii dataset annotations into a single csv."""
-  tables = glob.glob(os.path.join(dataset_path, '*', '*.txt'))
+  tables = dataset_path.glob('*/*.txt')
   rows = []
   for table_fp in tables:
-    with epath.Path(table_fp).open('r') as f:
+    with table_fp.open('r') as f:
       reader = csv.DictReader(f, delimiter='\t')
       for row in reader:
         # The filename in the row doesn't include the file's directory.
-        row['Begin File'] = os.path.join(
-            os.path.basename(os.path.dirname(table_fp)), row['Begin File'])
+        folder_name = table_fp.parent.name
+        row['Begin File'] = os.path.join(folder_name, row['Begin File'])
         # The Spectrogram rows are redundant with the Waveform rows, but contain
         # a couple extra columns.
         if 'Spectrogram' not in row['View']:
           rows.append(row)
 
-  with epath.Path(output_filepath).open('w') as f:
+  with output_filepath.open('w') as f:
     writer = csv.DictWriter(f, rows[0].keys())
     writer.writeheader()
     writer.writerows(rows)
@@ -227,7 +228,7 @@ def load_sierras_kahl_annotations(annotations_path: epath.Path) -> pd.DataFrame:
 # Reading directly from the set of annotation files will be more direct and
 # less error prone when updating datasets.
 def combine_powdermill_annotations(dataset_path: epath.Path,
-                                   output_filepath: str) -> None:
+                                   output_filepath: epath.Path) -> None:
   """Combine all Powdermill dataset annotations into a single csv."""
   tables = dataset_path.glob('*/*.txt')
   fieldnames = [
@@ -238,6 +239,7 @@ def combine_powdermill_annotations(dataset_path: epath.Path,
   for table_fp in tables:
     with table_fp.open('r') as f:
       reader = csv.DictReader(f, delimiter='\t', fieldnames=fieldnames)
+      subdir_name = table_fp.parent.name
       audio_filename = os.path.basename(table_fp).split('.')[0] + '.wav'
       for row in reader:
         # Some annotation files have a header, and some do not.
@@ -245,10 +247,10 @@ def combine_powdermill_annotations(dataset_path: epath.Path,
         if row['View'] == 'View':
           continue
         # The filename in the row doesn't include the file's directory.
-        row['Filename'] = audio_filename
+        row['Filename'] = os.path.join(subdir_name, audio_filename)
         rows.append(row)
 
-  with epath.Path(output_filepath).open('w') as f:
+  with output_filepath.open('w') as f:
     fieldnames.append('Filename')
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
