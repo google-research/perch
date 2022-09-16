@@ -131,7 +131,7 @@ class Int16AsFloatTensor(tfds.features.Audio):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.2.3')
+  VERSION = tfds.core.Version('1.2.4')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
       '1.1.0': ('Switched to higher sampling rate, added recording metadata '
@@ -149,7 +149,8 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                'background in downstream data: downstream data only'
                'contains relevant annotations. Also removing order, family and'
                'genus metadata, as those will be added in the TF-based'
-               'processing pipeline.'
+               'processing pipeline.',
+      '1.2.4': 'Adds a unique recording ID and a segment ID to all samples.',
   }
   TINY_SPECIES = ('ostric2', 'piebar1')
   BUILDER_CONFIGS = [
@@ -265,6 +266,10 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                     sample_rate=self.builder_config.sample_rate_hz,
                     encoding=tfds.features.Encoding.ZLIB,
                 ),
+            'recording_id':
+                tfds.features.Scalar(dtype=tf.uint64),
+            'segment_id':
+                tfds.features.Scalar(dtype=tf.int64),
             'segment_start':
                 tfds.features.Scalar(dtype=tf.uint64),
             'segment_end':
@@ -390,7 +395,8 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     beam = tfds.core.lazy_imports.apache_beam
     librosa = tfds.core.lazy_imports.librosa
 
-    def _process_example(source):
+    def _process_example(row):
+      recording_id, source = row
       with tempfile.NamedTemporaryFile(
           mode='w+b', suffix=source['url'].suffix) as f:
         f.write(source['url'].read_bytes())
@@ -411,6 +417,8 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                          ] if source['species_code'] else []
       return source['xeno_canto_id'], {
           'audio': audio,
+          'recording_id': recording_id,
+          'segment_id': -1,
           'segment_start': 0,
           'segment_end': len(audio),
           'label': foreground_label,
@@ -430,9 +438,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           'sound_type': source['sound_type'],
       }
 
-    pipeline = (
-        beam.Create(source for _, source in source_info.iterrows())
-        | beam.Map(_process_example))
+    pipeline = beam.Create(source_info.iterrows()) | beam.Map(_process_example)
 
     if self.builder_config.localization_fn:
 
@@ -456,6 +462,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
         for i, (start, end) in enumerate(audio_intervals):
           interval_examples.append((f'{key}_{i}', {
               **example, 'audio': audio[start:end],
+              'segment_id': i,
               'segment_start': start,
               'segment_end': end
           }))

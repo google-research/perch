@@ -36,6 +36,10 @@ class FakeDataset(bird_taxonomy.BirdTaxonomy):
               np.random.uniform(-1.0, 0.99,
                                 self.info.features['audio'].shape).astype(
                                     np.float32),
+          'recording_id':
+              i,
+          'segment_id':
+              -1 + i,
           'segment_start':
               17,
           'segment_end':

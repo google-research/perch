@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set up Poetry
-        run: pipx install git+https://github.com/python-poetry/poetry.git@dca6ff2699a06c0217ed6d5a278fa3146e4136ff
+        run: pipx install git+https://github.com/python-poetry/poetry.git@1.2
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v3
         with:

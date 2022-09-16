@@ -56,8 +56,8 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
     audio_glob: Pattern to match to find audio files.
     class_list_name: The name of the ClassList to use for labels. This is
       typically a list of either all regionally feasible species in the area
-      (for fully-annotated datasets) or the list of all species annotated
-      (if only a subset has been labeled).
+      (for fully-annotated datasets) or the list of all species annotated (if
+      only a subset has been labeled).
     metadata_load_fn: Because the metadata don't always appear under the same
       format, we specify for each config the way to load metadata. This function
       outputs a dataframe, where each row contains the metadata for some audio
@@ -85,7 +85,7 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
   """DatasetBuilder for soundscapes data."""
 
-  VERSION = tfds.core.Version('1.0.3')
+  VERSION = tfds.core.Version('1.0.4')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release. The label set corresponds to the full '
                'set of ~11 000 Xeno-Canto species.',
@@ -95,6 +95,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
                'Sapsucker Woods dataset.',
       '1.0.3': 'Adds handling for the new Cornell Sierra Nevadas dataset and '
                'the Kitzeslab Powdermill dataset.',
+      '1.0.4': 'Adds a unique recording ID and a segment ID to all samples.',
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
@@ -182,6 +183,10 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
                 tfds.features.ClassLabel(names=dataset_class_list.classes)),
         'filename':
             tfds.features.Text(),
+        'recording_id':
+            tfds.features.Scalar(dtype=tf.uint64),
+        'segment_id':
+            tfds.features.Scalar(dtype=tf.int64),
         'segment_start':
             tfds.features.Scalar(dtype=tf.uint64),
         'segment_end':
@@ -235,8 +240,9 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
 
     Args:
       segments: Dataframe of segments. Each row (=segment) must minimally
-        contain the following fields:
-        ['filename', 'url', 'label', 'start_time_s', 'end_time_s'].
+        contain the following fields: ['filename', 'url', 'label',
+        'start_time_s', 'end_time_s'].
+
     Returns:
       List of valid segments.
     """
@@ -250,12 +256,16 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         segments = segments.drop(k, axis=1)
 
     def _process_group(
-        segment_group: pd.DataFrame) -> List[Tuple[str, Dict[str, Any]]]:
+        group: Tuple[int, Tuple[str, pd.DataFrame]]
+    ) -> List[Tuple[str, Dict[str, Any]]]:
+      # Each filename gets a unique ID
+      recording_id, (filename, segment_group) = group
 
       # Each segment in segment_group will generate a tf.Example. A lot of
       # fields, especially metadata ones will be shared between segments.
       # Therefore, we create a template.
       recording_template = segment_group.iloc[0].copy()
+      recording_template['recording_id'] = recording_id
 
       # Load the audio associated with this group of segments
       url = recording_template['url']
@@ -270,7 +280,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
             audio, _ = librosa.load(
                 f.name, sr=sr, res_type=self.builder_config.resampling_method)
           except Exception as inst:  # pylint: disable=broad-except
-            # We have no idea what can go wrong in librosa, so we catch a braod
+            # We have no idea what can go wrong in librosa, so we catch a broad
             # exception here.
             logging.warning(
                 'The audio at %s could not be loaded. Following'
@@ -304,17 +314,18 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       valid_segments = []
       for index, ((start, end),
                   segment_labels) in enumerate(labeled_intervals.items()):
-        key = f"{recording_template['filename']}_{index}"
+        key = f'{filename}_{index}'
         valid_segments.append((key, {
             **recording_template,
             'label': list(segment_labels),
             'audio': audio[start:end],
             'segment_start': start,
             'segment_end': end,
+            'segment_id': index,
         }))
       return valid_segments
 
     pipeline = (
-        beam.Create(group for _, group in segments.groupby('filename'))
+        beam.Create(enumerate(segments.groupby('filename')))
         | beam.FlatMap(_process_group))
     return pipeline

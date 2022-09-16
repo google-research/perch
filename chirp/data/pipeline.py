@@ -238,7 +238,8 @@ class MixAudio(DatasetPreprocessOp):
   mixin_prob: float
   name: str = 'audio'
   source_name: str = 'source_audio'
-  pad_names: Tuple[str, ...] = ('segment_start', 'segment_end')
+  pad_names: Tuple[str, ...] = ('segment_start', 'segment_end', 'recording_id',
+                                'segment_id')
   label_names: Tuple[str, ...] = ('label', 'genus', 'family', 'order',
                                   'bg_labels', 'label_mask', 'genus_mask',
                                   'family_mask', 'order_mask', 'bg_labels_mask')
@@ -573,8 +574,8 @@ def get_dataset(
   Args:
     split: data split, e.g. 'train', 'test', 'train[:80%]', etc.
     is_train: If the dataset will be used for training. This only affects
-      whether data will be distributed or not in case tf_data_service_address
-      is provided.
+      whether data will be distributed or not in case tf_data_service_address is
+      provided.
     dataset_directory: dataset directory.
     tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
       instead of using the tfds.builder_from_directory.

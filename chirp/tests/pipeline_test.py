@@ -167,7 +167,7 @@ class PipelineTest(absltest.TestCase):
       self.assertSetEqual(
           set(example.keys()), {
               'audio', 'source_audio', 'bg_labels', 'label', 'segment_start',
-              'segment_end'
+              'segment_end', 'recording_id', 'segment_id'
           })
 
   def test_convert_bird_taxonomy_labels(self):
