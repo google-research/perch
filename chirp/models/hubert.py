@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """HuBERT model."""
-from typing import Any, Dict, Tuple, Optional, Union
+from typing import Any, Dict, Tuple, List, Optional, Union
 
 import flax
 from flax import linen as nn
@@ -29,10 +29,10 @@ class ModelOutputs:
   targets: jnp.ndarray
   mask_idc: jnp.ndarray
   quantization_loss: jnp.ndarray
-  label: jnp.ndarray
-  genus: Optional[jnp.ndarray] = None
-  family: Optional[jnp.ndarray] = None
-  order: Optional[jnp.ndarray] = None
+  label: List[jnp.ndarray]
+  genus: Optional[List[jnp.ndarray]] = None
+  family: Optional[List[jnp.ndarray]] = None
+  order: Optional[List[jnp.ndarray]] = None
 
 
 def compute_mask_indices(key: jnp.ndarray,
@@ -136,11 +136,17 @@ class HuBERTModel(nn.Module):
     taxonomy_loss_weight: Weight for taxonomic label losses. These are used to
       train supervised readout layer for evaluation only. The representation is
       learned in a purely self-supervised manner.
-    quant_loss_mult: Multiplier for the quantizer loss in the overall loss used
-      for training.
+    intermediate_readout_points: A List of inds of conformer blocks after which
+      to add a readout layer (for classification). Note that these are in
+      addition to the readout that always happens at the end of the "late"
+      feature extractor.
+    stop_gradient_earlyfs: Whether to stop gradient after the early feature
+      extractor.
+    classify_from_all: Whether to use the entire sequence (incl. masked frames)
+      for classification. Otherwise, only the unmasked frames are used.
   """
   num_classes: Dict[str, int]
-  early_feature_extractor: nn.Module
+  early_feature_extractor: Union[nn.Module, None]
   late_feature_extractor: nn.Module
   quantizer: nn.Module
   frontend: nn.Module
@@ -149,12 +155,56 @@ class HuBERTModel(nn.Module):
   final_dim: int = 512
   logit_temp: float = 0.1
   alpha: float = 1.0
-  quant_loss_mult: float = 1.0
+  intermediate_readout_points: Union[List[int], None] = None
+  stop_gradient_earlyfs: bool = True
+  classify_from_all: bool = True
+
+  def classify(self, x_list, mask_idc):
+    # The gradients of this loss will not propagate to train the representation
+    # (the representation is trained purely self-supervised).
+    # TODO(etriantafillou): check if the supervised loss "accidentally" modifies
+    # other parameters, like the mask embedding.
+    x_list = jax.lax.stop_gradient(x_list)
+    outputs = {}
+    for k, n in self.num_classes.items():
+      outputs[k] = []
+      # To be consistent with the implementation of conformers in the supervised
+      # `TaxonomyModel`, we average over the time dimension before the readout
+      # layer, to collapse x from [bsz, sz, csz] to [bsz, csz]. But in this case
+      # we only average over the *unmasked* frames, if `self.classify_from_all`
+      # is turned off.
+
+      # We use separate readout heads on differnet "levels" of representation.
+      for i, x_interm in enumerate(x_list):
+        if i != len(x_list) - 1 and i not in self.intermediate_readout_points:
+          continue
+        csz_ = x_interm.shape[-1]
+
+        if self.classify_from_all:
+          mean = jnp.mean(x_interm, axis=1)
+        else:
+          # x_filtered_zeros has 0s in place of masked embeddings, while keeping
+          # only the unmasked embeddings intact. [bsz, sz, csz_].
+          mask_idc_exp = jnp.repeat(
+              jnp.expand_dims(mask_idc, 2), repeats=csz_, axis=2)
+          x_filtered = jnp.where(mask_idc_exp, 0, x_interm)
+          mean = jnp.sum(
+              x_filtered, axis=1) / jnp.sum(
+                  mask_idc_exp == 0, axis=1)
+
+        outputs[k].append(nn.Dense(n, name="readout_{}_{}".format(k, i))(mean))
+    return outputs
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool,
                mask_key: Union[jnp.ndarray, None]) -> ModelOutputs:
     """Apply the HuBERT model.
+
+    The quantizer used may either be Product Quantizer (PQ) or a base quantizer.
+    In the former case, instead of making a single centroid prediction per
+    frame, a prediction is made for each "section" of the product quantizer.
+    There is also a corresponding target for each section if using PQ, and the
+    HuBERT loss becomes the average of the per-section losses.
 
     bsz: batch size.
     sz: number of frames (timesteps).
@@ -163,7 +213,7 @@ class HuBERTModel(nn.Module):
     ns: number of sections of the product quantizer (if applicable).
 
     Args:
-      inputs: Audio of shape `(bsz, time)`.
+      inputs: Audio of shape `(bsz, sz)`.
       train: Whether we're in training mode (affects batch norm, dropout and
         whether masking is applied).
       mask_key: A jnp.array that serves as the key for sampling masks. It can be
@@ -180,28 +230,43 @@ class HuBERTModel(nn.Module):
 
     # Pass x through the frontend and the "early" feature extractor.
     x = self.frontend(inputs)
-    x = self.early_feature_extractor(x, train=train)
+    if self.early_feature_extractor is not None:
+      x = self.early_feature_extractor(x, train=train)
 
     bsz, sz, csz = x.shape
-    nc = self.quantizer.num_centroids
+    nc = self.quantizer.get_num_centroids()
+    ns = self.quantizer.get_num_sections()
+
+    # Get the codes, quantization targets and quantizer loss.
+    # codes: [ns, nc, csz / ns], where ns = 1 if not using PQ.
+    quant_outputs = self.quantizer(x)
+    codes = quant_outputs.codebook
+    # quant_outputs.nn_idx: [ns, bsz, sz].
+    # targets: [ns, bsz, sz, nc].
+    targets = jax.nn.one_hot(quant_outputs.nn_idx, nc)
+    model_outputs["targets"] = targets
+    model_outputs["quantization_loss"] = quant_outputs.quantization_loss
+
+    # Project the centroids.
+    # A list of ns many elements that have shape [nc, final_dim].
+    codes_pj = [
+        nn.Dense(self.final_dim, name="codes_proj_{}".format(i))(codes[i])
+        for i in range(ns)
+    ]
+    # [ns, nc, final_dim].
+    codes_pj = jnp.stack(codes_pj, axis=0)
+
+    if self.stop_gradient_earlyfs:
+      # If no early feature extractor is used, this should have no effect.
+      # Otherwise, doing this will disallow HuBERT to train the early fs.
+      # Note that this leads to not training the early fs at all (the quantizer
+      # loss won't train it either, due to stopping gradients in quantizer.py).
+      # Quantizing on top of random early features is maybe an interesting
+      # baseline, if *consistency* of targets is what matters most.
+      x = jax.lax.stop_gradient(x)
 
     # The learnable mask token.
     mask_emb = self.param("mask_emb", nn.initializers.uniform(), (csz,))
-
-    # Get the codes, quantization targets and quantizer loss.
-    # codes: the cluster embeddings of shape [nc, csz].
-    # nn_idx: the (dense) labels of shape [bsz, sz].
-    # targets will be one-hot labels of shape [bsz, sz, nc].
-    _, quantization_loss, nn_idx, codes = self.quantizer(x)
-    targets = jax.nn.one_hot(nn_idx, nc)
-    model_outputs["targets"] = targets
-    model_outputs["quantization_loss"] = quantization_loss
-
-    # Project the centroids. [nc, final_dim].
-    codes_pj = nn.Dense(self.final_dim, name="project_codes")(codes)
-
-    # Stop gradients so that HuBERT doesn't train the early feature extractor.
-    x = jax.lax.stop_gradient(x)
 
     # Get the corrupted x, where the features are replaced with the learnable
     # masked embedding for the positions that are chosen to be masked, if we are
@@ -214,45 +279,44 @@ class HuBERTModel(nn.Module):
     mask_idc_exp = jnp.repeat(jnp.expand_dims(mask_idc, 2), repeats=csz, axis=2)
     x = jnp.where(mask_idc_exp > 0, mask_emb, x)
 
-    # Pass the corrupted x through the "late" feature extractor.
-    x = self.late_feature_extractor(x, train=train)
+    # Pass the corrupted x through the "late" feature extractor. Returns a list
+    # of x's for the different "readout points".
+    x_list = self.late_feature_extractor(
+        x, train=train, return_intermediate_list=True)
+    x = x_list[-1]  # the "embeddings"
     _, _, csz = x.shape
     model_outputs["embedding"] = x
 
-    # A linear head for supervised classification on top of HuBERT embeddings.
-    # The gradients of this loss will not propagate to train the representation
-    # (the representation is trained purely self-supervised). This is useful for
-    # evaluation of the representations (via classification on validation set).
-    for k, n in self.num_classes.items():
-      # To be consistent with the implementation of conformers in the supervised
-      # `TaxonomyModel`, we average over the time dimension before the readout
-      # layer, to collapse x from [bsz, sz, csz] to [bsz, csz]. But in this case
-      # we only average over the *unmasked* frames.
-
-      # x_filtered_zeros has 0s in place of masked embeddings, while keeping
-      # only the unmasked embeddings intact. [bsz, sz, csz].
-      mask_idc_exp = jnp.repeat(
-          jnp.expand_dims(mask_idc, 2), repeats=csz, axis=2)
-      x_filtered = jnp.where(mask_idc_exp, 0, x)
-      unmasked_mean = jnp.sum(
-          x_filtered, axis=1) / jnp.sum(
-              mask_idc_exp == 0, axis=1)
-
-      # Stop grad to ensure supervision doesn't leak into representations.
-      model_outputs[k] = nn.Dense(n)(jax.lax.stop_gradient(unmasked_mean))
+    # Linear readouts for supervised classification on top of HuBERT embeddings.
+    classification_outputs = self.classify(x_list, mask_idc=mask_idc)
+    model_outputs.update(classification_outputs)
 
     # Final projection layer that projects embeddings to `final_dim`. These
     # projected inputs will be used for the nearest-neighbour search with codes.
-    x = nn.Dense(self.final_dim, name="project_embeddings")(x)
+    # A list of ns many elements that have shape [bsz, sz, csz/ns].
+    x_sections = jnp.split(x, ns, axis=-1)
+    # A list of ns many elements that have shape [bsz, sz, final_dim].
+    x = [
+        nn.Dense(self.final_dim, name="final_proj_{}".format(i))(x_sec)
+        for (i, x_sec) in enumerate(x_sections)
+    ]
+    # [ns, bsz, sz, final_dim].
+    x = jnp.stack(x, axis=0)
 
-    # Predict the code of each timestep using cosine similarity between the
+    # Predict the code of each frame using cosine similarity between the
     # projected embeddings and the projected codes.
-    # x is [bsz, sz, final_dim].
-    # codes_pj is [nc, final_dim].
-    # logits will be [bsz, sz, nc].
     codes_pj /= (jnp.linalg.norm(codes_pj, axis=-1, keepdims=True) + 1e-5)
     x /= (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-5)
-    logits = jnp.dot(x, codes_pj.T)
+
+    codes_pj = jnp.transpose(codes_pj, (0, 2, 1))  # [ns, final_dim, nc].
+    logits = jnp.dot(x, codes_pj)  # [ns, bsz, sz, ns, nc]
+    # For each "section" of features, grab only the cluster assignments
+    # corresponding to that section.
+    logits = jnp.transpose(logits, (0, 3, 1, 2, 4))  # [ns, ns, bsz, sz, nc]
+    # Out of the first 2 dims, want to keep the inds [(0,0), (1,1), (2,2)...].
+    inds = jnp.stack((jnp.arange(ns), jnp.arange(ns)), axis=1)
+    logits = logits[tuple(jnp.moveaxis(inds, -1, 0))]  # [ns, bsz, sz, nc]
+
     # TODO(etriantafillou): experiment with learnable temperature.
     logits /= self.logit_temp
     model_outputs["logits"] = logits

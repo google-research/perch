@@ -20,18 +20,23 @@ import time
 from typing import Optional
 from absl import logging
 from chirp.models import class_average
+from chirp.models import frontend as frontend_models
 from chirp.models import hubert
+from chirp.models import layers
 from chirp.models import metrics
+from chirp.models import quantizers
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
 import flax
 from flax import linen as nn
+from flax import traverse_util
 import flax.jax_utils as flax_utils
 import jax
 from jax import numpy as jnp
 from jax import random
+from jax import tree_util
 from jax.experimental import jax2tf
 from ml_collections import config_dict
 import numpy as np
@@ -88,13 +93,14 @@ def hubert_loss_from_outputs(outputs: hubert.ModelOutputs, alpha: float,
   return alpha * loss_m + (1 - alpha) * loss_u
 
 
-def quantizer_loss(outputs: hubert.ModelOutputs,
+def quantizer_loss(outputs: hubert.ModelOutputs, quant_loss_mult: float,
                    **unused_kwargs) -> jnp.ndarray:
   """Get quantization loss from model outputs."""
+  del unused_kwargs
   # [batch_size, num frames, embed dim].
   quant_loss = outputs.quantization_loss
   quant_loss = jnp.squeeze(jnp.mean(quant_loss, -1))
-  return quant_loss
+  return quant_loss * quant_loss_mult
 
 
 def taxonomy_cross_entropy(outputs: hubert.ModelOutputs, label: jnp.ndarray,
@@ -102,21 +108,27 @@ def taxonomy_cross_entropy(outputs: hubert.ModelOutputs, label: jnp.ndarray,
                            order: jnp.ndarray, taxonomy_loss_weight: float,
                            **unused_kwargs) -> jnp.ndarray:
   """Computes mean cross entropy across taxonomic labels."""
-  mean = jnp.mean(
-      optax.sigmoid_binary_cross_entropy(outputs.label, label), axis=-1)
+
+  def aggregate_losses(preds, target):
+    # Iterate over the label made from different readout points.
+    losses = []
+    for l in preds:
+      losses.append(
+          jnp.mean(optax.sigmoid_binary_cross_entropy(l, target), axis=-1))
+    return jnp.sum(jnp.stack(losses, axis=0), axis=0)
+
+  mean = aggregate_losses(outputs.label, label)
+
   if taxonomy_loss_weight != 0:
-    mean += taxonomy_loss_weight * jnp.mean(
-        optax.sigmoid_binary_cross_entropy(outputs.genus, genus), axis=-1)
-    mean += taxonomy_loss_weight * jnp.mean(
-        optax.sigmoid_binary_cross_entropy(outputs.family, family), axis=-1)
-    mean += taxonomy_loss_weight * jnp.mean(
-        optax.sigmoid_binary_cross_entropy(outputs.order, order), axis=-1)
+    mean += taxonomy_loss_weight * aggregate_losses(outputs.genus, genus)
+    mean += taxonomy_loss_weight * aggregate_losses(outputs.family, family)
+    mean += taxonomy_loss_weight * aggregate_losses(outputs.order, order)
   return mean
 
 
 def supervised_loss(outputs: hubert.ModelOutputs, label: jnp.ndarray,
                     genus: jnp.ndarray, family: jnp.ndarray, order: jnp.ndarray,
-                    taxonomy_loss_weight: float,
+                    taxonomy_loss_weight: float, readout_loss_mult: float,
                     **unused_kwargs) -> jnp.ndarray:
   del unused_kwargs
   loss = taxonomy_cross_entropy(outputs, label, genus, family, order,
@@ -124,39 +136,50 @@ def supervised_loss(outputs: hubert.ModelOutputs, label: jnp.ndarray,
   # Make it [bsz, sz] so that it can be element-wise added to other losses.
   sz = outputs.logits.shape[-2]
   loss = jnp.repeat(jnp.expand_dims(loss, axis=-1), axis=-1, repeats=sz)
-  return loss
+  return loss * readout_loss_mult
 
 
-def keyed_cross_entropy(key: str, outputs: hubert.ModelOutputs,
+def keyed_cross_entropy(key: str,
+                        outputs: hubert.ModelOutputs,
+                        readout_index: int = 0,
                         **kwargs) -> Optional[jnp.ndarray]:
   """Cross entropy for the specified taxonomic label set."""
+  outputs = getattr(outputs, key)
+  outputs = outputs[readout_index]
   mean = jnp.mean(
-      optax.sigmoid_binary_cross_entropy(getattr(outputs, key), kwargs[key]),
-      axis=-1)
+      optax.sigmoid_binary_cross_entropy(outputs, kwargs[key]), axis=-1)
   return mean
 
 
-def keyed_map(key: str, outputs: hubert.ModelOutputs,
+def keyed_map(key: str,
+              outputs: hubert.ModelOutputs,
+              readout_index: int = 0,
               **kwargs) -> Optional[jnp.ndarray]:
-  return metrics.average_precision(
-      scores=getattr(outputs, key), labels=kwargs[key])
+  outputs = getattr(outputs, key)
+  outputs = outputs[readout_index]
+  return metrics.average_precision(scores=outputs, labels=kwargs[key])
 
 
-def keyed_cmap(key: str, outputs: hubert.ModelOutputs,
+def keyed_cmap(key: str,
+               outputs: hubert.ModelOutputs,
+               readout_index: int = 0,
                **kwargs) -> Optional[jnp.ndarray]:
+  outputs = getattr(outputs, key)
+  outputs = outputs[readout_index]
   return metrics.average_precision(
-      scores=getattr(outputs, key), labels=kwargs[key]), kwargs[key]
+      scores=outputs, labels=kwargs[key]), kwargs[key]
 
 
 def final_loss(outputs: hubert.ModelOutputs, alpha: float,
-               quant_loss_mult: float,
+               quant_loss_mult: float, readout_loss_mult: float,
                **kwargs_for_supervised) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
-  quant_loss = quantizer_loss(outputs)
+  quant_loss = quantizer_loss(outputs, quant_loss_mult)
   hubert_loss = hubert_loss_from_outputs(outputs, alpha)
   # The gradients from this supervised loss don't flow into the representations.
-  readout_loss = supervised_loss(outputs, **kwargs_for_supervised)
-  return quant_loss_mult * quant_loss + hubert_loss + readout_loss
+  readout_loss = supervised_loss(
+      outputs, readout_loss_mult=readout_loss_mult, **kwargs_for_supervised)
+  return quant_loss + hubert_loss + readout_loss
 
 
 def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
@@ -188,20 +211,28 @@ def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
   return ret[key]
 
 
-def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float):
+def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
+                            readout_loss_mult: float, num_readouts: int):
   """Create metrics collection."""
   metrics_dict = {
       "hubert_loss":
           clu_metrics.Average.from_fun(
               functools.partial(hubert_loss_from_outputs, alpha=alpha)),
       "quantizer_loss":
-          clu_metrics.Average.from_fun(quantizer_loss),
+          clu_metrics.Average.from_fun(
+              functools.partial(
+                  quantizer_loss, quant_loss_mult=quant_loss_mult)),
       "supervised_loss":
-          clu_metrics.Average.from_fun(supervised_loss),
+          clu_metrics.Average.from_fun(
+              functools.partial(
+                  supervised_loss, readout_loss_mult=readout_loss_mult)),
       "loss":
           clu_metrics.Average.from_fun(
               functools.partial(
-                  final_loss, alpha=alpha, quant_loss_mult=quant_loss_mult)),
+                  final_loss,
+                  alpha=alpha,
+                  quant_loss_mult=quant_loss_mult,
+                  readout_loss_mult=readout_loss_mult)),
   }
 
   # Debugging info:
@@ -225,6 +256,20 @@ def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float):
           clu_metrics.Average.from_fun(
               functools.partial(cluster_targets_metrics, key="h_diversity")),
   })
+
+  for i in range(num_readouts):
+    metrics_dict.update({
+        "label_xentropy_{}".format(i):
+            clu_metrics.Average.from_fun(
+                functools.partial(
+                    keyed_cross_entropy, key="label", readout_index=i)),
+        "label_map_{}".format(i):
+            clu_metrics.Average.from_fun(
+                functools.partial(keyed_map, key="label", readout_index=i)),
+        "label_cmap_{}".format(i):
+            class_average.ClassAverage.from_fun(
+                functools.partial(keyed_cmap, key="label", readout_index=i)),
+    })
 
   taxo_keys = ["label", "genus", "family", "order"]
   for key in taxo_keys:
@@ -258,11 +303,36 @@ class ModelBundle:
   ckpt: checkpoint.Checkpoint
 
 
+# Projected gradient descent utilities
+def mask_by_name(name, pytree):
+  """Create a mask which is only true for leaves with the given name."""
+  flat_tree = traverse_util.flatten_dict(pytree)
+  mask = {k: k[-1] == name for k in flat_tree}
+  return traverse_util.unflatten_dict(mask)
+
+
+def project(min_value: float, max_value: float) -> optax.GradientTransformation:
+  """Optax gradient transformation that projects values within a range."""
+
+  def clip_value(updates, params):
+    return tree_util.tree_map(
+        lambda p, u: jnp.clip(p + u, min_value, max_value) - p, params, updates)
+
+  return optax.stateless(clip_value)
+
+
 def initialize_model(dataset_info: tfds.core.DatasetInfo,
                      model_config: config_dict.ConfigDict, rng_seed: int,
-                     input_size: int, learning_rate: float, workdir: str,
-                     num_train_steps: int):
+                     input_size: int, learning_rate: float,
+                     start_learning_rate: float, workdir: str,
+                     num_train_steps: int,
+                     quantizer_config: config_dict.ConfigDict,
+                     base_quantizer_config: config_dict.ConfigDict,
+                     frontend_config: config_dict.ConfigDict,
+                     early_fs_config: config_dict.ConfigDict,
+                     reload_quantizer_from: str, **unused_kwargs):
   """Creates model for training, eval, or inference."""
+  del unused_kwargs
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
 
@@ -272,7 +342,63 @@ def initialize_model(dataset_info: tfds.core.DatasetInfo,
       k: dataset_info.features[k].num_classes
       for k in ("label", "genus", "family", "order")
   }
-  model = hubert.HuBERTModel(num_classes=num_classes, **model_config)
+
+  # Initialize the quantizer.
+  kwargs = {
+      "num_centroids": base_quantizer_config.num_centroids,
+      "gamma": base_quantizer_config.gamma
+  }
+  base_quantizer = [
+      quantizers.VectorQuantizerEnt(**kwargs)
+      for _ in range(quantizer_config.num_sections)
+  ]
+  quantizer = quantizers.ProductQuantizer(
+      num_sections=quantizer_config.num_sections, base_quantizer=base_quantizer)
+
+  # Initialize the frontend.
+  frontend = frontend_models.MelSpectrogram(
+      features=frontend_config.features,
+      stride=frontend_config.stride,
+      kernel_size=frontend_config.kernel_size,
+      sample_rate=frontend_config.sample_rate,
+      freq_range=frontend_config.freq_range,
+      scaling_config=frontend_config.scaling_config)
+
+  # Initialize the early feature extractor.
+  if early_fs_config.omit_earlyfs:
+    early_fs = None
+  else:
+    if early_fs_config.num_frames not in [125, 63, 32, 16]:
+      raise ValueError(
+          "Expected early_fs_config.num_frames to be 125, 63, 32 or 16.")
+    nf = 512
+    if early_fs_config.num_frames == 125:
+      conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
+                                 (nf, 3, 1), (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
+                                 (nf, 2, 1)])
+    elif early_fs_config.num_frames == 63:
+      conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
+                                 (nf, 3, 2), (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
+                                 (nf, 2, 1)])
+    elif early_fs_config.num_frames == 32:
+      conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
+                                 (nf, 3, 2), (nf, 3, 2), (nf, 3, 1), (nf, 2, 1),
+                                 (nf, 2, 1)])
+      conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
+                                 (nf, 3, 2), (nf, 3, 2), (nf, 3, 2), (nf, 2, 1),
+                                 (nf, 2, 1)])
+    early_fs = layers.EarlyFeatureExtractor(
+        dropout_prob=early_fs_config.dropout_prob,
+        activation=early_fs_config.activation,
+        conv_layer_tuples=conv_layer_tuples)
+
+  # Now set up the HuBERT model.
+  model = hubert.HuBERTModel(
+      num_classes=num_classes,
+      quantizer=quantizer,
+      frontend=frontend,
+      early_feature_extractor=early_fs,
+      **model_config)
   variables = model.init(
       model_init_key,
       jnp.zeros((1, input_size)),
@@ -280,27 +406,85 @@ def initialize_model(dataset_info: tfds.core.DatasetInfo,
       mask_key=mask_key)
   model_state, params = variables.pop("params")
 
-  # Initialize optimizer, and the learning rate schedule.
-  linear_increase = optax.linear_schedule(
-      init_value=0.,
-      end_value=learning_rate,
-      transition_steps=int(num_train_steps / 2),
-      transition_begin=0)
+  # NOTE: https://github.com/deepmind/optax/issues/160
+  params = params.unfreeze()
 
-  optimizer = optax.adam(learning_rate=linear_increase)
+  # Define the learning rate schedule for HuBERT.
+  # peak_scaling factor is such that if we multiply the initial learning rate
+  # with it, we get the intended peak learning rate.
+  peak_scaling_factor = learning_rate / start_learning_rate
+  learning_rate = optax.piecewise_interpolate_schedule(
+      "linear",
+      init_value=start_learning_rate,
+      boundaries_and_scales={
+          int(num_train_steps / 2): peak_scaling_factor,
+          num_train_steps: start_learning_rate
+      })
+
+  # Initialize optimizer and handle constraints
+  std_to_fwhm = jnp.sqrt(2 * jnp.log(2)) / jnp.pi
+  optimizer = optax.chain(
+      optax.adam(learning_rate=learning_rate),
+      optax.masked(
+          project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)),
+      optax.masked(project(0.0, jnp.pi), mask_by_name("gabor_mean", params)),
+      optax.masked(
+          project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
+          mask_by_name("gabor_std", params)))
   opt_state = optimizer.init(params)
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
   train_state = TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
-  train_state = ckpt.restore_or_initialize(train_state)
+
+  did_reload = False
+  while not did_reload:
+    try:
+      train_state = ckpt.restore_or_initialize(train_state)
+      did_reload = True
+      break
+    except tf.errors.NotFoundError:
+      logging.warning(
+          "Reloading from %s failed. Taking a nap and will try again.", workdir)
+      time.sleep(5)
+    except:
+      logging.warning(
+          "Reloading from %s failed for some unexpected reason. Taking a nap "
+          "and will try again.", workdir)
+      time.sleep(5)
+
+  if reload_quantizer_from:
+    ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_quantizer_from)
+    did_reload = False
+    while not did_reload:
+      try:
+        reloaded_quantizer = ckpt_to_reload.restore(None)
+        did_reload = True
+        break
+      except tf.errors.NotFoundError:
+        logging.warning(
+            "Reloading from %s failed. Taking a nap and will try again.",
+            reload_quantizer_from)
+        time.sleep(5)
+    print("reloaded_quantizer codebook {}".format(
+        reloaded_quantizer["params"]["quantizer"]))
+    train_state.params["quantizer"] = reloaded_quantizer["params"]["quantizer"]
+
   return ModelBundle(model, optimizer, key, ckpt), train_state
 
 
-def train(model_bundle, train_state, train_dataset, num_train_steps: int,
-          logdir: str, log_every_steps: int, checkpoint_every_steps: int,
-          num_quantizer_pretrain_steps: int) -> None:
+def train(model_bundle,
+          train_state,
+          train_dataset,
+          num_train_steps: int,
+          logdir: str,
+          log_every_steps: int,
+          checkpoint_every_steps: int,
+          num_quantizer_pretrain_steps: int,
+          quant_loss_mult: float,
+          readout_loss_mult: float,
+          reload_quantizer=False) -> None:
   """Train a model.
 
   Args:
@@ -313,96 +497,79 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
     checkpoint_every_steps: Checkpoint the model and training state.
     num_quantizer_pretrain_steps: The number of steps to train the quantizer
       only before begining to train all parameters end-to-end.
+    quant_loss_mult: The multiplier for the quantizer loss in the combined loss
+      used for training.
+    readout_loss_mult: The multiplier for the readout loss in the combined loss
+      used for training.
+    reload_quantizer: Whether to reload a pre-trained quantizer. If this is the
+      case, it is kept frozen.
   """
+  if reload_quantizer and num_quantizer_pretrain_steps:
+    raise ValueError("Cannot have both num_quantizer_steps being nonzero and "
+                     "reload_quantizer being True.")
+
   train_iterator = train_dataset.as_numpy_iterator()
-  train_metrics_collection = make_metrics_collection(
-      "train___", model_bundle.model.alpha, model_bundle.model.quant_loss_mult)
+  num_readouts = 1 if model_bundle.model.intermediate_readout_points is None else len(
+      model_bundle.model.intermediate_readout_points)
+  train_metrics_collection = make_metrics_collection("train___",
+                                                     model_bundle.model.alpha,
+                                                     quant_loss_mult,
+                                                     readout_loss_mult,
+                                                     num_readouts)
 
-  # Define update step for HuBERT (and supervised readout).
-  @functools.partial(jax.pmap, axis_name="batch")
-  def update_step(key, batch, train_state, mask_key):
+  def get_update_step(loss_key="train___loss"):
 
-    dropout_key, low_pass_key = random.split(key)
+    @functools.partial(jax.pmap, axis_name="batch")
+    def update_step(key, batch, train_state, mask_key):
 
-    def step(params, model_state):
-      variables = {"params": params, **model_state}
-      x = jnp.squeeze(batch["audio"])
-      model_outputs, model_state = model_bundle.model.apply(
-          variables,
-          x,
-          train=True,
-          mask_key=mask_key,
-          mutable=list(model_state.keys()),
-          rngs={
-              "dropout": dropout_key,
-              "low_pass": low_pass_key,
-          })
-      train_metrics = train_metrics_collection.gather_from_model_output(
-          outputs=model_outputs,
-          label=batch["label"],
-          genus=batch["genus"],
-          family=batch["family"],
-          order=batch["order"],
-          taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight).compute(
-          )
-      loss = train_metrics["train___loss"]
-      return loss, (train_metrics, model_state)
+      dropout_key, low_pass_key = random.split(key)
 
-    (_, (train_metrics, model_state)), grads = jax.value_and_grad(
-        step, has_aux=True)(train_state.params, train_state.model_state)
-    grads = jax.lax.pmean(grads, axis_name="batch")
-    updates, opt_state = model_bundle.optimizer.update(grads,
-                                                       train_state.opt_state)
-    params = optax.apply_updates(train_state.params, updates)
-    train_state = TrainState(
-        step=train_state.step + 1,
-        params=params,
-        opt_state=opt_state,
-        model_state=model_state)
-    return train_metrics, train_state
+      def step(params, model_state):
+        variables = {"params": params, **model_state}
+        x = jnp.squeeze(batch["audio"])
+        model_outputs, model_state = model_bundle.model.apply(
+            variables,
+            x,
+            train=True,
+            mask_key=mask_key,
+            mutable=list(model_state.keys()),
+            rngs={
+                "dropout": dropout_key,
+                "low_pass": low_pass_key,
+            })
+        train_metrics = train_metrics_collection.gather_from_model_output(
+            outputs=model_outputs,
+            label=batch["label"],
+            genus=batch["genus"],
+            family=batch["family"],
+            order=batch["order"],
+            taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight
+        ).compute()
+        loss = train_metrics[loss_key]
+        return loss, (train_metrics, model_state)
 
-  # Define update step for quantizer.
-  @functools.partial(jax.pmap, axis_name="batch")
-  def update_quantizer_step(key, batch, train_state, mask_key):
+      # model_state has only the batch_norm stats which only appear in the
+      # late feature extractor (conformer).
+      (_, (train_metrics, model_state)), grads = jax.value_and_grad(
+          step, has_aux=True)(train_state.params, train_state.model_state)
+      grads = jax.lax.pmean(grads, axis_name="batch")
+      updates, opt_state = model_bundle.optimizer.update(
+          grads, train_state.opt_state, train_state.params)
 
-    dropout_key, low_pass_key = random.split(key)
+      params_after_update = optax.apply_updates(train_state.params, updates)
 
-    def step(params, model_state):
-      variables = {"params": params, **model_state}
-      x = jnp.squeeze(batch["audio"])
-      model_outputs, model_state = model_bundle.model.apply(
-          variables,
-          x,
-          train=True,
-          mask_key=mask_key,
-          mutable=list(model_state.keys()),
-          rngs={
-              "dropout": dropout_key,
-              "low_pass": low_pass_key,
-          })
-      train_metrics = train_metrics_collection.gather_from_model_output(
-          outputs=model_outputs,
-          label=batch["label"],
-          genus=batch["genus"],
-          family=batch["family"],
-          order=batch["order"],
-          taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight).compute(
-          )
-      loss = train_metrics["train___quantizer_loss"]
-      return loss, (train_metrics, model_state)
+      train_state = TrainState(
+          step=train_state.step + 1,
+          params=params_after_update,
+          opt_state=opt_state,
+          model_state=model_state)
+      return train_metrics, train_state
 
-    (_, (train_metrics, model_state)), grads = jax.value_and_grad(
-        step, has_aux=True)(train_state.params, train_state.model_state)
-    grads = jax.lax.pmean(grads, axis_name="batch")
-    updates, opt_state = model_bundle.optimizer.update(grads,
-                                                       train_state.opt_state)
-    params = optax.apply_updates(train_state.params, updates)
-    train_state = TrainState(
-        step=train_state.step + 1,
-        params=params,
-        opt_state=opt_state,
-        model_state=model_state)
-    return train_metrics, train_state
+    return update_step
+
+  if num_quantizer_pretrain_steps:
+    quantizer_step = get_update_step("train___quantizer_loss")
+  joint_step = get_update_step("train___loss")
 
   initial_step = int(train_state.step)
   train_state = flax_utils.replicate(train_state)
@@ -426,17 +593,12 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
 
       if step < num_quantizer_pretrain_steps:
         # Train only the quantizer.
-        train_metrics, train_state = update_quantizer_step(
-            step_key, batch, train_state, mask_key)
-        # Delete this debugging stuff:
-        # print("train_state.params codes {}".format(
-        #     train_state.params["quantizer"]["codebook"]))
-        # print("train_state.params conv net {}".format(
-        #     train_state.params["early_feature_extractor"]))
-        # print("train_state.params keys {}".format(train_state.params.keys()))
+        train_metrics, train_state = quantizer_step(step_key, batch,
+                                                    train_state, mask_key)
       else:
-        train_metrics, train_state = update_step(step_key, batch, train_state,
-                                                 mask_key)
+        # Joint training.
+        train_metrics, train_state = joint_step(step_key, batch, train_state,
+                                                mask_key)
 
       train_metrics = flax_utils.unreplicate(train_metrics)
 
@@ -460,8 +622,12 @@ def evaluate(model_bundle: ModelBundle,
              reporter: periodic_actions.ReportProgress,
              eval_steps_per_checkpoint: Optional[int] = None):
   """Run evaluation."""
+  num_readouts = 1 if model_bundle.model.intermediate_readout_points is None else len(
+      model_bundle.model.intermediate_readout_points)
+  quant_loss_mult, readout_loss_mult = 1, 1
   valid_metrics = make_metrics_collection("valid___", model_bundle.model.alpha,
-                                          model_bundle.model.quant_loss_mult)
+                                          quant_loss_mult, readout_loss_mult,
+                                          num_readouts)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def update_metrics(valid_metrics, batch, train_state):

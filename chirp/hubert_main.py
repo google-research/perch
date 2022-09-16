@@ -67,6 +67,17 @@ def main(argv: Sequence[str]) -> None:
         "need to set the sample rate in the config to {}.".format(
             dataset_info.features["audio"].sample_rate))
 
+  reload_quantizer = False
+  if config.init_config.reload_quantizer_from:
+    reload_quantizer = True
+
+  # Set the multiplier of the quantizer loss such that the quantizer gets the
+  # intended starting learning rate.
+  quant_start_lr = config.init_config.quant_start_learning_rate
+  start_lr = config.init_config.start_learning_rate
+  quant_loss_mult = quant_start_lr / start_lr
+
+  # Initialize.
   model = hubert_train.initialize_model(
       dataset_info,
       workdir=_WORKDIR.value,
@@ -74,7 +85,12 @@ def main(argv: Sequence[str]) -> None:
       **config.init_config)
   if _MODE.value == TRAIN:
     hubert_train.train(
-        *model, train_dataset, logdir=_LOGDIR.value, **config.train_config)
+        *model,
+        train_dataset,
+        reload_quantizer=reload_quantizer,
+        quant_loss_mult=quant_loss_mult,
+        logdir=_LOGDIR.value,
+        **config.train_config)
   elif _MODE.value == EVAL:
     hubert_train.evaluate_loop(
         *model,

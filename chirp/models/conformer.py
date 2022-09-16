@@ -42,12 +42,15 @@ class Conformer(nn.Module):
   num_blocks: int = 1
 
   @nn.compact
-  def __call__(self, inputs: JTensor, train: bool) -> JTensor:
+  def __call__(self, inputs: JTensor, train: bool,
+               return_intermediate_list: bool) -> JTensor:
     """Projection followed by a conformer layer.
 
     Args:
       inputs: Input sequence JTensor of shape [B, T, H].
       train: Whether we are in train mode. Affects dropout and batch norm.
+      return_intermediate_list: Whether to return a list of the activations
+        after each conformer block, instead of only the final ones.
 
     Returns:
       The conformer output with shape [B, T, D].
@@ -78,6 +81,7 @@ class Conformer(nn.Module):
       ffn_residual_dropout = self.ffn_residual_dropout
       ffn_relu_dropout = self.ffn_relu_dropout
 
+    intermediate = []
     for i in range(self.num_blocks):
       inputs = layers.Conformer(
           model_dims=self.model_dims,
@@ -95,4 +99,8 @@ class Conformer(nn.Module):
           ffn_relu_dropout=ffn_relu_dropout,
           fflayer_weight_sharing=self.fflayer_weight_sharing,
           name='conformer_block_{}'.format(i))(inputs, train)
-    return inputs
+      intermediate.append(inputs)
+    if return_intermediate_list:
+      return intermediate
+    else:
+      return inputs

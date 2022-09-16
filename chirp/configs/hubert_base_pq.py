@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration to run HuBERT."""
+"""Configuration to run HuBERT with Product Quantizers."""
 from chirp import config_utils
 from ml_collections import config_dict
 
@@ -93,10 +93,6 @@ def get_config() -> config_dict.ConfigDict:
   model_config.late_feature_extractor = config_utils.callable_config(
       "conformer.Conformer", conformer_config)
 
-  # With this configuration, the number of frames is reduced from 500 to 125,
-  # and the framerate is reduced from 100Hz to 25Hz.
-  # TODO(etriantafillou): Experiment with moving the second strided layer to
-  # later, and consider increasing its kernel size to 5 to give it more context.
   early_fs_config = config_dict.ConfigDict()
   early_fs_config.omit_earlyfs = False
   early_fs_config.dropout_prob = 0.
@@ -107,7 +103,7 @@ def get_config() -> config_dict.ConfigDict:
   # Configure the masking parameters.
   mask_config = config_dict.ConfigDict()
   mask_config.mask_prob = 0.08
-  mask_config.mask_length = 10
+  mask_config.mask_length = 5
   mask_config.min_masks = 1
   model_config.mask_config = mask_config
 
@@ -122,28 +118,27 @@ def get_config() -> config_dict.ConfigDict:
   init_config.reload_quantizer_from = ""
 
   # Configure the frontend parameters.
-  model_config.frontend = config_utils.callable_config(
-      "frontend.MelSpectrogram",
-      features=160,
-      stride=sample_rate_hz // 100,
-      kernel_size=2_560,  # 0.08 * 32,000
-      sample_rate=sample_rate_hz,
-      freq_range=(60, 10_000),
-      scaling_config=config_utils.callable_config("frontend.PCENScalingConfig"))
+  frontend_config = config_dict.ConfigDict()
+  frontend_config.features = 160
+  frontend_config.stride = sample_rate_hz // 100
+  frontend_config.kernel_size = 2_560
+  frontend_config.sample_rate = sample_rate_hz
+  frontend_config.freq_range = (60, 10_000)
+  frontend_config.scaling_config = config_utils.callable_config(
+      "frontend.PCENScalingConfig")
+  init_config.frontend_config = frontend_config
 
   # Configure HuBERT.
-  model_config.final_dim = 256
+  model_config.final_dim = 64  # the dim to project *each feature section* (PQ)
   model_config.logit_temp = 0.1
-  # model_config.alpha = 1.0
-  model_config.alpha = 0.5  # gets loss for both masked and unmasked
-  model_config.taxonomy_loss_weight = 0.25
+  model_config.alpha = 0.75
+  model_config.taxonomy_loss_weight = 0.
   model_config.intermediate_readout_points = [2, 4, 6, 8, 10]
+  model_config.stop_gradient_earlyfs = True
   init_config.model_config = model_config
 
   # Configure the training loop.
-  # HuBERT trains in two stages: for 250K steps and 400K steps, respectively.
-  # Uses 32 GPUs, with a batch size of at most 87.5 seconds of audio per GPU.
-  num_train_steps = config_dict.FieldReference(2_000_000)
+  num_train_steps = config_dict.FieldReference(4_000_000)
   num_quantizer_pretrain_steps = config_dict.FieldReference(0)
   train_config = config_dict.ConfigDict()
   train_config.num_train_steps = num_train_steps
