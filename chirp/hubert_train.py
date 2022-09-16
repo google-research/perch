@@ -17,7 +17,7 @@
 import functools
 import os
 import time
-from typing import Optional
+from typing import Optional, List
 from absl import logging
 from chirp.models import cmap
 from chirp.models import frontend as frontend_models
@@ -202,7 +202,8 @@ def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
 
 
 def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
-                            readout_loss_mult: float, num_readouts: int):
+                            readout_loss_mult: float,
+                            readout_points: List[int]):
   """Create metrics collection."""
   metrics_dict = {
       "hubert_loss":
@@ -247,45 +248,39 @@ def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
               functools.partial(cluster_targets_metrics, key="h_diversity")),
   })
 
-  for i in range(num_readouts):
-    metrics_dict.update({
-        "label_xentropy_{}".format(i):
-            clu_metrics.Average.from_fun(
-                functools.partial(
-                    keyed_cross_entropy, key="label", readout_index=i)),
-        "label_map_{}".format(i):
-            clu_metrics.Average.from_fun(
-                functools.partial(keyed_map, key="label", readout_index=i)),
-    })
-
   taxo_keys = ["label", "genus", "family", "order"]
-  for key in taxo_keys:
-    metrics_dict.update({
-        key + "_xentropy":
-            clu_metrics.Average.from_fun(
-                functools.partial(keyed_cross_entropy, key=key)),
-        key + "_map":
-            clu_metrics.Average.from_fun(functools.partial(keyed_map, key=key)),
-    })
+  for i, block_ind in enumerate(readout_points):
+    for key in taxo_keys:
+      metrics_dict.update({
+          key + "_{}_xentropy".format(block_ind):
+              clu_metrics.Average.from_fun(
+                  functools.partial(
+                      keyed_cross_entropy, key=key, readout_index=i)),
+          key + "_{}_map".format(block_ind):
+              clu_metrics.Average.from_fun(
+                  functools.partial(keyed_map, key=key, readout_index=i)),
+      })
   metrics_dict = {prefix + k: v for k, v in metrics_dict.items()}
   return clu_metrics.Collection.create(**metrics_dict)
 
 
-def make_cmap_metrics_dict(label_names, num_readouts):
+def make_cmap_metrics_dict(label_names, readout_points):
   """Create a dict of empty cmap_metrics."""
   metrics_dict = {}
-  for i in range(num_readouts):
-    metrics_dict.update(
-        {label + "_{}".format(i): cmap.CMAP.empty() for label in label_names})
+  for block_ind in readout_points:
+    metrics_dict.update({
+        label + "_{}".format(block_ind): cmap.CMAP.empty()
+        for label in label_names
+    })
   return metrics_dict
 
 
 def update_cmap_metrics_dict(label_names, cmap_metrics, model_outputs, batch,
-                             num_readouts):
+                             readout_points):
   """Update a dict of cmap_metrics from model_outputs and a batch."""
   for label_name in label_names:
-    for i in range(num_readouts):
-      label_name_i = label_name + "_{}".format(i)
+    for i, block_ind in enumerate(readout_points):
+      label_name_i = label_name + "_{}".format(block_ind)
       cmap_metrics[label_name_i] = cmap_metrics[label_name_i].merge(
           cmap.CMAP(getattr(model_outputs, label_name)[i], batch[label_name]))
   return cmap_metrics
@@ -508,13 +503,9 @@ def train(model_bundle,
                      "reload_quantizer being True.")
 
   train_iterator = train_dataset.as_numpy_iterator()
-  num_readouts = 1 if model_bundle.model.intermediate_readout_points is None else len(
-      model_bundle.model.intermediate_readout_points)
-  train_metrics_collection = make_metrics_collection("train___",
-                                                     model_bundle.model.alpha,
-                                                     quant_loss_mult,
-                                                     readout_loss_mult,
-                                                     num_readouts)
+  train_metrics_collection = make_metrics_collection(
+      "train___", model_bundle.model.alpha, quant_loss_mult, readout_loss_mult,
+      model_bundle.model.readout_points)
 
   def get_update_step(loss_key="train___loss"):
 
@@ -621,12 +612,10 @@ def evaluate(model_bundle: ModelBundle,
              reporter: periodic_actions.ReportProgress,
              eval_steps_per_checkpoint: Optional[int] = None):
   """Run evaluation."""
-  num_readouts = 1 if model_bundle.model.intermediate_readout_points is None else len(
-      model_bundle.model.intermediate_readout_points)
   quant_loss_mult, readout_loss_mult = 1, 1
   valid_metrics = make_metrics_collection("valid___", model_bundle.model.alpha,
                                           quant_loss_mult, readout_loss_mult,
-                                          num_readouts)
+                                          model_bundle.model.readout_points)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def update_metrics(valid_metrics, batch, train_state):
@@ -645,7 +634,8 @@ def evaluate(model_bundle: ModelBundle,
 
   step = int(flax_utils.unreplicate(train_state.step))
   label_names = ("label", "genus", "family", "order")
-  cmap_metrics = make_cmap_metrics_dict(label_names, num_readouts)
+  cmap_metrics = make_cmap_metrics_dict(label_names,
+                                        model_bundle.model.readout_points)
   with reporter.timed("eval"):
     valid_metrics = flax_utils.replicate(valid_metrics.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
@@ -654,7 +644,7 @@ def evaluate(model_bundle: ModelBundle,
                                                     train_state)
       cmap_metrics = update_cmap_metrics_dict(label_names, cmap_metrics,
                                               model_outputs, batch,
-                                              num_readouts)
+                                              model_bundle.model.readout_points)
       if eval_steps_per_checkpoint is not None and s >= eval_steps_per_checkpoint:
         break
 

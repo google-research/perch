@@ -123,23 +123,24 @@ class HuBERTModel(nn.Module):
       takes spectrograms and returns feature vectors. Quantization is performed
       on the features produced by this feature extractor.
     late_feature_extractor: A network (e.g., a stack of Conformer blocks) that
-      takes "early" features and transforms them into higher-level features.
+      takes "early" features and returns a sequence of Jax ndarrays that contain
+      increasingly higher-level features.
     quantizer: A network that takes spectrograms and returns a codebook, the
       assignments of inputs to codes, and a loss for training it.
     frontend: The frontend to use to generate features.
     mask_config: The config for generating masks.
+    taxonomy_loss_weight: Weight for taxonomic label losses. These are used to
+      train supervised readout layer for evaluation only. The representation is
+      learned in a purely self-supervised manner.
+    readout_points: A List of indices of late feature extractor blocks after
+      which to add a readout layer (for classification). The allowed values are
+      in the range [0, len(x_list)) where x_list is the list of Jax ndarrays
+      returned by the late feature extractor.
     final_dim: The dimensionality after the final projection layer.
     logit_temp: The temperature to use for the logits of which cluster each
       timestep belongs to.
     alpha: The weight of the masked loss in the combination of the masked and
       unmasked losses for HuBERT. By default it's 1, considering only masked.
-    taxonomy_loss_weight: Weight for taxonomic label losses. These are used to
-      train supervised readout layer for evaluation only. The representation is
-      learned in a purely self-supervised manner.
-    intermediate_readout_points: A List of inds of conformer blocks after which
-      to add a readout layer (for classification). Note that these are in
-      addition to the readout that always happens at the end of the "late"
-      feature extractor.
     stop_gradient_earlyfs: Whether to stop gradient after the early feature
       extractor.
     classify_from_all: Whether to use the entire sequence (incl. masked frames)
@@ -152,10 +153,10 @@ class HuBERTModel(nn.Module):
   frontend: nn.Module
   mask_config: Dict[str, Any]
   taxonomy_loss_weight: float
+  readout_points: List[int]
   final_dim: int = 512
   logit_temp: float = 0.1
   alpha: float = 1.0
-  intermediate_readout_points: Union[List[int], None] = None
   stop_gradient_earlyfs: bool = True
   classify_from_all: bool = True
 
@@ -174,9 +175,9 @@ class HuBERTModel(nn.Module):
       # we only average over the *unmasked* frames, if `self.classify_from_all`
       # is turned off.
 
-      # We use separate readout heads on differnet "levels" of representation.
+      # We use separate readout heads on different "levels" of representation.
       for i, x_interm in enumerate(x_list):
-        if i != len(x_list) - 1 and i not in self.intermediate_readout_points:
+        if i not in self.readout_points:
           continue
         csz_ = x_interm.shape[-1]
 
@@ -283,6 +284,13 @@ class HuBERTModel(nn.Module):
     # of x's for the different "readout points".
     x_list = self.late_feature_extractor(
         x, train=train, return_intermediate_list=True)
+    for block_ind in self.readout_points:
+      if block_ind < 0 or block_ind >= len(x_list):
+        raise ValueError("Each element of `readout_points` should be in the "
+                         "range [0, len(x_list)) where x_list is the list that "
+                         "the late feature extractor returns. Found element "
+                         "{} and len(x_list) is {}".format(
+                             block_ind, len(x_list)))
     x = x_list[-1]  # the "embeddings"
     _, _, csz = x.shape
     model_outputs["embedding"] = x
