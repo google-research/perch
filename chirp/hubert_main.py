@@ -79,7 +79,6 @@ def main(argv: Sequence[str]) -> None:
 
   # Initialize.
   model = hubert_train.initialize_model(
-      dataset_info,
       workdir=_WORKDIR.value,
       num_train_steps=config.train_config.num_train_steps,
       **config.init_config)

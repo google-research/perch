@@ -19,12 +19,13 @@ import os
 import time
 from typing import Optional
 from absl import logging
-from chirp.models import class_average
+from chirp.models import cmap
 from chirp.models import frontend as frontend_models
 from chirp.models import hubert
 from chirp.models import layers
 from chirp.models import metrics
 from chirp.models import quantizers
+from chirp.taxonomy import class_utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -42,7 +43,6 @@ from ml_collections import config_dict
 import numpy as np
 import optax
 import tensorflow as tf
-import tensorflow_datasets as tfds
 
 EVAL_LOOP_SLEEP_S = 30
 
@@ -160,16 +160,6 @@ def keyed_map(key: str,
   return metrics.average_precision(scores=outputs, labels=kwargs[key])
 
 
-def keyed_cmap(key: str,
-               outputs: hubert.ModelOutputs,
-               readout_index: int = 0,
-               **kwargs) -> Optional[jnp.ndarray]:
-  outputs = getattr(outputs, key)
-  outputs = outputs[readout_index]
-  return metrics.average_precision(
-      scores=outputs, labels=kwargs[key]), kwargs[key]
-
-
 def final_loss(outputs: hubert.ModelOutputs, alpha: float,
                quant_loss_mult: float, readout_loss_mult: float,
                **kwargs_for_supervised) -> Optional[jnp.ndarray]:
@@ -266,9 +256,6 @@ def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
         "label_map_{}".format(i):
             clu_metrics.Average.from_fun(
                 functools.partial(keyed_map, key="label", readout_index=i)),
-        "label_cmap_{}".format(i):
-            class_average.ClassAverage.from_fun(
-                functools.partial(keyed_cmap, key="label", readout_index=i)),
     })
 
   taxo_keys = ["label", "genus", "family", "order"]
@@ -279,12 +266,29 @@ def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
                 functools.partial(keyed_cross_entropy, key=key)),
         key + "_map":
             clu_metrics.Average.from_fun(functools.partial(keyed_map, key=key)),
-        key + "_cmap":
-            class_average.ClassAverage.from_fun(
-                functools.partial(keyed_cmap, key=key)),
     })
   metrics_dict = {prefix + k: v for k, v in metrics_dict.items()}
   return clu_metrics.Collection.create(**metrics_dict)
+
+
+def make_cmap_metrics_dict(label_names, num_readouts):
+  """Create a dict of empty cmap_metrics."""
+  metrics_dict = {}
+  for i in range(num_readouts):
+    metrics_dict.update(
+        {label + "_{}".format(i): cmap.CMAP.empty() for label in label_names})
+  return metrics_dict
+
+
+def update_cmap_metrics_dict(label_names, cmap_metrics, model_outputs, batch,
+                             num_readouts):
+  """Update a dict of cmap_metrics from model_outputs and a batch."""
+  for label_name in label_names:
+    for i in range(num_readouts):
+      label_name_i = label_name + "_{}".format(i)
+      cmap_metrics[label_name_i] = cmap_metrics[label_name_i].merge(
+          cmap.CMAP(getattr(model_outputs, label_name)[i], batch[label_name]))
+  return cmap_metrics
 
 
 @flax.struct.dataclass
@@ -321,16 +325,14 @@ def project(min_value: float, max_value: float) -> optax.GradientTransformation:
   return optax.stateless(clip_value)
 
 
-def initialize_model(dataset_info: tfds.core.DatasetInfo,
-                     model_config: config_dict.ConfigDict, rng_seed: int,
-                     input_size: int, learning_rate: float,
-                     start_learning_rate: float, workdir: str,
-                     num_train_steps: int,
-                     quantizer_config: config_dict.ConfigDict,
-                     base_quantizer_config: config_dict.ConfigDict,
-                     frontend_config: config_dict.ConfigDict,
-                     early_fs_config: config_dict.ConfigDict,
-                     reload_quantizer_from: str, **unused_kwargs):
+def initialize_model(
+    model_config: config_dict.ConfigDict, rng_seed: int, input_size: int,
+    learning_rate: float, start_learning_rate: float, workdir: str,
+    num_train_steps: int, quantizer_config: config_dict.ConfigDict,
+    base_quantizer_config: config_dict.ConfigDict,
+    frontend_config: config_dict.ConfigDict,
+    early_fs_config: config_dict.ConfigDict, reload_quantizer_from: str,
+    target_class_list: str, **unused_kwargs):
   """Creates model for training, eval, or inference."""
   del unused_kwargs
   # Initialize random number generator
@@ -338,10 +340,7 @@ def initialize_model(dataset_info: tfds.core.DatasetInfo,
 
   # Load model
   model_init_key, mask_key = random.split(key)
-  num_classes = {
-      k: dataset_info.features[k].num_classes
-      for k in ("label", "genus", "family", "order")
-  }
+  num_classes = class_utils.get_class_sizes(target_class_list, True)
 
   # Initialize the quantizer.
   kwargs = {
@@ -634,7 +633,7 @@ def evaluate(model_bundle: ModelBundle,
     variables = {"params": train_state.params, **train_state.model_state}
     model_outputs = model_bundle.model.apply(
         variables, batch["audio"], train=False, mask_key=None)
-    return valid_metrics.merge(
+    return model_outputs, valid_metrics.merge(
         valid_metrics.gather_from_model_output(
             outputs=model_outputs,
             label=batch["label"],
@@ -645,11 +644,17 @@ def evaluate(model_bundle: ModelBundle,
             axis_name="batch"))
 
   step = int(flax_utils.unreplicate(train_state.step))
+  label_names = ("label", "genus", "family", "order")
+  cmap_metrics = make_cmap_metrics_dict(label_names, num_readouts)
   with reporter.timed("eval"):
     valid_metrics = flax_utils.replicate(valid_metrics.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
-      valid_metrics = update_metrics(valid_metrics, batch, train_state)
+      model_outputs, valid_metrics = update_metrics(valid_metrics, batch,
+                                                    train_state)
+      cmap_metrics = update_cmap_metrics_dict(label_names, cmap_metrics,
+                                              model_outputs, batch,
+                                              num_readouts)
       if eval_steps_per_checkpoint is not None and s >= eval_steps_per_checkpoint:
         break
 
@@ -657,6 +662,9 @@ def evaluate(model_bundle: ModelBundle,
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
 
   valid_metrics = {k.replace("___", "/"): v for k, v in valid_metrics.items()}
+  cmap_metrics = flax_utils.unreplicate(cmap_metrics)
+  for key in cmap_metrics:
+    valid_metrics[f"valid/{key}_cmap"] = cmap_metrics[key].compute()
   writer.write_scalars(step, valid_metrics)
   writer.flush()
 
