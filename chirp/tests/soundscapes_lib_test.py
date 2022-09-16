@@ -76,8 +76,7 @@ class SoundscapesLibTest(parameterized.TestCase):
   def test_load_hawaii_annotations(self):
     # Combine the Hawaii 'raw' annotations into a single csv.
     csv_path = epath.Path(self.data_dir) / 'hawaii.csv'
-    dataset_fns.combine_hawaii_annotations(self.testdata_dir.as_posix(),
-                                           csv_path.as_posix())
+    dataset_fns.combine_hawaii_annotations(self.testdata_dir, csv_path)
 
     # Then read from the combined csv.
     annos = dataset_fns.load_hawaii_annotations(csv_path)
@@ -133,22 +132,31 @@ class SoundscapesLibTest(parameterized.TestCase):
       self.assertEqual(anno.label, [expected_label])
 
   def test_load_powdermill_annotations(self):
+    # Combine the Hawaii 'raw' annotations into a single csv.
+    combined_csv_path = epath.Path(self.data_dir) / 'powdermill.csv'
+    dataset_fns.combine_powdermill_annotations(self.testdata_dir / 'powdermill',
+                                               combined_csv_path)
+
     annos_csv_path = path_utils.get_absolute_epath(
         'tests/testdata/powdermill.csv')
-    annos = dataset_fns.load_powdermill_annotations(annos_csv_path)
-    self.assertLen(annos, 5)
-    expected_labels = [
-        'norcar',
-        'woothr',
-        'eastow',
-        'eastow',
-        'eastow',
-    ]
-    for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
-      self.assertTrue(anno.filename.endswith('.wav'))
-      self.assertLen(anno.filename.split('.'), 2)
-      self.assertEqual(anno.namespace, 'ebird2021')
-      self.assertEqual(anno.label, [expected_label])
+    for csv_path in [combined_csv_path, annos_csv_path]:
+      annos = dataset_fns.load_powdermill_annotations(csv_path)
+      self.assertLen(annos, 5)
+      expected_labels = [
+          'norcar',
+          'woothr',
+          'eastow',
+          'eastow',
+          'eastow',
+      ]
+      for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
+        self.assertTrue(anno.filename.endswith('.wav'))
+        self.assertLen(anno.filename.split('.'), 2)
+        # Check that we got the nested filepath.
+        self.assertEqual(anno.filename,
+                         'Recording_1/Recording_1_Segment_05.wav')
+        self.assertEqual(anno.namespace, 'ebird2021')
+        self.assertEqual(anno.label, [expected_label])
 
   def test_load_birdclef_metadata(self):
     md_features = dataset_fns.birdclef_metadata_features()

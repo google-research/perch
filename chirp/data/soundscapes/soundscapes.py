@@ -153,7 +153,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           class_list_name='sierras_kahl'),
       SoundscapesConfig(
           name='powdermill',
-          audio_glob='powdermill/*/*.flac',
+          audio_glob='powdermill/*/*.wav',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=dataset_fns.load_powdermill_annotations,
