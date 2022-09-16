@@ -21,7 +21,9 @@ from chirp.data import pipeline
 from chirp.models import conformer
 from chirp.models import efficientnet
 from chirp.models import frontend
+from chirp.models import hubert
 from chirp.models import layers
+from chirp.models import quantizers
 from chirp.models import soundstream_unet
 from flax import linen as nn
 
@@ -31,6 +33,8 @@ def get_globals() -> Dict[str, Any]:
       "audio_utils": audio_utils,
       "conformer": conformer,
       "efficientnet": efficientnet,
+      "hubert": hubert,
+      "quantizers": quantizers,
       "frontend": frontend,
       "layers": layers,
       "nn": nn,

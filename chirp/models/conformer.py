@@ -39,6 +39,7 @@ class Conformer(nn.Module):
   atten_dropout: Optional[float] = None
   ffn_relu_dropout: Optional[float] = None
   fflayer_weight_sharing: bool = False
+  num_blocks: int = 1
 
   @nn.compact
   def __call__(self, inputs: JTensor, train: bool) -> JTensor:
@@ -77,20 +78,21 @@ class Conformer(nn.Module):
       ffn_residual_dropout = self.ffn_residual_dropout
       ffn_relu_dropout = self.ffn_relu_dropout
 
-    inputs = layers.Conformer(
-        model_dims=self.model_dims,
-        kernel_size=self.kernel_size,
-        ff_activation=self.ff_activation,
-        ff_residual_weight=self.ff_residual_weight,
-        ffn_dim_multiplier=self.ffn_dim_multiplier,
-        atten_num_heads=self.atten_num_heads,
-        layer_order=self.layer_order,
-        dropout_prob=self.dropout_prob,
-        conv_residual_dropout=conv_residual_dropout,
-        atten_residual_dropout=atten_residual_dropout,
-        ffn_residual_dropout=ffn_residual_dropout,
-        atten_dropout=atten_dropout,
-        ffn_relu_dropout=ffn_relu_dropout,
-        fflayer_weight_sharing=self.fflayer_weight_sharing,
-        name='conformer')(inputs, train)
+    for i in range(self.num_blocks):
+      inputs = layers.Conformer(
+          model_dims=self.model_dims,
+          kernel_size=self.kernel_size,
+          ff_activation=self.ff_activation,
+          ff_residual_weight=self.ff_residual_weight,
+          ffn_dim_multiplier=self.ffn_dim_multiplier,
+          atten_num_heads=self.atten_num_heads,
+          layer_order=self.layer_order,
+          dropout_prob=self.dropout_prob,
+          conv_residual_dropout=conv_residual_dropout,
+          atten_residual_dropout=atten_residual_dropout,
+          ffn_residual_dropout=ffn_residual_dropout,
+          atten_dropout=atten_dropout,
+          ffn_relu_dropout=ffn_relu_dropout,
+          fflayer_weight_sharing=self.fflayer_weight_sharing,
+          name='conformer_block_{}'.format(i))(inputs, train)
     return inputs
