@@ -116,6 +116,16 @@ def get_config() -> config_dict.ConfigDict:
   mask_config.min_masks = 1
   model_config.mask_config = mask_config
 
+  # Configure the classifier parameters.
+  classifier_config = config_dict.ConfigDict()
+  classifier_config.classify_from_all = True
+  classifier_config.per_frame_predictions = True
+  classifier_config.classify_pool_width = 50
+  classifier_config.classify_stride = 50
+  classifier_config.classify_features = 512
+  classifier_config.reduction_type = "MIDPOINT"
+  model_config.classifier_config = classifier_config
+
   # Configure the quantizer parameters.
   base_quantizer_config = config_dict.ConfigDict()
   base_quantizer_config.num_centroids = 128
@@ -142,7 +152,7 @@ def get_config() -> config_dict.ConfigDict:
   model_config.logit_temp = 0.1
   model_config.alpha = 0.75
   model_config.taxonomy_loss_weight = 0.
-  model_config.intermediate_readout_points = [2, 4, 6, 8, 10]
+  model_config.readout_points = [2, 4, 6, 8, 9, 10, 11]
   model_config.stop_gradient_earlyfs = True
   init_config.model_config = model_config
 

@@ -16,6 +16,7 @@
 """HuBERT model."""
 from typing import Any, Dict, Tuple, List, Optional, Union
 
+from chirp.models import layers
 import flax
 from flax import linen as nn
 import jax
@@ -129,6 +130,7 @@ class HuBERTModel(nn.Module):
       assignments of inputs to codes, and a loss for training it.
     frontend: The frontend to use to generate features.
     mask_config: The config for generating masks.
+    classifier_config: The config for the classifier.
     taxonomy_loss_weight: Weight for taxonomic label losses. These are used to
       train supervised readout layer for evaluation only. The representation is
       learned in a purely self-supervised manner.
@@ -143,8 +145,6 @@ class HuBERTModel(nn.Module):
       unmasked losses for HuBERT. By default it's 1, considering only masked.
     stop_gradient_earlyfs: Whether to stop gradient after the early feature
       extractor.
-    classify_from_all: Whether to use the entire sequence (incl. masked frames)
-      for classification. Otherwise, only the unmasked frames are used.
   """
   num_classes: Dict[str, int]
   early_feature_extractor: Union[nn.Module, None]
@@ -152,28 +152,26 @@ class HuBERTModel(nn.Module):
   quantizer: nn.Module
   frontend: nn.Module
   mask_config: Dict[str, Any]
+  classifier_config: Dict[str, Any]
   taxonomy_loss_weight: float
   readout_points: List[int]
   final_dim: int = 512
   logit_temp: float = 0.1
   alpha: float = 1.0
   stop_gradient_earlyfs: bool = True
-  classify_from_all: bool = True
 
-  def classify(self, x_list, mask_idc):
+  def classify(self, x_list, mask_idc, per_frame_predictions,
+               classify_pool_width, classify_stride, classify_features,
+               reduction_type, classify_from_all):
     # The gradients of this loss will not propagate to train the representation
     # (the representation is trained purely self-supervised).
     # TODO(etriantafillou): check if the supervised loss "accidentally" modifies
     # other parameters, like the mask embedding.
     x_list = jax.lax.stop_gradient(x_list)
     outputs = {}
+    midpt = x_list[-1].shape[-2] // 2  # The middle frame.
     for k, n in self.num_classes.items():
       outputs[k] = []
-      # To be consistent with the implementation of conformers in the supervised
-      # `TaxonomyModel`, we average over the time dimension before the readout
-      # layer, to collapse x from [bsz, sz, csz] to [bsz, csz]. But in this case
-      # we only average over the *unmasked* frames, if `self.classify_from_all`
-      # is turned off.
 
       # We use separate readout heads on different "levels" of representation.
       for i, x_interm in enumerate(x_list):
@@ -181,19 +179,57 @@ class HuBERTModel(nn.Module):
           continue
         csz_ = x_interm.shape[-1]
 
-        if self.classify_from_all:
-          mean = jnp.mean(x_interm, axis=1)
+        if per_frame_predictions:
+          # Borrow the classifier from `separation_model.py`.
+          x_interm = nn.normalization.LayerNorm(reduction_axes=(-2, -1))(
+              x_interm)
+          x_interm = layers.StridedAutopool(
+              0.5,
+              classify_pool_width,
+              classify_stride,
+              padding="SAME",
+              name="readout_autopool_{}_{}".format(k, i))(
+                  x_interm)
+          x_interm = nn.Conv(
+              features=classify_features,
+              kernel_size=(1,),
+              strides=(1,),
+              padding="SAME",
+              name="readout_conv1_{}_{}".format(k, i))(
+                  x_interm)
+          x_interm = nn.swish(x_interm)
+          per_frame_preds = nn.Conv(
+              n, (1,), (1,), "SAME", name="readout_conv2_{}_{}".format(k, i))(
+                  x_interm)
+          # Now reduce over the time axis to get 1 prediction per *sample*.
+          if reduction_type == "AVG":
+            reduce_fn = lambda x: jnp.mean(x, axis=-2)
+          elif reduction_type == "MAX":
+            reduce_fn = lambda x: jnp.max(x, axis=-2)
+          elif reduction_type == "MIDPOINT":
+            reduce_fn = lambda x: x[..., midpt, :]
+          else:
+            raise ValueError(f"Reduction {reduction_type} not recognized.")
+          outputs[k].append(reduce_fn(per_frame_preds))
         else:
-          # x_filtered_zeros has 0s in place of masked embeddings, while keeping
-          # only the unmasked embeddings intact. [bsz, sz, csz_].
-          mask_idc_exp = jnp.repeat(
-              jnp.expand_dims(mask_idc, 2), repeats=csz_, axis=2)
-          x_filtered = jnp.where(mask_idc_exp, 0, x_interm)
-          mean = jnp.sum(
-              x_filtered, axis=1) / jnp.sum(
-                  mask_idc_exp == 0, axis=1)
+          # Akin to the implementation of conformers in the supervised model,
+          # we average over the time dimension before the readout layer, to
+          # collapse x from [bsz, sz, csz] to [bsz, csz]. But in this case
+          # we only average the *unmasked* frames if `classify_from_all` is off.
+          if classify_from_all:
+            mean = jnp.mean(x_interm, axis=1)
+          else:
+            # x_filtered_zeros has 0s in place of masked embeddings, while
+            # keeping only the unmasked embeddings intact. [bsz, sz, csz_].
+            mask_idc_exp = jnp.repeat(
+                jnp.expand_dims(mask_idc, 2), repeats=csz_, axis=2)
+            x_filtered = jnp.where(mask_idc_exp, 0, x_interm)
+            mean = jnp.sum(
+                x_filtered, axis=1) / jnp.sum(
+                    mask_idc_exp == 0, axis=1)
 
-        outputs[k].append(nn.Dense(n, name="readout_{}_{}".format(k, i))(mean))
+          outputs[k].append(
+              nn.Dense(n, name="readout_{}_{}".format(k, i))(mean))
     return outputs
 
   @nn.compact
@@ -296,7 +332,8 @@ class HuBERTModel(nn.Module):
     model_outputs["embedding"] = x
 
     # Linear readouts for supervised classification on top of HuBERT embeddings.
-    classification_outputs = self.classify(x_list, mask_idc=mask_idc)
+    classification_outputs = self.classify(
+        x_list, mask_idc=mask_idc, **self.classifier_config)
     model_outputs.update(classification_outputs)
 
     # Final projection layer that projects embeddings to `final_dim`. These
