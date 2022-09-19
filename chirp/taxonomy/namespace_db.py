@@ -16,6 +16,7 @@
 """Database of bioacoustic label domains."""
 
 import dataclasses
+import functools
 import os
 from typing import Dict
 
@@ -25,6 +26,19 @@ from chirp.taxonomy import namespace
 NAMESPACES_PATH = 'taxonomy/data/namespaces'
 MAPPINGS_PATH = 'taxonomy/data/mappings'
 CLASS_LISTS_PATH = 'taxonomy/data/class_lists'
+
+
+@functools.lru_cache(maxsize=1)
+def load_db() -> 'NamespaceDatabase':
+  """Loads the NamespaceDatabase and caches the result.
+
+  The cache can be cleared with 'namespace_db.load_db.clear_cache()', which
+  may be helpful when adding new data in a colab session.
+
+  Returns:
+    A NamespaceDatabase.
+  """
+  return NamespaceDatabase.load_csvs()
 
 
 @dataclasses.dataclass

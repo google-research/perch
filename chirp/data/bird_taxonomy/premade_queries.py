@@ -35,7 +35,7 @@ def get_upstream_metadata_query() -> fsu.QuerySequence:
 
   _, _, _, unfeasible_ar_species = get_artificially_rare_species_constraints(
       5, 5)
-  db = namespace_db.NamespaceDatabase.load_csvs()
+  db = namespace_db.load_db()
   downstream_species = list(db.class_lists["downstream_species"].classes)
   return fsu.QuerySequence([
       fsu.Query(
@@ -113,7 +113,7 @@ def get_upstream_data_query() -> fsu.QuerySequence:
     ssw_stats = json.load(f)
   (target_fg, target_bg, feasible_ar_species,
    unfeasible_ar_species) = get_artificially_rare_species_constraints(5, 5)
-  db = namespace_db.NamespaceDatabase.load_csvs()
+  db = namespace_db.load_db()
   downstream_species = list(db.class_lists["downstream_species"].classes)
 
   return fsu.QuerySequence([
@@ -182,7 +182,7 @@ def get_downstream_metadata_query() -> fsu.QuerySequence:
   (_, _, feasible_ar_species,
    _) = get_artificially_rare_species_constraints(5, 5)
 
-  db = namespace_db.NamespaceDatabase.load_csvs()
+  db = namespace_db.load_db()
   downstream_species = list(db.class_lists["downstream_species"].classes)
   return fsu.QuerySequence([
       fsu.Query(
@@ -203,7 +203,7 @@ def get_downstream_data_query() -> fsu.QuerySequence:
   Returns:
     The QuerySequence to apply.
   """
-  db = namespace_db.NamespaceDatabase.load_csvs()
+  db = namespace_db.load_db()
   downstream_species = list(db.class_lists["downstream_species"].classes)
   (_, _, feasible_ar_species,
    unfeasible_ar_species) = get_artificially_rare_species_constraints(5, 5)

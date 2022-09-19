@@ -71,7 +71,7 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
   interval_length_s: Optional[float] = None
   data_processing_query: fsu.QuerySequence = fsu.QuerySequence(queries=[])
   metadata_processing_query: fsu.QuerySequence = fsu.QuerySequence(queries=[])
-  tiny_reference: bool = False
+  class_list_name: str = 'xenocanto'
 
 
 class Int16AsFloatTensor(tfds.features.Audio):
@@ -152,24 +152,24 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                'processing pipeline.',
       '1.2.4': 'Adds a unique recording ID and a segment ID to all samples.',
   }
-  TINY_SPECIES = ('ostric2', 'piebar1')
   BUILDER_CONFIGS = [
-      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+      # pylint: disable=unexpected-keyword-arg
+      BirdTaxonomyConfig(
           name='slice_peaked',
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
           description=('Chunked audio sequences processed with '
                        'chirp.audio_utils.slice_peaked_audio.')),
-      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+      BirdTaxonomyConfig(
           name='slice_peaked_tiny_reference',
           localization_fn=functools.partial(
               audio_utils.slice_peaked_audio, max_intervals=1),
           interval_length_s=6.0,
-          tiny_reference=True,
+          class_list_name='tiny_species',
           description=('A reference tiny version of the slice_peaked dataset '
-                       'containing only two species, built with using pandas'
+                       'containing only two species, built using Pandas'
                        'built-in functions.')),
-      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+      BirdTaxonomyConfig(
           name='slice_peaked_tiny',
           localization_fn=functools.partial(
               audio_utils.slice_peaked_audio, max_intervals=1),
@@ -178,34 +178,13 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                        'containing only two species, built using homemade '
                        'queries.'),
           data_processing_query=fsu.QuerySequence([
-              fsu.Query(
-                  op=fsu.TransformOp.FILTER,
-                  kwargs={
-                      'mask_op': fsu.MaskOp.IN,
-                      'op_kwargs': {
-                          'key': 'species_code',
-                          'values': list(TINY_SPECIES)
-                      }
-                  }),
-              fsu.Query(
-                  op=fsu.TransformOp.SCRUB_ALL_BUT,
-                  kwargs={
-                      'key': 'bg_species_codes',
-                      'values': list(TINY_SPECIES)
-                  })
+              fsu.filter_in_class_list('species_code', 'tiny_species'),
+              fsu.scrub_all_but_class_list('bg_species_codes', 'tiny_species'),
           ]),
           metadata_processing_query=fsu.QuerySequence([
-              fsu.Query(
-                  op=fsu.TransformOp.FILTER,
-                  kwargs={
-                      'mask_op': fsu.MaskOp.IN,
-                      'op_kwargs': {
-                          'key': 'species_code',
-                          'values': list(TINY_SPECIES)
-                      }
-                  }),
+              fsu.filter_in_class_list('species_code', 'tiny_species'),
           ])),
-      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+      BirdTaxonomyConfig(
           name='upstream_slice_peaked',
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
@@ -214,7 +193,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           ),
           description=('Upstream data version with chunked audio sequences '
                        'processed with chirp.audio_utils.slice_peaked_audio.')),
-      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+      BirdTaxonomyConfig(
           name='downstream_slice_peaked',
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
@@ -223,7 +202,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           .get_downstream_metadata_query(),
           description=('Downstream data version with chunked audio sequences '
                        'processed with chirp.audio_utils.slice_peaked_audio.')),
-      BirdTaxonomyConfig(  # pylint: disable=unexpected-keyword-arg
+      BirdTaxonomyConfig(
           name='full_length',
           localization_fn=None,
           description='Full-length audio sequences.'),
@@ -234,22 +213,18 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
 
   def _load_taxonomy_metadata(self, disable_filtering: bool = False):
     """Loads the taxonomy for the dataset."""
-    db = namespace_db.NamespaceDatabase.load_csvs()
-    dataset_classes = list(db.class_lists['xenocanto'].classes)
+    db = namespace_db.load_db()
+    dataset_classes = list(
+        db.class_lists[self.builder_config.class_list_name].classes)
     taxonomy_df = pd.DataFrame(dataset_classes, columns=['species_code'])
-    if not disable_filtering and not self.builder_config.tiny_reference:
+    if not disable_filtering:
       # We apply all the metadata processing queries
       taxonomy_df = fsu.apply_sequence(
           taxonomy_df, self.builder_config.metadata_processing_query)
     return taxonomy_df
 
   def _info(self) -> tfds.core.DatasetInfo:
-
-    if self.builder_config.tiny_reference:
-      class_names = self.TINY_SPECIES
-    else:
-      class_names = self._load_taxonomy_metadata()['species_code'].tolist()
-
+    class_names = self._load_taxonomy_metadata()['species_code'].tolist()
     full_length = self.builder_config.localization_fn is None
     audio_feature_shape = [
         None if full_length else int(self.builder_config.sample_rate_hz *
@@ -368,17 +343,10 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     source_info['url'] = source_info.apply(
         lambda s: self.GCS_URL / f'audio-data/{to_name(s)}', axis=1)
 
-    # To generate the reference tiny version, we filter/scrub using built-in
-    # dataframe functions only, not queries.
-    if self.builder_config.tiny_reference:
-      source_info = source_info[source_info['species_code'].isin(
-          self.TINY_SPECIES)]
-      source_info['bg_species_codes'] = source_info['bg_species_codes'].map(
-          lambda codes: [c for c in codes if c in self.TINY_SPECIES])
-    else:
-      # We apply all the processing queries.
-      source_info = fsu.apply_sequence(
-          source_info, self.builder_config.data_processing_query)
+    # Apply all the processing queries.
+    source_info = fsu.apply_sequence(source_info,
+                                     self.builder_config.data_processing_query)
+
     # Remap '' and 'no score' scores to 'E' (the worst score).
     source_info['quality_score'] = source_info['quality_score'].map(
         lambda s: 'E' if s in ('', 'no score') else s)

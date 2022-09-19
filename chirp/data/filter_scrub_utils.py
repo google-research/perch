@@ -19,6 +19,7 @@ import functools
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Union
 
 from chirp.data import sampling_utils as su
+from chirp.taxonomy import namespace_db
 import numpy as np
 import pandas as pd
 
@@ -348,7 +349,7 @@ def scrub(feature_dict: Dict[str, Any],
         'is of type {}'.format(type(feature_dict[key])))
   # Using this 'dirty' syntax because values and feature_dict[key] could be
   # list or ndarray -> using the 'not values' to check emptiness does not work.
-  if len(values) == 0 or len(feature_dict[key]) == 0:
+  if len(values) == 0 or len(feature_dict[key]) == 0:  # pylint: disable=g-explicit-length-test
     return feature_dict
   field_type = type(feature_dict[key][0])
   for index, val in enumerate(values):
@@ -467,6 +468,47 @@ def concat_no_duplicates(df_list: List[pd.DataFrame]) -> pd.DataFrame:
   return concat_df[~duplicated]
 
 
+def filter_in_class_list(key: str, class_list_name: str) -> Query:
+  """Creates a query filtering out labels not in the target class list.
+
+  Args:
+    key: Key for labels to filter. (eg, 'label'.)
+    class_list_name: Name of class list to draw labels from.
+
+  Returns:
+    Query for filtering.
+  """
+  db = namespace_db.load_db()
+  classes = list(db.class_lists[class_list_name].classes)
+  return Query(
+      op=TransformOp.FILTER,
+      kwargs={
+          'mask_op': MaskOp.IN,
+          'op_kwargs': {
+              'key': key,
+              'values': classes,
+          }
+      })
+
+
+def scrub_all_but_class_list(key: str, class_list_name: str) -> Query:
+  """Scrub everything outside the chosen class list.
+
+  Args:
+    key: Key for labels to filter. (eg, 'label'.)
+    class_list_name: Name of class list containing labels to keep.
+
+  Returns:
+    Query for scrub operation.
+  """
+  db = namespace_db.load_db()
+  classes = list(db.class_lists[class_list_name].classes)
+  return Query(
+      op=TransformOp.SCRUB_ALL_BUT, kwargs={
+          'key': key,
+          'values': classes,
+      })
+
 APPLY_FN = {
     Query: apply_query,
     QuerySequence: apply_sequence,
@@ -481,6 +523,7 @@ MERGE_FN = {
 }
 
 OPS = {
+    # pylint: disable=g-long-lambda
     MaskOp.IN:
         lambda df, **kwargs: df.apply(
             functools.partial(is_in, **kwargs), axis=1, result_type='expand'),
