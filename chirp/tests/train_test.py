@@ -143,6 +143,8 @@ class TrainTest(absltest.TestCase):
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))
     self.assertTrue(
+        tf.io.gfile.exists(os.path.join(self.train_dir, "label.csv")))
+    self.assertTrue(
         tf.io.gfile.exists(
             os.path.join(self.train_dir, "savedmodel/saved_model.pb")))
 

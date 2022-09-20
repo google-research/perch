@@ -16,8 +16,9 @@
 """Common utilities for exporting SavedModels and TFLite models."""
 
 import os
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence
 
+from chirp.taxonomy import namespace
 from jax.experimental import jax2tf
 import tensorflow as tf
 
@@ -86,8 +87,13 @@ class Jax2TfModelWrapper(tf.Module):
         fake_shape.append(s)
     return tf.zeros(fake_shape)
 
-  def export_converted_model(self, workdir, train_step):
-
+  def export_converted_model(
+      self,
+      workdir: str,
+      train_step: int,
+      class_lists: Optional[Dict[str, namespace.ClassList]] = None,
+      export_tf_lite: bool = True):
+    """Export converted TF models."""
     fake_inputs = self.get_tf_zero_inputs()
     concrete_fn = self.infer_tf.get_concrete_function(fake_inputs)
 
@@ -97,6 +103,13 @@ class Jax2TfModelWrapper(tf.Module):
         os.path.join(workdir, 'savedmodel', 'ckpt.txt'), 'w') as f:
       f.write(f'train_state.step: {train_step}\n')
 
+    if class_lists is not None:
+      for key, class_list in class_lists.items():
+        with tf.io.gfile.GFile(os.path.join(workdir, f'{key}.csv'), 'w') as f:
+          f.write(class_list.to_csv())
+
+    if not export_tf_lite:
+      return
     # Export TFLite model.
     converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_fn],
                                                                 self)

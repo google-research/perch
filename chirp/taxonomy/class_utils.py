@@ -18,12 +18,12 @@
 from chirp.taxonomy import namespace_db
 
 
-def get_class_sizes(species_class_list_name: str, add_taxonomic_labels: bool):
+def get_class_lists(species_class_list_name: str, add_taxonomic_labels: bool):
   """Get the number of classes for the target class outputs."""
   db = namespace_db.NamespaceDatabase.load_csvs()
   species_classes = db.class_lists[species_class_list_name]
-  num_classes = {
-      "label": species_classes.size,
+  class_lists = {
+      "label": species_classes,
   }
   if add_taxonomic_labels:
     for name in ["genus", "family", "order"]:
@@ -32,5 +32,5 @@ def get_class_sizes(species_class_list_name: str, add_taxonomic_labels: bool):
         continue
       mapping = db.mappings[mapping_name]
       taxa_class_list = species_classes.apply_namespace_mapping(mapping)
-      num_classes[name] = taxa_class_list.size
-  return num_classes
+      class_lists[name] = taxa_class_list
+  return class_lists

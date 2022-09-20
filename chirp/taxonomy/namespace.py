@@ -95,6 +95,13 @@ class ClassList:
       classes.append(row[namespace].strip())
     return ClassList(name, namespace, classes)
 
+  def to_csv(self) -> str:
+    """Serialize to CSV string."""
+    output_rows = [f'{self.namespace},comment']
+    for cl in self.classes:
+      output_rows.append(f'{cl},')
+    return '\n'.join(output_rows) + '\n'
+
   @property
   def size(self) -> int:
     return len(self.classes)

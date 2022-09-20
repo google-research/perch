@@ -16,7 +16,7 @@
 """Training loop."""
 import functools
 import time
-from typing import Optional
+from typing import Dict, Optional
 
 from absl import logging
 from chirp import export_utils
@@ -24,6 +24,7 @@ from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
+from chirp.taxonomy import namespace
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -139,6 +140,7 @@ class ModelBundle:
   optimizer: optax.GradientTransformation
   key: jnp.ndarray
   ckpt: checkpoint.Checkpoint
+  class_lists: Dict[str, namespace.ClassList]
 
 
 def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
@@ -150,8 +152,9 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
 
   # Load model
   model_init_key, key = random.split(key)
-  num_classes = class_utils.get_class_sizes(target_class_list, True)
-  model = taxonomy_model.TaxonomyModel(num_classes=num_classes, **model_config)
+  class_lists = class_utils.get_class_lists(target_class_list, True)
+  model = taxonomy_model.TaxonomyModel(
+      num_classes={k: v.size for (k, v) in class_lists.items()}, **model_config)
   variables = model.init(
       model_init_key, jnp.zeros((1, input_size)), train=False)
   model_state, params = variables.pop("params")
@@ -175,7 +178,7 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
   train_state = TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
   train_state = ckpt.restore_or_initialize(train_state)
-  return ModelBundle(model, optimizer, key, ckpt), train_state
+  return ModelBundle(model, optimizer, key, ckpt, class_lists), train_state
 
 
 def train(model_bundle, train_state, train_dataset, num_train_steps: int,
@@ -366,4 +369,5 @@ def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
   # so we provide a static batch size.
   converted_model = export_utils.Jax2TfModelWrapper(infer_fn, variables,
                                                     [1, input_size], False)
-  converted_model.export_converted_model(workdir, train_state.step)
+  converted_model.export_converted_model(workdir, train_state.step,
+                                         model_bundle.class_lists)

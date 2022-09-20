@@ -17,7 +17,7 @@
 
 import functools
 import time
-from typing import Optional
+from typing import Dict, Optional
 
 from absl import logging
 from chirp import export_utils
@@ -25,6 +25,7 @@ from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import separation_model
 from chirp.taxonomy import class_utils
+from chirp.taxonomy import namespace
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -57,6 +58,7 @@ class ModelBundle:
   optimizer: optax.GradientTransformation
   key: jnp.ndarray
   ckpt: checkpoint.Checkpoint
+  class_lists: Dict[str, namespace.ClassList]
 
 
 def p_log_mse_loss(source: jnp.ndarray,
@@ -172,9 +174,9 @@ def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
 
   # Load model
   model_init_key, key = random.split(key)
-  num_classes = class_utils.get_class_sizes(target_class_list, True)
+  class_lists = class_utils.get_class_lists(target_class_list, True)
   model = separation_model.SeparationModel(
-      num_classes=num_classes, **model_config)
+      num_classes={k: v.size for (k, v) in class_lists.items()}, **model_config)
   variables = model.init(
       model_init_key, jnp.zeros((1, input_size)), train=False)
   model_state, params = variables.pop('params')
@@ -188,7 +190,7 @@ def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
   train_state = TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
   train_state = ckpt.restore_or_initialize(train_state)
-  return ModelBundle(model, optimizer, key, ckpt), train_state
+  return ModelBundle(model, optimizer, key, ckpt, class_lists), train_state
 
 
 def train(model_bundle, train_state, train_dataset, num_train_steps: int,
@@ -398,4 +400,5 @@ def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
   converted_model = export_utils.Jax2TfModelWrapper(infer_fn, variables,
                                                     [None, None, frame_size],
                                                     False)
-  converted_model.export_converted_model(workdir, train_state.step)
+  converted_model.export_converted_model(workdir, train_state.step,
+                                         model_bundle.class_lists)

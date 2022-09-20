@@ -195,6 +195,8 @@ class TrainSeparationTest(absltest.TestCase):
     self.assertTrue(
         tf.io.gfile.exists(
             os.path.join(self.train_dir, "savedmodel/saved_model.pb")))
+    self.assertTrue(
+        tf.io.gfile.exists(os.path.join(self.train_dir, "label.csv")))
 
 
 if __name__ == "__main__":

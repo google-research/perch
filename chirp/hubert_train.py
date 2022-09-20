@@ -130,6 +130,7 @@ def supervised_loss(outputs: hubert.ModelOutputs, label: jnp.ndarray,
                     genus: jnp.ndarray, family: jnp.ndarray, order: jnp.ndarray,
                     taxonomy_loss_weight: float, readout_loss_mult: float,
                     **unused_kwargs) -> jnp.ndarray:
+  """Compute classification loss for all taxonomy heads."""
   del unused_kwargs
   loss = taxonomy_cross_entropy(outputs, label, genus, family, order,
                                 taxonomy_loss_weight)  # [bsz].
@@ -335,7 +336,8 @@ def initialize_model(
 
   # Load model
   model_init_key, mask_key = random.split(key)
-  num_classes = class_utils.get_class_sizes(target_class_list, True)
+  class_lists = class_utils.get_class_lists(target_class_list, True)
+  num_classes = {k: v.size for (k, v) in class_lists.items()}
 
   # Initialize the quantizer.
   kwargs = {
