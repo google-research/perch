@@ -20,6 +20,7 @@ import tempfile
 from unittest import mock
 
 from chirp.data import filter_scrub_utils as fsu
+from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import bird_taxonomy
 from etils import epath
 import numpy as np
@@ -87,26 +88,26 @@ class Int16AsFloatTensorTest(absltest.TestCase):
   """Tests for the Int16AsFloatTensor feature."""
 
   def test_encode_example(self):
-    feature = bird_taxonomy.Int16AsFloatTensor(shape=[None], sample_rate=22050)
+    feature = tfds_features.Int16AsFloatTensor(shape=[None], sample_rate=22050)
     np.testing.assert_allclose(
         feature.encode_example([-1.0, 0.0]),
         np.array([-(2**15), 0], dtype=np.int16))
 
   def test_reconstruct(self):
     example_data = [-1.0, 0.0, 0.5]
-    feature = bird_taxonomy.Int16AsFloatTensor(
+    feature = tfds_features.Int16AsFloatTensor(
         shape=[None], sample_rate=22050, encoding=tfds.features.Encoding.ZLIB)
     np.testing.assert_allclose(
         example_data,
         feature.decode_example(feature.encode_example(example_data)))
 
   def test_exception_on_non_float(self):
-    feature = bird_taxonomy.Int16AsFloatTensor(shape=[None], sample_rate=22050)
+    feature = tfds_features.Int16AsFloatTensor(shape=[None], sample_rate=22050)
     self.assertRaises(ValueError, feature.encode_example,
                       np.array([-1, 0, 0], dtype=np.int16))
 
   def test_exception_on_out_of_bound_values(self):
-    feature = bird_taxonomy.Int16AsFloatTensor(shape=[None], sample_rate=22050)
+    feature = tfds_features.Int16AsFloatTensor(shape=[None], sample_rate=22050)
     self.assertRaises(ValueError, feature.encode_example, [1.0])
     self.assertRaises(ValueError, feature.encode_example, [-1.5])
 

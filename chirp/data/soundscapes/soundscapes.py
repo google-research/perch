@@ -22,6 +22,7 @@ import warnings
 
 from absl import logging
 from chirp import audio_utils
+from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.data.soundscapes import dataset_fns
 from chirp.data.soundscapes import soundscapes_lib
@@ -173,7 +174,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
                                self.builder_config.sample_rate_hz),)
     common_features = {
         'audio':
-            bird_taxonomy.Int16AsFloatTensor(
+            tfds_features.Int16AsFloatTensor(
                 shape=audio_feature_shape,
                 sample_rate=self.builder_config.sample_rate_hz,
                 encoding=tfds.features.Encoding.ZLIB,

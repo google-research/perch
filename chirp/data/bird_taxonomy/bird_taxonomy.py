@@ -18,11 +18,12 @@
 import dataclasses
 import functools
 import tempfile
-from typing import Any, Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Tuple
 import warnings
 
 from chirp import audio_utils
 from chirp.data import filter_scrub_utils as fsu
+from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import premade_queries
 from chirp.taxonomy import namespace_db
 from etils import epath
@@ -72,60 +73,6 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
   data_processing_query: fsu.QuerySequence = fsu.QuerySequence(queries=[])
   metadata_processing_query: fsu.QuerySequence = fsu.QuerySequence(queries=[])
   class_list_name: str = 'xenocanto'
-
-
-class Int16AsFloatTensor(tfds.features.Audio):
-  """An int16 tfds.features.Tensor represented as a float32 in [-1, 1).
-
-  Examples are stored as int16 tensors but encoded from and decoded into float32
-  tensors in the [-1, 1) range (1 is excluded because we divide the
-  [-2**15, 2**15 - 1] interval by 2**15).
-  """
-  INT16_SCALE = float(1 << 15)
-
-  def __init__(
-      self,
-      *,
-      file_format: Optional[str] = None,
-      shape: tfds.typing.Shape,
-      dtype: tf.dtypes.DType = tf.float32,
-      sample_rate: tfds.typing.Dim,
-      encoding: Union[str,
-                      tfds.features.Encoding] = tfds.features.Encoding.NONE,
-      doc: tfds.features.DocArg = None):
-    del file_format
-    del dtype
-
-    self._int16_tensor_feature = tfds.features.Tensor(
-        shape=shape, dtype=tf.int16, encoding=encoding)
-
-    super().__init__(
-        file_format=None,
-        shape=shape,
-        dtype=tf.float32,
-        sample_rate=sample_rate,
-        encoding=encoding,
-        doc=doc)
-
-  def get_serialized_info(self):
-    return self._int16_tensor_feature.get_serialized_info()
-
-  def encode_example(self, example_data):
-    if not isinstance(example_data, np.ndarray):
-      example_data = np.array(example_data, dtype=np.float32)
-    if example_data.dtype != np.float32:
-      raise ValueError('dtype should be float32')
-    if (example_data.min() < -1.0 or
-        example_data.max() > 1.0 - (1.0 / self.INT16_SCALE)):
-      raise ValueError('values should be in [-1, 1)')
-    return self._int16_tensor_feature.encode_example(
-        (example_data * self.INT16_SCALE).astype(np.int16))
-
-  def decode_example(self, tfexample_data):
-    int16_scale = tf.constant(self.INT16_SCALE, dtype=tf.float32)
-    decoded_data = tf.cast(
-        self._int16_tensor_feature.decode_example(tfexample_data), tf.float32)
-    return decoded_data / int16_scale
 
 
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
@@ -236,7 +183,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
         description=_DESCRIPTION,
         features=tfds.features.FeaturesDict({
             'audio':
-                Int16AsFloatTensor(
+                tfds_features.Int16AsFloatTensor(
                     shape=audio_feature_shape,
                     sample_rate=self.builder_config.sample_rate_hz,
                     encoding=tfds.features.Encoding.ZLIB,
