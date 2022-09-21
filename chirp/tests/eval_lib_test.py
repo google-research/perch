@@ -101,5 +101,41 @@ class LoadEvalDatasetsTest(absltest.TestCase):
                                 dataset.element_spec.keys())
 
 
+class GetEmbeddingsTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.data_dir = tempfile.TemporaryDirectory('data_dir').name
+    FakeBirdTaxonomy(
+        data_dir=self.data_dir, config='fake_variant_1').download_and_prepare()
+
+  def test_get_embeddings(self):
+    fake_config = ml_collections.ConfigDict()
+    fake_config.dataset_configs = {
+        'fake_dataset_1': {
+            'tfds_name':
+                'fake_bird_taxonomy/fake_variant_1',
+            'tfds_data_dir':
+                self.data_dir,
+            'pipeline':
+                _c('pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]),
+            'split':
+                'train',
+        },
+    }
+    fake_config.model_callback = lambda x: x + 1
+    fake_config = config_utils.parse_config(fake_config,
+                                            config_globals.get_globals())
+    dataset = eval_lib.load_eval_datasets(fake_config)
+    dataset_name, = dataset.keys()
+    dataset = dataset[dataset_name]
+    _, embedded_dataset = eval_lib.get_embeddings(dataset_name, dataset,
+                                                  fake_config.model_callback)
+    self.assertContainsSubset(['embedding'],
+                              embedded_dataset.element_spec.keys())
+
+    embedding = next(embedded_dataset.as_numpy_iterator())['embedding']
+    self.assertTrue(((0 <= embedding) & (embedding <= 2)).all())
+
 if __name__ == '__main__':
   absltest.main()

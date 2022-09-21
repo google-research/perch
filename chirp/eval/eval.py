@@ -37,9 +37,11 @@ def main(argv: Sequence[str]) -> None:
                                      config_globals.get_globals())
 
   eval_datasets = eval_lib.load_eval_datasets(config)
+  embedded_datasets = dict()
   for dataset_name, dataset in eval_datasets.items():
     logging.info('%s:\n%s', dataset_name, dataset)
-
+    embedded_datasets[dataset_name] = eval_lib.get_embeddings(
+        dataset_name, dataset, config.model_callback)
 
 if __name__ == '__main__':
   app.run(main)

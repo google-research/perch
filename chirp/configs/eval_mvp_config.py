@@ -34,6 +34,8 @@ def get_config() -> config_dict.ConfigDict:
   """
   config = config_dict.ConfigDict()
   config.tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
+  # The model_callback is expected to be a Callable[[np.ndarray], np.ndarray].
+  config.model_callback = lambda x: x
 
   # Xeno-Canto's slice_peaked variants contain 6-second audio segments that are
   # randomly cropped to 5-second segments during training. At evaluation, we
