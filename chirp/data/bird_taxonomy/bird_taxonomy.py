@@ -78,7 +78,7 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.2.4')
+  VERSION = tfds.core.Version('1.2.5')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
       '1.1.0': ('Switched to higher sampling rate, added recording metadata '
@@ -98,6 +98,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                'genus metadata, as those will be added in the TF-based'
                'processing pipeline.',
       '1.2.4': 'Adds a unique recording ID and a segment ID to all samples.',
+      '1.2.5': 'Refactor Int16AsFloatTensor out of BirdTaxonomy.',
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
@@ -252,7 +253,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     info_species_codes = taxonomy_info[['species_code']].sort_values(
         by='species_code', axis=0, ignore_index=True)
     if len(info_species_codes.merge(namespace_species_codes)) != len(
-        info_species_codes):
+        namespace_species_codes):
       raise RuntimeError('Downloaded taxonomy_info dataframe is incompatible '
                          'with the taxonomy_metadata dataframe.')
 
