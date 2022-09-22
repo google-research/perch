@@ -246,10 +246,13 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     # includes information on the Xeno-Canto files associated with each
     # species.
     taxonomy_info = pd.read_json(paths['taxonomy_info'])
-    if not taxonomy_info[['species_code']].sort_values(
-        by='species_code', axis=0, ignore_index=True).equals(
-            self._load_taxonomy_metadata(disable_filtering=True).sort_values(
-                by='species_code', axis=0, ignore_index=True)):
+    namespace_species_codes = self._load_taxonomy_metadata(
+        disable_filtering=True).sort_values(
+            by='species_code', axis=0, ignore_index=True)
+    info_species_codes = taxonomy_info[['species_code']].sort_values(
+        by='species_code', axis=0, ignore_index=True)
+    if len(info_species_codes.merge(namespace_species_codes)) != len(
+        info_species_codes):
       raise RuntimeError('Downloaded taxonomy_info dataframe is incompatible '
                          'with the taxonomy_metadata dataframe.')
 

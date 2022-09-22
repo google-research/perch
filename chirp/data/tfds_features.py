@@ -29,6 +29,7 @@ class Int16AsFloatTensor(tfds.features.Audio):
   [-2**15, 2**15 - 1] interval by 2**15).
   """
   INT16_SCALE = float(1 << 15)
+  ALIASES = ['chirp.data.bird_taxonomy.bird_taxonomy.Int16AsFloatTensor']
 
   def __init__(
       self,
