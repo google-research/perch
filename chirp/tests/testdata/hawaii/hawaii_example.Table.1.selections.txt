@@ -11,3 +11,4 @@ Selection	View	Channel	Begin Time (s)	End Time (s)	Low Freq (Hz)	High Freq (Hz)	
 5	Spectrogram 1	1	6.375059561	7.336105775	365.672	7697.388	hawaii_example.wav	0.9610	7331.716	2756.250	Omao	Call	0		High
 6	Waveform 1	1	7.807280183	8.319588865	2559.701	4132.090	hawaii_example.wav	0.5123	1572.388		Iiwi	Meme	0		Medium
 6	Spectrogram 1	1	7.807280183	8.319588865	2559.701	4132.090	hawaii_example.wav	0.5123	1572.388	3445.312	Iiwi	Meme	0		Medium
+6	Waveform 1	1	7.807280183	8.319588865	777.0	888.0	hawaii_example.wav	0.5123	1572.388		Unknown	Meme	0		Medium

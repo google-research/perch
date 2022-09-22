@@ -72,6 +72,10 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
       This boolean decides whether it should keep this annotation (and
       therefore) add a species named "unknown" in the label space, or just scrub
       all "unknown" annotations.
+    supervised: Whether this is a supervised dataset. If so, any segment which
+      overlaps an 'unknown' label will be dropped (to avoid downward bias on
+      eval stats).
+    audio_dir: Base directory for soundscapes data.
   """
   audio_glob: str = ''
   class_list_name: str = ''
@@ -86,7 +90,7 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
   """DatasetBuilder for soundscapes data."""
 
-  VERSION = tfds.core.Version('1.0.4')
+  VERSION = tfds.core.Version('1.0.5')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release. The label set corresponds to the full '
                'set of ~11 000 Xeno-Canto species.',
@@ -95,8 +99,10 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       '1.0.2': 'Streamlines data handling, and adds handling for a new '
                'Sapsucker Woods dataset.',
       '1.0.3': 'Adds handling for the new Cornell Sierra Nevadas dataset and '
-               'the Kitzeslab Powdermill dataset.',
+               'the KitzesLab Powdermill dataset.',
       '1.0.4': 'Adds a unique recording ID and a segment ID to all samples.',
+      '1.0.5': 'Adds Peru dataset and moves to new version of SSW annotations. '
+               'Supervised segments with the "unknown" label are now dropped.',
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
@@ -162,6 +168,15 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           description=('New England recordings from Powdermill Nature Reserve, '
                        'Rector, PA. https://doi.org/10.1002/ecy.3329'),
           class_list_name='powdermill'),
+      SoundscapesConfig(
+          name='peru',
+          audio_glob='peru/audio/*.flac',
+          interval_length_s=5.0,
+          localization_fn=audio_utils.slice_peaked_audio,
+          annotation_load_fn=dataset_fns.load_peru_annotations,
+          description=('Soundscapes from the SW Amazon basin. '
+                       'https://zenodo.org/record/7079124#.YypL8-xufhM'),
+          class_list_name='peru'),
   ]
 
   def _info(self) -> tfds.core.DatasetInfo:
@@ -304,7 +319,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       labeled_intervals = soundscapes_lib.get_labeled_intervals(
           audio, segment_group, class_list, self.builder_config.sample_rate_hz,
           self.builder_config.interval_length_s,
-          self.builder_config.localization_fn)
+          self.builder_config.localization_fn, self.builder_config.supervised)
 
       # Remove all the fields we don't need from the recording_template. We set
       # errors='ignore' as some fields to be dropped may already not exist.
@@ -324,6 +339,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
             'segment_end': end,
             'segment_id': index,
         }))
+        beam.metrics.Metrics.counter('soundscapes', 'examples').inc()
       return valid_segments
 
     pipeline = (

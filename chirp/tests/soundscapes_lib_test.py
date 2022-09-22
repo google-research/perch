@@ -82,8 +82,8 @@ class SoundscapesLibTest(parameterized.TestCase):
     annos = dataset_fns.load_hawaii_annotations(csv_path)
     # Check that only six annotations are kept, dropping the 'Spectrogram' views
     # which are redundant.
-    self.assertLen(annos, 6)
-    expected_labels = ['iiwi'] * 4 + ['omao', 'iiwi']
+    self.assertLen(annos, 7)
+    expected_labels = ['iiwi'] * 4 + ['omao', 'iiwi', 'unknown']
     for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
       self.assertEqual(anno.filename, 'hawaii/hawaii_example.wav')
       self.assertEqual(anno.namespace, 'ebird2021')
@@ -157,6 +157,23 @@ class SoundscapesLibTest(parameterized.TestCase):
                          'Recording_1/Recording_1_Segment_05.wav')
         self.assertEqual(anno.namespace, 'ebird2021')
         self.assertEqual(anno.label, [expected_label])
+
+  def test_load_peru_annotations(self):
+    annos_csv_path = path_utils.get_absolute_epath('tests/testdata/peru.csv')
+    annos = dataset_fns.load_sierras_kahl_annotations(annos_csv_path)
+    self.assertLen(annos, 5)
+    expected_labels = [
+        'blfant1',
+        'grasal3',
+        'greant1',
+        'butwoo1',
+        'unknown',  # Mapped from '????'
+    ]
+    for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
+      self.assertEqual(anno.filename, 'PER_001_S01_20190116_100007Z.flac')
+      self.assertLen(anno.filename.split('.'), 2)
+      self.assertEqual(anno.namespace, 'ebird2021')
+      self.assertEqual(anno.label, [expected_label])
 
   def test_load_birdclef_metadata(self):
     md_features = dataset_fns.birdclef_metadata_features()

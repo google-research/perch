@@ -31,6 +31,7 @@ import tqdm
 _AUDIO_EXTENSIONS = ['.flac', '.wav']
 LocalizationFn = Callable[[Any, int, float, int], Sequence[Tuple[int, int]]]
 MAX_INTERVALS_PER_FILE = 200
+UNKNOWN_LABEL = 'unknown'
 
 
 @dataclasses.dataclass
@@ -68,11 +69,13 @@ def load_class_list(class_list_name: str,
   db = namespace_db.NamespaceDatabase.load_csvs()
   dataset_class_list = db.class_lists[class_list_name]
 
-  if (keep_unknown_annotation and 'unknown' not in dataset_class_list.classes):
+  if (keep_unknown_annotation and
+      UNKNOWN_LABEL not in dataset_class_list.classes):
     # Create a new class list which includes the 'unknown' class.
     dataset_class_list = namespace.ClassList(
-        dataset_class_list.name + '_unknown', dataset_class_list.namespace,
-        ['unknown'] + list(dataset_class_list.classes))
+        dataset_class_list.name + '_' + UNKNOWN_LABEL,
+        dataset_class_list.namespace,
+        [UNKNOWN_LABEL] + list(dataset_class_list.classes))
   return dataset_class_list
 
 
@@ -213,6 +216,17 @@ def add_annotated_urls(
   return segments
 
 
+def _has_overlap(start1, end1, start2, end2):
+  """Check whether two time windows overlap."""
+  # no overlap, interval < anno
+  if end1 < start2:
+    return False
+  # no overlap, interval > anno
+  if end2 < start1:
+    return False
+  return True
+
+
 def get_labeled_intervals(
     audio: np.ndarray,
     file_segments: pd.DataFrame,
@@ -220,6 +234,7 @@ def get_labeled_intervals(
     sample_rate_hz: int,
     interval_length_s: int,
     localization_fn: LocalizationFn,
+    drop_unknown_segments: bool,
 ) -> Dict[Tuple[int, int], Set[str]]:
   """Slices the given audio, and produces labels intervals.
 
@@ -238,12 +253,15 @@ def get_labeled_intervals(
     sample_rate_hz: Sample rate of audio.
     interval_length_s: Window size to slice.
     localization_fn: Function for selecting audio intervals.
+    drop_unknown_segments: If True, segments containing any UNKNOWN_LABEL will
+      be omitted from the dataset.
 
   Returns:
     labeled_intervals: A Dict mapping a (start, end) time of the recording to
     the set of classes present in that interval.
   """
   logging.info('Found %d annotations for target file.', len(file_segments))
+  beam = tfds.core.lazy_imports.apache_beam
 
   # Slice the audio into intervals
   # Returns `interval_length_s` long intervals.
@@ -274,20 +292,27 @@ def get_labeled_intervals(
     interval_labels = set([])
     for (current_annotation_start,
          currrent_annotation_end), seg in segments_by_timestamp.items():
-      # no overlap, interval < anno
-      if end < current_annotation_start:
-        continue
-      # no overlap, interval > anno
-      if currrent_annotation_end < st:
+      if not _has_overlap(st, end, current_annotation_start,
+                          currrent_annotation_end):
         continue
       # found an overlap!
       for label in seg['label']:
-        if label and label not in class_list.classes:
-          logging.warning('Found label "%s" not in the dataset classlist.',
-                          label)
-          continue
-        if label:
+        if label == UNKNOWN_LABEL or label in class_list.classes:
           interval_labels.add(label)
-    if interval_labels:
-      labeled_intervals[(st, end)] = interval_labels
+        else:
+          logging.info('dropping label not in class list: %s', str(label))
+          beam.metrics.Metrics.counter('soundscapes', f'dropped_{label}').inc()
+
+    if not interval_labels:
+      beam.metrics.Metrics.counter('soundscapes', 'no_interval_labels').inc()
+      continue
+    if drop_unknown_segments and UNKNOWN_LABEL in interval_labels:
+      beam.metrics.Metrics.counter('soundscapes', 'skipped_unknown').inc()
+      logging.info('skipping unknown segment with labels %s',
+                   str(interval_labels))
+      continue
+    beam.metrics.Metrics.counter('soundscapes', 'labeled_intervals').inc()
+    beam.metrics.Metrics.counter('soundscapes',
+                                 'total_labls').inc(len(interval_labels))
+    labeled_intervals[(st, end)] = interval_labels
   return labeled_intervals

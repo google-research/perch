@@ -74,7 +74,7 @@ class NamespaceDbTest(absltest.TestCase):
       self.assertGreaterEqual(
           table.lookup(tf.constant([i], dtype=tf.int64)).numpy()[0], 0)
 
-  def test_namespace_closure(self):
+  def test_namespace_class_list_closure(self):
     # Ensure that all classes in class lists appear in their namespace.
     db = namespace_db.NamespaceDatabase.load_csvs()
 
@@ -88,6 +88,7 @@ class NamespaceDbTest(absltest.TestCase):
         logging.warning(
             'The classes %s in class list %s did not appear in'
             ' namespace %s.', missing_classes, list_name, namespace.name)
+      missing_classes.discard('unknown')
       self.assertEmpty(missing_classes)
 
   def test_namespace_mapping_closure(self):
@@ -114,6 +115,7 @@ class NamespaceDbTest(absltest.TestCase):
             'The classes %s in mapping %s did not appear in'
             ' namespace %s.', missing_target_classes, mapping_name,
             target_namespace.name)
+      missing_target_classes.discard('unknown')
       self.assertEmpty(missing_source_classes)
       self.assertEmpty(missing_target_classes)
 
