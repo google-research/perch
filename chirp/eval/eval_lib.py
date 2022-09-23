@@ -15,7 +15,7 @@
 
 """Utility functions for evaluation."""
 
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, Sequence, Tuple
 
 from chirp.data import pipeline
 import ml_collections
@@ -80,3 +80,47 @@ def get_embeddings(
   dataset = dataset.map(
       _map_func, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
   return dataset_name, dataset
+
+
+
+# TODO(bringingjoy): update return type to a Sequence of
+# np.ndarrays when extending create_species_query to support returning multiple
+# queries for a given eval species.
+def create_averaged_query(
+    species_representatives: Sequence[np.ndarray]) -> np.ndarray:
+  """Creates a search query from representatives by averaging embeddings.
+
+  Args:
+    species_representatives: a collection of vectors representing species
+      vocalizations.
+
+  Returns:
+    An element-wise average of the vectors to serve as a search query.
+  """
+
+  query = np.mean(species_representatives, axis=0)
+  return query
+
+
+def cosine_similarity(vector_a: np.ndarray, vector_b: np.ndarray) -> float:
+  """Computes cosine similarity between two vectors and returns the score.
+
+  Args:
+    vector_a: an n-dimensional vector of floats.
+    vector_b: an n-dimensional vector of floats.
+
+  Returns:
+    The cosine similarity score between two vectors A and B, where increasing
+    score corresponds to vector similarity.
+
+  Note:
+    Definition: A dot B / ||A|| * ||B||. Scores
+    close to -1 means A and B are 'opposite' vectors,
+    close to 0 means A and B are 'orthogonal' vectors, and
+    close to 1 means to A and B are very similar vectors.
+  """
+
+  dot_prod = np.dot(vector_a, vector_b)
+  norm_prod = np.linalg.norm(vector_a) * np.linalg.norm(vector_b)
+
+  return dot_prod / norm_prod

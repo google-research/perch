@@ -24,6 +24,7 @@ from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.eval import eval_lib
 from chirp.tests import fake_dataset
 import ml_collections
+import numpy as np
 import tensorflow as tf
 
 from absl.testing import absltest
@@ -136,6 +137,38 @@ class GetEmbeddingsTest(absltest.TestCase):
 
     embedding = next(embedded_dataset.as_numpy_iterator())['embedding']
     self.assertTrue(((0 <= embedding) & (embedding <= 2)).all())
+
+
+class DefaultFunctionsTest(absltest.TestCase):
+
+  def test_create_averaged_query(self):
+    embedding1 = np.arange(0, 5)
+    embedding2 = np.arange(1, 6)
+    embeddings = [embedding1, embedding2]
+    actual_avg_query = eval_lib.create_averaged_query(embeddings)
+    expected_avg_query = np.array([0.5, 1.5, 2.5, 3.5, 4.5])
+    self.assertTrue(actual_avg_query.tolist(), expected_avg_query.tolist())
+
+  def test_cosine_similarity(self):
+    embedding = np.arange(0, 5)
+    actual_similarity = eval_lib.cosine_similarity(embedding, embedding)
+    expected_similarity = 1.0
+    self.assertAlmostEqual(actual_similarity, expected_similarity)
+
+    orthog_embedding0 = [-0.5, 0.0, -0.5, 0.0, -0.5]
+    orthog_embedding1 = [0.0, 0.5, 0.0, 0.5, 0.0]
+    actual_similarity = eval_lib.cosine_similarity(orthog_embedding0,
+                                                   orthog_embedding1)
+    expected_similarity = 0.0
+    self.assertAlmostEqual(actual_similarity, expected_similarity)
+
+    opposite_embedding0 = [-1] * 5
+    opposite_embedding1 = [1] * 5
+    actual_similarity = eval_lib.cosine_similarity(opposite_embedding0,
+                                                   opposite_embedding1)
+    expected_similarity = -1.0
+    self.assertAlmostEqual(actual_similarity, expected_similarity)
+
 
 if __name__ == '__main__':
   absltest.main()

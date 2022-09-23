@@ -16,6 +16,7 @@
 """Configuration for evaluating using the MVP protocol."""
 
 from chirp import config_utils
+from chirp.eval import eval_lib
 from ml_collections import config_dict
 
 _c = config_utils.callable_config
@@ -36,6 +37,11 @@ def get_config() -> config_dict.ConfigDict:
   config.tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
   # The model_callback is expected to be a Callable[[np.ndarray], np.ndarray].
   config.model_callback = lambda x: x
+
+  # TODO(bringingjoy): extend create_species_query to support returning multiple
+  # queries for a given eval species.
+  config.create_species_query = eval_lib.create_averaged_query
+  config.score_search = eval_lib.cosine_similarity
 
   # Xeno-Canto's slice_peaked variants contain 6-second audio segments that are
   # randomly cropped to 5-second segments during training. At evaluation, we
