@@ -15,6 +15,7 @@
 
 """Tests for eval_lib."""
 
+import shutil
 import tempfile
 from typing import Any, Sequence, Tuple
 
@@ -101,6 +102,10 @@ class LoadEvalDatasetsTest(absltest.TestCase):
       self.assertContainsSubset(['audio', 'label', 'bg_labels'],
                                 dataset.element_spec.keys())
 
+  def tearDown(self):
+    super().tearDown()
+    shutil.rmtree(self.data_dir)
+
 
 class GetEmbeddingsTest(absltest.TestCase):
 
@@ -137,6 +142,10 @@ class GetEmbeddingsTest(absltest.TestCase):
 
     embedding = next(embedded_dataset.as_numpy_iterator())['embedding']
     self.assertTrue(((0 <= embedding) & (embedding <= 2)).all())
+
+  def tearDown(self):
+    super().tearDown()
+    shutil.rmtree(self.data_dir)
 
 
 class DefaultFunctionsTest(absltest.TestCase):
