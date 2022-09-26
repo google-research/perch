@@ -16,3 +16,4 @@
 """Bird taxonomy dataset."""
 
 from .bird_taxonomy import BirdTaxonomy
+from .bird_taxonomy import BirdTaxonomyConfig
