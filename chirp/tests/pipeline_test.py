@@ -209,6 +209,59 @@ class PipelineTest(absltest.TestCase):
       self.assertLen(converted[image_name].shape, 1)
       self.assertEqual(np.sum(converted[image_name].numpy()), image_size)
 
+  def test_labels_to_string(self):
+    examples = {
+        'segment_start':
+            tf.convert_to_tensor([17, 64], dtype=tf.int64),
+        'label':
+            tf.convert_to_tensor([[1], [2]], dtype=tf.int64),
+        'bg_labels':
+            tf.convert_to_tensor([[2, 3], [4, 5]], dtype=tf.int64),
+        'filename':
+            tf.convert_to_tensor(['placeholder', 'placeholder'],
+                                 dtype=tf.string),
+    }
+    ds = tf.data.Dataset.from_tensor_slices(examples)
+    ds = pipeline.Pipeline([
+        pipeline.LabelsToString(),
+    ])(ds, self._builder.info).batch(2)
+    class_names = self._builder.info.features['label'].feature.names
+    processed_example = next(ds.as_numpy_iterator())
+    np.testing.assert_equal(processed_example['segment_start'],
+                            examples['segment_start'])
+    np.testing.assert_equal(
+        processed_example['label'],
+        [class_names[1].encode('utf-8'), class_names[2].encode('utf-8')])
+    np.testing.assert_equal(processed_example['bg_labels'], [
+        f'{class_names[2]} {class_names[3]}'.encode('utf-8'),
+        f'{class_names[4]} {class_names[5]}'.encode('utf-8')
+    ])
+    np.testing.assert_equal(processed_example['filename'], examples['filename'])
+
+  def test_only_keep(self):
+    examples = {
+        'segment_start':
+            tf.convert_to_tensor([17, 64], dtype=tf.int64),
+        'label':
+            tf.convert_to_tensor([[1], [2]], dtype=tf.int64),
+        'bg_labels':
+            tf.convert_to_tensor([[2, 3], [4, 5]], dtype=tf.int64),
+        'filename':
+            tf.convert_to_tensor(['placeholder', 'placeholder'],
+                                 dtype=tf.string),
+    }
+    ds = tf.data.Dataset.from_tensor_slices(examples)
+    ds = pipeline.Pipeline([
+        pipeline.OnlyKeep(names=['segment_start', 'bg_labels']),
+    ])(ds, self._builder.info).batch(2)
+    processed_example = next(ds.as_numpy_iterator())
+    self.assertSameElements(processed_example.keys(),
+                            ['segment_start', 'bg_labels'])
+    np.testing.assert_equal(processed_example['segment_start'],
+                            examples['segment_start'])
+    np.testing.assert_equal(processed_example['bg_labels'],
+                            examples['bg_labels'])
+
 
 if __name__ == '__main__':
   absltest.main()

@@ -17,8 +17,9 @@
 import dataclasses
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
-# Import bird_taxonomy to register the custom tfds.features.FeatureConnector.
+# Import bird_taxonomy and soundscapes to register the datasets with TFDS.
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
+import chirp.data.soundscapes  # pylint: disable=unused-import
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 import jax
@@ -304,7 +305,7 @@ class MultiHot(FeaturesPreprocessOp):
   This must be done before batching.
 
   Attributes:
-    names: The labels to conver to multi-hot representations.
+    names: The labels to convert to multi-hot representations.
   """
   names: Tuple[str, ...] = ('label', 'genus', 'family', 'order', 'bg_labels')
 
@@ -321,6 +322,34 @@ class MultiHot(FeaturesPreprocessOp):
                   dataset_info.features[name].feature.num_classes,
                   dtype=tf.int32),
               axis=0), 0, 1)
+
+    return features
+
+
+@dataclasses.dataclass
+class LabelsToString(FeaturesPreprocessOp):
+  """Converts labels to a string representation.
+
+  Label values are joined using `separator`.
+
+  Attributes:
+    names: The labels to convert to a string representation.
+    separator: The separator character to use.
+  """
+  names: Tuple[str, ...] = ('label', 'genus', 'family', 'order', 'bg_labels')
+  separator: str = ' '
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    features = features.copy()
+    for name in self.names:
+      if name not in features:
+        continue
+      features[name] = tf.strings.reduce_join(
+          tf.gather(
+              tf.constant(dataset_info.features[name].feature.names),
+              features[name]),
+          separator=self.separator)
 
     return features
 
@@ -500,6 +529,24 @@ class OnlyJaxTypes(FeaturesPreprocessOp):
           jnp, feature.dtype.name) or feature.dtype is tf.bool:
         new_features[name] = feature
     return new_features
+
+
+@dataclasses.dataclass
+class OnlyKeep(FeaturesPreprocessOp):
+  """Discards features with names not in `names`.
+
+  Attributes:
+    names: The names of features to keep.
+  """
+  names: str
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    return {
+        name: feature
+        for name, feature in features.items()
+        if name in self.names
+    }
 
 
 @dataclasses.dataclass
