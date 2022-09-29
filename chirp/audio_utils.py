@@ -17,7 +17,7 @@
 
 General utilities for processing audio and spectrograms.
 """
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple, Union
 
 from chirp import signal
 from jax import lax
@@ -35,7 +35,7 @@ _BOUNDARY_TO_PADDING_MODE = {"zeros": "constant", "constant": "edge"}
 
 
 def ema(xs: jnp.ndarray,
-        gamma: jnp.ndarray,
+        gamma: Union[float, jnp.ndarray],
         initial_state: Optional[jnp.ndarray] = None,
         axis: int = 0) -> jnp.ndarray:
   """Computes the exponential moving average along one axis."""
@@ -58,14 +58,40 @@ def ema(xs: jnp.ndarray,
   return ys, final_state
 
 
-def pcen(
-    filterbank_energy: jnp.ndarray,
-    smoothing_coef: float = 0.05638943879134889,
-    gain: float = 0.98,
-    bias: float = 2.0,
-    root: float = 2.0,
-    eps: float = 1e-6,
-    state: Optional[jnp.ndarray] = None) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def ema_conv1d(xs: jnp.ndarray, gamma: Union[float, jnp.ndarray],
+               conv_width: int) -> jnp.ndarray:
+  """Uses a depth-wise conv1d to approximate the EMA operation."""
+  if conv_width == -1:
+    conv_width = xs.shape[1]
+
+  left_pad = jnp.repeat(xs[:, 0:1], conv_width - 1, axis=1)
+  padded_inp = jnp.concatenate([left_pad, xs], axis=1)
+
+  kernel = jnp.array([(1.0 - gamma)**k for k in range(conv_width - 1)] +
+                     [gamma])
+  if isinstance(gamma, float) or gamma.ndim == 0:
+    kernel = kernel[jnp.newaxis, jnp.newaxis, :]
+    kernel = jnp.repeat(kernel, xs.shape[-1], axis=1)
+  else:
+    kernel = jnp.swapaxes(kernel, 0, 1)
+    kernel = kernel[jnp.newaxis, :, :]
+  outp = lax.conv_general_dilated(
+      padded_inp,
+      kernel, (1,),
+      padding="VALID",
+      feature_group_count=xs.shape[-1],
+      dimension_numbers=("NTC", "IOT", "NTC"))
+  return outp
+
+
+def pcen(filterbank_energy: jnp.ndarray,
+         smoothing_coef: float = 0.05638943879134889,
+         gain: float = 0.98,
+         bias: float = 2.0,
+         root: float = 2.0,
+         eps: float = 1e-6,
+         state: Optional[jnp.ndarray] = None,
+         conv_width: int = 0) -> Tuple[jnp.ndarray, Optional[jnp.ndarray]]:
   """Per-Channel Energy Normalization (PCEN).
 
   See https://arxiv.org/abs/1607.05666 for details.
@@ -85,6 +111,9 @@ def pcen(
     eps: Epsilon floor value to prevent division by zero.
     state: Optional state produced by a previous call to fixed_pcen. Used in
       streaming mode.
+    conv_width: If non-zero, use a convolutional approximation of the EMA,
+      with kernel size indicated here. If set to -1, the sequence length will be
+      used as the kernel size.
 
   Returns:
     Filterbank energies with PCEN compression applied (type and shape are
@@ -104,8 +133,15 @@ def pcen(
     if jnp.ndim(arr) > max_rank:
       raise ValueError(f"{name} must have rank at most {max_rank}")
 
-  smoothed_energy, filter_state = ema(
-      filterbank_energy, smoothing_coef, initial_state=state, axis=-2)
+  if conv_width == 0:
+    smoothed_energy, filter_state = ema(
+        filterbank_energy, smoothing_coef, initial_state=state, axis=-2)
+  elif len(filterbank_energy.shape) == 3:
+    smoothed_energy = ema_conv1d(filterbank_energy, smoothing_coef, conv_width)
+    filter_state = None
+  else:
+    raise ValueError(
+        "Can only apply convolutional EMA to inputs with shape [B, T, D].")
   inv_root = 1. / root
   pcen_output = ((filterbank_energy /
                   (eps + smoothed_energy)**gain + bias)**inv_root -

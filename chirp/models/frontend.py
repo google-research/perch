@@ -49,6 +49,7 @@ class PCENScalingConfig:
   root: float = 2.0
   eps: float = 1e-6
   spcen: bool = False
+  conv_width: int = 0
 
 
 ScalingConfig = Union[LogScalingConfig, PCENScalingConfig]
@@ -164,10 +165,6 @@ class ISTFT(InverseFrontend):
   """Inverse short-term Fourier transform.
 
   This module uses a Hann window.
-
-  Attribute:
-    use_tf_istft: For exporting to TF Lite, the iSTFT can optionally be done
-      using an external call to the TF op.
   """
 
   @nn.compact

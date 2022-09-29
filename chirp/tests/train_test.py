@@ -106,7 +106,8 @@ class TrainTest(absltest.TestCase):
         stride=32_000 // 25,
         kernel_size=2_560,
         sample_rate=32_000,
-        freq_range=(60, 10_000))
+        freq_range=(60, 10_000),
+        scaling_config=frontend.PCENScalingConfig(conv_width=256))
     return config
 
   def test_config_structure(self):
@@ -133,7 +134,6 @@ class TrainTest(absltest.TestCase):
     # CUDA is not linked (JAX will detect the GPU so jax2tf will try to create
     # a TF graph on the GPU and fail)
     config = self._get_test_config(use_const_encoder=True)
-    config.init_config.model_config.frontend.use_tf_stft = False
 
     model_bundle, train_state = train.initialize_model(
         workdir=self.train_dir, **config.init_config)
@@ -147,6 +147,14 @@ class TrainTest(absltest.TestCase):
     self.assertTrue(
         tf.io.gfile.exists(
             os.path.join(self.train_dir, "savedmodel/saved_model.pb")))
+
+    # Check that saved_model inference doesn't crash.
+    # Currently lax.scan (used in the non-convolutional PCEN) fails.
+    # See: https://github.com/google/jax/issues/12504
+    # The convolutional EMA (using conv_width != 0) works, though.
+    reloaded = tf.saved_model.load(os.path.join(self.train_dir, "savedmodel"))
+    audio = jnp.zeros([1, 5 * config.sample_rate_hz])
+    reloaded.infer_tf(audio)
 
   def test_init_baseline(self):
     # Ensure that we can initialize the model with the baseline config.
@@ -176,7 +184,7 @@ class TrainTest(absltest.TestCase):
     ds, _ = self._get_test_dataset(config)
     model_bundle, train_state = train.initialize_model(
         workdir=self.train_dir, **config.init_config)
-    # Write a chekcpoint, or else the eval will hang.
+    # Write a checkpoint, or else the eval will hang.
     model_bundle.ckpt.save(train_state)
 
     config.eval_config.num_train_steps = 0

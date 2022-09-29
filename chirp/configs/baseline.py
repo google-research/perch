@@ -87,13 +87,13 @@ def get_config() -> config_dict.ConfigDict:
   init_config.model_config = model_config
 
   model_config.frontend = _c(
-      "frontend.MorletWaveletTransform",
+      "frontend.MelSpectrogram",
       features=160,
       stride=sample_rate_hz // 100,
       kernel_size=2_048,  # ~0.08 * 32,000
       sample_rate=sample_rate_hz,
       freq_range=(60, 10_000),
-      scaling_config=_c("frontend.PCENScalingConfig"))
+      scaling_config=_c("frontend.PCENScalingConfig", conv_width=256))
 
   # Configure the training loop
   num_train_steps = config_dict.FieldReference(1_000_000)
@@ -107,6 +107,8 @@ def get_config() -> config_dict.ConfigDict:
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = num_train_steps
   eval_config.eval_steps_per_checkpoint = 1000
+  eval_config.tflite_export = True
+  eval_config.input_size = window_size_s * sample_rate_hz
   config.eval_config = eval_config
 
   return config
