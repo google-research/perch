@@ -15,6 +15,7 @@
 
 """Tests for eval_lib."""
 
+import functools
 import shutil
 import tempfile
 from typing import Any, Sequence, Tuple
@@ -26,6 +27,7 @@ from chirp.eval import eval_lib
 from chirp.tests import fake_dataset
 import ml_collections
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 
 from absl.testing import absltest
@@ -135,8 +137,8 @@ class GetEmbeddingsTest(absltest.TestCase):
     dataset = eval_lib.load_eval_datasets(fake_config)
     dataset_name, = dataset.keys()
     dataset = dataset[dataset_name]
-    _, embedded_dataset = eval_lib.get_embeddings(dataset_name, dataset,
-                                                  fake_config.model_callback)
+    embedded_dataset = eval_lib.get_embeddings(dataset,
+                                               fake_config.model_callback)
     self.assertContainsSubset(['embedding'],
                               embedded_dataset.element_spec.keys())
 
@@ -146,6 +148,109 @@ class GetEmbeddingsTest(absltest.TestCase):
   def tearDown(self):
     super().tearDown()
     shutil.rmtree(self.data_dir)
+
+
+class EvalSetTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.class_names = ['a', 'b', 'c']
+    self.fake_embeddings_df = pd.DataFrame({
+        'label': (['a'] * 4 + ['b'] * 4 + ['c'] * 4) * 2,
+        'bg_labels':
+            ['', 'b', 'c', 'b c', '', 'a', 'c', 'a c', '', 'a', 'b', 'a b'] * 2,
+        'dataset_name': ['dataset_1'] * 12 + ['dataset_2'] * 12,
+    })
+    self.embedded_datasets = {
+        'dataset_1':
+            tf.data.Dataset.from_tensor_slices(
+                self.fake_embeddings_df.groupby('dataset_name').get_group(
+                    'dataset_1').to_dict('list')),
+        'dataset_2':
+            tf.data.Dataset.from_tensor_slices(
+                self.fake_embeddings_df.groupby('dataset_name').get_group(
+                    'dataset_2').to_dict('list')),
+    }
+
+  def test_prepare_eval_sets(self):
+    partial_specification = functools.partial(
+        eval_lib.EvalSetSpecification,
+        class_names=self.class_names,
+        search_corpus_classwise_mask_fn=(
+            lambda df, _: df['label'].map(lambda s: True)),
+        class_representative_global_mask_fn=(
+            lambda df: df['label'].map(lambda s: True)),
+        class_representative_classwise_mask_fn=(
+            lambda df, class_name: df['label'].str.contains(class_name)),
+        num_representatives_per_class=0)
+
+    fake_config = ml_collections.ConfigDict()
+    fake_config.rng_seed = 1234
+    fake_config.eval_set_specifications = {
+        'fake_specification_1':
+            partial_specification(
+                search_corpus_global_mask_fn=(
+                    lambda df: df['dataset_name'] == 'dataset_1')),
+        'fake_specification_2':
+            partial_specification(
+                search_corpus_global_mask_fn=(
+                    lambda df: df['dataset_name'] == 'dataset_2')),
+    }
+
+    eval_set_generator = eval_lib.prepare_eval_sets(fake_config,
+                                                    self.embedded_datasets)
+    eval_sets = [(n, list(g)) for n, g in eval_set_generator]
+
+    # There should be two eval sets.
+    self.assertEqual([n for n, _ in eval_sets],
+                     ['fake_specification_1', 'fake_specification_2'])
+    # There should be one classwise eval set per class.
+    for _, classwise_eval_sets in eval_sets:
+      self.assertEqual([n for n, _, _ in classwise_eval_sets], ['a', 'b', 'c'])
+
+  def test_eval_set_generator(self):
+    num_representatives_per_class = 2
+
+    fake_config = ml_collections.ConfigDict()
+    fake_config.rng_seed = 1234
+    fake_config.eval_set_specifications = {
+        'fake_specification':
+            eval_lib.EvalSetSpecification(
+                search_corpus_global_mask_fn=(
+                    lambda df: df['dataset_name'] == 'dataset_1'),
+                class_names=self.class_names,
+                search_corpus_classwise_mask_fn=(
+                    lambda df, n: ~df['bg_labels'].str.contains(n)),
+                class_representative_global_mask_fn=(
+                    lambda df: df['dataset_name'] == 'dataset_1'),
+                class_representative_classwise_mask_fn=(
+                    lambda df, n: df['label'].str.contains(n)),
+                num_representatives_per_class=num_representatives_per_class)
+    }
+
+    (_,
+     classwise_eval_sets), = eval_lib.prepare_eval_sets(fake_config,
+                                                        self.embedded_datasets)
+    for (class_name, class_representatives_df,
+         search_corpus_df) in classwise_eval_sets:
+      # We should get the number of class representatives we requested.
+      self.assertLen(class_representatives_df, num_representatives_per_class)
+      # All class representatives should have the label `class_name`.
+      self.assertTrue((class_representatives_df['label'] == class_name).all())
+      # According to our `search_corpus_classwise_mask_fn`, `class_name` should
+      # not appear in any background label.
+      self.assertTrue(
+          (~search_corpus_df['bg_labels'].str.contains(class_name)).all())
+      # Class representatives should not be included in the search corpus.
+      self.assertTrue(
+          (~search_corpus_df.index.isin(class_representatives_df.index)).all())
+      # Embeddings from 'dataset_2' should not be found anywhere.
+      self.assertTrue(
+          (class_representatives_df['dataset_name'] != 'dataset_2').all())
+      self.assertTrue((search_corpus_df['dataset_name'] != 'dataset_2').all())
+      # By construction of `self.embeddings_df`, we know that the above three
+      # result in 4 + 2 + 12 = 18 rows being excluded.
+      self.assertLen(search_corpus_df, 6)
 
 
 class DefaultFunctionsTest(absltest.TestCase):

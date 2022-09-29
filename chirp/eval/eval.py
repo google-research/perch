@@ -41,7 +41,14 @@ def main(argv: Sequence[str]) -> None:
   for dataset_name, dataset in eval_datasets.items():
     logging.info('%s:\n%s', dataset_name, dataset)
     embedded_datasets[dataset_name] = eval_lib.get_embeddings(
-        dataset_name, dataset, config.model_callback)
+        dataset, config.model_callback)
+
+  for eval_set_name, eval_set_generator in eval_lib.prepare_eval_sets(
+      config, embedded_datasets):
+    logging.info(eval_set_name)
+    for class_name, _, _ in eval_set_generator:
+      logging.info('    %s', class_name)
+
 
 if __name__ == '__main__':
   app.run(main)
