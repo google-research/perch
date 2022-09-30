@@ -124,6 +124,7 @@ def get_config() -> config_dict.ConfigDict:
   # queries for a given eval species.
   config.create_species_query = eval_lib.create_averaged_query
   config.score_search = eval_lib.cosine_similarity
+  config.score_search_ordering = 'high'
 
   # Xeno-Canto's slice_peaked variants contain 6-second audio segments that are
   # randomly cropped to 5-second segments during training. At evaluation, we

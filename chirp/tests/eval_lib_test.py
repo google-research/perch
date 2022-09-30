@@ -253,6 +253,38 @@ class EvalSetTest(absltest.TestCase):
       self.assertLen(search_corpus_df, 6)
 
 
+class SearchProcedureTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.query = [1, 0]
+    self.species_id = 'C'
+    self.search_corpus = pd.DataFrame({
+        'embedding': [[0, 1], [1, 0], [1, 1]],
+        'label': ['B', 'A', 'C'],
+        'bg_labels': ['B C', ' ', 'A']
+    })
+
+  def test_query_search(self):
+
+    actual_query_result = eval_lib.query_search(
+        query=self.query,
+        species_id=self.species_id,
+        search_corpus=self.search_corpus,
+        search_score=eval_lib.cosine_similarity)
+    expected_query_result = pd.DataFrame({
+        'score': [0.0, 1.0, 0.7071],
+        'species_match': [1, 0, 1]
+    })
+    actual_query_scores = actual_query_result['score'].round(4)
+    expected_query_scores = expected_query_result['score']
+    self.assertTrue((actual_query_scores == expected_query_scores).all())
+
+    actual_query_matches = actual_query_result['species_match']
+    expected_query_matches = expected_query_result['species_match']
+    self.assertTrue((actual_query_matches == expected_query_matches).all())
+
+
 class DefaultFunctionsTest(absltest.TestCase):
 
   def test_create_averaged_query(self):

@@ -17,7 +17,7 @@
 
 import dataclasses
 import functools
-from typing import Callable, Dict, Generator, Sequence, Tuple
+from typing import Callable, Dict, Generator, Mapping, Sequence, Tuple
 
 from absl import logging
 from chirp.data import pipeline
@@ -27,6 +27,9 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+_EMBEDDING_KEY = 'embedding'
+_LABEL_KEY = 'label'
+_BACKGROUND_KEY = 'bg_labels'
 ConfigDict = ml_collections.ConfigDict
 
 MaskFunction = Callable[[pd.DataFrame], pd.Series]
@@ -297,8 +300,7 @@ def _create_embeddings_dataframe(
 
   embeddings_df = pd.DataFrame(embedded_dataset.as_numpy_iterator())
 
-  # Turn 'label', 'bg_labels', 'dataset_name' columns into proper string
-  # columns.
+  # Encode 'label', 'bg_labels', 'dataset_name' column data as strings.
   for column_name in ('label', 'bg_labels', 'dataset_name'):
     embeddings_df[column_name] = embeddings_df[column_name].str.decode(
         'utf-8').astype('string')
@@ -349,6 +351,85 @@ def prepare_eval_sets(
         embeddings_df=embeddings_df,
         eval_set_specification=eval_set_specification,
         rng_key=eval_set_key)
+
+
+# TODO(hamer): add function to rank the produced search results.
+# TODO(hamer): add flag to indicate whether search_score prefers high or low
+# values.
+def search(
+    eval_and_search_corpus: ClasswiseEvalSetGenerator,
+    create_species_query: Callable[[Sequence[np.ndarray]], np.ndarray],
+    search_score: Callable[[np.ndarray, np.ndarray], float]
+) -> Mapping[str, pd.DataFrame]:
+  """Performs search over evaluation set examples and search corpus pairs.
+
+  Args:
+    eval_and_search_corpus: A ClasswiseEvalSetGenerator, an alias for a
+      Generator of Tuples, where each contains an eval set species name
+      (class_name), a DataFrame containing a collection of representatives of
+      the eval set species, and a DataFrame containing a collection of search
+      corpus species examples to perform search over.
+    create_species_query: A function callback provided by the user to construct
+      a search query from a collection of species vectors. Choice of methodology
+      left up to the user.
+    search_score: A function callback provided by the user to produce a score by
+      comparing two vectors (e.g. query and species representative/embedding).
+
+  Returns:
+    A mapping of query-species ID to a DataFrame of search results. The results
+    DataFrame is structured as follows, with num(search_corpus) rows and two
+    columns:
+    - each row corresponds to the results for a single search corpus example,
+    - column 1 contains a search score (float)
+    - column 2 contains an indicator of whether the eval and search species are
+    the same (bool).
+  """
+
+  # A mapping from eval species class to a DataFrame of search results.
+  eval_search_results = dict()
+
+  for species_id, eval_reps, search_corpus in eval_and_search_corpus:
+    eval_embeddings = eval_reps['embedding']
+    query = create_species_query(eval_embeddings)
+    species_scores = query_search(
+        query=query,
+        species_id=species_id,
+        search_corpus=search_corpus,
+        search_score=search_score)
+
+    eval_search_results[species_id] = species_scores
+
+  return eval_search_results
+
+
+def query_search(
+    query: np.ndarray, species_id: str, search_corpus: pd.DataFrame,
+    search_score: Callable[[np.ndarray, np.ndarray], float]) -> pd.DataFrame:
+  """Performs vector-based comparison between the query and search corpus.
+
+  Args:
+    query: A vector representation of an evaluation species.
+    species_id: The species ID of the query.
+    search_corpus: A DataFrame containing rows of search examples.
+    search_score: A Callable that operates over two vectors and returns a float.
+
+  Returns:
+    A DataFrame where each row corresponds to the results on a single search
+    examplar, with columns for a numeric score and species match (bool) checked
+    between the query species ID and the search corpus examplar's foreground and
+    background species labels.
+  """
+
+  search_species_scores = pd.DataFrame()
+  search_species_scores['score'] = search_corpus[_EMBEDDING_KEY].apply(
+      lambda x: search_score(query, x))
+  fg_species_match = search_corpus[_LABEL_KEY].apply(
+      lambda x: species_id in x.split(' ')).astype(np.int16)
+  bg_species_match = search_corpus[_BACKGROUND_KEY].apply(
+      lambda x: species_id in x.split(' ')).astype(np.int16)
+  search_species_scores['species_match'] = fg_species_match | bg_species_match
+
+  return search_species_scores
 
 
 
