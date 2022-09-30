@@ -25,6 +25,7 @@ from chirp.models import hubert
 from chirp.models import layers
 from chirp.models import metrics
 from chirp.models import quantizers
+from chirp.models import train_state_lib
 from chirp.taxonomy import class_utils
 from clu import checkpoint
 from clu import metric_writers
@@ -288,14 +289,6 @@ def update_cmap_metrics_dict(label_names, cmap_metrics, model_outputs, batch,
 
 
 @flax.struct.dataclass
-class TrainState:
-  step: int
-  params: flax.core.scope.VariableDict
-  opt_state: optax.OptState
-  model_state: flax.core.scope.FrozenVariableDict
-
-
-@flax.struct.dataclass
 class ModelBundle:
   model: nn.Module
   optimizer: optax.GradientTransformation
@@ -431,8 +424,12 @@ def initialize_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = TrainState(
-      step=0, params=params, opt_state=opt_state, model_state=model_state)
+  train_state = train_state_lib.TrainState(
+      step=0,
+      params=params,
+      opt_state=opt_state,
+      model_state=model_state,
+      rngs={})
 
   did_reload = False
   while not did_reload:
@@ -444,7 +441,7 @@ def initialize_model(
       logging.warning(
           "Reloading from %s failed. Taking a nap and will try again.", workdir)
       time.sleep(5)
-    except:
+    except:  # pylint: disable=bare-except
       logging.warning(
           "Reloading from %s failed for some unexpected reason. Taking a nap "
           "and will try again.", workdir)
@@ -550,8 +547,7 @@ def train(model_bundle,
 
       params_after_update = optax.apply_updates(train_state.params, updates)
 
-      train_state = TrainState(
-          step=train_state.step + 1,
+      train_state = train_state.increment(
           params=params_after_update,
           opt_state=opt_state,
           model_state=model_state)
@@ -564,7 +560,7 @@ def train(model_bundle,
   joint_step = get_update_step("train___loss")
 
   initial_step = int(train_state.step)
-  train_state = flax_utils.replicate(train_state)
+  train_state = train_state.replicate()
 
   # Logging
   writer = metric_writers.create_default_writer(logdir)
@@ -603,12 +599,12 @@ def train(model_bundle,
 
     if (step + 1) % checkpoint_every_steps == 0 or step == num_train_steps:
       with reporter.timed("checkpoint"):
-        model_bundle.ckpt.save(flax_utils.unreplicate(train_state))
+        train_state = train_state.save_checkpoint_replicated(model_bundle.ckpt)
   writer.close()
 
 
 def evaluate(model_bundle: ModelBundle,
-             train_state: TrainState,
+             train_state: train_state_lib.TrainState,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
              reporter: periodic_actions.ReportProgress,
@@ -662,7 +658,7 @@ def evaluate(model_bundle: ModelBundle,
 
 
 def evaluate_loop(model_bundle: ModelBundle,
-                  train_state: TrainState,
+                  train_state: train_state_lib.TrainState,
                   valid_dataset: tf.data.Dataset,
                   workdir: str,
                   logdir: str,
@@ -692,16 +688,17 @@ def evaluate_loop(model_bundle: ModelBundle,
       time.sleep(eval_sleep_s)
       continue
 
-    evaluate(model_bundle, flax_utils.replicate(train_state), valid_dataset,
-             writer, reporter, eval_steps_per_checkpoint)
+    evaluate(model_bundle, train_state.replicate(), valid_dataset, writer,
+             reporter, eval_steps_per_checkpoint)
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_size)
     last_step = int(train_state.step)
     last_ckpt = ckpt.latest_checkpoint
 
 
-def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,
-                   workdir: str, input_size: int):
+def export_tf_lite(model_bundle: ModelBundle,
+                   train_state: train_state_lib.TrainState, workdir: str,
+                   input_size: int):
   """Write a TFLite flatbuffer."""
   variables = {"params": train_state.params, **train_state.model_state}
 

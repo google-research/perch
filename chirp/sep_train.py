@@ -24,6 +24,7 @@ from chirp import export_utils
 from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import separation_model
+from chirp.models import train_state_lib
 from chirp.taxonomy import class_utils
 from chirp.taxonomy import namespace
 from clu import checkpoint
@@ -42,14 +43,6 @@ import optax
 import tensorflow as tf
 
 EVAL_LOOP_SLEEP_S = 30
-
-
-@flax.struct.dataclass
-class TrainState:
-  step: int
-  params: flax.core.scope.VariableDict
-  opt_state: optax.OptState
-  model_state: flax.core.scope.FrozenVariableDict
 
 
 @flax.struct.dataclass
@@ -187,8 +180,12 @@ def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = TrainState(
-      step=0, params=params, opt_state=opt_state, model_state=model_state)
+  train_state = train_state_lib.TrainState(
+      step=0,
+      params=params,
+      opt_state=opt_state,
+      model_state=model_state,
+      rngs={})
   train_state = ckpt.restore_or_initialize(train_state)
   return ModelBundle(model, optimizer, key, ckpt, class_lists), train_state
 
@@ -201,7 +198,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
   train_iterator = train_dataset.as_numpy_iterator()
   train_metrics_collection = make_metrics_collection('train___')
   initial_step = int(train_state.step)
-  train_state = flax.jax_utils.replicate(train_state)
+  train_state = train_state.replicate()
   # Logging
   writer = metric_writers.create_default_writer(logdir)
   reporter = periodic_actions.ReportProgress(
@@ -251,11 +248,8 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
     updates, opt_state = model_bundle.optimizer.update(grads,
                                                        train_state.opt_state)
     params = optax.apply_updates(train_state.params, updates)
-    train_state = TrainState(
-        step=train_state.step + 1,
-        params=params,
-        opt_state=opt_state,
-        model_state=model_state)
+    train_state = train_state.increment(
+        params=params, opt_state=opt_state, model_state=model_state)
     return train_metrics, train_state
 
   for step in range(initial_step, num_train_steps + 1):
@@ -269,12 +263,12 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
       reporter(step)
     if step % checkpoint_every_steps == 0:
       with reporter.timed('checkpoint'):
-        model_bundle.ckpt.save(flax_utils.unreplicate(train_state))
+        train_state = train_state.save_checkpoint_replicated(model_bundle.ckpt)
   writer.close()
 
 
 def evaluate(model_bundle: ModelBundle,
-             train_state: TrainState,
+             train_state: train_state_lib.TrainState,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
              reporter: periodic_actions.ReportProgress,
@@ -317,8 +311,8 @@ def evaluate(model_bundle: ModelBundle,
     for valid_step, batch in enumerate(valid_dataset.as_numpy_iterator()):
       if max_eval_steps > 0 and valid_step >= max_eval_steps:
         break
-      model_outputs, valid_metrics = evaluate_step(
-          valid_metrics, batch, flax_utils.replicate(train_state))
+      model_outputs, valid_metrics = evaluate_step(valid_metrics, batch,
+                                                   train_state.replicate())
       cmap_metrics = cmap.update_cmap_metrics_dict(cmap_metrics, model_outputs,
                                                    batch)
 
@@ -335,7 +329,7 @@ def evaluate(model_bundle: ModelBundle,
 
 
 def evaluate_loop(model_bundle: ModelBundle,
-                  train_state: TrainState,
+                  train_state: train_state_lib.TrainState,
                   valid_dataset: tf.data.Dataset,
                   workdir: str,
                   logdir: str,
@@ -373,7 +367,8 @@ def evaluate_loop(model_bundle: ModelBundle,
     last_ckpt = ckpt.latest_checkpoint
 
 
-def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
+def export_tf(model_bundle: ModelBundle,
+              train_state: train_state_lib.TrainState, workdir: str,
               frame_size: int):
   """Write a TFLite flatbuffer.
 

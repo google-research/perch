@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """Training loop."""
+
 import functools
 import time
 from typing import Dict, Optional
@@ -23,6 +24,7 @@ from chirp import export_utils
 from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import taxonomy_model
+from chirp.models import train_state_lib
 from chirp.taxonomy import class_utils
 from chirp.taxonomy import namespace
 from clu import checkpoint
@@ -127,14 +129,6 @@ def project(min_value: float, max_value: float) -> optax.GradientTransformation:
 
 
 @flax.struct.dataclass
-class TrainState:
-  step: int
-  params: flax.core.scope.VariableDict
-  opt_state: optax.OptState
-  model_state: flax.core.scope.FrozenVariableDict
-
-
-@flax.struct.dataclass
 class ModelBundle:
   model: nn.Module
   optimizer: optax.GradientTransformation
@@ -175,8 +169,13 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = TrainState(
-      step=0, params=params, opt_state=opt_state, model_state=model_state)
+  rngs = train_state_lib.TrainState.make_rngs(rng_seed, ["dropout", "lowpass"])
+  train_state = train_state_lib.TrainState(
+      step=0,
+      params=params,
+      opt_state=opt_state,
+      model_state=model_state,
+      rngs=rngs)
   train_state = ckpt.restore_or_initialize(train_state)
   return ModelBundle(model, optimizer, key, ckpt, class_lists), train_state
 
@@ -200,18 +199,14 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
       "train___", model_bundle.model.taxonomy_loss_weight)
 
   # Forward pass and metrics
-  def forward(params, key, batch, model_state):
-    dropout_key, low_pass_key = random.split(key)
+  def forward(params, rngs, batch, model_state):
     variables = {"params": params, **model_state}
     model_outputs, model_state = model_bundle.model.apply(
         variables,
         batch["audio"],
         train=True,
         mutable=list(model_state.keys()),
-        rngs={
-            "dropout": dropout_key,
-            "low_pass": low_pass_key
-        })
+        rngs=rngs)
     taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
     train_metrics = train_metrics_collection.gather_from_model_output(
         outputs=model_outputs,
@@ -221,24 +216,21 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
 
   # Define update step
   @functools.partial(jax.pmap, axis_name="batch")
-  def update_step(key, batch, train_state):
+  def update_step(batch, train_state):
     grads, (train_metrics, model_state) = jax.grad(
-        forward, has_aux=True)(train_state.params, key, batch,
+        forward, has_aux=True)(train_state.params, train_state.rngs, batch,
                                train_state.model_state)
     grads = jax.lax.pmean(grads, axis_name="batch")
     updates, opt_state = model_bundle.optimizer.update(grads,
                                                        train_state.opt_state,
                                                        train_state.params)
     params = optax.apply_updates(train_state.params, updates)
-    train_state = TrainState(
-        step=train_state.step + 1,
-        params=params,
-        opt_state=opt_state,
-        model_state=model_state)
+    train_state = train_state.increment(
+        params=params, opt_state=opt_state, model_state=model_state)
     return train_metrics, train_state
 
   initial_step = int(train_state.step)
-  train_state = flax_utils.replicate(train_state)
+  train_state = train_state.replicate()
 
   # Logging
   writer = metric_writers.create_default_writer(logdir)
@@ -246,14 +238,10 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
       num_train_steps=num_train_steps, writer=writer)
 
   # Training and evaluation loop
-  key = model_bundle.key
-
   for step in range(initial_step, num_train_steps + 1):
     with jax.profiler.StepTraceAnnotation("train", step_num=step):
       batch = next(train_iterator)
-      step_key, key = random.split(key)
-      step_key = random.split(step_key, num=jax.local_device_count())
-      train_metrics, train_state = update_step(step_key, batch, train_state)
+      train_metrics, train_state = update_step(batch, train_state)
       train_metrics = flax_utils.unreplicate(train_metrics)
 
       if step % log_every_steps == 0:
@@ -265,12 +253,12 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
 
     if (step + 1) % checkpoint_every_steps == 0 or step == num_train_steps:
       with reporter.timed("checkpoint"):
-        model_bundle.ckpt.save(flax_utils.unreplicate(train_state))
+        train_state = train_state.save_checkpoint_replicated(model_bundle.ckpt)
   writer.close()
 
 
 def evaluate(model_bundle: ModelBundle,
-             train_state: TrainState,
+             train_state: train_state_lib.TrainState,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
              reporter: periodic_actions.ReportProgress,
@@ -317,7 +305,7 @@ def evaluate(model_bundle: ModelBundle,
 
 
 def evaluate_loop(model_bundle: ModelBundle,
-                  train_state: TrainState,
+                  train_state: train_state_lib.TrainState,
                   valid_dataset: tf.data.Dataset,
                   workdir: str,
                   logdir: str,
@@ -347,15 +335,16 @@ def evaluate_loop(model_bundle: ModelBundle,
       time.sleep(eval_sleep_s)
       continue
 
-    evaluate(model_bundle, flax_utils.replicate(train_state), valid_dataset,
-             writer, reporter, eval_steps_per_checkpoint)
+    evaluate(model_bundle, train_state.replicate(), valid_dataset, writer,
+             reporter, eval_steps_per_checkpoint)
     if tflite_export:
       export_tf(model_bundle, train_state, workdir, input_size)
     last_step = int(train_state.step)
     last_ckpt = ckpt.latest_checkpoint
 
 
-def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
+def export_tf(model_bundle: ModelBundle,
+              train_state: train_state_lib.TrainState, workdir: str,
               input_size: int):
   """Export SavedModel and TFLite."""
   variables = {"params": train_state.params, **train_state.model_state}
