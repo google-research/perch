@@ -122,7 +122,7 @@ def get_embeddings(
   """
 
   def _map_func(example):
-    example['embedding'] = tf.py_function(
+    example['embedding'] = tf.numpy_function(
         func=model_callback, inp=[example['audio']], Tout=tf.float32)
     del example['audio']
     return example
