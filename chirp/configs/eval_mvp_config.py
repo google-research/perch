@@ -113,7 +113,8 @@ def get_config() -> config_dict.ConfigDict:
     The configuration dictionary for the MVP evaluation protocol.
   """
   config = config_dict.ConfigDict()
-  config.tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
+  tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
+  config.tfds_data_dir = tfds_data_dir
   # The model_callback is expected to be a Callable[[np.ndarray], np.ndarray].
   config.model_callback = lambda x: [0.0]
   # The PRNG seed controls the random subsampling of class representatives down
@@ -157,7 +158,7 @@ def get_config() -> config_dict.ConfigDict:
   for dataset_description in required_datasets:
     dataset_config = config_dict.ConfigDict()
     dataset_config.tfds_name = dataset_description['tfds_name']
-    dataset_config.tfds_data_dir = config.tfds_data_dir
+    dataset_config.tfds_data_dir = tfds_data_dir
 
     ops = [
         _c('pipeline.OnlyKeep',
