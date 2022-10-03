@@ -344,12 +344,13 @@ def initialize_model(
       "num_centroids": base_quantizer_config.num_centroids,
       "gamma": base_quantizer_config.gamma
   }
-  base_quantizer = [
+  base_quantizers = [
       quantizers.VectorQuantizerEnt(**kwargs)
       for _ in range(quantizer_config.num_sections)
   ]
   quantizer = quantizers.ProductQuantizer(
-      num_sections=quantizer_config.num_sections, base_quantizer=base_quantizer)
+      num_sections=quantizer_config.num_sections,
+      base_quantizers=base_quantizers)
 
   # Initialize the frontend.
   frontend = frontend_models.MelSpectrogram(

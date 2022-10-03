@@ -276,7 +276,7 @@ class HuBERTModel(nn.Module):
 
     # Get the codes, quantization targets and quantizer loss.
     # codes: [ns, nc, csz / ns], where ns = 1 if not using PQ.
-    quant_outputs = self.quantizer(x)
+    quant_outputs = self.quantizer(x, train)
     codes = quant_outputs.codebook
     # quant_outputs.nn_idx: [ns, bsz, sz].
     # targets: [ns, bsz, sz, nc].
