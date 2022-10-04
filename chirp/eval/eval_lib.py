@@ -111,20 +111,27 @@ def load_eval_datasets(config: ConfigDict) -> Dict[str, tf.data.Dataset]:
   }
 
 
-def get_embeddings(
-    dataset: tf.data.Dataset,
-    model_callback: Callable[[np.ndarray], np.ndarray]) -> tf.data.Dataset:
+def get_embeddings(dataset: tf.data.Dataset,
+                   model_callback: Callable[[np.ndarray], np.ndarray],
+                   batch_size: int) -> tf.data.Dataset:
   """Embeds the audio slice in each tf.Example across the input dataset.
 
   Args:
-    dataset: a TF Dataset composed of tf.Examples.
-    model_callback: a Callable that takes a NumPy array and produces an embedded
-      NumPy array.
+    dataset: A TF Dataset composed of tf.Examples.
+    model_callback: A Callable that takes a batched NumPy array and produces a
+      batched embedded NumPy array.
+    batch_size: The number of examples to embed in each batch.
 
   Returns:
     An updated TF Dataset with a new 'embedding' feature and deleted 'audio'
     feature.
   """
+  # To accommodate accelerators with static shape requirements (e.g., TPUs),
+  # we pad the dataset with elements such that its length is exactly divisible
+  # by `batch_size`.
+  num_elements = len(dataset)
+  padded_dataset = dataset.concatenate(
+      dataset.take(1).repeat(batch_size - (num_elements % batch_size)))
 
   def _map_func(example):
     example['embedding'] = tf.numpy_function(
@@ -134,8 +141,11 @@ def get_embeddings(
 
   # Use the 'audio' feature to produce a model embedding; delete the old 'audio'
   # feature.
-  return dataset.map(
-      _map_func, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
+  embedded_padded_dataset = padded_dataset.batch(
+      batch_size, drop_remainder=True).prefetch(1).map(_map_func)
+
+  # `take(num_elements)` ensures that we discard the padded examples.
+  return embedded_padded_dataset.unbatch().take(num_elements)
 
 
 def _get_class_representatives_df(embeddings_df: pd.DataFrame,

@@ -137,8 +137,8 @@ class GetEmbeddingsTest(absltest.TestCase):
     dataset = eval_lib.load_eval_datasets(fake_config)
     dataset_name, = dataset.keys()
     dataset = dataset[dataset_name]
-    embedded_dataset = eval_lib.get_embeddings(dataset,
-                                               fake_config.model_callback)
+    embedded_dataset = eval_lib.get_embeddings(
+        dataset, fake_config.model_callback, batch_size=1)
     self.assertContainsSubset(['embedding'],
                               embedded_dataset.element_spec.keys())
 

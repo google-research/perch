@@ -116,7 +116,7 @@ def get_config() -> config_dict.ConfigDict:
   tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
   config.tfds_data_dir = tfds_data_dir
   # The model_callback is expected to be a Callable[[np.ndarray], np.ndarray].
-  config.model_callback = lambda x: [float(0.0)]
+  config.model_callback = lambda x: [[float(0.0)] * len(x)]
   # The PRNG seed controls the random subsampling of class representatives down
   # to the right number of when forming eval sets.
   config.rng_seed = 1234
