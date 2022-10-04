@@ -17,10 +17,12 @@
 
 import dataclasses
 import functools
+import os
 from typing import Callable, Dict, Generator, Mapping, Sequence, Tuple
 
 from absl import logging
 from chirp.data import pipeline
+from chirp.models import metrics
 import jax
 import ml_collections
 import numpy as np
@@ -430,6 +432,40 @@ def query_search(
   search_species_scores['species_match'] = fg_species_match | bg_species_match
 
   return search_species_scores
+
+
+def compute_metrics(eval_set_name: str, eval_set_results: Mapping[str,
+                                                                  pd.DataFrame],
+                    write_results_dir: str):
+  """Operates over a DataFrame of eval results and produces average precision.
+
+  Args:
+    eval_set_name: The name of the evaluation set.
+    eval_set_results: A mapping from species ID to a DataFrame of the search
+      results for that species (with columns 'score' and 'species_match').
+    write_results_dir: The path to write the computed metrics to file.
+
+  Returns:
+    Produces the specified metrics computed for each species in the given eval
+    set and writes these to a csv for each eval set.
+  """
+
+  species_to_metric = dict()
+  for eval_species, eval_results in eval_set_results.items():
+    eval_scores = eval_results['score'].values
+    species_label_match = eval_results['species_match'].values
+    average_precision = metrics.average_precision(eval_scores,
+                                                  species_label_match)
+    species_to_metric[eval_species] = average_precision
+
+  write_results_path = os.path.join(write_results_dir,
+                                    eval_set_name) + '_average_precision'
+  species_to_metric = {
+      'eval_species': species_to_metric.keys(),
+      'average_precision': species_to_metric.values()
+  }
+  results_df = pd.DataFrame.from_dict(species_to_metric)
+  results_df.to_csv(write_results_path)
 
 
 

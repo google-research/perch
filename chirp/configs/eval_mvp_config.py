@@ -116,7 +116,7 @@ def get_config() -> config_dict.ConfigDict:
   tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
   config.tfds_data_dir = tfds_data_dir
   # The model_callback is expected to be a Callable[[np.ndarray], np.ndarray].
-  config.model_callback = lambda x: [0.0]
+  config.model_callback = lambda x: [float(0.0)]
   # The PRNG seed controls the random subsampling of class representatives down
   # to the right number of when forming eval sets.
   config.rng_seed = 1234
@@ -124,8 +124,11 @@ def get_config() -> config_dict.ConfigDict:
   # TODO(bringingjoy): extend create_species_query to support returning multiple
   # queries for a given eval species.
   config.create_species_query = eval_lib.create_averaged_query
-  config.score_search = eval_lib.cosine_similarity
-  config.score_search_ordering = 'high'
+  config.search_score = eval_lib.cosine_similarity
+  # TODO(hamer): consider enforcing similarity ordering assumption for the user
+  # in place of adding an ordering flag (to be passed to ../model/metric).
+  # TODO(hamer): determine how to structure paths for model evaluation results.
+  config.write_results_dir = '/tmp/'
 
   # Xeno-Canto's slice_peaked variants contain 6-second audio segments that are
   # randomly cropped to 5-second segments during training. At evaluation, we
