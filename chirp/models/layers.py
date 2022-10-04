@@ -591,6 +591,8 @@ class EarlyFeatureExtractor(nn.Module):
     Returns:
       A jnp.ndarray with shape [B, T, D].
     """
+    if inputs.ndim != 3:
+      raise ValueError("Expected the input to have 3 dimensions.")
     model_dims = self.conv_layer_tuples[0][0]
     if inputs.shape[-1] != model_dims:
       inputs = FeedForward(output_dims=model_dims)(inputs)

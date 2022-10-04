@@ -392,7 +392,10 @@ class HuBERTModel(nn.Module):
     quantizers = []
 
     # Pass x through the frontend and the "early" feature extractor.
-    x = self.frontend(inputs)
+    if self.frontend is None:
+      x = jnp.expand_dims(inputs, -1)  # (bsz, sz, 1)
+    else:
+      x = self.frontend(inputs)  # (bsz, sz, csz)
     if self.early_feature_extractor is not None:
       x = self.early_feature_extractor(x, train=train)
 

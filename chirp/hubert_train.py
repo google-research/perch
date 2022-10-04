@@ -384,13 +384,15 @@ def initialize_model(
     quantizer_list.append(quantizer)
 
   # Initialize the frontend.
-  frontend = frontend_models.MelSpectrogram(
-      features=frontend_config.features,
-      stride=frontend_config.stride,
-      kernel_size=frontend_config.kernel_size,
-      sample_rate=frontend_config.sample_rate,
-      freq_range=frontend_config.freq_range,
-      scaling_config=frontend_config.scaling_config)
+  frontend = None
+  if not frontend_config.omit_frontend:
+    frontend = frontend_models.MelSpectrogram(
+        features=frontend_config.features,
+        stride=frontend_config.stride,
+        kernel_size=frontend_config.kernel_size,
+        sample_rate=frontend_config.sample_rate,
+        freq_range=frontend_config.freq_range,
+        scaling_config=frontend_config.scaling_config)
 
   # Initialize the early feature extractor.
   if early_fs_config.omit_earlyfs:
@@ -399,23 +401,36 @@ def initialize_model(
     if early_fs_config.num_frames not in [125, 63, 32, 16]:
       raise ValueError(
           "Expected early_fs_config.num_frames to be 125, 63, 32 or 16.")
-    nf = 512
-    if early_fs_config.num_frames == 125:
-      conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
-                                 (nf, 3, 1), (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
-                                 (nf, 2, 1)])
-    elif early_fs_config.num_frames == 63:
-      conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
-                                 (nf, 3, 2), (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
-                                 (nf, 2, 1)])
-    elif early_fs_config.num_frames == 32:
-      conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
-                                 (nf, 3, 2), (nf, 3, 2), (nf, 3, 1), (nf, 2, 1),
-                                 (nf, 2, 1)])
-    elif early_fs_config.num_frames == 16:
-      conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
-                                 (nf, 3, 2), (nf, 3, 2), (nf, 3, 2), (nf, 2, 1),
-                                 (nf, 2, 1)])
+
+    if frontend is None:
+      # Their original architecture led to 500 frames which causes OOM.
+      # Added an additional conv layer with stride 2 which makes it 250 instead.
+      # and another, making it 125. Still was getting OOM with this with batch
+      # size 128, so reduced it to 64.
+      conv_layer_tuples = tuple([(512, 10, 5), (512, 3, 2), (512, 3, 2),
+                                 (512, 3, 2), (512, 3, 2), (512, 2, 2),
+                                 (512, 2, 2), (512, 2, 2), (512, 2, 2)])
+    else:
+      nf = 512
+      if early_fs_config.num_frames == 125:
+        # With this configuration, the number of frames is reduced from 500 to
+        # 125 and the framerate is reduced from 100Hz (which the frontend
+        # outputs) 25Hz.
+        conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 1),
+                                   (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
+                                   (nf, 2, 1)])
+      elif early_fs_config.num_frames == 63:
+        conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
+                                   (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
+                                   (nf, 2, 1)])
+      elif early_fs_config.num_frames == 32:
+        conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
+                                   (nf, 3, 2), (nf, 3, 1), (nf, 2, 1),
+                                   (nf, 2, 1)])
+      elif early_fs_config.num_frames == 16:
+        conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
+                                   (nf, 3, 2), (nf, 3, 2), (nf, 2, 1),
+                                   (nf, 2, 1)])
     early_fs = layers.EarlyFeatureExtractor(
         dropout_prob=early_fs_config.dropout_prob,
         activation=early_fs_config.activation,
@@ -452,14 +467,17 @@ def initialize_model(
 
   # Initialize optimizer and handle constraints
   std_to_fwhm = jnp.sqrt(2 * jnp.log(2)) / jnp.pi
-  optimizer = optax.chain(
-      optax.adam(learning_rate=learning_rate),
-      optax.masked(
-          project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)),
-      optax.masked(project(0.0, jnp.pi), mask_by_name("gabor_mean", params)),
-      optax.masked(
-          project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
-          mask_by_name("gabor_std", params)))
+  if frontend is None:
+    optimizer = optax.adam(learning_rate=learning_rate)
+  else:
+    optimizer = optax.chain(
+        optax.adam(learning_rate=learning_rate),
+        optax.masked(
+            project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)),
+        optax.masked(project(0.0, jnp.pi), mask_by_name("gabor_mean", params)),
+        optax.masked(
+            project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
+            mask_by_name("gabor_std", params)))
   opt_state = optimizer.init(params)
 
   # Load checkpoint

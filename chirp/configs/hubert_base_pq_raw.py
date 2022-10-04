@@ -23,7 +23,7 @@ _c = config_utils.callable_config
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
-  batch_size = config_dict.FieldReference(128)
+  batch_size = config_dict.FieldReference(64)
   target_class_list = config_dict.FieldReference("xenocanto")
   add_taxonomic_labels = config_dict.FieldReference(True)
 
@@ -145,7 +145,7 @@ def get_config() -> config_dict.ConfigDict:
   frontend_config.freq_range = (60, 10_000)
   frontend_config.scaling_config = config_utils.callable_config(
       "frontend.PCENScalingConfig")
-  frontend_config.omit_frontend = False
+  frontend_config.omit_frontend = True
   init_config.frontend_config = frontend_config
 
   # Configure HuBERT.
