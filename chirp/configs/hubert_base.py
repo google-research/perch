@@ -123,7 +123,7 @@ def get_config() -> config_dict.ConfigDict:
   # Configure the classifier parameters.
   classifier_config = config_dict.ConfigDict()
   classifier_config.classify_from_all = True
-  classifier_config.per_frame_predictions = True
+  classifier_config.per_frame_predictions = False
   classifier_config.classify_pool_width = 50
   classifier_config.classify_stride = 50
   classifier_config.classify_features = 512
@@ -157,6 +157,7 @@ def get_config() -> config_dict.ConfigDict:
   model_config.alpha = 0.5  # gets loss for both masked and unmasked
   model_config.taxonomy_loss_weight = 0.25
   model_config.readout_points = [2, 4, 6, 8, 10]
+  model_config.quantizer_points = [-1]
   init_config.model_config = model_config
 
   # Configure the training loop.

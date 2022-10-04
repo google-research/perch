@@ -51,12 +51,13 @@ def filter_loss(loss, keep_inds):
   """Filters `loss` based on `keep_inds`.
 
   Args:
-    loss: [bsz, sz]. The loss for each timestep in each batch sample.
-    keep_inds: [bsz, sz]. A mask that determines which timesteps to consider.
+    loss: [ns, bsz, sz]. The loss for each frame (sz) in each batch sample (bsz)
+      for each quantizer section (ns) with ns > 1 if using product quantization.
+    keep_inds: [bsz, sz]. A mask that determines which frames to consider.
 
   Returns:
-    loss_filtered: [bsz, sz]. A jnp.array that is such that averaging over it
-    yields the same result as averaging over loss[keep_inds], which we can't
+    loss_filtered: [ns, bsz, sz]. A jnp.array that is such that averaging over
+    it yields the same result as averaging over loss[keep_inds], which we can't
     compute directly due to a concretization error.
   """
   # First, compute the mean of the entries to keep, as per `keep_inds`.
@@ -74,11 +75,20 @@ def filtered_hubert_loss_from_outputs(outputs: hubert.ModelOutputs,
   logits = outputs.logits
   targets = outputs.targets
 
-  # [bsz, sz, num classes].
-  loss = optax.softmax_cross_entropy(logits, targets)
-  # [bsz, sz].
-  loss_filtered = filter_loss(loss, keep_inds)
-  return loss_filtered
+  # `logits` and `targets` are lists whose length will be the number of
+  # quantizers `nq`.
+  losses = []
+  # Each of l and t have shape [ns, bsz, sz, nc].
+  for logit, target in zip(logits, targets):
+    # [ns, bsz, sz].
+    loss = optax.softmax_cross_entropy(logit, target)
+    # [ns, bsz, sz].
+    loss_filtered = filter_loss(loss, keep_inds)
+    losses.append(loss_filtered)
+
+  # [nq, ns, bsz, sz].
+  losses = jnp.stack(losses, axis=0)
+  return losses
 
 
 def hubert_loss_from_outputs(outputs: hubert.ModelOutputs, alpha: float,
@@ -97,9 +107,10 @@ def quantizer_loss(outputs: hubert.ModelOutputs, quant_loss_mult: float,
                    **unused_kwargs) -> jnp.ndarray:
   """Get quantization loss from model outputs."""
   del unused_kwargs
-  # [batch_size, num frames, embed dim].
+  # [bsz, sz, csz].
   quant_loss = outputs.quantization_loss
   quant_loss = jnp.squeeze(jnp.mean(quant_loss, -1))
+  # [bsz, sz].
   return quant_loss * quant_loss_mult
 
 
@@ -135,7 +146,7 @@ def supervised_loss(outputs: hubert.ModelOutputs, label: jnp.ndarray,
   loss = taxonomy_cross_entropy(outputs, label, genus, family, order,
                                 taxonomy_loss_weight)  # [bsz].
   # Make it [bsz, sz] so that it can be element-wise added to other losses.
-  sz = outputs.logits.shape[-2]
+  sz = outputs.logits[0].shape[-2]
   loss = jnp.repeat(jnp.expand_dims(loss, axis=-1), axis=-1, repeats=sz)
   return loss * readout_loss_mult
 
@@ -165,11 +176,21 @@ def final_loss(outputs: hubert.ModelOutputs, alpha: float,
                quant_loss_mult: float, readout_loss_mult: float,
                **kwargs_for_supervised) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
+  # [bsz, sz].
   quant_loss = quantizer_loss(outputs, quant_loss_mult)
+  # [nq, ns, bsz, sz].
   hubert_loss = hubert_loss_from_outputs(outputs, alpha)
-  # The gradients from this supervised loss don't flow into the representations.
+  # [bsz, sz].
   readout_loss = supervised_loss(
       outputs, readout_loss_mult=readout_loss_mult, **kwargs_for_supervised)
+
+  # Make the shapes match so that these losses can be added elementwise.
+  nq, ns, _, _ = hubert_loss.shape
+  quant_loss = jnp.repeat(jnp.expand_dims(quant_loss, 0), ns, axis=0)
+  quant_loss = jnp.repeat(jnp.expand_dims(quant_loss, 0), nq, axis=0)
+  readout_loss = jnp.repeat(jnp.expand_dims(readout_loss, 0), ns, axis=0)
+  readout_loss = jnp.repeat(jnp.expand_dims(readout_loss, 0), nq, axis=0)
+
   return quant_loss + hubert_loss + readout_loss
 
 
@@ -177,34 +198,34 @@ def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
                             **unused_kwargs) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
   del unused_kwargs
-  assert key in [
-      "n_masked_per_sample", "n_per_cluster", "max_per_cluster",
-      "min_per_cluster", "h_diversity"
-  ]
-  # targets is [bsz, sz, nc].
-  targets = outputs.targets
+  assert key.startswith(("n_masked_per_sample", "n_per_cluster",
+                         "max_per_cluster", "min_per_cluster", "h_diversity"))
+  # A list of [ns, bsz, sz, nc].
+  all_targets = outputs.targets
   mask_idc = outputs.mask_idc
   n_masked_per_sample = jnp.sum(mask_idc, axis=1)  # [bsz].
-  nc = targets.shape[-1]
-  targets = jnp.reshape(targets, (-1, nc))  # [bsz * sz, nc].
-  n_per_cluster = jnp.sum(targets, axis=0)  # [nc].
-  max_per_cluster = jnp.max(n_per_cluster)
-  min_per_cluster = jnp.min(n_per_cluster)
-  diversity = jnp.mean(targets, axis=0)  # [nc]
-  h_diversity = -jnp.sum(diversity * jnp.log2(diversity + 1e-8))
-  ret = {
-      "n_masked_per_sample": n_masked_per_sample,
-      "n_per_cluster": n_per_cluster,
-      "max_per_cluster": max_per_cluster,
-      "min_per_cluster": min_per_cluster,
-      "h_diversity": h_diversity
-  }
+  ret = {"n_masked_per_sample": n_masked_per_sample}
+  for i, targets in enumerate(all_targets):
+    nc = targets.shape[-1]
+    targets = jnp.reshape(targets, (-1, nc))  # [ns * bsz * sz, nc].
+    n_per_cluster = jnp.sum(targets, axis=0)  # [nc].
+    max_per_cluster = jnp.max(n_per_cluster)
+    min_per_cluster = jnp.min(n_per_cluster)
+    diversity = jnp.mean(targets, axis=0)  # [nc]
+    h_diversity = -jnp.sum(diversity * jnp.log2(diversity + 1e-8))
+    ret.update({
+        "n_per_cluster_{}".format(i): n_per_cluster,
+        "max_per_cluster_{}".format(i): max_per_cluster,
+        "min_per_cluster_{}".format(i): min_per_cluster,
+        "h_diversity_{}".format(i): h_diversity
+    })
+  print("ret has keys {}".format(ret.keys()))
   return ret[key]
 
 
 def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
-                            readout_loss_mult: float,
-                            readout_points: List[int]):
+                            readout_loss_mult: float, readout_points: List[int],
+                            quantizer_points: List[int]):
   """Create metrics collection."""
   metrics_dict = {
       "hubert_loss":
@@ -227,27 +248,34 @@ def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
                   readout_loss_mult=readout_loss_mult)),
   }
 
-  # Debugging info:
   metrics_dict.update({
       "n_masked_per_sample":
           clu_metrics.Average.from_fun(
               functools.partial(
                   cluster_targets_metrics, key="n_masked_per_sample")),
-      "n_per_cluster":
-          clu_metrics.Average.from_fun(
-              functools.partial(cluster_targets_metrics, key="n_per_cluster")),
-      "max_per_cluster":
-          clu_metrics.Average.from_fun(
-              functools.partial(cluster_targets_metrics,
-                                key="max_per_cluster")),
-      "min_per_cluster":
-          clu_metrics.Average.from_fun(
-              functools.partial(cluster_targets_metrics,
-                                key="min_per_cluster")),
-      "h_diversity":
-          clu_metrics.Average.from_fun(
-              functools.partial(cluster_targets_metrics, key="h_diversity")),
   })
+  for i, block_ind in enumerate(quantizer_points):
+    block_name = "late_fs_{}".format(block_ind) if block_ind >= 0 else "earlyfs"
+    metrics_dict.update({
+        "n_per_cluster_{}".format(block_name):
+            clu_metrics.Average.from_fun(
+                functools.partial(
+                    cluster_targets_metrics, key="n_per_cluster_{}".format(i))),
+        "max_per_cluster_{}".format(block_name):
+            clu_metrics.Average.from_fun(
+                functools.partial(
+                    cluster_targets_metrics,
+                    key="max_per_cluster_{}".format(i))),
+        "min_per_cluster_{}".format(block_name):
+            clu_metrics.Average.from_fun(
+                functools.partial(
+                    cluster_targets_metrics,
+                    key="min_per_cluster_{}".format(i))),
+        "h_diversity_{}".format(block_name):
+            clu_metrics.Average.from_fun(
+                functools.partial(
+                    cluster_targets_metrics, key="h_diversity_{}".format(i))),
+    })
 
   taxo_keys = ["label", "genus", "family", "order"]
   for i, block_ind in enumerate(readout_points):
@@ -344,13 +372,16 @@ def initialize_model(
       "num_centroids": base_quantizer_config.num_centroids,
       "gamma": base_quantizer_config.gamma
   }
-  base_quantizers = [
-      quantizers.VectorQuantizerEnt(**kwargs)
-      for _ in range(quantizer_config.num_sections)
-  ]
-  quantizer = quantizers.ProductQuantizer(
-      num_sections=quantizer_config.num_sections,
-      base_quantizers=base_quantizers)
+  quantizer_list = []
+  for _ in range(len(model_config.quantizer_points)):
+    base_quantizers = [
+        quantizers.VectorQuantizerEnt(**kwargs)
+        for _ in range(quantizer_config.num_sections)
+    ]
+    quantizer = quantizers.ProductQuantizer(
+        num_sections=quantizer_config.num_sections,
+        base_quantizers=base_quantizers)
+    quantizer_list.append(quantizer)
 
   # Initialize the frontend.
   frontend = frontend_models.MelSpectrogram(
@@ -381,6 +412,7 @@ def initialize_model(
       conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
                                  (nf, 3, 2), (nf, 3, 2), (nf, 3, 1), (nf, 2, 1),
                                  (nf, 2, 1)])
+    elif early_fs_config.num_frames == 16:
       conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2),
                                  (nf, 3, 2), (nf, 3, 2), (nf, 3, 2), (nf, 2, 1),
                                  (nf, 2, 1)])
@@ -392,7 +424,7 @@ def initialize_model(
   # Now set up the HuBERT model.
   model = hubert.HuBERTModel(
       num_classes=num_classes,
-      quantizer=quantizer,
+      quantizer=quantizer_list,
       frontend=frontend,
       early_feature_extractor=early_fs,
       **model_config)
@@ -508,7 +540,7 @@ def train(model_bundle,
   train_iterator = train_dataset.as_numpy_iterator()
   train_metrics_collection = make_metrics_collection(
       "train___", model_bundle.model.alpha, quant_loss_mult, readout_loss_mult,
-      model_bundle.model.readout_points)
+      model_bundle.model.readout_points, model_bundle.model.quantizer_points)
 
   def get_update_step(loss_key="train___loss"):
 
@@ -618,7 +650,8 @@ def evaluate(model_bundle: ModelBundle,
   quant_loss_mult, readout_loss_mult = 1, 1
   valid_metrics = make_metrics_collection("valid___", model_bundle.model.alpha,
                                           quant_loss_mult, readout_loss_mult,
-                                          model_bundle.model.readout_points)
+                                          model_bundle.model.readout_points,
+                                          model_bundle.model.quantizer_points)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def update_metrics(valid_metrics, batch, train_state):

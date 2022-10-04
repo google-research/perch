@@ -119,7 +119,7 @@ def get_config() -> config_dict.ConfigDict:
   # Configure the classifier parameters.
   classifier_config = config_dict.ConfigDict()
   classifier_config.classify_from_all = True
-  classifier_config.per_frame_predictions = True
+  classifier_config.per_frame_predictions = False
   classifier_config.classify_pool_width = 50
   classifier_config.classify_stride = 50
   classifier_config.classify_features = 512
@@ -152,7 +152,8 @@ def get_config() -> config_dict.ConfigDict:
   model_config.logit_temp = 0.1
   model_config.alpha = 0.75
   model_config.taxonomy_loss_weight = 0.
-  model_config.readout_points = [2, 4, 6, 8, 9, 10, 11]
+  model_config.readout_points = [0, 2, 4, 6, 8, 10, 11]
+  model_config.quantizer_points = [-1]
   model_config.stop_gradient_earlyfs = True
   init_config.model_config = model_config
 

@@ -139,7 +139,7 @@ class VectorQuantizerEnt(BaseQuantizer):
   gamma: float = 1.0
 
   def loss(self, scores):
-    scores_shape = scores.shape
+    scores_shape = scores.shape  # [bsz, sz, nc]
     scores = jnp.reshape(scores, [-1, scores.shape[-1]])
     h_clust = jnp.sum(scores * jnp.log2(scores + 1e-8), axis=-1)
     h_clust = -jnp.mean(h_clust)
