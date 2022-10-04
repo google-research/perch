@@ -284,12 +284,13 @@ def _add_dataset_name(features: Dict[str, tf.Tensor],
   return features
 
 
-def _create_embeddings_dataframe(
-    embedded_datasets: Dict[str, tf.data.Dataset]) -> pd.DataFrame:
+def _create_embeddings_dataframe(embedded_datasets: Dict[str, tf.data.Dataset],
+                                 config: ConfigDict) -> pd.DataFrame:
   """Builds a dataframe out of all embedded datasets.
 
   Args:
     embedded_datasets: A mapping from dataset name to embedded dataset.
+    config: The evaluation configuration dict.
 
   Returns:
     The embeddings dataframe.
@@ -299,6 +300,10 @@ def _create_embeddings_dataframe(
   embedded_dataset = next(it)
   for dataset in it:
     embedded_dataset = embedded_dataset.concatenate(dataset)
+
+  if config.debug.embedded_dataset_cache_path:
+    embedded_dataset = embedded_dataset.cache(
+        config.debug.embedded_dataset_cache_path)
 
   embeddings_df = pd.DataFrame(embedded_dataset.as_numpy_iterator())
 
@@ -338,7 +343,7 @@ def prepare_eval_sets(
   }
 
   # Build a DataFrame out of all embedded datasets.
-  embeddings_df = _create_embeddings_dataframe(embedded_datasets)
+  embeddings_df = _create_embeddings_dataframe(embedded_datasets, config)
 
   logging.info('Preparing %d unique eval sets.',
                len(config.eval_set_specifications))

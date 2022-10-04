@@ -210,4 +210,15 @@ def get_config() -> config_dict.ConfigDict:
                     corpus_type=corpus_type,
                     num_representatives_per_class=k))
 
+  config.debug = config_dict.ConfigDict()
+  # Path to the embedded dataset cache. If set, the embedded dataset will be
+  # cached at that path and used upon subsequent runs without recomputing the
+  # embeddings.
+  #
+  # **WARNING**: only use to speed up debugging. When the path is set and a cache,
+  # already exists, the model callback will be ignored. No effect will occur if
+  # there are updates to the model without updating the cache path (i.e. metrics
+  # will be computed with respect to a previous model callback's embeddings).
+  config.debug.embedded_dataset_cache_path = ''
+
   return config

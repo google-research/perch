@@ -186,6 +186,7 @@ class EvalSetTest(absltest.TestCase):
 
     fake_config = ml_collections.ConfigDict()
     fake_config.rng_seed = 1234
+    fake_config.debug = {'embedded_dataset_cache_path': ''}
     fake_config.eval_set_specifications = {
         'fake_specification_1':
             partial_specification(
@@ -213,6 +214,7 @@ class EvalSetTest(absltest.TestCase):
 
     fake_config = ml_collections.ConfigDict()
     fake_config.rng_seed = 1234
+    fake_config.debug = {'embedded_dataset_cache_path': ''}
     fake_config.eval_set_specifications = {
         'fake_specification':
             eval_lib.EvalSetSpecification(
