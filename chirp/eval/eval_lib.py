@@ -415,6 +415,16 @@ def _add_dataset_name(features: Dict[str, tf.Tensor],
   return features
 
 
+def _numpy_iterator_with_progress_logging(embedded_dataset):
+  num_embeddings = len(embedded_dataset)
+  roughly_5_per_cent = int(0.05 * num_embeddings)
+
+  for i, example in enumerate(embedded_dataset.as_numpy_iterator()):
+    yield example
+    logging.log_every_n(logging.INFO, 'Computing embeddings (%.2f%% done)...',
+                        roughly_5_per_cent, (i + 1) / num_embeddings)
+
+
 def _create_embeddings_dataframe(embedded_datasets: Dict[str, tf.data.Dataset],
                                  config: ConfigDict) -> pd.DataFrame:
   """Builds a dataframe out of all embedded datasets.
@@ -462,7 +472,8 @@ def _create_embeddings_dataframe(embedded_datasets: Dict[str, tf.data.Dataset],
     embedded_dataset = embedded_dataset.cache(
         config.debug.embedded_dataset_cache_path)
 
-  embeddings_df = pd.DataFrame(embedded_dataset.as_numpy_iterator())
+  embeddings_df = pd.DataFrame(
+      _numpy_iterator_with_progress_logging(embedded_dataset))
 
   # Encode 'label', 'bg_labels', 'dataset_name' column data as strings.
   for column_name in ('label', 'bg_labels', 'dataset_name'):
