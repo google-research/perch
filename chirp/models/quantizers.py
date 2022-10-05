@@ -56,14 +56,13 @@ class BaseQuantizer(nn.Module):
   def get_num_sections(self):
     return 1
 
-  def create_codebook(self, flat_inputs, collection='params'):
+  def create_codebook(self, flat_inputs):
     """Default codebook variable."""
-    ckey = self.make_rng('codes')
     embedding_dim = flat_inputs.shape[-1]
-    init_fn = jax.nn.initializers.variance_scaling(
-        self.init_scale, 'fan_avg', 'normal', dtype=self.dtype)
-    codebook = self.variable(collection, 'codebook', init_fn, ckey,
-                             (self.num_centroids, embedding_dim))
+    init_fn = jax.nn.initializers.variance_scaling(self.init_scale, 'fan_avg',
+                                                   'normal')
+    codebook = self.param('codebook', init_fn,
+                          (self.num_centroids, embedding_dim))
     return codebook
 
   def update_cluster_counts(self, encodings, train):
@@ -110,13 +109,14 @@ class VectorQuantizer(BaseQuantizer):
     # Find nearest neighbor indices.
     distances = (
         jnp.sum(jnp.square(flat_inputs), 1, keepdims=True) -
-        2 * jnp.matmul(flat_inputs, codebook.value.T) +
-        jnp.sum(jnp.square(codebook.value.T), 0, keepdims=True))
+        2 * jnp.matmul(flat_inputs, codebook.T) +
+        jnp.sum(jnp.square(codebook.T), 0, keepdims=True))
     nn_idx = jnp.argmin(distances, axis=1)
     encodings = jax.nn.one_hot(nn_idx, self.num_centroids)
     counts = self.update_cluster_counts(encodings, train)
-    quantized = jnp.matmul(encodings, codebook.value)
+    quantized = jnp.matmul(encodings, codebook)
     quantized = jnp.reshape(quantized, inputs.shape)
+    nn_idx = jnp.reshape(nn_idx, inputs.shape[:-1])
     quantization_loss = self.loss(inputs, quantized)
 
     # Apply stop gradient to protect the encodings from downstream losses.
@@ -125,7 +125,7 @@ class VectorQuantizer(BaseQuantizer):
     # Expand the dimensions to match those of product quantizer, for interface
     # consistency. This can be seen as a product quantizer with just 1 section.
     nn_idx = jnp.expand_dims(nn_idx, 0)
-    codebook_values = jnp.expand_dims(codebook.value, 0)
+    codebook_values = jnp.expand_dims(codebook, 0)
 
     if self.stop_gradient_codes:
       codebook_values = jax.lax.stop_gradient(codebook_values)
@@ -139,7 +139,6 @@ class VectorQuantizerEnt(BaseQuantizer):
   gamma: float = 1.0
 
   def loss(self, scores):
-    scores_shape = scores.shape  # [bsz, sz, nc]
     scores = jnp.reshape(scores, [-1, scores.shape[-1]])
     h_clust = jnp.sum(scores * jnp.log2(scores + 1e-8), axis=-1)
     h_clust = -jnp.mean(h_clust)
@@ -147,7 +146,6 @@ class VectorQuantizerEnt(BaseQuantizer):
     diversity = jnp.mean(scores, axis=0)
     h_diversity = -jnp.sum(diversity * jnp.log2(diversity + 1e-8))
     loss = h_clust - self.gamma * h_diversity
-    loss = jnp.full(scores_shape, loss)
     return loss
 
   @nn.compact
@@ -157,7 +155,7 @@ class VectorQuantizerEnt(BaseQuantizer):
     codebook = self.create_codebook(flat_inputs)
 
     # Expand codebook and feature dimensions for broadcasting.
-    codes = jnp.expand_dims(codebook.value, range(inputs.ndim - 1))
+    codes = jnp.expand_dims(codebook, range(flat_inputs.ndim - 1))
     features = jax.lax.stop_gradient(flat_inputs)
     features = jnp.expand_dims(features, -2)
     similarity = jnp.sum(features * codes, axis=-1)
@@ -171,15 +169,18 @@ class VectorQuantizerEnt(BaseQuantizer):
     quantized -= jnp.mean(quantized, axis=-1, keepdims=True)
     quantized /= jnp.linalg.norm(quantized, axis=-1, keepdims=True)
     quantized = jnp.reshape(quantized, inputs.shape)
+    nn_idx = jnp.reshape(nn_idx, inputs.shape[:-1])
 
     quantization_loss = self.loss(scores)
+    quantization_loss = jnp.full(inputs.shape[:-1] + (self.num_centroids,),
+                                 quantization_loss)
     # Apply stop gradient to protect the encodings from downstream losses.
     quantized = inputs + jax.lax.stop_gradient(quantized - inputs)
 
     # Expand the dimensions to match those of product quantizer, for interface
     # consistency. This can be seen as a product quantizer with just 1 section.
     nn_idx = jnp.expand_dims(nn_idx, 0)
-    codebook_values = jnp.expand_dims(codebook.value, 0)
+    codebook_values = jnp.expand_dims(codebook, 0)
 
     if self.stop_gradient_codes:
       codebook_values = jax.lax.stop_gradient(codebook_values)
