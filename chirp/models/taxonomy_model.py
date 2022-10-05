@@ -51,24 +51,37 @@ class TaxonomyModel(nn.Module):
   taxonomy_loss_weight: float
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> ModelOutputs:
+  def __call__(self,
+               inputs: jnp.ndarray,
+               train: bool,
+               use_running_average: Optional[bool] = None) -> ModelOutputs:
     """Apply the taxonomy model.
 
     Args:
       inputs: Audio of shape `(batch size, time)`.
-      train: Whether this is training (affects batch norm and dropout).
+      train: Whether this is training. This affects Dropout behavior, and also
+        affects BatchNorm behavior if 'use_running_average' is set to None.
+      use_running_average: Optional, used to decide whether to use running
+        statistics in BatchNorm (test mode), or the current batch's statistics
+        (train mode). If not specified (or specified to None), default to 'not
+        train'.
 
     Returns:
       Logits for each output head.
     """
+    if use_running_average is None:
+      use_running_average = not train
     x = self.frontend(inputs)
     if isinstance(self.encoder, conformer.Conformer):
-      x = self.encoder(x, train=train)
+      x = self.encoder(x, train=train, use_running_average=use_running_average)
       # Silly baseline: average over the time dimension.
       x = jnp.mean(x, axis=1)
     else:
       # Treat the spectrogram as a gray-scale image
-      x = self.encoder(x[..., jnp.newaxis], train=train)
+      x = self.encoder(
+          x[..., jnp.newaxis],
+          train=train,
+          use_running_average=use_running_average)
 
     model_outputs = {}
     model_outputs["embedding"] = x

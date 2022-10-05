@@ -42,19 +42,29 @@ class Conformer(nn.Module):
   num_blocks: int = 1
 
   @nn.compact
-  def __call__(self, inputs: JTensor, train: bool,
-               return_intermediate_list: bool) -> JTensor:
+  def __call__(self,
+               inputs: JTensor,
+               train: bool,
+               return_intermediate_list: bool,
+               use_running_average: Optional[bool] = None) -> JTensor:
     """Projection followed by a conformer layer.
 
     Args:
       inputs: Input sequence JTensor of shape [B, T, H].
-      train: Whether we are in train mode. Affects dropout and batch norm.
+      train: Whether this is training. This affects Dropout behavior, and also
+        affects BatchNorm behavior if 'use_running_average' is set to None.
       return_intermediate_list: Whether to return a list of the activations
         after each conformer block, instead of only the final ones.
+      use_running_average: Optional, used to decide whether to use running
+        statistics in BatchNorm (test mode), or the current batch's statistics
+        (train mode). If not specified (or specified to None), default to 'not
+        train'.
 
     Returns:
       The conformer output with shape [B, T, D].
     """
+    if use_running_average is None:
+      use_running_average = not train
     if inputs.shape[-1] != self.model_dims:
       # Conformer requires the input dims to be `model_dims` so use a projection
       # layer that maps `input_dims` to `model_dims` before the conformer layer.
@@ -98,7 +108,8 @@ class Conformer(nn.Module):
           atten_dropout=atten_dropout,
           ffn_relu_dropout=ffn_relu_dropout,
           fflayer_weight_sharing=self.fflayer_weight_sharing,
-          name='conformer_block_{}'.format(i))(inputs, train)
+          name='conformer_block_{}'.format(i))(
+              inputs, train=train, use_running_average=use_running_average)
       intermediate.append(inputs)
     if return_intermediate_list:
       return intermediate

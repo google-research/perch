@@ -31,7 +31,8 @@ class LayersTest(absltest.TestCase):
         features=24, kernel_size=(3, 3), strides=2, expand_ratio=6)
     key = random.PRNGKey(0)
     inputs = jnp.ones((1, 112, 112, 16))
-    outputs, variables = mbconv.init_with_output(key, inputs, train=True)
+    outputs, variables = mbconv.init_with_output(
+        key, inputs, use_running_average=False)
     self.assertEqual(outputs.shape, (1, 56, 56, 24))
 
     num_parameters = tree_util.tree_reduce(

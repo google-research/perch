@@ -102,12 +102,15 @@ class MBConv(nn.Module):
   reduction_ratio: Optional[int] = None
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
+  def __call__(self,
+               inputs: jnp.ndarray,
+               use_running_average: bool = None) -> jnp.ndarray:
     """Applies an inverted bottleneck block to the inputs.
 
     Args:
       inputs: Inputs should be of shape `(batch size, height, width, channels)`.
-      train: Whether this is training (affects batch norm).
+      use_running_average: Used to decide whether to use running statistics in
+        BatchNorm (test mode), or the current batch's statistics (train mode).
 
     Returns:
       A JAX array of `(batch size, height, width, features)`.
@@ -125,7 +128,7 @@ class MBConv(nn.Module):
               x)
       if self.batch_norm:
         x = nn.BatchNorm(
-            use_running_average=not train, name="ExpandBatchNorm")(
+            use_running_average=use_running_average, name="ExpandBatchNorm")(
                 x)
       x = self.activation(x)
 
@@ -151,7 +154,7 @@ class MBConv(nn.Module):
             x)
     if self.batch_norm:
       x = nn.BatchNorm(
-          use_running_average=not train, name="DepthwiseBatchNorm")(
+          use_running_average=use_running_average, name="DepthwiseBatchNorm")(
               x)
     x = self.activation(x)
 
@@ -169,7 +172,7 @@ class MBConv(nn.Module):
             x)
     if self.batch_norm:
       x = nn.BatchNorm(
-          use_running_average=not train, name="ProjectBatchNorm")(
+          use_running_average=use_running_average, name="ProjectBatchNorm")(
               x)
 
     return x
@@ -294,16 +297,26 @@ class LightConv1D(nn.Module):
   dropout_prob: float = 0.0
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
+  def __call__(self,
+               inputs: jnp.ndarray,
+               train: bool,
+               use_running_average: Optional[bool] = None) -> jnp.ndarray:
     """Lightweight conv layer.
 
     Args:
       inputs: Input sequence jnp.ndarray of shape [B, T, H].
-      train: Whether to use train mode (affects batch norm and dropout).
+      train: Whether this is training. This affects Dropout behavior, and also
+        affects BatchNorm behavior if 'use_running_average' is set to None.
+      use_running_average: Optional, used to decide whether to use running
+        statistics in BatchNorm (test mode), or the current batch's statistics
+        (train mode). If not specified (or specified to None), default to 'not
+        train'.
 
     Returns:
       The lconv output with shape [B, T, H].
     """
+    if use_running_average is None:
+      use_running_average = not train
     unnormalized_inputs = inputs
 
     inputs = nn.LayerNorm(name="ln")(inputs)
@@ -327,7 +340,7 @@ class LightConv1D(nn.Module):
     )(
         inputs)
 
-    inputs = nn.BatchNorm()(inputs, use_running_average=not train)
+    inputs = nn.BatchNorm()(inputs, use_running_average=use_running_average)
     inputs = self.conv_activation(inputs)
 
     inputs = FeedForward(
@@ -453,12 +466,18 @@ class Conformer(nn.Module):
   def __call__(self,
                inputs: jnp.ndarray,
                train: bool,
+               use_running_average: Optional[bool] = None,
                atten_mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
     """Conformer layer.
 
     Args:
       inputs: Input sequence jnp.ndarray of shape [B, T, H].
-      train: Whether we are in training mode. Affects dropout, batch norm.
+      train: Whether this is training. This affects Dropout behavior, and also
+        affects BatchNorm behavior if 'use_running_average' is set to None.
+      use_running_average: Optional, used to decide whether to use running
+        statistics in BatchNorm (test mode), or the current batch's statistics
+        (train mode). If not specified (or specified to None), default to 'not
+        train'.
       atten_mask: Input jnp.ndarray attention mask.
 
     Raises:
@@ -467,6 +486,8 @@ class Conformer(nn.Module):
     Returns:
       The conformer output with shape [B, T, D].
     """
+    if use_running_average is None:
+      use_running_average = not train
 
     layer_order_set = ["mhsa", "conv", "mhsa_before_conv", "conv_before_mhsa"]
     if self.layer_order not in layer_order_set:
@@ -516,7 +537,8 @@ class Conformer(nn.Module):
     if self.layer_order == "mhsa":
       inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)
     elif self.layer_order == "conv":
-      inputs = lconv(inputs, train)
+      inputs = lconv(
+          inputs, train=train, use_running_average=use_running_average)
     elif self.layer_order == "mhsa_before_conv":
       inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)
       inputs = lconv(inputs, train)

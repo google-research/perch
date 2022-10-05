@@ -42,7 +42,12 @@ class ConstantEncoder(nn.Module):
   output_dim: int = 32
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:  # pylint: disable=redefined-outer-name
+  def __call__(
+      self,
+      inputs: jnp.ndarray,
+      train: bool,  # pylint: disable=redefined-outer-name
+      use_running_average: bool
+  ) -> jnp.ndarray:
     return jnp.zeros([inputs.shape[0], self.output_dim])
 
 
