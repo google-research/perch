@@ -18,6 +18,7 @@
 import itertools
 
 from chirp import config_utils
+from chirp.configs import baseline
 from ml_collections import config_dict
 
 _c = config_utils.callable_config
@@ -39,7 +40,13 @@ def get_config() -> config_dict.ConfigDict:
   tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
   config.tfds_data_dir = tfds_data_dir
   # The model_callback is expected to be a Callable[[np.ndarray], np.ndarray].
-  config.model_callback = lambda x: [[float(0.0)] * len(x)]
+  model_checkpoint_path = config_dict.FieldReference('')
+  config.model_checkpoint_path = model_checkpoint_path
+  config.model_callback = _c(
+      'eval_lib.FlaxCheckpointCallback',
+      init_config=baseline.get_config().init_config,
+      workdir=model_checkpoint_path)
+  config.batch_size = 16
   # The PRNG seed controls the random subsampling of class representatives down
   # to the right number of when forming eval sets.
   config.rng_seed = 1234
@@ -111,17 +118,15 @@ def get_config() -> config_dict.ConfigDict:
   config.eval_set_specifications = {}
   for corpus_type, location in itertools.product(('xc_fg', 'xc_bg', 'birdclef'),
                                                  ('ssw', 'colombia', 'hawaii')):
-    # SSW species are artificially-rare, which means that we learned a species
-    # representation for them during upstream training. Rather than using a
-    # collection of species representatives, we use that learned representation
-    # to perform search, and we correspondingly set
-    # `num_representatives_per_class` to zero.
+    # SSW species are "artificially rare" (a limited number of examples were included
+    # during upstream training). We use the singular learned vector representation
+    # from upstream training during search.
     if location == 'ssw':
       config.eval_set_specifications[f'artificially_rare_{corpus_type}'] = _c(
           'eval_lib.EvalSetSpecification.mvp_specification',
           location=location,
           corpus_type=corpus_type,
-          num_representatives_per_class=0)
+          num_representatives_per_class=1)
     # For downstream species, we sweep over {1, 2, 4, 8, 16} representatives
     # per class, and in each case we resample the collection of class
     # representatives 5 times to get confidence intervals on the metrics.
