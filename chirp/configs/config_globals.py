@@ -27,6 +27,7 @@ from chirp.models import layers
 from chirp.models import quantizers
 from chirp.models import soundstream_unet
 from chirp.models import taxonomy_model
+from chirp.sfda.methods import tent
 from flax import linen as nn
 
 
@@ -43,5 +44,6 @@ def get_globals() -> Dict[str, Any]:
       "nn": nn,
       "pipeline": pipeline,
       "soundstream_unet": soundstream_unet,
+      "tent": tent,
       "taxonomy_model": taxonomy_model,
   }
