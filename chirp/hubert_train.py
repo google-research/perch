@@ -495,7 +495,7 @@ def initialize_model(
       logging.warning(
           "Reloading from %s failed. Taking a nap and will try again.", workdir)
       time.sleep(5)
-    except:
+    except:  # pylint: disable=bare-except
       logging.warning(
           "Reloading from %s failed for some unexpected reason. Taking a nap "
           "and will try again.", workdir)
@@ -631,8 +631,8 @@ def train(model_bundle,
       step_key, key = random.split(key)
       mask_key, key = random.split(key)
 
-      mask_key = random.split(mask_key, num=jax.device_count())
-      step_key = random.split(step_key, num=jax.device_count())
+      mask_key = random.split(mask_key, num=jax.local_device_count())
+      step_key = random.split(step_key, num=jax.local_device_count())
 
       if step < num_quantizer_pretrain_steps:
         # Train only the quantizer.
