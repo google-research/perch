@@ -18,6 +18,7 @@ import dataclasses
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 # Import bird_taxonomy and soundscapes to register the datasets with TFDS.
+from absl import logging
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
 import chirp.data.soundscapes  # pylint: disable=unused-import
 from chirp.taxonomy import namespace
@@ -599,10 +600,15 @@ class Batch(DatasetPreprocessOp):
   def __call__(self, dataset: tf.data.Dataset,
                dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
     if self.split_across_devices:
-      if self.batch_size % jax.local_device_count():
-        raise ValueError('batch size must be divisible by number of devices')
+      if self.batch_size % jax.device_count():
+        raise ValueError(f'batch size ({self.batch_size}) must be divisible by '
+                         f'number of devices ({jax.device_count()}).')
+      logging.info(
+          'Splitting batch across %d devices, with '
+          'local device count %d.', jax.device_count(),
+          jax.local_device_count())
       dataset = dataset.batch(
-          self.batch_size // jax.local_device_count(), drop_remainder=True)
+          self.batch_size // jax.device_count(), drop_remainder=True)
       return dataset.batch(jax.local_device_count(), drop_remainder=True)
     else:
       return dataset.batch(self.batch_size, drop_remainder=True)
