@@ -295,6 +295,7 @@ class LightConv1D(nn.Module):
   kernel_size: Optional[int] = None
   conv_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.swish
   dropout_prob: float = 0.0
+  downsample: bool = True
 
   @nn.compact
   def __call__(self,
@@ -331,7 +332,7 @@ class LightConv1D(nn.Module):
     inputs = nn.Conv(
         features=self.input_dims,
         kernel_size=(self.kernel_size,),
-        strides=1,
+        strides=2 if self.downsample else 1,
         padding="SAME",
         input_dilation=1,
         kernel_dilation=1,
@@ -347,6 +348,15 @@ class LightConv1D(nn.Module):
         output_dims=self.input_dims, activation=Identity())(
             inputs)
     inputs = nn.Dropout(self.dropout_prob)(inputs, deterministic=not train)
+
+    if self.downsample:
+      unnormalized_inputs = nn.avg_pool(
+          unnormalized_inputs, (2,), (2,), padding="SAME")
+      # If downsampling happened, the dimensions might also have changed, which
+      # means we need to project the inputs for the residual connection
+      if unnormalized_inputs.shape[-1] != self.input_dims:
+        unnormalized_inputs = nn.Dense(features=self.input_dims)(
+            unnormalized_inputs)
 
     output = inputs + unnormalized_inputs
     return output
@@ -461,6 +471,8 @@ class Conformer(nn.Module):
   atten_dropout: Optional[float] = None
   ffn_relu_dropout: Optional[float] = None
   fflayer_weight_sharing: bool = False
+  downsample: bool = False
+  skip_layer_norm: bool = True
 
   @nn.compact
   def __call__(self,
@@ -494,12 +506,14 @@ class Conformer(nn.Module):
       raise ValueError(
           f"`self.layer_order` must be within `{layer_order_set}`.")
 
+    input_dims = inputs.shape[-1]
+
     # Set up the first ff layer.
     fflayer_start = TransformerFeedForward(
         name="fflayer_start",
         activation=self.ff_activation,
-        input_dims=self.model_dims,
-        hidden_dims=self.model_dims * self.ffn_dim_multiplier,
+        input_dims=input_dims,
+        hidden_dims=input_dims * self.ffn_dim_multiplier,
         residual_weight=self.ff_residual_weight,
         residual_dropout_prob=self.ffn_residual_dropout,
         relu_dropout_prob=self.ffn_relu_dropout)
@@ -525,9 +539,11 @@ class Conformer(nn.Module):
     lconv = LightConv1D(
         input_dims=self.model_dims,
         kernel_size=self.kernel_size,
-        dropout_prob=self.conv_residual_dropout)
+        dropout_prob=self.conv_residual_dropout,
+        downsample=self.downsample)
 
-    final_ln = nn.LayerNorm(name="final_ln")
+    if not self.skip_layer_norm:
+      final_ln = nn.LayerNorm(name="final_ln")
 
     if atten_mask is not None and "mhsa" not in self.layer_order:
       raise RuntimeError("Attention mask is provided but no attention layer.")
@@ -552,7 +568,8 @@ class Conformer(nn.Module):
     else:
       inputs = fflayer_end(inputs, train)
 
-    inputs = final_ln(inputs)
+    if not self.skip_layer_norm:
+      inputs = final_ln(inputs)
     return inputs
 
 

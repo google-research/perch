@@ -26,6 +26,7 @@ from chirp.models import hubert
 from chirp.models import layers
 from chirp.models import quantizers
 from chirp.models import soundstream_unet
+from chirp.models import taxonomy_model
 from flax import linen as nn
 
 
@@ -41,5 +42,6 @@ def get_globals() -> Dict[str, Any]:
       "layers": layers,
       "nn": nn,
       "pipeline": pipeline,
-      "soundstream_unet": soundstream_unet
+      "soundstream_unet": soundstream_unet,
+      "taxonomy_model": taxonomy_model,
   }

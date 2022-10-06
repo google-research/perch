@@ -17,6 +17,7 @@
 from typing import Dict, Optional
 
 from chirp.models import conformer
+from chirp.models import frontend
 import flax
 from flax import linen as nn
 from jax import numpy as jnp
@@ -54,7 +55,8 @@ class TaxonomyModel(nn.Module):
   def __call__(self,
                inputs: jnp.ndarray,
                train: bool,
-               use_running_average: Optional[bool] = None) -> ModelOutputs:
+               use_running_average: Optional[bool] = None,
+               mask: Optional[jnp.ndarray] = None) -> ModelOutputs:
     """Apply the taxonomy model.
 
     Args:
@@ -65,6 +67,7 @@ class TaxonomyModel(nn.Module):
         statistics in BatchNorm (test mode), or the current batch's statistics
         (train mode). If not specified (or specified to None), default to 'not
         train'.
+      mask: An optional mask of the inputs.
 
     Returns:
       Logits for each output head.
@@ -78,10 +81,18 @@ class TaxonomyModel(nn.Module):
       x = jnp.mean(x, axis=1)
     else:
       # Treat the spectrogram as a gray-scale image
+      if mask is not None:
+        # Go from time steps to frames
+        mask = frontend.frames_mask(mask, self.frontend.stride)
+        # Add axes for broadcasting over frequencies and channels
+        kwargs = {"mask": mask[..., jnp.newaxis, jnp.newaxis]}
+      else:
+        kwargs = {}
       x = self.encoder(
           x[..., jnp.newaxis],
           train=train,
-          use_running_average=use_running_average)
+          use_running_average=use_running_average,
+          **kwargs)
 
     model_outputs = {}
     model_outputs["embedding"] = x
@@ -90,3 +101,32 @@ class TaxonomyModel(nn.Module):
         continue
       model_outputs[k] = nn.Dense(n)(x)
     return ModelOutputs(**model_outputs)
+
+
+class ConformerModel(nn.Module):
+  """Conformer model."""
+  num_conformer_blocks: int = 16
+  features: int = 144
+  num_heads: int = 4
+
+  @nn.compact
+  def __call__(self,
+               inputs: jnp.ndarray,
+               train: bool,
+               mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
+    # Subsample from (160, x) to (40, x // 4)
+    x = inputs
+    x = conformer.ConvolutionalSubsampling(features=self.features)(
+        x, train=train)
+
+    # Apply conformer blocks
+    x = conformer.Conformer(
+        model_dims=self.features,
+        atten_num_heads=self.num_heads,
+        num_blocks=self.num_conformer_blocks,
+        downsample=3,
+        dropout_prob=0.1)(
+            x, train=train, return_intermediate_list=False)
+
+    # To get a global embedding we now just pool
+    return jnp.mean(x, axis=-2)
