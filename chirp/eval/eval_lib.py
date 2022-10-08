@@ -421,8 +421,8 @@ def _numpy_iterator_with_progress_logging(embedded_dataset):
 
   for i, example in enumerate(embedded_dataset.as_numpy_iterator()):
     yield example
-    logging.log_every_n(logging.INFO, 'Computing embeddings (%.2f%% done)...',
-                        roughly_5_per_cent, (i + 1) / num_embeddings)
+    logging.log_every_n(logging.INFO, 'Computing embeddings (%.1f%% done)...',
+                        roughly_5_per_cent, 100 * (i + 1) / num_embeddings)
 
 
 def _create_embeddings_dataframe(embedded_datasets: Dict[str, tf.data.Dataset],
