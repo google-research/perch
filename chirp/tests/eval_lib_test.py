@@ -137,8 +137,8 @@ class GetEmbeddingsTest(absltest.TestCase):
     dataset = eval_lib.load_eval_datasets(fake_config)
     dataset_name, = dataset.keys()
     dataset = dataset[dataset_name]
-    embedded_dataset = eval_lib.get_embeddings(dataset,
-                                               fake_config.model_callback)
+    embedded_dataset = eval_lib.get_embeddings(
+        dataset, fake_config.model_callback, batch_size=1)
     self.assertContainsSubset(['embedding'],
                               embedded_dataset.element_spec.keys())
 
@@ -157,6 +157,7 @@ class EvalSetTest(absltest.TestCase):
     self.class_names = ['a', 'b', 'c']
     self.fake_embeddings_df = pd.DataFrame({
         'label': (['a'] * 4 + ['b'] * 4 + ['c'] * 4) * 2,
+        'embedding': ([[0.0]] * 24),
         'bg_labels':
             ['', 'b', 'c', 'b c', '', 'a', 'c', 'a c', '', 'a', 'b', 'a b'] * 2,
         'dataset_name': ['dataset_1'] * 12 + ['dataset_2'] * 12,
@@ -186,6 +187,8 @@ class EvalSetTest(absltest.TestCase):
 
     fake_config = ml_collections.ConfigDict()
     fake_config.rng_seed = 1234
+    fake_config.model_callback = {'learned_representations': {'a': [0.0]}}
+    fake_config.debug = {'embedded_dataset_cache_path': ''}
     fake_config.eval_set_specifications = {
         'fake_specification_1':
             partial_specification(
@@ -213,6 +216,8 @@ class EvalSetTest(absltest.TestCase):
 
     fake_config = ml_collections.ConfigDict()
     fake_config.rng_seed = 1234
+    fake_config.model_callback = {'learned_representations': {'a': [0.0]}}
+    fake_config.debug = {'embedded_dataset_cache_path': ''}
     fake_config.eval_set_specifications = {
         'fake_specification':
             eval_lib.EvalSetSpecification(

@@ -21,7 +21,7 @@ import json
 import os
 
 from absl import logging
-import audio_ops
+from chirp.birb_sep_paper import audio_ops
 from ml_collections import config_dict
 import numpy as np
 import tensorflow

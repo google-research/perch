@@ -102,12 +102,15 @@ class MBConv(nn.Module):
   reduction_ratio: Optional[int] = None
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
+  def __call__(self,
+               inputs: jnp.ndarray,
+               use_running_average: bool = None) -> jnp.ndarray:
     """Applies an inverted bottleneck block to the inputs.
 
     Args:
       inputs: Inputs should be of shape `(batch size, height, width, channels)`.
-      train: Whether this is training (affects batch norm).
+      use_running_average: Used to decide whether to use running statistics in
+        BatchNorm (test mode), or the current batch's statistics (train mode).
 
     Returns:
       A JAX array of `(batch size, height, width, features)`.
@@ -125,7 +128,7 @@ class MBConv(nn.Module):
               x)
       if self.batch_norm:
         x = nn.BatchNorm(
-            use_running_average=not train, name="ExpandBatchNorm")(
+            use_running_average=use_running_average, name="ExpandBatchNorm")(
                 x)
       x = self.activation(x)
 
@@ -151,7 +154,7 @@ class MBConv(nn.Module):
             x)
     if self.batch_norm:
       x = nn.BatchNorm(
-          use_running_average=not train, name="DepthwiseBatchNorm")(
+          use_running_average=use_running_average, name="DepthwiseBatchNorm")(
               x)
     x = self.activation(x)
 
@@ -169,7 +172,7 @@ class MBConv(nn.Module):
             x)
     if self.batch_norm:
       x = nn.BatchNorm(
-          use_running_average=not train, name="ProjectBatchNorm")(
+          use_running_average=use_running_average, name="ProjectBatchNorm")(
               x)
 
     return x
@@ -292,18 +295,29 @@ class LightConv1D(nn.Module):
   kernel_size: Optional[int] = None
   conv_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.swish
   dropout_prob: float = 0.0
+  downsample: bool = True
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
+  def __call__(self,
+               inputs: jnp.ndarray,
+               train: bool,
+               use_running_average: Optional[bool] = None) -> jnp.ndarray:
     """Lightweight conv layer.
 
     Args:
       inputs: Input sequence jnp.ndarray of shape [B, T, H].
-      train: Whether to use train mode (affects batch norm and dropout).
+      train: Whether this is training. This affects Dropout behavior, and also
+        affects BatchNorm behavior if 'use_running_average' is set to None.
+      use_running_average: Optional, used to decide whether to use running
+        statistics in BatchNorm (test mode), or the current batch's statistics
+        (train mode). If not specified (or specified to None), default to 'not
+        train'.
 
     Returns:
       The lconv output with shape [B, T, H].
     """
+    if use_running_average is None:
+      use_running_average = not train
     unnormalized_inputs = inputs
 
     inputs = nn.LayerNorm(name="ln")(inputs)
@@ -318,7 +332,7 @@ class LightConv1D(nn.Module):
     inputs = nn.Conv(
         features=self.input_dims,
         kernel_size=(self.kernel_size,),
-        strides=1,
+        strides=2 if self.downsample else 1,
         padding="SAME",
         input_dilation=1,
         kernel_dilation=1,
@@ -327,13 +341,22 @@ class LightConv1D(nn.Module):
     )(
         inputs)
 
-    inputs = nn.BatchNorm()(inputs, use_running_average=not train)
+    inputs = nn.BatchNorm()(inputs, use_running_average=use_running_average)
     inputs = self.conv_activation(inputs)
 
     inputs = FeedForward(
         output_dims=self.input_dims, activation=Identity())(
             inputs)
     inputs = nn.Dropout(self.dropout_prob)(inputs, deterministic=not train)
+
+    if self.downsample:
+      unnormalized_inputs = nn.avg_pool(
+          unnormalized_inputs, (2,), (2,), padding="SAME")
+      # If downsampling happened, the dimensions might also have changed, which
+      # means we need to project the inputs for the residual connection
+      if unnormalized_inputs.shape[-1] != self.input_dims:
+        unnormalized_inputs = nn.Dense(features=self.input_dims)(
+            unnormalized_inputs)
 
     output = inputs + unnormalized_inputs
     return output
@@ -448,17 +471,25 @@ class Conformer(nn.Module):
   atten_dropout: Optional[float] = None
   ffn_relu_dropout: Optional[float] = None
   fflayer_weight_sharing: bool = False
+  downsample: bool = False
+  skip_layer_norm: bool = True
 
   @nn.compact
   def __call__(self,
                inputs: jnp.ndarray,
                train: bool,
+               use_running_average: Optional[bool] = None,
                atten_mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
     """Conformer layer.
 
     Args:
       inputs: Input sequence jnp.ndarray of shape [B, T, H].
-      train: Whether we are in training mode. Affects dropout, batch norm.
+      train: Whether this is training. This affects Dropout behavior, and also
+        affects BatchNorm behavior if 'use_running_average' is set to None.
+      use_running_average: Optional, used to decide whether to use running
+        statistics in BatchNorm (test mode), or the current batch's statistics
+        (train mode). If not specified (or specified to None), default to 'not
+        train'.
       atten_mask: Input jnp.ndarray attention mask.
 
     Raises:
@@ -467,18 +498,22 @@ class Conformer(nn.Module):
     Returns:
       The conformer output with shape [B, T, D].
     """
+    if use_running_average is None:
+      use_running_average = not train
 
     layer_order_set = ["mhsa", "conv", "mhsa_before_conv", "conv_before_mhsa"]
     if self.layer_order not in layer_order_set:
       raise ValueError(
           f"`self.layer_order` must be within `{layer_order_set}`.")
 
+    input_dims = inputs.shape[-1]
+
     # Set up the first ff layer.
     fflayer_start = TransformerFeedForward(
         name="fflayer_start",
         activation=self.ff_activation,
-        input_dims=self.model_dims,
-        hidden_dims=self.model_dims * self.ffn_dim_multiplier,
+        input_dims=input_dims,
+        hidden_dims=input_dims * self.ffn_dim_multiplier,
         residual_weight=self.ff_residual_weight,
         residual_dropout_prob=self.ffn_residual_dropout,
         relu_dropout_prob=self.ffn_relu_dropout)
@@ -504,9 +539,11 @@ class Conformer(nn.Module):
     lconv = LightConv1D(
         input_dims=self.model_dims,
         kernel_size=self.kernel_size,
-        dropout_prob=self.conv_residual_dropout)
+        dropout_prob=self.conv_residual_dropout,
+        downsample=self.downsample)
 
-    final_ln = nn.LayerNorm(name="final_ln")
+    if not self.skip_layer_norm:
+      final_ln = nn.LayerNorm(name="final_ln")
 
     if atten_mask is not None and "mhsa" not in self.layer_order:
       raise RuntimeError("Attention mask is provided but no attention layer.")
@@ -516,7 +553,8 @@ class Conformer(nn.Module):
     if self.layer_order == "mhsa":
       inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)
     elif self.layer_order == "conv":
-      inputs = lconv(inputs, train)
+      inputs = lconv(
+          inputs, train=train, use_running_average=use_running_average)
     elif self.layer_order == "mhsa_before_conv":
       inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)
       inputs = lconv(inputs, train)
@@ -530,7 +568,8 @@ class Conformer(nn.Module):
     else:
       inputs = fflayer_end(inputs, train)
 
-    inputs = final_ln(inputs)
+    if not self.skip_layer_norm:
+      inputs = final_ln(inputs)
     return inputs
 
 
@@ -591,6 +630,8 @@ class EarlyFeatureExtractor(nn.Module):
     Returns:
       A jnp.ndarray with shape [B, T, D].
     """
+    if inputs.ndim != 3:
+      raise ValueError("Expected the input to have 3 dimensions.")
     model_dims = self.conv_layer_tuples[0][0]
     if inputs.shape[-1] != model_dims:
       inputs = FeedForward(output_dims=model_dims)(inputs)

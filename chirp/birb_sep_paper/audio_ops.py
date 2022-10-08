@@ -15,8 +15,8 @@
 
 """Basic reuable audio transformations. Like melspec."""
 
+from chirp.birb_sep_paper import pcen_ops
 import numpy as np
-import pcen_ops
 from scipy import signal
 import tensorflow as tf
 

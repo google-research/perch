@@ -17,10 +17,15 @@
 
 import dataclasses
 import functools
-from typing import Callable, Dict, Generator, Mapping, Sequence, Tuple
+import os
+from typing import (Callable, Dict, Generator, Mapping, Sequence, Tuple, Type,
+                    TypeVar)
 
 from absl import logging
+from chirp import train
 from chirp.data import pipeline
+from chirp.models import metrics
+from chirp.taxonomy import namespace_db
 import jax
 import ml_collections
 import numpy as np
@@ -37,6 +42,8 @@ ClasswiseMaskFunction = Callable[[pd.DataFrame, str], pd.Series]
 ClasswiseEvalSetGenerator = Generator[Tuple[str, pd.DataFrame, pd.DataFrame],
                                       None, None]
 EvalSetGenerator = Generator[Tuple[str, ClasswiseEvalSetGenerator], None, None]
+
+_T = TypeVar('_T', bound='EvalSetSpecification')
 
 
 @dataclasses.dataclass
@@ -81,6 +88,122 @@ class EvalSetSpecification:
   class_representative_classwise_mask_fn: ClasswiseMaskFunction
   num_representatives_per_class: int
 
+  @classmethod
+  def mvp_specification(cls: Type[_T], location: str, corpus_type: str,
+                        num_representatives_per_class: int) -> _T:
+    """Instantiates an eval MVP EvalSetSpecification.
+
+    Args:
+      location: Geographical location in {'ssw', 'colombia', 'hawaii'}.
+      corpus_type: Corpus type in {'xc_fg', 'xc_bg', 'birdclef'}.
+      num_representatives_per_class: Number of class representatives to sample.
+
+    Returns:
+      The EvalSetSpecification.
+    """
+    downstream_class_names = (
+        namespace_db.load_db().class_lists['downstream_species'].classes)
+    # "At-risk" species are excluded from downstream data due to conservation
+    # status.
+    class_names = {
+        'ssw':
+            namespace_db.load_db().class_lists['artificially_rare_species']
+            .classes,
+        'colombia': [
+            c for c in
+            namespace_db.load_db().class_lists['birdclef2019_colombia'].classes
+            if c in downstream_class_names
+        ],
+        'hawaii': [
+            c for c in namespace_db.load_db().class_lists['hawaii'].classes
+            if c in downstream_class_names
+        ],
+    }[location]
+
+    # The name of the dataset to draw embeddings from to form the corpus.
+    corpus_dataset_name = (f'birdclef_{location}'
+                           if corpus_type == 'birdclef' else 'xc_downstream')
+    has_corpus_dataset_name = (
+        lambda df: df['dataset_name'] == corpus_dataset_name)
+    # Only include embeddings in the searchcorpus which have foreground
+    # ('label') and/or background labels ('bg_labels') for some class in
+    # `class_names`, which are encoded as space-separated species IDs/codes.
+    has_some_fg_annotation = (
+        # `'|'.join(class_names)` is a regex which matches *any* class in
+        # `class_names`.
+        lambda df: df['label'].str.contains('|'.join(class_names)))
+    has_some_bg_annotation = (
+        lambda df: df['bg_labels'].str.contains('|'.join(class_names)))
+    has_some_annotation = (
+        lambda df: has_some_fg_annotation(df) | has_some_bg_annotation(df))
+
+    class_representative_dataset_name = {
+        'ssw': 'learned_representations',
+        'colombia': 'xc_downstream',
+        'hawaii': 'xc_downstream'
+    }[location]
+
+    return cls(
+        class_names=class_names,
+        search_corpus_global_mask_fn=(
+            lambda df: has_corpus_dataset_name(df) & has_some_annotation(df)),
+        # Ensure that target species' background vocalizations are not present
+        # in the 'xc_fg' corpus and vice versa.
+        search_corpus_classwise_mask_fn={
+            'xc_fg': lambda df, n: ~df['bg_labels'].str.contains(n),
+            'xc_bg': lambda df, n: ~df['label'].str.contains(n),
+            'birdclef': lambda df, _: df['label'].map(lambda s: True),
+        }[corpus_type],
+        # Class representatives are drawn only from foreground-vocalizing
+        # species present in Xeno-Canto.
+        class_representative_global_mask_fn=(
+            lambda df: df['dataset_name'] == class_representative_dataset_name),
+        class_representative_classwise_mask_fn=(
+            lambda df, class_name: df['label'].str.contains(class_name)),
+        num_representatives_per_class=num_representatives_per_class,
+    )
+
+
+@dataclasses.dataclass
+class FlaxCheckpointCallback:
+  """A model callback implementation for Flax checkpoints.
+
+  Attributes:
+    init_config: Flax model configuration.
+    workdir: path to the model checkpoint.
+    model_callback: the fprop function used as part of the model callback,
+      created automatically post-initialization.
+    learned_representations: mapping from class name to its learned
+      representation, created automatically post-initialization.
+  """
+  init_config: ConfigDict
+  workdir: str
+  model_callback: Callable[[np.ndarray],
+                           np.ndarray] = dataclasses.field(init=False)
+  learned_representations: Mapping[str,
+                                   np.ndarray] = dataclasses.field(init=False)
+
+  def __post_init__(self):
+    model_bundle, train_state = train.initialize_model(
+        workdir=self.workdir, **self.init_config)
+    variables = {'params': train_state.params, **train_state.model_state}
+
+    @jax.jit
+    def fprop(inputs):
+      return model_bundle.model.apply(variables, inputs, train=False).embedding
+
+    self.model_callback = fprop
+
+    class_list = namespace_db.load_db().class_lists[
+        self.init_config['target_class_list']].classes
+    head_index = list(model_bundle.model.num_classes.keys()).index('label')
+    output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
+
+    self.learned_representations = dict(zip(class_list, output_weights))
+
+  def __call__(self, inputs: np.ndarray) -> np.ndarray:
+    return np.asarray(self.model_callback(inputs))
+
 
 def _load_eval_dataset(dataset_config: ConfigDict) -> tf.data.Dataset:
   """Loads an evaluation dataset from its corresponding configuration dict."""
@@ -109,20 +232,27 @@ def load_eval_datasets(config: ConfigDict) -> Dict[str, tf.data.Dataset]:
   }
 
 
-def get_embeddings(
-    dataset: tf.data.Dataset,
-    model_callback: Callable[[np.ndarray], np.ndarray]) -> tf.data.Dataset:
+def get_embeddings(dataset: tf.data.Dataset,
+                   model_callback: Callable[[np.ndarray], np.ndarray],
+                   batch_size: int) -> tf.data.Dataset:
   """Embeds the audio slice in each tf.Example across the input dataset.
 
   Args:
-    dataset: a TF Dataset composed of tf.Examples.
-    model_callback: a Callable that takes a NumPy array and produces an embedded
-      NumPy array.
+    dataset: A TF Dataset composed of tf.Examples.
+    model_callback: A Callable that takes a batched NumPy array and produces a
+      batched embedded NumPy array.
+    batch_size: The number of examples to embed in each batch.
 
   Returns:
     An updated TF Dataset with a new 'embedding' feature and deleted 'audio'
     feature.
   """
+  # To accommodate accelerators with static shape requirements (e.g., TPUs),
+  # we pad the dataset with elements such that its length is exactly divisible
+  # by `batch_size`.
+  num_elements = len(dataset)
+  padded_dataset = dataset.concatenate(
+      dataset.take(1).repeat(batch_size - (num_elements % batch_size)))
 
   def _map_func(example):
     example['embedding'] = tf.numpy_function(
@@ -132,8 +262,11 @@ def get_embeddings(
 
   # Use the 'audio' feature to produce a model embedding; delete the old 'audio'
   # feature.
-  return dataset.map(
-      _map_func, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
+  embedded_padded_dataset = padded_dataset.batch(
+      batch_size, drop_remainder=True).prefetch(1).map(_map_func)
+
+  # `take(num_elements)` ensures that we discard the padded examples.
+  return embedded_padded_dataset.unbatch().take(num_elements)
 
 
 def _get_class_representatives_df(embeddings_df: pd.DataFrame,
@@ -282,15 +415,31 @@ def _add_dataset_name(features: Dict[str, tf.Tensor],
   return features
 
 
-def _create_embeddings_dataframe(
-    embedded_datasets: Dict[str, tf.data.Dataset]) -> pd.DataFrame:
+def _numpy_iterator_with_progress_logging(embedded_dataset):
+  num_embeddings = len(embedded_dataset)
+  roughly_5_per_cent = int(0.05 * num_embeddings)
+
+  for i, example in enumerate(embedded_dataset.as_numpy_iterator()):
+    yield example
+    logging.log_every_n(logging.INFO, 'Computing embeddings (%.2f%% done)...',
+                        roughly_5_per_cent, (i + 1) / num_embeddings)
+
+
+def _create_embeddings_dataframe(embedded_datasets: Dict[str, tf.data.Dataset],
+                                 config: ConfigDict) -> pd.DataFrame:
   """Builds a dataframe out of all embedded datasets.
+
+  The dataframe also contains upstream class representations (rows with the
+  'learned_representations' value for their 'dataset_name' column).
 
   Args:
     embedded_datasets: A mapping from dataset name to embedded dataset.
+    config: The evaluation configuration dict.
 
   Returns:
-    The embeddings dataframe.
+    The embeddings dataframe, with additional rows for upstream class
+    representations (accessible through `embeddings_df[
+    embeddings_df['dataset_name'] == 'learned_representations']`).
   """
   # Concatenate all embedded datasets into one embeddings dataset.
   it = iter(embedded_datasets.values())
@@ -298,7 +447,33 @@ def _create_embeddings_dataframe(
   for dataset in it:
     embedded_dataset = embedded_dataset.concatenate(dataset)
 
-  embeddings_df = pd.DataFrame(embedded_dataset.as_numpy_iterator())
+  learned_representations = config.model_callback.learned_representations
+  num_representations = len(learned_representations)
+  tensors = {
+      'label':
+          tf.constant(list(learned_representations.keys())),
+      'embedding':
+          tf.constant(list(learned_representations.values())),
+      'dataset_name':
+          tf.constant(['learned_representations'] * num_representations),
+  }
+  for feature_name, spec in embedded_dataset.element_spec.items():
+    if feature_name not in tensors:
+      tensors[feature_name] = tf.constant(
+          ['' if spec.dtype == tf.string else 0] * num_representations,
+          dtype=spec.dtype)
+  upstream_class_representations_dataset = tf.data.Dataset.from_tensor_slices(
+      tensors)
+
+  embedded_dataset = embedded_dataset.concatenate(
+      upstream_class_representations_dataset)
+
+  if config.debug.embedded_dataset_cache_path:
+    embedded_dataset = embedded_dataset.cache(
+        config.debug.embedded_dataset_cache_path)
+
+  embeddings_df = pd.DataFrame(
+      _numpy_iterator_with_progress_logging(embedded_dataset))
 
   # Encode 'label', 'bg_labels', 'dataset_name' column data as strings.
   for column_name in ('label', 'bg_labels', 'dataset_name'):
@@ -336,7 +511,7 @@ def prepare_eval_sets(
   }
 
   # Build a DataFrame out of all embedded datasets.
-  embeddings_df = _create_embeddings_dataframe(embedded_datasets)
+  embeddings_df = _create_embeddings_dataframe(embedded_datasets, config)
 
   logging.info('Preparing %d unique eval sets.',
                len(config.eval_set_specifications))
@@ -430,6 +605,40 @@ def query_search(
   search_species_scores['species_match'] = fg_species_match | bg_species_match
 
   return search_species_scores
+
+
+def compute_metrics(eval_set_name: str, eval_set_results: Mapping[str,
+                                                                  pd.DataFrame],
+                    write_results_dir: str):
+  """Operates over a DataFrame of eval results and produces average precision.
+
+  Args:
+    eval_set_name: The name of the evaluation set.
+    eval_set_results: A mapping from species ID to a DataFrame of the search
+      results for that species (with columns 'score' and 'species_match').
+    write_results_dir: The path to write the computed metrics to file.
+
+  Returns:
+    Produces the specified metrics computed for each species in the given eval
+    set and writes these to a csv for each eval set.
+  """
+
+  species_to_metric = dict()
+  for eval_species, eval_results in eval_set_results.items():
+    eval_scores = eval_results['score'].values
+    species_label_match = eval_results['species_match'].values
+    average_precision = metrics.average_precision(eval_scores,
+                                                  species_label_match)
+    species_to_metric[eval_species] = average_precision
+
+  write_results_path = os.path.join(write_results_dir,
+                                    eval_set_name) + '_average_precision'
+  species_to_metric = {
+      'eval_species': species_to_metric.keys(),
+      'average_precision': species_to_metric.values()
+  }
+  results_df = pd.DataFrame.from_dict(species_to_metric)
+  results_df.to_csv(write_results_path)
 
 
 

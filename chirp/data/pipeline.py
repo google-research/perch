@@ -18,6 +18,7 @@ import dataclasses
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 # Import bird_taxonomy and soundscapes to register the datasets with TFDS.
+from absl import logging
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
 import chirp.data.soundscapes  # pylint: disable=unused-import
 from chirp.taxonomy import namespace
@@ -97,6 +98,48 @@ class Pipeline:
 
 
 @dataclasses.dataclass
+class Pad(FeaturesPreprocessOp):
+  """Pads the last axis to a minimum length.
+
+  Attributes:
+    pad_size: The minimum length to pad to.
+    random: If true, pads a random amount left and right. If false, will pad the
+      end only.
+    names: The name of the features to pad.
+  """
+  pad_size: float
+  random: bool = True
+  names: Tuple[str, ...] = ('audio',)
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    sample_rate = dataset_info.features[self.names[0]].sample_rate
+    window_size = tf.cast(self.pad_size * sample_rate, tf.int32)
+
+    features = features.copy()
+    for name in self.names:
+      if name not in features:
+        continue
+      padding = tf.reduce_max([window_size - tf.shape(features[name])[-1], 0])
+      if self.random:
+        left_pad = tf.random.uniform(
+            shape=(), minval=0, maxval=padding + 1, dtype=tf.int32)
+        right_pad = padding - left_pad
+      else:
+        left_pad = 0
+        right_pad = padding
+      paddings = ((0, 0),) * (tf.rank(features[name]) - 1) + (
+          (left_pad, right_pad),)
+
+      mask = tf.ones_like(features[name])
+      padded_mask = tf.pad(mask, paddings)
+      features[f'{name}_mask'] = padded_mask
+
+      features[name] = tf.pad(features[name], paddings)
+    return features
+
+
+@dataclasses.dataclass
 class Slice(FeaturesPreprocessOp):
   """Slices a window of the input.
 
@@ -109,7 +152,7 @@ class Slice(FeaturesPreprocessOp):
   """
   window_size: float
   start: float
-  names: Tuple[str, ...] = ('audio', 'source_audio')
+  names: Tuple[str, ...] = ('audio', 'source_audio', 'audio_mask')
 
   def __call__(self, features: Features,
                dataset_info: tfds.core.DatasetInfo) -> Features:
@@ -136,7 +179,7 @@ class RandomSlice(FeaturesPreprocessOp):
     names: The name of the features to slice. Each will be sliced the same way.
   """
   window_size: float
-  names: Tuple[str, ...] = ('audio', 'source_audio')
+  names: Tuple[str, ...] = ('audio', 'source_audio', 'audio_mask')
 
   def __call__(self, features: Features,
                dataset_info: tfds.core.DatasetInfo) -> Features:
@@ -228,8 +271,8 @@ class MixAudio(DatasetPreprocessOp):
     name: The name of the featuere to be mixed.
     source_name: The unmixed channels will be stored in this feature.
     pad_names: These labels must be padded to zeros.
-    label_names: The names of the labels, which will be combined using an OR
-      operation in the case of mixing.
+    label_names: The names of the labels and masks, which will be combined using
+      an OR operation in the case of mixing.
     axis: The axis that should contain the mixed samples (for the source audio
       feature as well as the padded features). This should be set to the number
       of batch axes (e.g., 0 if this is applied before batching, 1 if applied
@@ -241,9 +284,10 @@ class MixAudio(DatasetPreprocessOp):
   source_name: str = 'source_audio'
   pad_names: Tuple[str, ...] = ('segment_start', 'segment_end', 'recording_id',
                                 'segment_id')
-  label_names: Tuple[str, ...] = ('label', 'genus', 'family', 'order',
-                                  'bg_labels', 'label_mask', 'genus_mask',
-                                  'family_mask', 'order_mask', 'bg_labels_mask')
+  label_names: Tuple[str,
+                     ...] = ('label', 'genus', 'family', 'order', 'bg_labels',
+                             'label_mask', 'genus_mask', 'family_mask',
+                             'order_mask', 'bg_labels_mask', 'audio_mask')
   axis: int = 0
 
   def __call__(self, dataset: tf.data.Dataset,
@@ -599,10 +643,15 @@ class Batch(DatasetPreprocessOp):
   def __call__(self, dataset: tf.data.Dataset,
                dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
     if self.split_across_devices:
-      if self.batch_size % jax.local_device_count():
-        raise ValueError('batch size must be divisible by number of devices')
+      if self.batch_size % jax.device_count():
+        raise ValueError(f'batch size ({self.batch_size}) must be divisible by '
+                         f'number of devices ({jax.device_count()}).')
+      logging.info(
+          'Splitting batch across %d devices, with '
+          'local device count %d.', jax.device_count(),
+          jax.local_device_count())
       dataset = dataset.batch(
-          self.batch_size // jax.local_device_count(), drop_remainder=True)
+          self.batch_size // jax.device_count(), drop_remainder=True)
       return dataset.batch(jax.local_device_count(), drop_remainder=True)
     else:
       return dataset.batch(self.batch_size, drop_remainder=True)

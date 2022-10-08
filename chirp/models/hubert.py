@@ -26,10 +26,10 @@ from jax import numpy as jnp
 @flax.struct.dataclass
 class ModelOutputs:
   embedding: jnp.ndarray
-  logits: jnp.ndarray
-  targets: jnp.ndarray
+  logits: List[jnp.ndarray]
+  targets: List[jnp.ndarray]
   mask_idc: jnp.ndarray
-  quantization_loss: jnp.ndarray
+  quantization_loss: List[jnp.ndarray]
   label: List[jnp.ndarray]
   genus: Optional[List[jnp.ndarray]] = None
   family: Optional[List[jnp.ndarray]] = None
@@ -113,6 +113,14 @@ def compute_mask_indices(key: jnp.ndarray,
   return mask
 
 
+@flax.struct.dataclass
+class QuantizerBundle:
+  quantization_loss: jnp.ndarray
+  targets: jnp.ndarray
+  codebook: jnp.ndarray
+  projected_feature_codes: jnp.ndarray
+
+
 class HuBERTModel(nn.Module):
   """HuBERT model.
 
@@ -126,8 +134,10 @@ class HuBERTModel(nn.Module):
     late_feature_extractor: A network (e.g., a stack of Conformer blocks) that
       takes "early" features and returns a sequence of Jax ndarrays that contain
       increasingly higher-level features.
-    quantizer: A network that takes spectrograms and returns a codebook, the
-      assignments of inputs to codes, and a loss for training it.
+    quantizer: A list of quantizer networks, each of which returns a codebook,
+      assignments of inputs to codes, and a loss for training it. This list may
+      contain only a single element, or several in the case of quantizing in
+      different feature spaces.
     frontend: The frontend to use to generate features.
     mask_config: The config for generating masks.
     classifier_config: The config for the classifier.
@@ -137,6 +147,12 @@ class HuBERTModel(nn.Module):
     readout_points: A List of indices of late feature extractor blocks after
       which to add a readout layer (for classification). The allowed values are
       in the range [0, len(x_list)) where x_list is the list of Jax ndarrays
+      returned by the late feature extractor.
+    quantizer_points: A list of integers indicating where to quantize. The value
+      of -1 stands for quantizing right after the early feature extractor, while
+      any non-negative integer represents quantizing after the late feature
+      extractor block with that integer index. The allowed values are -1 and
+      ints in the range [0, len(x_list)) where x_list is the list of ndarrays
       returned by the late feature extractor.
     final_dim: The dimensionality after the final projection layer.
     logit_temp: The temperature to use for the logits of which cluster each
@@ -149,12 +165,13 @@ class HuBERTModel(nn.Module):
   num_classes: Dict[str, int]
   early_feature_extractor: Union[nn.Module, None]
   late_feature_extractor: nn.Module
-  quantizer: nn.Module
+  quantizer: List[nn.Module]
   frontend: nn.Module
   mask_config: Dict[str, Any]
   classifier_config: Dict[str, Any]
   taxonomy_loss_weight: float
   readout_points: List[int]
+  quantizer_points: List[int]
   final_dim: int = 512
   logit_temp: float = 0.1
   alpha: float = 1.0
@@ -232,6 +249,109 @@ class HuBERTModel(nn.Module):
               nn.Dense(n, name="readout_{}_{}".format(k, i))(mean))
     return outputs
 
+  def add_projected_quantizer(self, x, quantizers, train):
+    """Adds a quantizer on top of features x."""
+    # Get the next quantizer module.
+    quant_index = len(quantizers)
+    quantizer = self.quantizer[quant_index]
+    nc = quantizer.get_num_centroids()
+    ns = quantizer.get_num_sections()
+
+    # Get the codes, quantization targets and quantizer loss.
+    quant_outputs = quantizer(x, train)
+    # codes: [ns, nc, csz / ns], where ns = 1 if not using PQ.
+    codes = quant_outputs.codebook
+    # quant_outputs.nn_idx: [ns, bsz, sz].
+    # targets: [ns, bsz, sz, nc].
+    nn_idx = quant_outputs.nn_idx
+    targets = jax.nn.one_hot(nn_idx, nc)
+
+    # Project the centroids.
+    # A list of ns many elements that have shape [nc, final_dim].
+    codes_pj = [
+        nn.Dense(
+            self.final_dim, name="codes_proj_{}_{}".format(quant_index,
+                                                           i))(codes[i])
+        for i in range(ns)
+    ]
+    # [ns, nc, final_dim].
+    codes_pj = jnp.stack(codes_pj, axis=0)
+    quantizers.append(
+        QuantizerBundle(quant_outputs.quantization_loss, targets, codes,
+                        codes_pj))
+    return quantizers
+
+  def apply_final_projection(self, x, quantizers):
+    """Apply projection layer(s) on the features.
+
+    A separate projection layer is used for each "section" (if using product
+    quantization) of each quantizer.
+
+    Args:
+      x: Embeddings from late feature extractor of shape [bsz, sz, csz].
+      quantizers: A list of QuantizerBundle's, one per quantizer.
+
+    Returns:
+      projected_x: A list whose length is the same as that of quantizers. Each
+        element is the projected features of shape [ns, bsz, sz, final_dim].
+    """
+    projected_x = []
+    # Create a separate (set of) projection(s) for each quantizer.
+    for j in range(len(quantizers)):
+      # A list of ns many elements that have shape [bsz, sz, csz/ns].
+      x_sections = jnp.split(x, self.quantizer[j].get_num_sections(), axis=-1)
+      # A list of ns many elements that have shape [bsz, sz, final_dim].
+      x_proj = [
+          nn.Dense(
+              self.final_dim,
+              name="final_proj_section_{}_quant_{}".format(i, j))(x_sec)
+          for (i, x_sec) in enumerate(x_sections)
+      ]
+      # [ns, bsz, sz, final_dim].
+      projected_x.append(jnp.stack(x_proj, axis=0))
+    return projected_x
+
+  def get_logits(self, x_list, quantizers):
+    """Compute the logits i.e.
+
+    similarity between projected features and codes.
+
+    Args:
+      x_list: A list whose length is the number of quantizers. Each element of
+        that list is an array of shape [ns, bsz, sz, final_dim], storing the
+        features that were projected with a layer specific to that quantizer.
+      quantizers: A list of the same length as x_list, storing the
+        QuantizerBundle for each quantizers.
+
+    Returns:
+      The logits, as a list of [ns, bsz, sz, nc]-shaped jnp.arrays. The length
+      of this list is the number of quantizers.
+    """
+    # Predict the code of each timestep using cosine similarity between the
+    # projected embeddings and the projected codes.
+    all_logits = []
+    for x, q_bundle, q_module in zip(x_list, quantizers, self.quantizer):
+      # First, l2-normalize the (projected) features and codes.
+      x /= (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-5)
+      codes_pj = q_bundle.projected_feature_codes
+      codes_pj /= (jnp.linalg.norm(codes_pj, axis=-1, keepdims=True) + 1e-5)
+
+      # Then, compute the dot product between them.
+      ns = q_module.get_num_sections()
+      codes_pj = jnp.transpose(codes_pj, (0, 2, 1))  # [ns, final_dim, nc]
+      logits = jnp.dot(x, codes_pj)  # [ns, bsz, sz, ns, nc]
+      # For each "section" of features, grab only the cluster assignments
+      # corresponding to that section.
+      logits = jnp.transpose(logits, (0, 3, 1, 2, 4))  # [ns, ns, bsz, sz, nc]
+      # Out of the first 2 dims want to keep the inds [(0,0), (1,1), (2,2)...]
+      inds = jnp.stack((jnp.arange(ns), jnp.arange(ns)), axis=1)
+      logits = logits[tuple(jnp.moveaxis(inds, -1, 0))]  # [ns, bsz, sz, nc]
+
+      # TODO(etriantafillou): experiment with learnable temperature.
+      logits /= self.logit_temp
+      all_logits.append(logits)
+    return all_logits
+
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool,
                mask_key: Union[jnp.ndarray, None]) -> ModelOutputs:
@@ -263,35 +383,27 @@ class HuBERTModel(nn.Module):
     if train and mask_key is None:
       raise ValueError("During training mode, `mask_key` should not be None.")
 
+    if len(self.quantizer) != len(self.quantizer_points):
+      raise ValueError("The lengths of `quantizer` and `quantizer_points` "
+                       "should match, but are {} and {}.".format(
+                           len(self.quantizer), len(self.quantizer_points)))
+
     model_outputs = {}
+    quantizers = []
 
     # Pass x through the frontend and the "early" feature extractor.
-    x = self.frontend(inputs)
+    if self.frontend is None:
+      x = jnp.expand_dims(inputs, -1)  # (bsz, sz, 1)
+    else:
+      x = self.frontend(inputs)  # (bsz, sz, csz)
     if self.early_feature_extractor is not None:
       x = self.early_feature_extractor(x, train=train)
 
     bsz, sz, csz = x.shape
-    nc = self.quantizer.get_num_centroids()
-    ns = self.quantizer.get_num_sections()
 
-    # Get the codes, quantization targets and quantizer loss.
-    # codes: [ns, nc, csz / ns], where ns = 1 if not using PQ.
-    quant_outputs = self.quantizer(x)
-    codes = quant_outputs.codebook
-    # quant_outputs.nn_idx: [ns, bsz, sz].
-    # targets: [ns, bsz, sz, nc].
-    targets = jax.nn.one_hot(quant_outputs.nn_idx, nc)
-    model_outputs["targets"] = targets
-    model_outputs["quantization_loss"] = quant_outputs.quantization_loss
-
-    # Project the centroids.
-    # A list of ns many elements that have shape [nc, final_dim].
-    codes_pj = [
-        nn.Dense(self.final_dim, name="codes_proj_{}".format(i))(codes[i])
-        for i in range(ns)
-    ]
-    # [ns, nc, final_dim].
-    codes_pj = jnp.stack(codes_pj, axis=0)
+    if -1 in self.quantizer_points:
+      # Add the first quantizer, directly on top of the "early features".
+      quantizers = self.add_projected_quantizer(x, quantizers, train)
 
     if self.stop_gradient_earlyfs:
       # If no early feature extractor is used, this should have no effect.
@@ -331,39 +443,51 @@ class HuBERTModel(nn.Module):
     _, _, csz = x.shape
     model_outputs["embedding"] = x
 
+    # Add additional quantizers.
+    for block_ind in list(self.quantizer_points):
+      if block_ind == -1:
+        # -1 stands for quantizing right after the early feature extractor
+        # and a quantizer has already been added there, nothing to do.
+        continue
+      elif block_ind < 0:
+        raise ValueError("An element of `quantizer_points` can only be "
+                         "negative if it's -1, but found {}.".format(block_ind))
+      elif block_ind >= len(x_list):
+        raise ValueError("Each element of `quantizer_points` should be in the "
+                         "range [0, len(x_list)) where x_list is the list that "
+                         "the late feature extractor returns. Found element "
+                         "{} and len(x_list) is {}".format(
+                             block_ind, len(x_list)))
+      quantizers = self.add_projected_quantizer(x_list[block_ind], quantizers,
+                                                train)
+
     # Linear readouts for supervised classification on top of HuBERT embeddings.
     classification_outputs = self.classify(
         x_list, mask_idc=mask_idc, **self.classifier_config)
     model_outputs.update(classification_outputs)
 
-    # Final projection layer that projects embeddings to `final_dim`. These
-    # projected inputs will be used for the nearest-neighbour search with codes.
-    # A list of ns many elements that have shape [bsz, sz, csz/ns].
-    x_sections = jnp.split(x, ns, axis=-1)
-    # A list of ns many elements that have shape [bsz, sz, final_dim].
-    x = [
-        nn.Dense(self.final_dim, name="final_proj_{}".format(i))(x_sec)
-        for (i, x_sec) in enumerate(x_sections)
-    ]
-    # [ns, bsz, sz, final_dim].
-    x = jnp.stack(x, axis=0)
+    # Final projection layer that projects embeddings to `final_dim`.
+    # A list with as many elements as the number of quantizers used, where each
+    # element has shape [ns, bsz, sz, final_dim].
+    x_proj_list = self.apply_final_projection(x, quantizers)
 
-    # Predict the code of each frame using cosine similarity between the
-    # projected embeddings and the projected codes.
-    codes_pj /= (jnp.linalg.norm(codes_pj, axis=-1, keepdims=True) + 1e-5)
-    x /= (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-5)
-
-    codes_pj = jnp.transpose(codes_pj, (0, 2, 1))  # [ns, final_dim, nc].
-    logits = jnp.dot(x, codes_pj)  # [ns, bsz, sz, ns, nc]
-    # For each "section" of features, grab only the cluster assignments
-    # corresponding to that section.
-    logits = jnp.transpose(logits, (0, 3, 1, 2, 4))  # [ns, ns, bsz, sz, nc]
-    # Out of the first 2 dims, want to keep the inds [(0,0), (1,1), (2,2)...].
-    inds = jnp.stack((jnp.arange(ns), jnp.arange(ns)), axis=1)
-    logits = logits[tuple(jnp.moveaxis(inds, -1, 0))]  # [ns, bsz, sz, nc]
-
-    # TODO(etriantafillou): experiment with learnable temperature.
-    logits /= self.logit_temp
+    # Compute the logits via cosine similarity between the projected embeddings
+    # and the projected codes.
+    # A list of [ns, bsz, sz, nc]-shaped jnp.arrays with one item per quantizer.
+    logits = self.get_logits(x_proj_list, quantizers)
     model_outputs["logits"] = logits
+
+    # The targets for each quantizer.
+    model_outputs["targets"] = [
+        quantizers[i].targets for i in range(len(quantizers))
+    ]
+
+    # The quantization loss: the mean over the individual quantizer losses.
+    # [bsz, sz, nc].
+    quant_losses = [
+        quantizers[i].quantization_loss for i in range(len(quantizers))
+    ]
+    model_outputs["quantization_loss"] = jnp.mean(
+        jnp.stack(quant_losses, axis=0), axis=0)
 
     return ModelOutputs(**model_outputs)

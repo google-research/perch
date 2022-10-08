@@ -41,13 +41,22 @@ def main(argv: Sequence[str]) -> None:
   for dataset_name, dataset in eval_datasets.items():
     logging.info('%s:\n%s', dataset_name, dataset)
     embedded_datasets[dataset_name] = eval_lib.get_embeddings(
-        dataset, config.model_callback)
+        dataset, config.model_callback, config.batch_size)
 
+  eval_set_search_results = dict()
   for eval_set_name, eval_set_generator in eval_lib.prepare_eval_sets(
       config, embedded_datasets):
     logging.info(eval_set_name)
-    for class_name, _, _ in eval_set_generator:
-      logging.info('    %s', class_name)
+
+    search_results = eval_lib.search(eval_set_generator,
+                                     config.create_species_query,
+                                     config.search_score)
+
+    eval_set_search_results[eval_set_name] = search_results
+
+  for eval_set_name, eval_set_results in eval_set_search_results.items():
+    eval_lib.compute_metrics(eval_set_name, eval_set_results,
+                             config.write_results_dir)
 
 
 if __name__ == '__main__':

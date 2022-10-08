@@ -117,12 +117,14 @@ class Stem(nn.Module):
   features: int
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
+  def __call__(self, inputs: jnp.ndarray,
+               use_running_average: bool) -> jnp.ndarray:
     """Applies the first step of EfficientNet to the inputs.
 
     Args:
       inputs: Inputs should be of shape `(batch size, height, width, channels)`.
-      train: Whether this is training (affects batch norm and dropout).
+      use_running_average: Used to decide whether to use running statistics in
+        BatchNorm (test mode), or the current batch's statistics (train mode).
 
     Returns:
       A JAX array of `(batch size, height, width, features)`.
@@ -134,7 +136,7 @@ class Stem(nn.Module):
         use_bias=False,
         padding="VALID")(
             inputs)
-    x = nn.BatchNorm(use_running_average=not train)(x)
+    x = nn.BatchNorm(use_running_average=use_running_average)(x)
     x = nn.swish(x)
     return x
 
@@ -151,12 +153,14 @@ class Head(nn.Module):
   features: int
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
+  def __call__(self, inputs: jnp.ndarray,
+               use_running_average: bool) -> jnp.ndarray:
     """Applies the last step of EfficientNet to the inputs.
 
     Args:
       inputs: Inputs should be of shape `(batch size, height, width, channels)`.
-      train: Whether this is training (affects batch norm and dropout).
+      use_running_average: Used to decide whether to use running statistics in
+        BatchNorm (test mode), or the current batch's statistics (train mode).
 
     Returns:
       A JAX array of `(batch size, height, width, features)`.
@@ -164,7 +168,7 @@ class Head(nn.Module):
     x = nn.Conv(
         features=self.features, kernel_size=(1, 1), strides=1, use_bias=False)(
             inputs)
-    x = nn.BatchNorm(use_running_average=not train)(x)
+    x = nn.BatchNorm(use_running_average=use_running_average)(x)
     x = nn.swish(x)
     return x
 
@@ -188,7 +192,10 @@ class EfficientNet(nn.Module):
   stem: Optional[nn.Module] = None
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
+  def __call__(self,
+               inputs: jnp.ndarray,
+               train: bool,
+               use_running_average: Optional[bool] = None) -> jnp.ndarray:
     """Applies EfficientNet to the inputs.
 
     Note that this model does not include the final pooling and fully connected
@@ -196,12 +203,19 @@ class EfficientNet(nn.Module):
 
     Args:
       inputs: Inputs should be of shape `(batch size, height, width, channels)`.
-      train: Whether this is training (affects batch norm and dropout).
+      train: Whether this is training. This affects Dropout behavior, and also
+        affects BatchNorm behavior if 'use_running_average' is set to None.
+      use_running_average: Optional, used to decide whether to use running
+        statistics in BatchNorm (test mode), or the current batch's statistics
+        (train mode). If not specified (or specified to None), default to 'not
+        train'.
 
     Returns:
       A JAX array of `(batch size, height, width, features)` if `include_top` is
       false. If `include_top` is true the output is `(batch_size, features)`.
     """
+    if use_running_average is None:
+      use_running_average = not train
     scaling = SCALINGS[self.model]
 
     if self.stem is None:
@@ -210,7 +224,7 @@ class EfficientNet(nn.Module):
     else:
       stem = self.stem
 
-    x = stem(inputs, train=train)
+    x = stem(inputs, use_running_average=use_running_average)
 
     for stage in STAGES:
       num_blocks = round_num_blocks(stage.num_blocks, scaling.depth_coefficient)
@@ -226,7 +240,7 @@ class EfficientNet(nn.Module):
             activation=nn.swish,
             batch_norm=True,
             reduction_ratio=REDUCTION_RATIO)
-        y = mbconv(x, train=train)
+        y = mbconv(x, use_running_average=use_running_average)
 
         # Stochastic depth
         if block > 0 and self.survival_probability:
@@ -245,7 +259,7 @@ class EfficientNet(nn.Module):
     else:
       head = self.head
 
-    x = head(x, train=train)
+    x = head(x, use_running_average=use_running_average)
 
     if self.include_top:
       x = jnp.mean(x, axis=(1, 2))

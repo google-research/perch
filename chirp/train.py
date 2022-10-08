@@ -203,6 +203,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
   def forward(params, key, batch, model_state):
     dropout_key, low_pass_key = random.split(key)
     variables = {"params": params, **model_state}
+    kwargs = {"mask": batch["audio_mask"]} if "audio_mask" in batch else {}
     model_outputs, model_state = model_bundle.model.apply(
         variables,
         batch["audio"],
@@ -211,7 +212,8 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
         rngs={
             "dropout": dropout_key,
             "low_pass": low_pass_key
-        })
+        },
+        **kwargs)
     taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
     train_metrics = train_metrics_collection.gather_from_model_output(
         outputs=model_outputs,
@@ -282,8 +284,9 @@ def evaluate(model_bundle: ModelBundle,
   @functools.partial(jax.pmap, axis_name="batch")
   def update_metrics(valid_metrics, batch, train_state):
     variables = {"params": train_state.params, **train_state.model_state}
+    kwargs = {"mask": batch["audio_mask"]} if "audio_mask" in batch else {}
     model_outputs = model_bundle.model.apply(
-        variables, batch["audio"], train=False)
+        variables, batch["audio"], train=False, **kwargs)
     return model_outputs, valid_metrics.merge(
         valid_metrics.gather_from_model_output(
             outputs=model_outputs,
@@ -292,8 +295,11 @@ def evaluate(model_bundle: ModelBundle,
             **batch))
 
   step = int(flax_utils.unreplicate(train_state.step))
-  cmap_metrics = cmap.make_cmap_metrics_dict(
-      ("label", "genus", "family", "order"))
+  if model_bundle.model.taxonomy_loss_weight > 0:
+    cmap_metrics = cmap.make_cmap_metrics_dict(
+        ("label", "genus", "family", "order"))
+  else:
+    cmap_metrics = cmap.make_cmap_metrics_dict(("label",))
   with reporter.timed("eval"):
     valid_metrics = flax_utils.replicate(valid_metrics.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):

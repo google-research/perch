@@ -55,6 +55,24 @@ class PCENScalingConfig:
 ScalingConfig = Union[LogScalingConfig, PCENScalingConfig]
 
 
+def frames_mask(mask: jnp.ndarray, stride: int) -> jnp.ndarray:
+  """Converts a mask of samples to a mask of frames.
+
+  Args:
+    mask: Array of size (..., time).
+    stride: The stride used by the frontend.
+
+  Returns:
+    An array of size (..., frames) where frames = ceil(time / stride).
+  """
+  length = mask.shape[-1]
+  num_frames = -(-length // stride)
+  pad_width = ((0, 0),) * (mask.ndim - 1) + ((0, num_frames * stride - length),)
+  mask = jnp.pad(mask, pad_width)
+  frame_masks = jnp.reshape(mask, mask.shape[:-1] + (num_frames, stride))
+  return jnp.any(frame_masks, axis=-1)
+
+
 class Frontend(nn.Module):
   """A audio frontend.
 
