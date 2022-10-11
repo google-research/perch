@@ -41,15 +41,15 @@ class TaxonomyModel(nn.Module):
 
   Attributes:
     num_classes: Number of classes for each output head.
-    frontend: The frontend to use to generate features.
     encoder: A network (e.g., a 2D convolutional network) that takes
       spectrograms and returns feature vectors.
     taxonomy_loss_weight: Weight for taxonomic label losses.
+    frontend: The frontend to use to generate features.
   """
   num_classes: Dict[str, int]
-  frontend: nn.Module
   encoder: nn.Module
   taxonomy_loss_weight: float
+  frontend: Optional[nn.Module] = None
 
   @nn.compact
   def __call__(self,
@@ -74,20 +74,22 @@ class TaxonomyModel(nn.Module):
     """
     if use_running_average is None:
       use_running_average = not train
-    x = self.frontend(inputs)
+    kwargs = {} if mask is None else {"mask": mask}
+    if self.frontend is not None:
+      x = self.frontend(inputs)
+      if mask is not None:
+        # Go from time steps to frames
+        mask = frontend.frames_mask(mask, self.frontend.stride)
+        # Add axes for broadcasting over frequencies and channels
+        kwargs = {"mask": mask[..., jnp.newaxis, jnp.newaxis]}
+    else:
+      x = inputs
     if isinstance(self.encoder, conformer.Conformer):
       x = self.encoder(x, train=train, use_running_average=use_running_average)
       # Silly baseline: average over the time dimension.
       x = jnp.mean(x, axis=1)
     else:
       # Treat the spectrogram as a gray-scale image
-      if mask is not None:
-        # Go from time steps to frames
-        mask = frontend.frames_mask(mask, self.frontend.stride)
-        # Add axes for broadcasting over frequencies and channels
-        kwargs = {"mask": mask[..., jnp.newaxis, jnp.newaxis]}
-      else:
-        kwargs = {}
       x = self.encoder(
           x[..., jnp.newaxis],
           train=train,

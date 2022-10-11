@@ -45,7 +45,7 @@ def prepare_audio_model(
     optimizer_config: config_dict.ConfigDict,
     total_steps: int,
     rng_seed: int,
-    input_size: int,
+    input_shape: Tuple[int, ...],
     pretrained_ckpt_dir: str,
     target_class_list: str,
 ) -> Tuple[ModelBundle, scope.VariableDict, scope.FrozenVariableDict,
@@ -60,8 +60,8 @@ def prepare_audio_model(
     total_steps: The total number of steps used for adaptation. Used to
       adequately define learning rate scheduling.
     rng_seed: The random seed used to initialize the model.
-    input_size: The size of the input (for audio, equals to sample_rate_hz *
-      audio_length_s).
+    input_shape: The shape of the input (for audio, equals to [sample_rate_hz *
+      audio_length_s]).
     pretrained_ckpt_dir: The directory where to find the pretrained checkpoint.
     target_class_list: The classlist in which labels are expressed. Used to
       define the size of the classifier's head.
@@ -78,7 +78,7 @@ def prepare_audio_model(
   model_bundle, train_state = train.initialize_model(
       model_config=model_config,
       rng_seed=rng_seed,
-      input_size=input_size,
+      input_shape=input_shape,
       learning_rate=0.,
       workdir=pretrained_ckpt_dir,
       target_class_list=target_class_list)

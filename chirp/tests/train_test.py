@@ -100,6 +100,8 @@ class TrainTest(absltest.TestCase):
     config.train_config.log_every_steps = 1
     config.train_config.checkpoint_every_steps = 1
     config.eval_config.eval_steps_per_checkpoint = 1
+    config.init_config.input_shape = (config.sample_rate_hz,)
+    config.eval_config.input_shape = (config.sample_rate_hz,)
     if use_const_encoder:
       config.init_config.model_config.encoder = ConstantEncoder(output_dim=32)
     else:
@@ -144,7 +146,7 @@ class TrainTest(absltest.TestCase):
         workdir=self.train_dir, **config.init_config)
 
     train.export_tf(model_bundle, train_state, self.train_dir,
-                    config.init_config.input_size)
+                    config.init_config.input_shape)
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))
     self.assertTrue(
@@ -158,7 +160,7 @@ class TrainTest(absltest.TestCase):
     # See: https://github.com/google/jax/issues/12504
     # The convolutional EMA (using conv_width != 0) works, though.
     reloaded = tf.saved_model.load(os.path.join(self.train_dir, "savedmodel"))
-    audio = jnp.zeros([1, 5 * config.sample_rate_hz])
+    audio = jnp.zeros([1, config.sample_rate_hz])
     reloaded.infer_tf(audio)
 
   def test_init_baseline(self):

@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 # Import bird_taxonomy and soundscapes to register the datasets with TFDS.
 from absl import logging
+from chirp import audio_utils
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
 import chirp.data.soundscapes  # pylint: disable=unused-import
 from chirp.taxonomy import namespace
@@ -60,9 +61,11 @@ class Pipeline:
   Attributes:
     ops: The preprocessing operations to apply.
     num_parallel_calls: Passed to `dataset.map`.
+    deterministic: Whether the ordering of the samples should be deterministic.
   """
   ops: Sequence[Union[FeaturesPreprocessOp, DatasetPreprocessOp]]
   num_parallel_calls: int = tf.data.AUTOTUNE
+  deterministic: bool = False
 
   def __call__(self, dataset: tf.data.Dataset,
                dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
@@ -76,13 +79,15 @@ class Pipeline:
         if feature_preprocess_ops:
           dataset = dataset.map(
               map_func=self.chain(feature_preprocess_ops, dataset_info),
-              num_parallel_calls=self.num_parallel_calls)
+              num_parallel_calls=self.num_parallel_calls,
+              deterministic=self.deterministic)
           feature_preprocess_ops.clear()
         dataset = op(dataset, dataset_info)
     if feature_preprocess_ops:
       dataset = dataset.map(
           map_func=self.chain(feature_preprocess_ops, dataset_info),
-          num_parallel_calls=self.num_parallel_calls)
+          num_parallel_calls=self.num_parallel_calls,
+          deterministic=self.deterministic)
     return dataset
 
   @staticmethod
@@ -366,6 +371,65 @@ class MultiHot(FeaturesPreprocessOp):
                   dataset_info.features[name].feature.num_classes,
                   dtype=tf.int32),
               axis=0), 0, 1)
+
+    return features
+
+
+@dataclasses.dataclass
+class MelSpectrogram(FeaturesPreprocessOp):
+  """Convert audio to a spectrogram.
+
+  Attributes:
+    features: The number of channels to create.
+    kernel_size: The kernel size to use.
+    stride: The stride to use.
+    sample_rate: The sample rate of the original audio.
+    freq_range: The frequency range to capture.
+    name: The name of the feature to process.
+    power: The power of the magnitude spectrogram.
+    log_floor: Clip by this value before taking logarithm of magnitudes.
+    log_offset: Shift values by this value before taking logarithm.
+    scale: Scale the final output by this scalar.
+  """
+  features: int
+  kernel_size: int
+  stride: int
+  sample_rate: int
+  freq_range: Tuple[int, int]
+  name: str = 'audio'
+  power: float = 2.0
+  log_floor: float = 1e-5
+  log_offset: float = 0.0
+  scale: float = 0.1
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    features = features.copy()
+    stfts = audio_utils.stft_tf(
+        features[self.name],
+        nperseg=self.kernel_size,
+        noverlap=self.kernel_size - self.stride,
+        padded=False)
+    if tf.shape(features[self.name])[-1] % self.stride == 0:
+      stfts = stfts[..., :-1]
+    stfts = tf.experimental.numpy.swapaxes(stfts, -1, -2)
+    magnitude_spectrograms = tf.math.abs(stfts)**self.power
+
+    num_spectrogram_bins = self.kernel_size // 2 + 1
+    mel_matrix = tf.signal.linear_to_mel_weight_matrix(self.features,
+                                                       num_spectrogram_bins,
+                                                       self.sample_rate,
+                                                       *self.freq_range)
+    mel_spectrograms = magnitude_spectrograms @ mel_matrix
+
+    def log_scale(x, floor, offset, scalar):
+      """TensorFlow port of audio_utils.log_scale."""
+      return scalar * tf.math.log(tf.maximum(x, floor) + offset)
+
+    features[self.name] = log_scale(mel_spectrograms, self.log_floor,
+                                    self.log_offset, self.scale)
+
+    # TODO(bartvm): Probably needs a standardization step to stabilize training.
 
     return features
 

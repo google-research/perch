@@ -18,8 +18,10 @@ import os
 import tempfile
 
 from chirp.data import pipeline
+from chirp.models import frontend
 from chirp.taxonomy import namespace_db
 from chirp.tests import fake_dataset
+from jax import numpy as jnp
 import numpy as np
 import tensorflow as tf
 
@@ -58,13 +60,11 @@ class PipelineTest(absltest.TestCase):
                                  dtype=tf.string),
     }
     ds = tf.data.Dataset.from_tensor_slices(examples)
-    ds = pipeline.Pipeline([
-        pipeline.OnlyJaxTypes(),
-        pipeline.MultiHot(),
-    ])(ds, self._builder.info)
-    mixed_ds = pipeline.Pipeline([
-        pipeline.MixAudio(1.0),
-    ])(ds, self._builder.info)
+    ds = pipeline.Pipeline(
+        [pipeline.OnlyJaxTypes(), pipeline.MultiHot()],
+        deterministic=True)(ds, self._builder.info)
+    mixed_ds = pipeline.Pipeline([pipeline.MixAudio(1.0)],
+                                 deterministic=True)(ds, self._builder.info)
     mixed_example = next(mixed_ds.as_numpy_iterator())
     np.testing.assert_allclose(mixed_example['audio'],
                                examples['audio'][0] + examples['audio'][1])
@@ -76,16 +76,15 @@ class PipelineTest(absltest.TestCase):
             (self._builder.info.features['bg_labels'].num_classes - 6),
             dtype=np.int32))
 
-    unmixed_ds = pipeline.Pipeline([
-        pipeline.MixAudio(mixin_prob=0.0),
-    ])(ds, self._builder.info)
+    unmixed_ds = pipeline.Pipeline([pipeline.MixAudio(mixin_prob=0.0)],
+                                   deterministic=True)(ds, self._builder.info)
     for x, y in tf.data.Dataset.zip((ds, unmixed_ds)).as_numpy_iterator():
       for key in x:
         if key in ('source_audio', 'segment_start', 'segment_end'):
           np.testing.assert_equal(x[key], y[key][:1])
           np.testing.assert_equal(np.zeros_like(x[key]), y[key][1:])
         else:
-          np.testing.assert_equal(x[key], y[key])
+          np.testing.assert_equal(x[key], y[key], err_msg=f'{key} not equal')
 
   def test_process_example(self):
     sample_rate_hz = self._builder.info.features['audio'].sample_rate
@@ -261,6 +260,37 @@ class PipelineTest(absltest.TestCase):
                             examples['segment_start'])
     np.testing.assert_equal(processed_example['bg_labels'],
                             examples['bg_labels'])
+
+  def test_melspec(self):
+    batch_size = 3
+    sample_rate_hz = 22050
+
+    time_size = 5 * sample_rate_hz
+    audio = tf.math.sin(tf.linspace(0.0, 440 * jnp.pi, time_size))
+    noise = 0.01 * tf.random.normal((batch_size, time_size))
+    signal = audio + noise
+
+    model = frontend.MelSpectrogram(
+        features=160,
+        stride=sample_rate_hz // 100,
+        kernel_size=512,  # ~0.08 * 32,000
+        sample_rate=sample_rate_hz,
+        freq_range=(60, 10_000),
+        scaling_config=frontend.LogScalingConfig(floor=1e-5, scalar=0.1))
+    melspec = model.apply({}, jnp.array(signal))
+
+    melspec_tf = pipeline.MelSpectrogram(
+        features=160,
+        stride=sample_rate_hz // 100,
+        kernel_size=512,  # ~0.08 * 32,000
+        sample_rate=sample_rate_hz,
+        freq_range=(60, 10_000),
+        log_floor=1e-5,
+        scale=0.1)({
+            'audio': signal
+        }, dataset_info=None)['audio']
+
+    np.testing.assert_allclose(melspec, melspec_tf.numpy(), rtol=1e-5)
 
 
 if __name__ == '__main__':

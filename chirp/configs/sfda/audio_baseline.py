@@ -93,7 +93,7 @@ def get_config() -> config_dict.ConfigDict:
   init_config = config_dict.ConfigDict()
   init_config.rng_seed = seed
   init_config.target_class_list = target_class_list
-  init_config.input_size = window_size_s * sample_rate_hz
+  init_config.input_shape = ((window_size_s * sample_rate_hz).get(),)
   init_config.pretrained_ckpt_dir = ""
 
   # Configure model

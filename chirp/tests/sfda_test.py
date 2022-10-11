@@ -126,7 +126,7 @@ class AdaptationTest(parameterized.TestCase):
         model_config=config.model_config,
         rng_seed=config.init_config.rng_seed,
         pretrained_ckpt_dir=self.adapt_dir,
-        input_size=config.init_config.input_size,
+        input_shape=config.init_config.input_shape,
         target_class_list=config.init_config.target_class_list,
         adaptation_iterations=method_config.num_epochs *
         len(adaptation_dataset),

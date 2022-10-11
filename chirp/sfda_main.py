@@ -70,7 +70,7 @@ def main(argv: Sequence[str]) -> None:
       model_config=config.model_config,
       pretrained_ckpt_dir=config.init_config.pretrained_ckpt_dir,
       rng_seed=config.init_config.rng_seed,
-      input_size=config.init_config.input_size,
+      input_shape=config.init_config.input_shape,
       target_class_list=config.init_config.target_class_list,
       adaptation_iter=len(adaptation_dataset) * method_config.num_epochs,
       modality=config.modality,

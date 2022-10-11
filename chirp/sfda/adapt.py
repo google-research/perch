@@ -78,7 +78,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       rng_seed: int,
       pretrained_ckpt_dir: str,
       modality: Modality,
-      input_size: int,
+      input_shape: Tuple[int, ...],
       target_class_list: str,
       adaptation_iterations: int,
       optimizer_config: config_dict.ConfigDict,
@@ -93,7 +93,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       pretrained_ckpt_dir: The directory from where to fetch the pretrained
         model.
       modality: The modality currently used between 'image' and 'audio'.
-        input_size: The size of the input.
+      input_shape: The shape of the input.
       target_class_list: The classlist in which labels are expressed. Used to
         define the size of the classifier's head.
       adaptation_iterations: The total number of steps used for adaptation. Used
@@ -119,7 +119,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
        opt_state) = model_utils.prepare_audio_model(
            model_config=model_config,
            rng_seed=rng_seed,
-           input_size=input_size,
+           input_shape=input_shape,
            target_class_list=target_class_list,
            pretrained_ckpt_dir=pretrained_ckpt_dir,
            total_steps=adaptation_iterations,
