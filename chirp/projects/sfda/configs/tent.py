@@ -19,10 +19,11 @@ Wang, Dequan, et al. "Tent: Fully test-time adaptation by entropy minimization."
 arXiv preprint arXiv:2006.10726 (2020).
 """
 from chirp import config_utils
+from chirp.projects.sfda import model_utils
 from ml_collections import config_dict
 
 
-def get_audio_config() -> config_dict.ConfigDict:
+def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-function-docstring
 
   # Configure adaptation
   audio_config = config_dict.ConfigDict()
@@ -33,6 +34,7 @@ def get_audio_config() -> config_dict.ConfigDict:
   optimizer_cfg.weight_decay = 0.
   optimizer_cfg.learning_rate = 1e-4
   optimizer_cfg.use_cosine_decay = True
+  optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
   audio_config.optimizer_config = optimizer_cfg
 
   # Forward options

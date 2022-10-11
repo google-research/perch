@@ -21,10 +21,12 @@ from chirp import config_utils
 from chirp.data import pipeline
 from chirp.models import frontend
 from chirp.projects.sfda import adapt
+from chirp.projects.sfda import model_utils
 from chirp.projects.sfda.configs import audio_baseline
 from chirp.projects.sfda.configs import config_globals
 from chirp.projects.sfda.configs import tent as tent_config
 from chirp.tests import fake_dataset
+from flax import traverse_util
 import flax.linen as nn
 import jax.numpy as jnp
 
@@ -150,6 +152,33 @@ class AdaptationTest(parameterized.TestCase):
         **method_config)
     self.assertIsNotNone(new_adaptation_state)
 
+  def test_mask_parameters(self):
+    """Testing parameter masking used to restrict trainable parameters."""
+
+    config, _ = self._get_configs()
+    _, params, _, _ = model_utils.prepare_audio_model(
+        model_config=config.model_config,
+        optimizer_config=None,
+        total_steps=0,
+        rng_seed=config.init_config.rng_seed,
+        input_shape=config.init_config.input_shape,
+        pretrained_ckpt_dir=self.adapt_dir,
+        target_class_list=config.init_config.target_class_list)
+
+    # Test BN masking
+    masked_params = model_utils.mask_parameters(params,
+                                                model_utils.TrainableParams.BN)
+    for p, masked in traverse_util.flatten_dict(masked_params).items():
+      if any(["BatchNorm" in x for x in p]):
+        self.assertFalse(masked)
+      else:
+        self.assertTrue(masked)
+
+    # Test no masking
+    masked_params = model_utils.mask_parameters(params,
+                                                model_utils.TrainableParams.ALL)
+    for p, masked in traverse_util.flatten_dict(masked_params).items():
+      self.assertFalse(masked)
 
 if __name__ == "__main__":
   absltest.main()
