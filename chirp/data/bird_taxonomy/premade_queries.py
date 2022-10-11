@@ -33,8 +33,8 @@ SSW_STATS_PATH = "data/bird_taxonomy/metadata/ssw_stats.json"
 
 def get_upstream_metadata_query() -> fsu.QuerySequence:
 
-  _, _, _, unfeasible_ar_species = get_artificially_rare_species_constraints(
-      5, 5)
+  _, _, _, unfeasible_ar_species = (
+      get_artificially_rare_species_constraints(5, 5))
   db = namespace_db.load_db()
   downstream_species = list(db.class_lists["downstream_species"].classes)
   return fsu.QuerySequence([
@@ -103,8 +103,12 @@ def get_artificially_rare_species_constraints(num_foreground: int,
   return target_fg, target_bg, feasible_ar_species, unfeasible_ar_species
 
 
-def get_upstream_data_query() -> fsu.QuerySequence:
+def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
   """Produces the QuerySequence to generate upstream data.
+
+  Args:
+    ar_only: if True, only include recordings with artificially rare species
+      annotations.
 
   Returns:
     The QuerySequence to apply
@@ -116,7 +120,7 @@ def get_upstream_data_query() -> fsu.QuerySequence:
   db = namespace_db.load_db()
   downstream_species = list(db.class_lists["downstream_species"].classes)
 
-  return fsu.QuerySequence([
+  queries = [
       # Filter all samples from downstream species
       fsu.Query(
           op=fsu.TransformOp.FILTER,
@@ -174,7 +178,33 @@ def get_upstream_data_query() -> fsu.QuerySequence:
               "key": "bg_species_codes",
               "values": downstream_species + unfeasible_ar_species
           })
-  ])
+  ]
+  if ar_only:
+    queries.append(
+        fsu.QueryParallel(
+            queries=[
+                fsu.Query(
+                    op=fsu.TransformOp.FILTER,
+                    kwargs={
+                        "mask_op": fsu.MaskOp.CONTAINS_ANY,
+                        "op_kwargs": {
+                            "key": "bg_species_codes",
+                            "values": feasible_ar_species
+                        }
+                    }),
+                fsu.Query(
+                    op=fsu.TransformOp.FILTER,
+                    kwargs={
+                        "mask_op": fsu.MaskOp.IN,
+                        "op_kwargs": {
+                            "key": "species_code",
+                            "values": feasible_ar_species
+                        }
+                    }),
+            ],
+            merge_strategy=fsu.MergeStrategy.CONCAT_NO_DUPLICATES))
+
+  return fsu.QuerySequence(queries)
 
 
 def get_downstream_metadata_query() -> fsu.QuerySequence:

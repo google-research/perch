@@ -65,8 +65,8 @@ def sample_recordings_under_constraints(
       if species_stats[k]['fg'] < target_fg[k] or species_stats[k][
           'bg'] < target_bg[k]:
         raise ValueError(
-            'The problem is not feasible. There are only %d foreground samples'
-            'for species %s, and %d background samples'.format(
+            'The problem is not feasible. There are only {} foreground samples'
+            'for species {}, and {} background samples'.format(
                 species_stats[k]['fg'], k, species_stats[k]['bg']))
   else:
     logging.warning('Could not verify the feasibility of the proble. No species'
@@ -98,7 +98,7 @@ def sample_recordings_under_constraints(
   valid_subset = find_valid_subset(ordered_target_fg, ordered_target_bg, [],
                                    seen, recordings)
   if not valid_subset:
-    raise RuntimeError('Could not find a solution to the constrained sampling'
+    raise RuntimeError('Could not find a solution to the constrained sampling '
                        'problem.')
   return df.loc[[x[2] for x in valid_subset]]
 

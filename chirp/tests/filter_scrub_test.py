@@ -68,9 +68,7 @@ class NotInTests(DataProcessingTest):
         fsu.is_not_in, key='Country', values=['France', 'Brazil'])
 
     # Ensure we're properly filtering out species
-    self.assertEqual(
-        test_df.apply(fn_call, axis=1, result_type='expand').tolist(),
-        [True, True, False])
+    self.assertEqual(fn_call(test_df).tolist(), [True, True, False])
 
     # 2) Tests on the fake dataFrame.
 
@@ -81,7 +79,7 @@ class NotInTests(DataProcessingTest):
     self.assertIn(targeted_country, df['country'].unique())
     filtering_fn = functools.partial(
         fsu.is_not_in, key='country', values=[targeted_country])
-    filtered_df = df[df.apply(filtering_fn, axis=1, result_type='expand')]
+    filtered_df = df[filtering_fn(df)]
     self.assertGreater(len(df), len(filtered_df))
 
     # Ensure we've filtered all South African species.
@@ -97,21 +95,13 @@ class NotInTests(DataProcessingTest):
 
     # Make a query with an error in the name of the field
     with self.assertRaises(ValueError):
-      test_df.apply(
-          functools.partial(
-              fsu.is_not_in, key='county', values=['France', 'Brazil']),
-          axis=1,
-          result_type='expand')
+      _ = fsu.is_not_in(test_df, key='county', values=['France', 'Brazil'])
 
   def test_filtering_wrong_type(self):
     """Ensure filtering raises adequate error with wrong input type."""
     test_df = self.toy_df.copy()
     with self.assertRaises(TypeError):
-      test_df.apply(
-          functools.partial(
-              fsu.is_not_in, key='Country', values=[b'France', b'Brazil']),
-          axis=1,
-          result_type='expand')
+      _ = fsu.is_not_in(test_df, key='Country', values=[b'France', b'Brazil']),
 
 
 class SamplingTest(DataProcessingTest):
