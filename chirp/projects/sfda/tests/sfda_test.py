@@ -18,12 +18,12 @@
 import tempfile
 
 from chirp import config_utils
-from chirp.configs import config_globals
-from chirp.configs.sfda import audio_baseline
-from chirp.configs.sfda import tent as tent_config
 from chirp.data import pipeline
 from chirp.models import frontend
-from chirp.sfda import adapt
+from chirp.projects.sfda import adapt
+from chirp.projects.sfda.configs import audio_baseline
+from chirp.projects.sfda.configs import config_globals
+from chirp.projects.sfda.configs import tent as tent_config
 from chirp.tests import fake_dataset
 import flax.linen as nn
 import jax.numpy as jnp

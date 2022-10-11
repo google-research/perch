@@ -16,8 +16,8 @@
 """Test-Time Entropy Minimization (TENT) method."""
 
 from typing import Type
-from chirp.sfda import adapt
-from chirp.sfda import losses
+from chirp.projects.sfda import adapt
+from chirp.projects.sfda import losses
 from clu import metrics as clu_metrics
 
 

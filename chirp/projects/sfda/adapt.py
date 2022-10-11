@@ -22,8 +22,8 @@ from typing import Dict, Tuple, Type
 
 from chirp import train
 from chirp.models import cmap
-from chirp.sfda import losses
-from chirp.sfda import model_utils
+from chirp.projects.sfda import losses
+from chirp.projects.sfda import model_utils
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions

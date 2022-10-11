@@ -22,8 +22,8 @@ from absl import flags
 from absl import logging
 from chirp import config_utils
 from chirp.configs import config_globals
-from chirp.sfda import adapt
-from chirp.sfda import data_utils
+from chirp.projects.sfda import adapt
+from chirp.projects.sfda import data_utils
 import jax
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
@@ -72,7 +72,7 @@ def main(argv: Sequence[str]) -> None:
       rng_seed=config.init_config.rng_seed,
       input_shape=config.init_config.input_shape,
       target_class_list=config.init_config.target_class_list,
-      adaptation_iter=len(adaptation_dataset) * method_config.num_epochs,
+      adaptation_iterations=len(adaptation_dataset) * method_config.num_epochs,
       modality=config.modality,
       optimizer_config=method_config.optimizer_config)
 

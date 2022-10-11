@@ -15,7 +15,7 @@
 
 """Base configuration for bio-acoustic SFDA experiments."""
 from chirp import config_utils
-from chirp.sfda import adapt
+from chirp.projects.sfda import adapt
 from ml_collections import config_dict
 
 _c = config_utils.callable_config
