@@ -21,14 +21,12 @@ from absl import app
 from absl import flags
 from absl import logging
 from chirp import config_utils
-from chirp.configs import config_globals
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import data_utils
+from chirp.projects.sfda.configs import config_globals
 import jax
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
-
-from xmanager import xm  # pylint: disable=unused-import
 
 _CONFIG = config_flags.DEFINE_config_file("config")
 _METHOD_CONFIG = config_flags.DEFINE_config_file(

@@ -74,13 +74,13 @@ class AdaptationTest(parameterized.TestCase):
     """Create configuration dictionary for training."""
     config = audio_baseline.get_config()
     config = config_utils.parse_config(config, config_globals.get_globals())
-
+    config.init_config.target_class_list = "xenocanto"
     config.sample_rate_hz = 50
     toy_pipeline = pipeline.Pipeline(ops=[
         pipeline.OnlyJaxTypes(),
         pipeline.ConvertBirdTaxonomyLabels(
             source_namespace="ebird2021",
-            target_class_list="ebird2021",
+            target_class_list=config.init_config.target_class_list,
             add_taxonomic_labels=True),
         pipeline.Batch(batch_size=2, split_across_devices=True),
         pipeline.RandomSlice(window_size=1),

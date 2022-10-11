@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """Utilities to load data for Source-free Domain Adaptation."""
+import ast
 from typing import List, Tuple
 
 from chirp.data import pipeline
@@ -63,8 +64,9 @@ def get_audio_datasets(
   Raises:
     ValueError: If the model's sample_rate and data's sample_rate do not match.
   """
-  adaptation_split = to_tf_compatible_split(adaptation_data_config.split)
-  eval_split = to_tf_compatible_split(eval_data_config.split)
+  adaptation_split = to_tf_compatible_split(
+      ast.literal_eval(adaptation_data_config.split))
+  eval_split = to_tf_compatible_split(ast.literal_eval(eval_data_config.split))
 
   # is_train only affects how data is processed by tensorflow internally,
   # in the case of a distributed setting. For now, SFDA is only supported in a
