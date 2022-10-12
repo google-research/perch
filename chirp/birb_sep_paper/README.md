@@ -6,6 +6,21 @@ discussed in our [paper](https://arxiv.org/abs/2110.03209).
 Much of the code here is for running inference or embedding large datasets,
 so we provide some example usage below to get you started.
 
+You can download the model files for either `lorikeet` (covering 87 output
+classes, including common birds from East Australia and parrot species
+worldwide) or `sierras` (covering 89 classes appearing in the California Sierra
+Nevadas).  The models can be downloaded with `gsutil` like so:
+```
+gsutil -m cp -r \
+  "gs://chirp-public-bucket/birbsep_paper" .
+```
+
+The bird separation models for 4 or 8 output channels can be downloaded with:
+```
+gsutil -m cp -r \
+  "gs://gresearch/sound_separation/bird_mixit_model_checkpoints" .
+```
+
 ## Simple Usage for Colab/Jupyter Notebooks
 
 To load and run the models simply adapt the following snippets.
