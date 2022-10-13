@@ -35,6 +35,8 @@ def get_config() -> config_dict.ConfigDict:
   window_size_s = config_dict.FieldReference(30)
   frame_rate_hz = config_dict.FieldReference(100)
 
+  scaling_config = _c("frontend.LogScalingConfig")
+
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
       "pipeline.Pipeline",
@@ -57,7 +59,8 @@ def get_config() -> config_dict.ConfigDict:
               stride=sample_rate_hz // frame_rate_hz,
               kernel_size=2_048,  # ~0.08 * 32,000
               sample_rate=sample_rate_hz,
-              freq_range=(60, 10_000)),
+              freq_range=(60, 10_000),
+              scaling_config=scaling_config),
           _c("pipeline.Repeat")
       ])
   train_dataset_config.split = "train"
@@ -83,7 +86,8 @@ def get_config() -> config_dict.ConfigDict:
               stride=sample_rate_hz // frame_rate_hz,
               kernel_size=2_048,  # ~0.08 * 32,000
               sample_rate=sample_rate_hz,
-              freq_range=(60, 10_000))
+              freq_range=(60, 10_000),
+              scaling_config=scaling_config)
       ])
   eval_dataset_config.split = "train"
   config.eval_dataset_config = eval_dataset_config
@@ -107,7 +111,7 @@ def get_config() -> config_dict.ConfigDict:
   train_config = config_dict.ConfigDict()
   train_config.num_train_steps = num_train_steps
   train_config.log_every_steps = 250
-  train_config.checkpoint_every_steps = 25_000
+  train_config.checkpoint_every_steps = 5_000
   config.train_config = train_config
 
   eval_config = config_dict.ConfigDict()

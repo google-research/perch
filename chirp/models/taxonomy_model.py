@@ -110,11 +110,13 @@ class ConformerModel(nn.Module):
   num_conformer_blocks: int = 16
   features: int = 144
   num_heads: int = 4
+  kernel_size: int = 15
 
   @nn.compact
   def __call__(self,
                inputs: jnp.ndarray,
                train: bool,
+               use_running_average: Optional[bool] = None,
                mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
     # Subsample from (160, x) to (40, x // 4)
     x = inputs
@@ -126,9 +128,13 @@ class ConformerModel(nn.Module):
         model_dims=self.features,
         atten_num_heads=self.num_heads,
         num_blocks=self.num_conformer_blocks,
+        kernel_size=self.kernel_size,
         downsample=3,
         dropout_prob=0.1)(
-            x, train=train, return_intermediate_list=False)
+            x,
+            train=train,
+            use_running_average=use_running_average,
+            return_intermediate_list=False)
 
     # To get a global embedding we now just pool
     return jnp.mean(x, axis=-2)

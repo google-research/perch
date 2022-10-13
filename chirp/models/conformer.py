@@ -98,7 +98,7 @@ class Conformer(nn.Module):
       if self.downsample:
         # TODO(bartvm): Make target_dim a parameter or have a more flexible way
         # of configuring the downsampling behaviour
-        target_dim = 1024
+        target_dim = 256
         model_dim_scaling = (target_dim / self.model_dims)**(
             1 / (self.num_blocks // self.downsample))
         model_dims = int(self.model_dims *

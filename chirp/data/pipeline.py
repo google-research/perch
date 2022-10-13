@@ -22,6 +22,7 @@ from absl import logging
 from chirp import audio_utils
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
 import chirp.data.soundscapes  # pylint: disable=unused-import
+from chirp.models import frontend
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 import jax
@@ -387,9 +388,7 @@ class MelSpectrogram(FeaturesPreprocessOp):
     freq_range: The frequency range to capture.
     name: The name of the feature to process.
     power: The power of the magnitude spectrogram.
-    log_floor: Clip by this value before taking logarithm of magnitudes.
-    log_offset: Shift values by this value before taking logarithm.
-    scale: Scale the final output by this scalar.
+    scaling_config: The magnitude scaling to use.
   """
   features: int
   kernel_size: int
@@ -398,9 +397,7 @@ class MelSpectrogram(FeaturesPreprocessOp):
   freq_range: Tuple[int, int]
   name: str = 'audio'
   power: float = 2.0
-  log_floor: float = 1e-5
-  log_offset: float = 0.0
-  scale: float = 0.1
+  scaling_config: Optional[frontend.ScalingConfig] = None
 
   def __call__(self, features: Features,
                dataset_info: tfds.core.DatasetInfo) -> Features:
@@ -426,10 +423,14 @@ class MelSpectrogram(FeaturesPreprocessOp):
       """TensorFlow port of audio_utils.log_scale."""
       return scalar * tf.math.log(tf.maximum(x, floor) + offset)
 
-    features[self.name] = log_scale(mel_spectrograms, self.log_floor,
-                                    self.log_offset, self.scale)
-
-    # TODO(bartvm): Probably needs a standardization step to stabilize training.
+    if isinstance(self.scaling_config, frontend.LogScalingConfig):
+      # TODO(bartvm): Probably needs standardization step to stabilize training.
+      features[self.name] = log_scale(mel_spectrograms,
+                                      **dataclasses.asdict(self.scaling_config))
+    elif self.scaling_config is None:
+      features[self.name] = mel_spectrograms
+    else:
+      raise ValueError('unknown scaling config')
 
     return features
 

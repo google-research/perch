@@ -26,9 +26,10 @@ import numpy as np
 import tensorflow as tf
 
 from absl.testing import absltest
+from absl.testing import parameterized
 
 
-class PipelineTest(absltest.TestCase):
+class PipelineTest(parameterized.TestCase):
 
   @classmethod
   def setUpClass(cls):
@@ -261,7 +262,11 @@ class PipelineTest(absltest.TestCase):
     np.testing.assert_equal(processed_example['bg_labels'],
                             examples['bg_labels'])
 
-  def test_melspec(self):
+  @parameterized.parameters(
+      None,
+      frontend.LogScalingConfig(floor=1e-5, scalar=0.1),
+  )
+  def test_melspec(self, scaling_config):
     batch_size = 3
     sample_rate_hz = 22050
 
@@ -276,7 +281,7 @@ class PipelineTest(absltest.TestCase):
         kernel_size=512,  # ~0.08 * 32,000
         sample_rate=sample_rate_hz,
         freq_range=(60, 10_000),
-        scaling_config=frontend.LogScalingConfig(floor=1e-5, scalar=0.1))
+        scaling_config=scaling_config)
     melspec = model.apply({}, jnp.array(signal))
 
     melspec_tf = pipeline.MelSpectrogram(
@@ -285,12 +290,11 @@ class PipelineTest(absltest.TestCase):
         kernel_size=512,  # ~0.08 * 32,000
         sample_rate=sample_rate_hz,
         freq_range=(60, 10_000),
-        log_floor=1e-5,
-        scale=0.1)({
+        scaling_config=scaling_config)({
             'audio': signal
         }, dataset_info=None)['audio']
 
-    np.testing.assert_allclose(melspec, melspec_tf.numpy(), rtol=1e-5)
+    np.testing.assert_allclose(melspec, melspec_tf.numpy(), atol=1e-5)
 
 
 if __name__ == '__main__':
