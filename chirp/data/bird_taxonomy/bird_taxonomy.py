@@ -75,40 +75,32 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.3.0')
+  VERSION = tfds.core.Version('1.4.0')
   RELEASE_NOTES = {
-      '1.0.0':
-          'Initial release.',
+      '1.0.0': 'Initial release.',
       '1.1.0': ('Switched to higher sampling rate, added recording metadata '
                 'features, switched to log-scaling in slice_peaked_audio.'),
-      '1.1.1':
-          'Added slice_peaked_tiny config.',
-      '1.1.2':
-          'Kept previous tiny_config as reference, but also added a tiny'
-          'version generated with queries.',
-      '1.2.0':
-          'Added upstream data config.',
-      '1.2.1':
-          'Added downstream data config. Fixed the upstream query.'
-          'Bumped the taxonomy_info to 2022-07-18.',
-      '1.2.2':
-          'Replacing any non-relevant foreground annotation in the'
-          'downstream data with "ignore" class: downstream data only'
-          'contains relevant annotations + "ignore" class.',
-      '1.2.3':
-          'Removing any non-relevant annotation from foreground or '
-          'background in downstream data: downstream data only'
-          'contains relevant annotations. Also removing order, family and'
-          'genus metadata, as those will be added in the TF-based'
-          'processing pipeline.',
-      '1.2.4':
-          'Adds a unique recording ID and a segment ID to all samples.',
-      '1.2.5':
-          'Refactor Int16AsFloatTensor out of BirdTaxonomy.',
+      '1.1.1': 'Added slice_peaked_tiny config.',
+      '1.1.2': 'Kept previous tiny_config as reference, but also added a tiny'
+               'version generated with queries.',
+      '1.2.0': 'Added upstream data config.',
+      '1.2.1': 'Added downstream data config. Fixed the upstream query.'
+               'Bumped the taxonomy_info to 2022-07-18.',
+      '1.2.2': 'Replacing any non-relevant foreground annotation in the'
+               'downstream data with "ignore" class: downstream data only'
+               'contains relevant annotations + "ignore" class.',
+      '1.2.3': 'Removing any non-relevant annotation from foreground or '
+               'background in downstream data: downstream data only'
+               'contains relevant annotations. Also removing order, family and'
+               'genus metadata, as those will be added in the TF-based'
+               'processing pipeline.',
+      '1.2.4': 'Adds a unique recording ID and a segment ID to all samples.',
+      '1.2.5': 'Refactor Int16AsFloatTensor out of BirdTaxonomy.',
       '1.3.0': ('Added "upstream_full_length", "downstream_full_length", '
                 '"upstream_ar_only_slice_peaked", and '
                 '"upstream_ar_only_full_length" variants. Removed '
                 '"slice_peaked_tiny_reference" variant.'),
+      '1.4.0': 'Added a seabird_sliced_peaked dataset.'
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
@@ -188,6 +180,21 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           metadata_processing_query=premade_queries
           .get_downstream_metadata_query(),
           description='Downstream data with full-length audio sequences.'),
+      BirdTaxonomyConfig(
+          name='seabird_slice_peaked',
+          localization_fn=audio_utils.slice_peaked_audio,
+          interval_length_s=6.0,
+          description=('Seabird dataset consisting of data '
+                       'with chunked audio sequences processed with '
+                       'chirp.audio_utils.slice_peaked_audio.'),
+          data_processing_query=fsu.QuerySequence([
+              fsu.filter_in_class_list('species_code', 'global_seabirds'),
+              fsu.scrub_all_but_class_list('bg_species_codes',
+                                           'global_seabirds'),
+          ]),
+          metadata_processing_query=fsu.QuerySequence([
+              fsu.filter_in_class_list('species_code', 'global_seabirds'),
+          ])),
   ]
 
   GCS_URL = epath.Path('gs://chirp-public-bucket/xeno-canto')

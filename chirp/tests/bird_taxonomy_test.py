@@ -69,7 +69,7 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
     cls.url_patcher.start()
     for patcher in cls.query_patchers:
       patcher.start()
-    subdir = epath.Path(cls.tempdir) / 'audio-data' / 'fakecode1'
+    subdir = epath.Path(cls.tempdir) / 'audio-data' / 'arcter'
     subdir.mkdir(parents=True)
     for i in range(4):
       tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(
