@@ -379,7 +379,6 @@ def initialize_model(
         for _ in range(quantizer_config.num_sections)
     ]
     quantizer = quantizers.ProductQuantizer(
-        num_sections=quantizer_config.num_sections,
         base_quantizers=base_quantizers)
     quantizer_list.append(quantizer)
 
