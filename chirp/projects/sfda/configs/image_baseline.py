@@ -27,7 +27,7 @@ def get_config() -> config_dict.ConfigDict:
 
   config = config_dict.ConfigDict()
   config.modality = adapt.Modality.IMAGE
-  config.multi_label = True
+  config.multi_label = False
   config.eval_every = 1  # in epochs
 
   config.batch_size_adaptation = 64

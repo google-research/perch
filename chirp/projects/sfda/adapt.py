@@ -23,6 +23,7 @@ from typing import Dict, Tuple, Type
 from chirp import train
 from chirp.models import cmap
 from chirp.projects.sfda import losses
+from chirp.projects.sfda import metrics
 from chirp.projects.sfda import model_utils
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -222,10 +223,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
               multi_label,
           "outputs":
               model_outputs,
-          "probas":
+          "probabilities":
               logits2probas(model_outputs.label),
-          "logits":
-              model_outputs.label,
           "label_mask":
               jnp.ones_like(model_outputs.label)
               if "label_mask" not in batch else batch["label_mask"],
@@ -348,9 +347,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       return model_outputs, metric_collection.merge(
           metric_collection.gather_from_model_output(
               multi_label=multi_label,
-              logits=model_outputs.label,
               outputs=model_outputs,
-              probas=logits2probas(model_outputs.label),
+              probabilities=logits2probas(model_outputs.label),
               label_mask=jnp.ones_like(model_outputs.label)
               if "label_mask" not in batch else batch["label_mask"],
               label=batch["label"].astype(np.int32)))
@@ -476,10 +474,6 @@ def get_common_metrics(supervised: bool,
 
   Returns:
     A collection of metrics.
-
-  Raises:
-    NotImplementedError: If multi-label is set to False. Single-label will be
-      supported in a subsequent release.
   """
   metrics_dict = {}
   if supervised:
@@ -488,9 +482,13 @@ def get_common_metrics(supervised: bool,
           functools.partial(train.keyed_map, key="label"))
       metrics_dict["supervised_loss"] = clu_metrics.Average.from_fun(
           losses.label_binary_xent)
+      metrics_dict["entropy_loss"] = clu_metrics.Average.from_fun(
+          losses.label_binary_ent)
     else:
-      raise NotImplementedError("Single-label case will be supported in a "
-                                "subsequent release.")
-  metrics_dict["entropy_loss"] = clu_metrics.Average.from_fun(
-      losses.label_binary_ent)
+      metrics_dict["supervised_loss"] = clu_metrics.Average.from_fun(
+          losses.label_xent)
+      metrics_dict["entropy_loss"] = clu_metrics.Average.from_fun(
+          losses.label_ent)
+      metrics_dict["accuracy"] = metrics.Accuracy
+
   return clu_metrics.Collection.create(**metrics_dict)

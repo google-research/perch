@@ -15,21 +15,55 @@
 
 """A set of common losses used by several SFDA methods."""
 
+from typing import Optional
+
 import flax
 import jax
 import jax.numpy as jnp
-import optax
 
 
-def label_binary_ent(probas: jnp.ndarray,
-                     label_mask: jnp.ndarray,
+def label_xent(probabilities: jnp.ndarray,
+               label: jnp.ndarray,
+               eps: float = 1e-10,
+               **_) -> jnp.ndarray:
+  """Cross entropy for single-label classification settings.
+
+  Args:
+    probabilities: Model's probabilities, expected shape [*, num_classes].
+    label: One-hot labels, expected shape [*, num_classes].
+    eps: For numerical stability
+
+  Returns:
+    Multi-class xent. Shape [*,].
+  """
+  xent = -(label * jnp.log(probabilities + eps)).sum(-1)
+  return xent
+
+
+def label_ent(probabilities: jnp.ndarray,
+              eps: float = 1e-10,
+              **_) -> jnp.ndarray:
+  """Standard entropy used for single-label classification settings.
+
+  Args:
+    probabilities: Model's probabilities, expected shape [*, num_classes]
+    eps: For numerical stability.
+
+  Returns:
+    The entropy of probabilities, shape [*,]
+  """
+  return -(probabilities * jnp.log(probabilities + eps)).sum(-1)
+
+
+def label_binary_ent(probabilities: jnp.ndarray,
+                     label_mask: Optional[jnp.ndarray] = None,
                      eps: float = 1e-10,
                      **_) -> jnp.ndarray:
   """Computes averaged classwise binary entropy.
 
   Args:
-    probas: Probabilities used to compute the binary entropies. Expected shape
-      [*, num_classes].
+    probabilities: Probabilities used to compute the binary entropies. Expected
+      shape [*, num_classes].
     label_mask: Used to mask classes before averaging across classes. Expected
       shape [*, num_classes].
     eps: For numerical stability.
@@ -37,29 +71,40 @@ def label_binary_ent(probas: jnp.ndarray,
   Returns:
     The binary entropies, averaged across classes shape [*,]
   """
-  assert probas.shape == label_mask.shape, (probas.shape, label_mask.shape)
-  binary_entropies = -(probas * jnp.log(probas + eps) +
-                       (1 - probas) * jnp.log((1 - probas) + eps)
+  if label_mask is None:
+    label_mask = jnp.ones_like(probabilities)
+  assert probabilities.shape == label_mask.shape, (probabilities.shape,
+                                                   label_mask.shape)
+  binary_entropies = -(probabilities * jnp.log(probabilities + eps) +
+                       (1 - probabilities) * jnp.log((1 - probabilities) + eps)
                       )  # [..., num_classes]
   return (label_mask * binary_entropies).sum(axis=-1) / label_mask.sum(axis=-1)
 
 
-def label_binary_xent(logits: jnp.ndarray, label: jnp.ndarray, label_mask,
+def label_binary_xent(probabilities: jnp.ndarray,
+                      label: jnp.ndarray,
+                      label_mask: Optional[jnp.ndarray] = None,
+                      eps: float = 1e-10,
                       **_) -> jnp.ndarray:
   """Computes averaged classwise binary cross-entropy.
 
   Args:
-    logits: Shape [*, num_classes]
+    probabilities: Shape [*, num_classes]
     label: Shape [*, num_classes]
     label_mask: Shape [*, num_classes]
+    eps: For numerical stability.
 
   Returns:
     Average of per-class binary xent. Shape [*]
   """
-  assert logits.shape == label_mask.shape == label_mask.shape, (
-      logits.shape, label_mask.shape, label_mask.shape)
-  cross_entropy = optax.sigmoid_binary_cross_entropy(logits, label)
-  return jnp.sum(label_mask * cross_entropy, axis=-1) / label_mask.sum(axis=-1)
+  if label_mask is None:
+    label_mask = jnp.ones_like(probabilities)
+  assert probabilities.shape == label_mask.shape == label_mask.shape, (
+      probabilities.shape, label_mask.shape, label_mask.shape)
+  binary_entropies = -(label * jnp.log(probabilities + eps) +
+                       (1 - label) * jnp.log((1 - probabilities) + eps)
+                      )  # [..., num_classes]
+  return (label_mask * binary_entropies).sum(axis=-1) / label_mask.sum(axis=-1)
 
 
 def l2_loss(params: flax.core.scope.VariableDict):

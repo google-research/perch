@@ -37,7 +37,7 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
   image_config.optimizer_config = optimizer_cfg
 
-  # Foward options
+  # Forward options
   image_config.num_epochs = 10
   image_config.use_dropout = False
   image_config.update_bn_statistics = True
