@@ -58,17 +58,26 @@ def main(argv: Sequence[str]) -> None:
   config = config.unlock()
   method_config = getattr(method_config, config.modality.value)
 
-  adaptation_dataset, val_dataset = data_utils.get_audio_datasets(
-      adaptation_data_config=config.adaptation_data_config,
-      eval_data_config=config.eval_data_config,
-      sample_rate_hz=config.sample_rate_hz)
+  if config.modality == adapt.Modality.AUDIO:
+    adaptation_dataset, val_dataset = data_utils.get_audio_datasets(
+        adaptation_data_config=config.adaptation_data_config,
+        eval_data_config=config.eval_data_config,
+        sample_rate_hz=config.sample_rate_hz)
+  else:
+    adaptation_dataset, val_dataset = data_utils.get_image_datasets(
+        image_model=config.model_config.encoder,
+        dataset_name=config.init_config.target_class_list,
+        batch_size_train=config.batch_size_adaptation,
+        batch_size_eval=config.batch_size_eval,
+        data_seed=config.init_config.rng_seed)
 
   # Initialize state and bundles
   model_bundle, adaptation_state, key = sfda_method.initialize(
       model_config=config.model_config,
       pretrained=config.init_config.pretrained_model,
       rng_seed=config.init_config.rng_seed,
-      input_shape=config.init_config.input_shape,
+      input_shape=None if config.modality == adapt.Modality.IMAGE else
+      config.init_config.input_shape,
       target_class_list=config.init_config.target_class_list,
       adaptation_iterations=len(adaptation_dataset) * method_config.num_epochs,
       modality=config.modality,

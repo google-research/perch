@@ -15,6 +15,7 @@
 
 """Tests for adaptation part."""
 
+import shutil
 import tempfile
 
 from chirp import config_utils
@@ -27,6 +28,7 @@ from chirp.projects.sfda.configs import audio_baseline
 from chirp.projects.sfda.configs import config_globals
 from chirp.projects.sfda.configs import image_baseline
 from chirp.projects.sfda.configs import tent as tent_config
+from chirp.projects.sfda.tests import fake_image_dataset
 from chirp.tests import fake_dataset
 from flax import traverse_util
 import flax.linen as nn
@@ -57,21 +59,41 @@ class AdaptationTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.adapt_dir = tempfile.TemporaryDirectory("adapt_dir").name
-    self.data_dir = tempfile.TemporaryDirectory("data_dir").name
-    fake_builder = fake_dataset.FakeDataset(data_dir=self.data_dir)
-    fake_builder.download_and_prepare()
-    self.builder = fake_builder
+    self.adapt_dir = tempfile.mkdtemp()
+    self.audio_data_dir = tempfile.mkdtemp()
+    self.image_data_dir = tempfile.mkdtemp()
+    fake_audio_builder = fake_dataset.FakeDataset(data_dir=self.audio_data_dir)
+    fake_image_builder = fake_image_dataset.FakeImageDataset(
+        data_dir=self.image_data_dir)
+    fake_audio_builder.download_and_prepare()
+    fake_image_builder.download_and_prepare()
+    self.image_builder = fake_image_builder
+    self.audio_builder = fake_audio_builder
 
-  def _get_datasets(self, config):
-    adaptation_dataset, _ = pipeline.get_dataset(
-        "train[:2]",
-        dataset_directory=self.builder.data_dir,
-        pipeline=config.adaptation_data_config.pipeline)
-    val_dataset, _ = pipeline.get_dataset(
-        "train[2:4]",
-        dataset_directory=self.builder.data_dir,
-        pipeline=config.eval_data_config.pipeline)
+  def tearDown(self):
+    super().tearDown()
+    shutil.rmtree(self.adapt_dir)
+    shutil.rmtree(self.audio_data_dir)
+    shutil.rmtree(self.image_data_dir)
+
+  def _get_datasets(self, config, modality: adapt.Modality):
+    if modality == adapt.Modality.AUDIO:
+      adaptation_dataset, _ = pipeline.get_dataset(
+          "train[:2]",
+          dataset_directory=self.audio_builder.data_dir,
+          pipeline=config.adaptation_data_config.pipeline)
+      val_dataset, _ = pipeline.get_dataset(
+          "train[2:4]",
+          dataset_directory=self.audio_builder.data_dir,
+          pipeline=config.eval_data_config.pipeline)
+    else:
+      input_pipeline = models.MODEL_REGISTRY[config.model_config.encoder](
+          num_classes=1).get_input_pipeline
+      dataset = input_pipeline(data_builder=self.image_builder, split="train")
+      dataset = dataset.batch(
+          1, drop_remainder=False).batch(
+              1, drop_remainder=False)
+      adaptation_dataset = val_dataset = dataset
     return adaptation_dataset, val_dataset
 
   def _get_configs(self,
@@ -107,6 +129,8 @@ class AdaptationTest(parameterized.TestCase):
     elif modality == adapt.Modality.IMAGE:
       config = image_baseline.get_config()
       config = config_utils.parse_config(config, config_globals.get_globals())
+      config.init_config.target_class_list = "fake_image_dataset"
+      config.init_config.input_shape = None
       if use_constant_encoder:
         config.model_config.encoder = models.ImageModelName.CONSTANT
     method_configs = {}
@@ -117,9 +141,11 @@ class AdaptationTest(parameterized.TestCase):
       method_configs[method] = method_config
     return config, method_configs
 
-  def test_adapt_one_epoch(self,
-                           method: str = "tent",
-                           modality: adapt.Modality = adapt.Modality.AUDIO):
+  @parameterized.named_parameters(
+      ("image", "tent", adapt.Modality.IMAGE),
+      ("audio", "tent", adapt.Modality.AUDIO),
+  )
+  def test_adapt_one_epoch(self, method, modality: adapt.Modality):
     """Test an epoch of adaptation for SFDA methods."""
 
     # Recover the configurations dict.
@@ -130,7 +156,7 @@ class AdaptationTest(parameterized.TestCase):
     method_config.num_epochs = 1
 
     # Get data
-    adaptation_dataset, val_dataset = self._get_datasets(config)
+    adaptation_dataset, val_dataset = self._get_datasets(config, modality)
 
     # Initialize state and parameters
     model_bundle, adaptation_state, key = sfda_method.initialize(
@@ -141,7 +167,7 @@ class AdaptationTest(parameterized.TestCase):
         target_class_list=config.init_config.target_class_list,
         adaptation_iterations=method_config.num_epochs *
         len(adaptation_dataset),
-        modality=config.modality,
+        modality=modality,
         optimizer_config=method_config.optimizer_config)
 
     # Perform adaptation.
@@ -155,7 +181,7 @@ class AdaptationTest(parameterized.TestCase):
         use_supervised_metrics=True,
         target_class_list=config.init_config.target_class_list,
         multi_label=config.multi_label,
-        modality=config.modality,
+        modality=modality,
         eval_every=config.eval_every,
         sfda_method=sfda_method,
         **method_config)
@@ -189,7 +215,7 @@ class AdaptationTest(parameterized.TestCase):
         total_steps=1,
         rng_seed=config.init_config.rng_seed,
         pretrained=False,
-        input_shape=(12, 12, 3),
+        input_shape=config.init_config.input_shape,
         target_class_list=config.init_config.target_class_list)
     self._test_mask_parameters(params)
 

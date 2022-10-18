@@ -16,10 +16,13 @@
 """Utilities to load data for Source-free Domain Adaptation."""
 import ast
 from typing import List, Tuple, Dict, Any
-
+from absl import logging
 from chirp.data import pipeline
+from chirp.projects.sfda import models
+import jax
 from ml_collections import config_dict
 import tensorflow as tf
+import tensorflow_datasets as tfds
 
 
 def to_tf_compatible_split(split_tuple: List[Tuple[int, int]]) -> str:
@@ -39,15 +42,15 @@ def to_tf_compatible_split(split_tuple: List[Tuple[int, int]]) -> str:
   """
   splits = []
   for st, end in split_tuple:
-    splits.append(f"train[{st}%:{end}%]")
-  return "+".join(splits)
+    splits.append(f'train[{st}%:{end}%]')
+  return '+'.join(splits)
 
 
 def get_audio_datasets(
     adaptation_data_config: config_dict.ConfigDict,
     eval_data_config: config_dict.ConfigDict,
     sample_rate_hz: float) -> Tuple[tf.data.Dataset, tf.data.Dataset]:
-  """Get datasets used for adaptation and evaluation.
+  """Get audio datasets used for adaptation and evaluation.
 
   Args:
     adaptation_data_config: The configuration containing relevant information
@@ -79,11 +82,11 @@ def get_audio_datasets(
       pipeline=adaptation_data_config.pipeline,
   )
 
-  if adaptation_dataset_info.features["audio"].sample_rate != sample_rate_hz:
+  if adaptation_dataset_info.features['audio'].sample_rate != sample_rate_hz:
     raise ValueError(
-        "Dataset sample rate must match config sample rate. To address this, "
-        "need to set the sample rate in the config to {}.".format(
-            adaptation_dataset_info.features["audio"].sample_rate))
+        'Dataset sample rate must match config sample rate. To address this, '
+        'need to set the sample rate in the config to {}.'.format(
+            adaptation_dataset_info.features['audio'].sample_rate))
 
   # Grab the data used for evaluation
   val_dataset, val_dataset_info = pipeline.get_dataset(
@@ -94,11 +97,58 @@ def get_audio_datasets(
       pipeline=eval_data_config.pipeline,
   )
 
-  if val_dataset_info.features["audio"].sample_rate != sample_rate_hz:
+  if val_dataset_info.features['audio'].sample_rate != sample_rate_hz:
     raise ValueError(
-        "Dataset sample rate must match config sample rate. To address this, "
-        "need to set the sample rate in the config to {}.".format(
-            val_dataset_info.features["audio"].sample_rate))
+        'Dataset sample rate must match config sample rate. To address this, '
+        'need to set the sample rate in the config to {}.'.format(
+            val_dataset_info.features['audio'].sample_rate))
+  return adaptation_dataset, val_dataset
+
+
+def get_image_datasets(
+    image_model: models.ImageModelName,
+    dataset_name: str,
+    batch_size_train: int,
+    batch_size_eval: int,
+    data_seed: int,
+) -> Tuple[tf.data.Dataset, tf.data.Dataset]:
+  """Get image dataset used for adaptation and evaluation.
+
+  Args:
+    image_model: The image model used for adaptation. This dictates the input
+      pipeline to use.
+    dataset_name: The name of the dataset used for adaptation and evaluation.
+    batch_size_train: The batch size used for adaptation.
+    batch_size_eval: The batch size used for evaluation.
+    data_seed: Used to seed data shuffling.
+
+  Returns:
+    The adaptation and evaluation datasets.
+  """
+  input_pipeline = models.MODEL_REGISTRY[image_model](
+      num_classes=0).get_input_pipeline
+  dataset_metadata = get_metadata(dataset_name)
+  num_devices = jax.local_device_count()
+
+  def build_image_dataset(split: str, batch_size: int):
+    data_builder = tfds.builder(dataset_name)
+    tfds_split = dataset_metadata['splits'][split]
+    logging.info('Using split %s for dataset %s', tfds_split, dataset_name)
+    dataset = input_pipeline(
+        data_builder=data_builder,
+        split=tfds_split,
+        image_size=dataset_metadata['resolution'])
+    if split == 'train':
+      dataset = dataset.shuffle(512, seed=data_seed)
+    if num_devices is not None:
+      dataset = dataset.batch(batch_size // num_devices, drop_remainder=False)
+      dataset = dataset.batch(num_devices, drop_remainder=False)
+    else:
+      dataset = dataset.batch(batch_size, drop_remainder=False)
+    return dataset.prefetch(10)
+
+  adaptation_dataset = build_image_dataset('train', batch_size_train)
+  val_dataset = build_image_dataset('eval', batch_size_eval)
   return adaptation_dataset, val_dataset
 
 
@@ -116,12 +166,18 @@ def get_metadata(dataset_name: str) -> Dict[str, Any]:
   Raises:
     NotImplementedError: If the dataset is unknown.
   """
-  if "imagenet" in dataset_name:
-    return {"num_classes": 1000, "resolution": 224}
-  elif "cifar" in dataset_name:
-    return {"num_classes": 10, "resolution": 32}
-  elif dataset_name == "fake_image_dataset":
-    return {"num_classes": 2, "resolution": 12}
+  if 'imagenet' in dataset_name:
+    if 'corrupted' in dataset_name:
+      split = {'train': 'validation[:75%]', 'eval': 'validation[75%:]'}
+    else:
+      split = {'train': 'test[:75%]', 'eval': 'test[75%:]'}
+    return {'num_classes': 1000, 'resolution': 224, 'splits': split}
+  elif 'cifar' in dataset_name:
+    split = {'train': 'test[:75%]', 'eval': 'test[75%:]'}
+    return {'num_classes': 10, 'resolution': 32, 'splits': split}
+  elif dataset_name == 'fake_image_dataset':
+    split = {'train': 'train[:2]', 'eval': 'train[2:4]'}
+    return {'num_classes': 2, 'resolution': 12, 'splits': split}
   else:
     raise NotImplementedError(
-        f"Unknown number of classes for dataset {dataset_name}.")
+        f'Unknown number of classes for dataset {dataset_name}.')

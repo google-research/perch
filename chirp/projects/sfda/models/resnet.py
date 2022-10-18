@@ -25,6 +25,7 @@ Taken from https://github.com/google/flax/blob/main/examples/imagenet/models.py.
     Student and NOTELA.
   - Added a 'load_ckpt' method, following image_model.ImageModel template.
   - Added a 'get_ckpt_path' method, following image_model.ImageModel template.
+  - Integrated flax's input pipeline in the 'get_input_pipeline' method.
 """
 
 import functools
@@ -37,8 +38,13 @@ import flax
 from flax import linen as nn
 from flax.training import checkpoints as flax_checkpoints
 import jax.numpy as jnp
+import tensorflow as tf
+import tensorflow_datasets as tfds
 
 ModuleDef = Any
+CROP_PADDING = 32
+MEAN_RGB = [0.485 * 255, 0.456 * 255, 0.406 * 255]
+STDDEV_RGB = [0.229 * 255, 0.224 * 255, 0.225 * 255]
 
 
 class ResNetBlock(nn.Module):
@@ -168,6 +174,77 @@ class ResNet(image_model.ImageModel):
     else:
       raise NotImplementedError('No pretrained checkpoint available for '
                                 f'dataset {dataset_name}.')
+
+  @staticmethod
+  def get_input_pipeline(data_builder: tfds.core.DatasetBuilder, split: str,
+                         **kwargs) -> tf.data.Dataset:
+    image_size = kwargs['image_size']
+    dtype = tf.float32
+    read_config = tfds.ReadConfig(add_tfds_id=True)
+
+    def _resize(image):
+      return tf.image.resize([image], [image_size, image_size],
+                             method=tf.image.ResizeMethod.BICUBIC)[0]
+
+    def _decode_and_center_crop(image_bytes):
+      """Crops to center of image with padding then scales image_size."""
+      shape = tf.io.extract_jpeg_shape(image_bytes)
+      image_height = shape[0]
+      image_width = shape[1]
+
+      padded_center_crop_size = tf.cast(
+          ((image_size / (image_size + CROP_PADDING)) *
+           tf.cast(tf.minimum(image_height, image_width), tf.float32)),
+          tf.int32)
+
+      offset_height = ((image_height - padded_center_crop_size) + 1) // 2
+      offset_width = ((image_width - padded_center_crop_size) + 1) // 2
+      crop_window = tf.stack([
+          offset_height, offset_width, padded_center_crop_size,
+          padded_center_crop_size
+      ])
+      image = tf.io.decode_and_crop_jpeg(image_bytes, crop_window, channels=3)
+      image = _resize(image)
+
+      return image
+
+    def normalize_image(image):
+      image -= tf.constant(MEAN_RGB, shape=[1, 1, 3], dtype=image.dtype)
+      image /= tf.constant(STDDEV_RGB, shape=[1, 1, 3], dtype=image.dtype)
+      return image
+
+    def preprocess_for_eval(image_bytes, dtype=tf.float32):
+      """Preprocesses the given image for evaluation.
+
+      Args:
+        image_bytes: `Tensor` representing an image binary of arbitrary size.
+        dtype: data type of the image.
+
+      Returns:
+        A preprocessed image `Tensor`.
+      """
+      image = _decode_and_center_crop(image_bytes)
+      image = tf.reshape(image, [image_size, image_size, 3])
+      image = normalize_image(image)
+      image = tf.image.convert_image_dtype(image, dtype=dtype)
+      return image
+
+    def decode_example(example):
+      image = preprocess_for_eval(example['image'], dtype=dtype)
+      label = tf.one_hot(example['label'],
+                         data_builder.info.features['label'].num_classes)
+      return {'image': image, 'label': label}
+
+    dataset = data_builder.as_dataset(
+        split=split,
+        decoders={'image': tfds.decode.SkipDecoding()},
+        read_config=read_config)
+    options = tf.data.Options()
+    options.experimental_threading.private_threadpool_size = 48
+    dataset = dataset.with_options(options)
+    dataset = dataset.map(
+        decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    return dataset
 
 
 ResNet18 = functools.partial(

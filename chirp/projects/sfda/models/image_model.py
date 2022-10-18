@@ -21,6 +21,8 @@ from chirp.models import taxonomy_model
 from etils import epath
 import flax
 import flax.linen as nn
+import tensorflow as tf
+import tensorflow_datasets as tfds
 
 
 class ImageModel(nn.Module):
@@ -81,3 +83,35 @@ class ImageModel(nn.Module):
       variables: The path to load the checkpoint.
     """
     raise NotImplementedError
+
+  @staticmethod
+  def get_input_pipeline(data_builder: tfds.core.DatasetBuilder, split: str,
+                         **kwargs) -> tf.data.Dataset:
+    """Get the data pipeline for the current model.
+
+    Because we're relying on pretrained models from the web, this part of the
+    data pipeline can hardly be factorized. We hereby provide a default
+    pipeline that converts image to tf.float32, and one-hots the labels.
+    However, we **leave it for each model to specify its own processing
+    pipeline**, with the only requirement of producing one-hot labels.
+
+    Args:
+      data_builder: The dataset's data builder.
+      split: The split of the dataset used.
+      **kwargs: Additional kwargs that may be useful for model-specific
+        pipelines.
+
+    Returns:
+      The processed dataset.
+    """
+    read_config = tfds.ReadConfig(add_tfds_id=True)
+    dataset = data_builder.as_dataset(split=split, read_config=read_config)
+
+    def _pp(example):
+      image = tf.image.convert_image_dtype(example['image'], tf.float32)
+      label = tf.one_hot(example['label'],
+                         data_builder.info.features['label'].num_classes)
+
+      return {'image': image, 'label': label}
+
+    return dataset.map(_pp, tf.data.experimental.AUTOTUNE)
