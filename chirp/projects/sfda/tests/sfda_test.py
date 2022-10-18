@@ -22,8 +22,10 @@ from chirp.data import pipeline
 from chirp.models import frontend
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import model_utils
+from chirp.projects.sfda import models
 from chirp.projects.sfda.configs import audio_baseline
 from chirp.projects.sfda.configs import config_globals
+from chirp.projects.sfda.configs import image_baseline
 from chirp.projects.sfda.configs import tent as tent_config
 from chirp.tests import fake_dataset
 from flax import traverse_util
@@ -72,34 +74,41 @@ class AdaptationTest(parameterized.TestCase):
         pipeline=config.eval_data_config.pipeline)
     return adaptation_dataset, val_dataset
 
-  def _get_configs(self):
+  def _get_configs(self,
+                   modality: adapt.Modality,
+                   use_constant_encoder: bool = True):
     """Create configuration dictionary for training."""
-    config = audio_baseline.get_config()
-    config = config_utils.parse_config(config, config_globals.get_globals())
-    config.init_config.target_class_list = "xenocanto"
-    config.sample_rate_hz = 50
-    toy_pipeline = pipeline.Pipeline(ops=[
-        pipeline.OnlyJaxTypes(),
-        pipeline.ConvertBirdTaxonomyLabels(
-            source_namespace="ebird2021",
-            target_class_list=config.init_config.target_class_list,
-            add_taxonomic_labels=True),
-        pipeline.Batch(batch_size=2, split_across_devices=True),
-        pipeline.RandomSlice(window_size=1),
-    ])
+    if modality == adapt.Modality.AUDIO:
+      config = audio_baseline.get_config()
+      config = config_utils.parse_config(config, config_globals.get_globals())
+      config.init_config.target_class_list = "xenocanto"
+      config.sample_rate_hz = 50
+      toy_pipeline = pipeline.Pipeline(ops=[
+          pipeline.OnlyJaxTypes(),
+          pipeline.ConvertBirdTaxonomyLabels(
+              source_namespace="ebird2021",
+              target_class_list=config.init_config.target_class_list,
+              add_taxonomic_labels=True),
+          pipeline.Batch(batch_size=2, split_across_devices=True),
+          pipeline.RandomSlice(window_size=1),
+      ])
 
-    config.adaptation_data_config.pipeline = toy_pipeline
-    config.eval_data_config.pipeline = toy_pipeline
+      config.adaptation_data_config.pipeline = toy_pipeline
+      config.eval_data_config.pipeline = toy_pipeline
+      if use_constant_encoder:
+        config.model_config.encoder = ConstantEncoder(output_dim=32)
 
-    config.model_config.encoder = ConstantEncoder(output_dim=32)
-
-    config.model_config.frontend = frontend.MelSpectrogram(
-        features=32,
-        stride=config.sample_rate_hz // 25,
-        kernel_size=10,
-        sample_rate=config.sample_rate_hz,
-        freq_range=(60, 10_000))
-
+      config.model_config.frontend = frontend.MelSpectrogram(
+          features=32,
+          stride=config.sample_rate_hz // 25,
+          kernel_size=10,
+          sample_rate=config.sample_rate_hz,
+          freq_range=(60, 10_000))
+    elif modality == adapt.Modality.IMAGE:
+      config = image_baseline.get_config()
+      config = config_utils.parse_config(config, config_globals.get_globals())
+      if use_constant_encoder:
+        config.model_config.encoder = models.ImageModelName.CONSTANT
     method_configs = {}
     for method in ["tent"]:
       method_config = _unparsed_configs[method].get_config()
@@ -114,7 +123,7 @@ class AdaptationTest(parameterized.TestCase):
     """Test an epoch of adaptation for SFDA methods."""
 
     # Recover the configurations dict.
-    config, method_configs = self._get_configs()
+    config, method_configs = self._get_configs(modality)
     method_config = method_configs[method]
     sfda_method = method_config.sfda_method
     method_config = getattr(method_config, modality.value)
@@ -127,7 +136,7 @@ class AdaptationTest(parameterized.TestCase):
     model_bundle, adaptation_state, key = sfda_method.initialize(
         model_config=config.model_config,
         rng_seed=config.init_config.rng_seed,
-        pretrained_ckpt_dir=self.adapt_dir,
+        pretrained=False,
         input_shape=config.init_config.input_shape,
         target_class_list=config.init_config.target_class_list,
         adaptation_iterations=method_config.num_epochs *
@@ -152,24 +161,46 @@ class AdaptationTest(parameterized.TestCase):
         **method_config)
     self.assertIsNotNone(new_adaptation_state)
 
-  def test_mask_parameters(self):
+  def test_mask_parameters_audio(self):
     """Testing parameter masking used to restrict trainable parameters."""
-
-    config, _ = self._get_configs()
+    config, _ = self._get_configs(modality=adapt.Modality.AUDIO)
     _, params, _, _ = model_utils.prepare_audio_model(
         model_config=config.model_config,
         optimizer_config=None,
         total_steps=0,
         rng_seed=config.init_config.rng_seed,
         input_shape=config.init_config.input_shape,
-        pretrained_ckpt_dir=self.adapt_dir,
+        pretrained=False,
         target_class_list=config.init_config.target_class_list)
 
+    self._test_mask_parameters(params)
+
+  @parameterized.named_parameters(
+      ("resnet", models.ImageModelName.RESNET),
+      ("wideresnet", models.ImageModelName.WIDERESNET))
+  def test_mask_parameters_image(self, model: models.ImageModelName):
+    """Testing parameter masking used to restrict trainable parameters."""
+
+    config, _ = self._get_configs(modality=adapt.Modality.IMAGE)
+    config.model_config.encoder = model
+    _, params, _, _ = model_utils.prepare_image_model(
+        model_config=config.model_config,
+        optimizer_config=None,
+        total_steps=1,
+        rng_seed=config.init_config.rng_seed,
+        pretrained=False,
+        input_shape=(12, 12, 3),
+        target_class_list=config.init_config.target_class_list)
+    self._test_mask_parameters(params)
+
+  def _test_mask_parameters(self, params):
     # Test BN masking
     masked_params = model_utils.mask_parameters(params,
                                                 model_utils.TrainableParams.BN)
     for p, masked in traverse_util.flatten_dict(masked_params).items():
-      if any(["BatchNorm" in x for x in p]):
+      if any(["norm" in x.lower() for x in p
+             ]) and (any(["scale" in x.lower() for x in p]) or
+                     any(["bias" in x.lower() for x in p])):
         self.assertFalse(masked)
       else:
         self.assertTrue(masked)

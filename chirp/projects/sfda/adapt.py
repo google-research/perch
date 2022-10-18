@@ -76,12 +76,12 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       self,
       model_config: config_dict.ConfigDict,
       rng_seed: int,
-      pretrained_ckpt_dir: str,
       modality: Modality,
       input_shape: Tuple[int, ...],
       target_class_list: str,
       adaptation_iterations: int,
       optimizer_config: config_dict.ConfigDict,
+      pretrained: bool,
   ) -> Tuple[model_utils.ModelBundle, AdaptationState, jax.random.PRNGKeyArray]:
     """Loads model's params and state, and instantiates the adaptation state.
 
@@ -90,8 +90,6 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         different parts of the architecture.
       rng_seed: The random seed used to define the jax random key and seed other
         non-jax random operations.
-      pretrained_ckpt_dir: The directory from where to fetch the pretrained
-        model.
       modality: The modality currently used between 'image' and 'audio'.
       input_shape: The shape of the input.
       target_class_list: The classlist in which labels are expressed. Used to
@@ -100,36 +98,34 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         to adequately define learning rate scheduling.
       optimizer_config: The optimizer configuration, including the name of the
         optimizer, the learning rate etc.
+      pretrained: Whether to use a pretrained model or not.
 
     Returns:
       The model_bundle to use, the initial adaptation_state, and the jax
         random key to use for adaptation.
 
     Raises:
-      ValueError: In case the chosen modality is Modality.IMAGE.
-      NotImplementedError: In case the chosen modality is neither Modality.AUDIO
+      ValueError: In case the chosen modality is neither Modality.AUDIO
         nor Modality.IMAGE.
     """
     # Generate a random key
     key = jax.random.PRNGKey(rng_seed)
-
-    # Load classification model and optimizer.
     if modality == Modality.AUDIO:
-      (model_bundle, params, model_state,
-       opt_state) = model_utils.prepare_audio_model(
-           model_config=model_config,
-           rng_seed=rng_seed,
-           input_shape=input_shape,
-           target_class_list=target_class_list,
-           pretrained_ckpt_dir=pretrained_ckpt_dir,
-           total_steps=adaptation_iterations,
-           optimizer_config=optimizer_config)
+      prepare_fn = model_utils.prepare_audio_model
     elif modality == Modality.IMAGE:
-      raise NotImplementedError(
-          "Image modality will be supported in a susbsequent"
-          "release.")
+      prepare_fn = model_utils.prepare_image_model
     else:
       raise ValueError(f"Modality {modality} not supported.")
+
+    (model_bundle, params, model_state, opt_state) = prepare_fn(
+        model_config=model_config,
+        optimizer_config=optimizer_config,
+        pretrained=pretrained,
+        rng_seed=rng_seed,
+        input_shape=input_shape,
+        target_class_list=target_class_list,
+        total_steps=adaptation_iterations,
+    )
 
     # Package model, parameters and states in structures.
     # TODO(mboudiaf): Add support for restoring previous adaptation state.

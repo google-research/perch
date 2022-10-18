@@ -15,7 +15,7 @@
 
 """Utilities to load data for Source-free Domain Adaptation."""
 import ast
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 
 from chirp.data import pipeline
 from ml_collections import config_dict
@@ -100,3 +100,28 @@ def get_audio_datasets(
         "need to set the sample rate in the config to {}.".format(
             val_dataset_info.features["audio"].sample_rate))
   return adaptation_dataset, val_dataset
+
+
+def get_metadata(dataset_name: str) -> Dict[str, Any]:
+  """Maps image dataset names to metadata.
+
+  Args:
+    dataset_name: The raw dataset_name.
+
+  Returns:
+    A dictionary of metadata for this dataset, including:
+      - num_classes: The number of classes.
+      - resolution: The image resolution.
+
+  Raises:
+    NotImplementedError: If the dataset is unknown.
+  """
+  if "imagenet" in dataset_name:
+    return {"num_classes": 1000, "resolution": 224}
+  elif "cifar" in dataset_name:
+    return {"num_classes": 10, "resolution": 32}
+  elif dataset_name == "fake_image_dataset":
+    return {"num_classes": 2, "resolution": 12}
+  else:
+    raise NotImplementedError(
+        f"Unknown number of classes for dataset {dataset_name}.")

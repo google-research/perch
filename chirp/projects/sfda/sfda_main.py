@@ -66,7 +66,7 @@ def main(argv: Sequence[str]) -> None:
   # Initialize state and bundles
   model_bundle, adaptation_state, key = sfda_method.initialize(
       model_config=config.model_config,
-      pretrained_ckpt_dir=config.init_config.pretrained_ckpt_dir,
+      pretrained=config.init_config.pretrained_model,
       rng_seed=config.init_config.rng_seed,
       input_shape=config.init_config.input_shape,
       target_class_list=config.init_config.target_class_list,

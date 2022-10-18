@@ -29,7 +29,6 @@ def get_config() -> config_dict.ConfigDict:
   add_taxonomic_labels = config_dict.FieldReference(True)
 
   config = config_dict.ConfigDict()
-  config.debug = False
   config.modality = adapt.Modality.AUDIO
   config.multi_label = True
   config.eval_every = 1  # in epochs
@@ -95,7 +94,7 @@ def get_config() -> config_dict.ConfigDict:
   init_config.rng_seed = seed
   init_config.target_class_list = target_class_list
   init_config.input_shape = ((window_size_s * sample_rate_hz).get(),)
-  init_config.pretrained_ckpt_dir = ""
+  init_config.pretrained_model = True
 
   # Configure model
   model_config = config_dict.ConfigDict()
@@ -112,6 +111,7 @@ def get_config() -> config_dict.ConfigDict:
       sample_rate=sample_rate_hz,
       freq_range=(60, 10_000),
       scaling_config=_c("frontend.PCENScalingConfig"))
+  init_config.pretrained_ckpt_dir = ""
 
   config.model_config = model_config
   config.init_config = init_config
