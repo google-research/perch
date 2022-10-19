@@ -351,7 +351,7 @@ def evaluate_loop(model_bundle: ModelBundle,
       time.sleep(eval_sleep_s)
       continue
     try:
-      ckpt.restore(train_state, next_ckpt)
+      train_state = ckpt.restore(train_state, next_ckpt)
     except tf.errors.NotFoundError:
       logging.warning("Checkpoint %s not found in workdir %s",
                       ckpt.latest_checkpoint, workdir)
