@@ -146,7 +146,8 @@ class ModelBundle:
 
 def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
                      input_shape: Tuple[int, ...], learning_rate: float,
-                     workdir: str, target_class_list: str):
+                     workdir: str,
+                     target_class_list: str) -> Tuple[ModelBundle, TrainState]:
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
@@ -181,7 +182,6 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
   ckpt = checkpoint.MultihostCheckpoint(workdir)
   train_state = TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
-  train_state = ckpt.restore_or_initialize(train_state)
   return ModelBundle(model, optimizer, key, ckpt, class_lists), train_state
 
 
