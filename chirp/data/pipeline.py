@@ -377,6 +377,19 @@ class MultiHot(FeaturesPreprocessOp):
 
 
 @dataclasses.dataclass
+class MergeBackgroundLabels(FeaturesPreprocessOp):
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    features = features.copy()
+    features['label'] = tf.clip_by_value(
+        features['label'] + features['bg_labels'], 0, 1)
+    features['label_mask'] = tf.clip_by_value(
+        features['label_mask'] + features['bg_labels_mask'], 0, 1)
+    return features
+
+
+@dataclasses.dataclass
 class MelSpectrogram(FeaturesPreprocessOp):
   """Convert audio to a spectrogram.
 
