@@ -14,7 +14,8 @@
 # limitations under the License.
 
 """Taxonomy model."""
-from typing import Dict, Optional
+import dataclasses
+from typing import Dict, List, Optional, Tuple
 
 from chirp.models import conformer
 from chirp.models import frontend
@@ -111,6 +112,7 @@ class ConformerModel(nn.Module):
   features: int = 144
   num_heads: int = 4
   kernel_size: int = 15
+  downsample: List[Tuple[int, float]] = dataclasses.field(default_factory=list)
 
   @nn.compact
   def __call__(self,
@@ -129,7 +131,7 @@ class ConformerModel(nn.Module):
         atten_num_heads=self.num_heads,
         num_blocks=self.num_conformer_blocks,
         kernel_size=self.kernel_size,
-        downsample=3,
+        downsample=self.downsample,
         dropout_prob=0.1)(
             x,
             train=train,

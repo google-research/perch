@@ -755,7 +755,8 @@ def get_dataset(
         split=split,
         data_dir=tfds_data_dir,
         with_info=True,
-        read_config=read_config)
+        read_config=read_config,
+        shuffle_files=True)
   else:
     builder = tfds.builder_from_directory(dataset_directory)
     ds = builder.as_dataset(split=split, read_config=read_config)
@@ -775,8 +776,8 @@ def get_dataset(
   if is_train and tf_data_service_address:
     ds = ds.apply(
         tf.data.experimental.service.distribute(
-            processing_mode=tf.data.experimental.service.ShardingPolicy.DYNAMIC,
+            processing_mode=tf.data.experimental.service.ShardingPolicy.OFF,
             service=tf_data_service_address,
             job_name='chirp_job'))
-  ds = ds.prefetch(tf.data.AUTOTUNE)
+  ds = ds.prefetch(2)
   return ds, dataset_info

@@ -152,6 +152,9 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
 
+  # Handle lazy computation
+  input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
+
   # Load model
   model_init_key, key = random.split(key)
   class_lists = class_utils.get_class_lists(target_class_list, True)
@@ -343,6 +346,9 @@ def evaluate_loop(model_bundle: ModelBundle,
   # Initialize last_step to -1 so we always run at least one eval.
   last_step = -1
   last_ckpt = ""
+
+  # Handle lazy computation
+  input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
 
   while last_step < num_train_steps:
     ckpt = checkpoint.MultihostCheckpoint(workdir)
