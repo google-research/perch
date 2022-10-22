@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Tuple
 
 from chirp.models import conformer
 from chirp.models import frontend
+from chirp.models import layers
 import flax
 from flax import linen as nn
 from jax import numpy as jnp
@@ -120,8 +121,16 @@ class ConformerModel(nn.Module):
                train: bool,
                use_running_average: Optional[bool] = None,
                mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
-    # Subsample from (160, x) to (40, x // 4)
-    x = inputs
+    # Apply frontend
+    dim = 512
+    conv_layer_tuples = ((dim, 20, 10), (dim, 3, 2), (dim, 3, 2), (dim, 3, 2),
+                         (dim, 3, 2), (dim, 2, 2), (160, 2, 2))
+    x = layers.EarlyFeatureExtractor(conv_layer_tuples)(inputs, train=train)
+
+    # At this point, think of channels as frequencies and add single channel
+    x = x[..., jnp.newaxis]
+
+    # Subsample from (x, 160) to (x // 4, 40)
     x = conformer.ConvolutionalSubsampling(features=self.features)(
         x, train=train)
 

@@ -23,7 +23,7 @@ _c = config_utils.callable_config
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
-  batch_size = config_dict.FieldReference(128)
+  batch_size = config_dict.FieldReference(64)
   target_class_list = config_dict.FieldReference("xenocanto")
   add_taxonomic_labels = config_dict.FieldReference(True)
 
@@ -42,8 +42,6 @@ def get_config() -> config_dict.ConfigDict:
   config.frame_rate_hz = frame_rate_hz
   config.num_channels = num_channels
 
-  scaling_config = _c("frontend.LogScalingConfig")
-
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
       "pipeline.Pipeline",
@@ -60,14 +58,6 @@ def get_config() -> config_dict.ConfigDict:
           _c("pipeline.Batch", batch_size=batch_size,
              split_across_devices=True),
           _c("pipeline.RandomNormalizeAudio", min_gain=0.15, max_gain=0.25),
-          _c(
-              "pipeline.MelSpectrogram",
-              features=num_channels,
-              stride=sample_rate_hz // frame_rate_hz,
-              kernel_size=2_048,  # ~0.08 * 32,000
-              sample_rate=sample_rate_hz,
-              freq_range=(60, 10_000),
-              scaling_config=scaling_config),
           _c("pipeline.Repeat")
       ])
   train_dataset_config.split = "train"
@@ -87,14 +77,6 @@ def get_config() -> config_dict.ConfigDict:
           _c("pipeline.Batch", batch_size=batch_size,
              split_across_devices=True),
           _c("pipeline.NormalizeAudio", target_gain=0.2),
-          _c(
-              "pipeline.MelSpectrogram",
-              features=num_channels,
-              stride=sample_rate_hz // frame_rate_hz,
-              kernel_size=2_048,  # ~0.08 * 32,000
-              sample_rate=sample_rate_hz,
-              freq_range=(60, 10_000),
-              scaling_config=scaling_config)
       ])
   eval_dataset_config.split = "train"
   config.eval_dataset_config = eval_dataset_config
@@ -102,7 +84,7 @@ def get_config() -> config_dict.ConfigDict:
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
   init_config.learning_rate = 0.0001
-  init_config.input_shape = (train_window_size * frame_rate_hz, 160)
+  init_config.input_shape = (train_window_size * sample_rate_hz,)
   init_config.rng_seed = 0
   init_config.target_class_list = target_class_list
   config.init_config = init_config
@@ -130,7 +112,7 @@ def get_config() -> config_dict.ConfigDict:
   eval_config.num_train_steps = num_train_steps
   eval_config.eval_steps_per_checkpoint = 1000
   eval_config.tflite_export = True
-  eval_config.input_shape = (eval_window_size * frame_rate_hz, 160)
+  eval_config.input_shape = (eval_window_size * sample_rate_hz,)
   config.eval_config = eval_config
 
   return config
