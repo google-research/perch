@@ -89,9 +89,9 @@ class EvalSetSpecification:
   num_representatives_per_class: int
 
   @classmethod
-  def mvp_specification(cls: Type[_T], location: str, corpus_type: str,
-                        num_representatives_per_class: int) -> _T:
-    """Instantiates an eval MVP EvalSetSpecification.
+  def v1_specification(cls: Type[_T], location: str, corpus_type: str,
+                       num_representatives_per_class: int) -> _T:
+    """Instantiates an eval protocol v1 EvalSetSpecification.
 
     Args:
       location: Geographical location in {'ssw', 'colombia', 'hawaii'}.

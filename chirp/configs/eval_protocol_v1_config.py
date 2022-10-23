@@ -13,12 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration for evaluating using the MVP protocol."""
+"""Configuration for evaluating using the v1 protocol."""
 
 import itertools
 
 from chirp import config_utils
-from chirp.configs import baseline
+from chirp.configs import baseline_attention
 from ml_collections import config_dict
 
 _c = config_utils.callable_config
@@ -28,15 +28,16 @@ _TFDS_DATA_DIR = None
 
 
 def get_config() -> config_dict.ConfigDict:
-  """Creates a configuration dictionary for the MVP evaluation protocol.
+  """Creates a configuration dictionary for the evaluation protocol v1.
 
-  The MVP protocol evaluates on artificially rare Sapsucker Woods (SSW) species
+  The v1 protocol evaluates on artificially rare Sapsucker Woods (SSW) species
   as well as on held-out Colombia and Hawaii species.
 
   Returns:
-    The configuration dictionary for the MVP evaluation protocol.
+    The configuration dictionary for the v1 evaluation protocol.
   """
   config = config_dict.ConfigDict()
+  baseline_attention_config = baseline_attention.get_config()
   tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
   config.tfds_data_dir = tfds_data_dir
   # The model_callback is expected to be a Callable[[np.ndarray], np.ndarray].
@@ -44,7 +45,7 @@ def get_config() -> config_dict.ConfigDict:
   config.model_checkpoint_path = model_checkpoint_path
   config.model_callback = _c(
       'eval_lib.FlaxCheckpointCallback',
-      init_config=baseline.get_config().init_config,
+      init_config=baseline_attention_config.init_config,
       workdir=model_checkpoint_path)
   config.batch_size = 16
   # The PRNG seed controls the random subsampling of class representatives down
@@ -98,6 +99,7 @@ def get_config() -> config_dict.ConfigDict:
         _c('pipeline.OnlyKeep',
            names=['audio', 'label', 'bg_labels', 'recording_id', 'segment_id']),
         _c('pipeline.NormalizeAudio', target_gain=target_gain),
+        baseline_attention_config.eval_dataset_config.pipeline.__config.ops[-1],  # pylint: disable=protected-access
         _c('pipeline.LabelsToString')
     ]
     # Xeno-Canto data needs to be cropped before normalizing the audio.
@@ -118,12 +120,12 @@ def get_config() -> config_dict.ConfigDict:
   config.eval_set_specifications = {}
   for corpus_type, location in itertools.product(('xc_fg', 'xc_bg', 'birdclef'),
                                                  ('ssw', 'colombia', 'hawaii')):
-    # SSW species are "artificially rare" (a limited number of examples were included
-    # during upstream training). We use the singular learned vector representation
-    # from upstream training during search.
+    # SSW species are "artificially rare" (a limited number of examples were
+    # included during upstream training). We use the singular learned vector
+    # representation from upstream training during search.
     if location == 'ssw':
       config.eval_set_specifications[f'artificially_rare_{corpus_type}'] = _c(
-          'eval_lib.EvalSetSpecification.mvp_specification',
+          'eval_lib.EvalSetSpecification.v1_specification',
           location=location,
           corpus_type=corpus_type,
           num_representatives_per_class=1)
@@ -134,7 +136,7 @@ def get_config() -> config_dict.ConfigDict:
       for k, seed in itertools.product((1, 2, 4, 8, 16), range(1, 6)):
         config.eval_set_specifications[
             f'{location}_{corpus_type}_{k}_seed{seed}'] = _c(
-                'eval_lib.EvalSetSpecification.mvp_specification',
+                'eval_lib.EvalSetSpecification.v1_specification',
                 location=location,
                 corpus_type=corpus_type,
                 num_representatives_per_class=k)
