@@ -73,6 +73,11 @@ def get_config() -> config_dict.ConfigDict:
 
   required_datasets = (
       {
+          'dataset_name': 'xc_artificially_rare',
+          'is_xc': True,
+          'tfds_name': 'bird_taxonomy/upstream_ar_only_slice_peaked'
+      },
+      {
           'dataset_name': 'xc_downstream',
           'is_xc': True,
           'tfds_name': 'bird_taxonomy/downstream_slice_peaked'
@@ -128,7 +133,7 @@ def get_config() -> config_dict.ConfigDict:
           'eval_lib.EvalSetSpecification.v1_specification',
           location=location,
           corpus_type=corpus_type,
-          num_representatives_per_class=1)
+          num_representatives_per_class=-1)
     # For downstream species, we sweep over {1, 2, 4, 8, 16} representatives
     # per class, and in each case we resample the collection of class
     # representatives 5 times to get confidence intervals on the metrics.
