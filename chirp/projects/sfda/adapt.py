@@ -285,7 +285,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     for batch in tqdm.tqdm(
         adaptation_dataset.as_numpy_iterator(), total=len(adaptation_dataset)):
       batch = jax.tree_map(np.asarray, batch)
-
+      verify_batch(batch)
       current_step = int(flax_utils.unreplicate(adaptation_state.step))
       step_key, key = jax.random.split(key)
       step_key = jax.random.split(step_key, num=jax.local_device_count())
@@ -356,6 +356,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     # Loop over validation dataset
     for batch in tqdm.tqdm(eval_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
+      verify_batch(batch)
       model_outputs, valid_metrics = update_metrics(
           metric_collection=valid_metrics, batch=batch)
       cmap_metrics = cmap.update_cmap_metrics_dict(cmap_metrics, model_outputs,
@@ -484,11 +485,34 @@ def get_common_metrics(supervised: bool,
           losses.label_binary_xent)
       metrics_dict["entropy_loss"] = clu_metrics.Average.from_fun(
           losses.label_binary_ent)
+      metrics_dict["marginal_entropy"] = metrics.MarginalBinaryEntropy
     else:
       metrics_dict["supervised_loss"] = clu_metrics.Average.from_fun(
           losses.label_xent)
       metrics_dict["entropy_loss"] = clu_metrics.Average.from_fun(
           losses.label_ent)
       metrics_dict["accuracy"] = metrics.Accuracy
+      metrics_dict["marginal_entropy"] = metrics.MarginalEntropy
 
   return clu_metrics.Collection.create(**metrics_dict)
+
+
+def verify_batch(batch: Dict[str, jnp.ndarray]) -> None:
+  """Performs non-jittable verifications on a batch of data.
+
+  Args:
+    batch: The current batch of data.
+
+  Raises:
+    ValueError: If the batch has a label_mask, and label_mask differs across
+      samples.
+  """
+  if "label_mask" in batch:
+    label_mask = flax_utils.unreplicate(batch["label_mask"])
+    if not (jnp.tile(label_mask[0],
+                     (label_mask.shape[0], 1)) == label_mask).all():
+      raise ValueError(
+          "Some metrics (e.g. marginal entropy) can only be computed if each "
+          "sample's probability distribution is defined over the same set of"
+          "classes. Therefore, we verify that `label_mask` is the same across "
+          "samples.")
