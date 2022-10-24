@@ -64,12 +64,21 @@ def main(argv: Sequence[str]) -> None:
         eval_data_config=config.eval_data_config,
         sample_rate_hz=config.sample_rate_hz)
   else:
+    if "corrupted" in config.init_config.target_class_list:
+      builder_kwargs = {
+          "config":
+              "{}_{}".format(config.init_config.corruption_name,
+                             config.init_config.corruption_severity)
+      }
+    else:
+      builder_kwargs = {}
     adaptation_dataset, val_dataset = data_utils.get_image_datasets(
         image_model=config.model_config.encoder,
         dataset_name=config.init_config.target_class_list,
         batch_size_train=config.batch_size_adaptation,
         batch_size_eval=config.batch_size_eval,
-        data_seed=config.init_config.rng_seed)
+        data_seed=config.init_config.rng_seed,
+        builder_kwargs=builder_kwargs)
 
   # Initialize state and bundles
   model_bundle, adaptation_state, key = sfda_method.initialize(

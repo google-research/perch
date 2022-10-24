@@ -111,6 +111,7 @@ def get_image_datasets(
     batch_size_train: int,
     batch_size_eval: int,
     data_seed: int,
+    builder_kwargs: Dict[str, Any],
 ) -> Tuple[tf.data.Dataset, tf.data.Dataset]:
   """Get image dataset used for adaptation and evaluation.
 
@@ -121,6 +122,7 @@ def get_image_datasets(
     batch_size_train: The batch size used for adaptation.
     batch_size_eval: The batch size used for evaluation.
     data_seed: Used to seed data shuffling.
+    builder_kwargs: Kwargs to pass when creating the data builder.
 
   Returns:
     The adaptation and evaluation datasets.
@@ -131,7 +133,7 @@ def get_image_datasets(
   num_devices = jax.local_device_count()
 
   def build_image_dataset(split: str, batch_size: int):
-    data_builder = tfds.builder(dataset_name)
+    data_builder = tfds.builder(dataset_name, **builder_kwargs)
     tfds_split = dataset_metadata['splits'][split]
     logging.info('Using split %s for dataset %s', tfds_split, dataset_name)
     dataset = input_pipeline(

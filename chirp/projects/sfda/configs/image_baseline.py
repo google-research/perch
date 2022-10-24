@@ -35,13 +35,15 @@ def get_config() -> config_dict.ConfigDict:
 
   init_config = config_dict.ConfigDict()
   init_config.rng_seed = 0
-  init_config.target_class_list = "imagenet2012"
+  init_config.target_class_list = "cifar10_corrupted"
+  init_config.corruption_name = "gaussian_noise"
+  init_config.corruption_severity = 5
   init_config.pretrained_model = True
 
   config.init_config = init_config
 
   model_config = config_dict.ConfigDict()
-  model_config.encoder = models.ImageModelName.RESNET
+  model_config.encoder = models.ImageModelName.WIDERESNET
   config.model_config = model_config
 
   return config
