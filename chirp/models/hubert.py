@@ -193,7 +193,7 @@ class HuBERTModel(nn.Module):
   logit_temp: float = 0.1
   alpha: float = 1.0
   stop_gradient_earlyfs: bool = True
-  add_positional_embeddings: bool = True
+  add_positional_embeddings: bool = False
 
   def classify(self, x_list, mask_idc, per_frame_predictions,
                classify_pool_width, classify_stride, classify_features,
