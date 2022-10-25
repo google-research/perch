@@ -284,9 +284,47 @@ class ProductQuantizer(nn.Module):
       codes, to protect them from being modified by downstream losses. Should
       always be True, and a future CL with remove this from being an option
       (keeping only for comparisons purposes with previous code).
+    pca_dim: Dimension for learned PCA projection. Set <= 0 to disable.
   """
   base_quantizers: Sequence[BaseQuantizer]
   stop_gradient_codes: bool = True
+  pca_dim: int = 0
+
+  def get_pca_layer(self, embedding_dim):
+    """Create PCA params for projection and pre-bias."""
+    if self.pca_dim <= 0:
+      return jnp.ones([1]), jnp.zeros([1])
+    projection = self.param(
+        'pca_proj',
+        jax.nn.initializers.variance_scaling(
+            1.0, 'fan_avg', 'normal', dtype=jnp.float32),
+        [embedding_dim, self.pca_dim])
+    pre_bias = self.param('pre_bias', jax.nn.initializers.zeros,
+                          [1, embedding_dim])
+    return projection, pre_bias
+
+  def pca_project(self, flat_inputs):
+    """Map to a low-dim'l space and minimize reconstruction error."""
+    if self.pca_dim <= 0:
+      return flat_inputs, 0, jnp.ones([1]), jnp.zeros([1])
+
+    embedding_dim = flat_inputs.shape[-1]
+    projection, pre_bias = self.get_pca_layer(embedding_dim)
+
+    projected = jnp.matmul(flat_inputs + pre_bias, projection)
+    unprojected = jnp.matmul(projected, projection.T) - pre_bias
+    l2_loss = jnp.sqrt(jnp.sum(jnp.square(flat_inputs - unprojected), axis=-1))
+    l2_loss = jnp.mean(l2_loss)
+
+    # Ensure that (P@X)@(P@X).T is orthonormal.
+    cov = jnp.matmul(projected.T, projected) / flat_inputs.shape[0]
+    cov_loss = jnp.mean(jnp.square(cov - jnp.eye(self.pca_dim)))
+    return projected, l2_loss + cov_loss, projection, pre_bias
+
+  def pca_unproject(self, quantized, projection, pre_bias):
+    if self.pca_dim <= 0:
+      return quantized
+    return jnp.matmul(quantized, projection.T) - pre_bias
 
   def get_num_centroids(self):
     nc = [q.num_centroids for q in self.base_quantizers]
@@ -301,9 +339,12 @@ class ProductQuantizer(nn.Module):
   @nn.compact
   def __call__(self, inputs, train):
     ns = self.get_num_sections()
+    embedding_dim = inputs.shape[-1]
+    flat_inputs = jnp.reshape(inputs, [-1, embedding_dim])
+    flat_inputs, pca_loss, projection, pre_bias = self.pca_project(flat_inputs)
 
     # Divide the input into `num_sections` parts and quantize each separately.
-    input_sections = jnp.split(inputs, ns, axis=-1)
+    input_sections = jnp.split(flat_inputs, ns, axis=-1)
     loss, quantized, nn_idx, codebook_list, counts = [], [], [], [], []
     for quantizer, sec in zip(self.base_quantizers, input_sections):
       # Let `csz` denote the number of channels of `inputs` and `...` denotes
@@ -314,6 +355,7 @@ class ProductQuantizer(nn.Module):
       outputs = quantizer(sec, train)
       quantized.append(outputs.quantized)
       nn_idx.append(outputs.nn_idx)
+
       codebook_list.append(outputs.codebook)
       loss.append(outputs.quantization_loss)
       counts += outputs.cluster_counts
@@ -323,9 +365,12 @@ class ProductQuantizer(nn.Module):
     # nn_idx: [ns, ...].
     # codebook: [ns, nc, csz / ns].
     quantized = jnp.concatenate(quantized, axis=-1)
+    quantized = self.pca_unproject(quantized, projection, pre_bias)
+    quantized = jnp.reshape(quantized, inputs.shape)
     nn_idx = jnp.concatenate(nn_idx, axis=0)
+    nn_idx = jnp.reshape(nn_idx, (ns,) + inputs.shape[:-1])
     codebook = jnp.concatenate(codebook_list, axis=0)
-    quantization_loss = jnp.mean(jnp.stack(loss, axis=0), axis=0)
+    quantization_loss = jnp.mean(jnp.stack(loss, axis=0), axis=0) + pca_loss
 
     if self.stop_gradient_codes:
       codebook = jax.lax.stop_gradient(codebook)
