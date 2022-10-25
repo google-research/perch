@@ -172,6 +172,31 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     """
     pass
 
+  def before_run(self, key: jax.random.PRNGKeyArray,
+                 model_bundle: model_utils.ModelBundle,
+                 adaptation_state: AdaptationState,
+                 adaptation_dataset: tf.data.Dataset, modality: Modality,
+                 multi_label: bool, **method_kwargs) -> AdaptationState:
+    """Any operation that a method needs to do before a run.
+
+    An example of application is to initialize memories.
+
+    Args:
+      key: The jax random key used for random operations in this epoch.
+      model_bundle: The ModelBundle used for adaptation.
+      adaptation_state: The current state of adaptation.
+      adaptation_dataset: The dataset used for adaptation.
+      modality: The current modality.
+      multi_label: Whether this is a multi-label problem.
+      **method_kwargs: Additional method-specific kwargs.
+
+    Returns:
+      A potentially updated adaptation_state.
+    """
+    del (key, model_bundle, modality, multi_label, method_kwargs,
+         adaptation_dataset)
+    return adaptation_state
+
   def before_epoch(self, key: jax.random.PRNGKeyArray,
                    model_bundle: model_utils.ModelBundle,
                    adaptation_state: AdaptationState,
@@ -205,7 +230,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       **method_kwargs) -> Tuple[AdaptationState, Dict[str, jnp.ndarray]]:
     """Any operation that a method needs to do before an adaptation iteration.
 
-    An example of application is to grab the pseudo-labels needed for the
+    An example of application is to compute the pseudo-labels needed for the
     current iteration.
 
     Args:
@@ -501,6 +526,16 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
 
   validation_writer = metric_writers.create_default_writer(
       logdir, asynchronous=False, collection="validation")
+
+  # Before run.
+  adaptation_state = sfda_method.before_run(
+      key=key,
+      model_bundle=model_bundle,
+      adaptation_state=adaptation_state,
+      multi_label=multi_label,
+      modality=modality,
+      adaptation_dataset=adaptation_dataset,
+      **method_kwargs)
 
   for epoch in range(method_kwargs["num_epochs"]):
 

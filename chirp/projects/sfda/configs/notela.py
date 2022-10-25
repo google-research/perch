@@ -61,10 +61,10 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   audio_config.optimizer_config = optimizer_cfg
 
   # Method-specifc hparams
-  audio_config.online_pl_updates = False
   audio_config.knn = 5
   audio_config.lambda_ = 1.0
   audio_config.alpha = 1.0
+  audio_config.online_pl_updates = False
 
   # Forward options
   audio_config.num_epochs = 10

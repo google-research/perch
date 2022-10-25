@@ -25,6 +25,7 @@ from chirp.projects.sfda import method_utils
 from chirp.projects.sfda import model_utils
 from clu import metrics as clu_metrics
 import flax.jax_utils as flax_utils
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -38,10 +39,9 @@ class NOTELA(adapt.SFDAMethod):
   to the teacher step. NOTELA works in two different modes:
     - offline mode: Pseudo-labels are computed only once every epoch (before the
     epoch starts).
-    - online mode: (Coming in next release) We track a memory of the dataset's
-      extracted features and probabilities. Pseudo-labels are computed on-the-go
-      by comparing samples from the current batch to the features/probabilities
-      in memory.
+    - online mode: We track a memory of the dataset's extracted features and
+    probabilities. Pseudo-labels are computed on-the-go by comparing samples
+    from the current batch to the features/probabilities in memory.
   In both cases, the student-step remains to match the pseudo-labels using a
   noisy (dropout) model forward.
   """
@@ -148,12 +148,27 @@ class NOTELA(adapt.SFDAMethod):
     Returns:
       An updated version of adaptation_state, where method_state contains
         all initialized memories.
-
-    Raises:
-      NotImplementedError: In the case the 'online mode' is activated.
     """
     if method_kwargs["online_pl_updates"]:
-      raise NotImplementedError("Coming in the next release.")
+      logging.info("Initializing memories...")
+
+      # Extract embeddings and model's probabilities.
+      forward_result = method_utils.forward_dataset(
+          dataset=adaptation_dataset,
+          adaptation_state=adaptation_state,
+          model_bundle=model_bundle,
+          modality=modality,
+          multi_label=multi_label,
+          use_batch_statistics=method_kwargs["update_bn_statistics"])
+
+      # Store everything in the method_state dictionnary.
+      ids = forward_result["id"]
+      method_state = {
+          "dataset_feature": forward_result["embedding"],
+          "dataset_proba": forward_result["proba"],
+          "id2index": {ids[i]: i for i in range(len(ids))},
+      }
+      adaptation_state = adaptation_state.replace(method_state=method_state)
     return adaptation_state
 
   def before_epoch(self, key: jax.random.PRNGKeyArray,
@@ -222,8 +237,8 @@ class NOTELA(adapt.SFDAMethod):
       **method_kwargs) -> Tuple[adapt.AdaptationState, Dict[str, jnp.ndarray]]:
     """Grab or compute the pseudo-labels for the current batch.
 
-    In 'offline mode', grabs the pre-computed pseudo-labels from method_state's
-    memory.
+    In 'offline mode', we only grab pre-computed pseudo-labels from the
+    pseudo_label memory.
 
     Args:
       key: The jax random key used for random operations.
@@ -239,20 +254,40 @@ class NOTELA(adapt.SFDAMethod):
         updated version in which the method_state's memories have been
         updated
       A dictionary containing the pseudo-labels to use for the iteration.
-
-    Raises:
-      NotImplementedError: If the online mode of NOTELA is activated.
     """
-
+    method_state = flax_utils.unreplicate(adaptation_state.method_state)
+    id2index = method_state["id2index"]
+    batch_indexes = np.array(
+        [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
     if method_kwargs["online_pl_updates"]:
-      raise NotImplementedError("Coming in the next release.")
+
+      # In the online version, we compute the pseudo-labels on-the-go.
+      model_outputs = method_utils.batch_forward(
+          adapt.keep_jax_types(batch), adaptation_state.model_state,
+          adaptation_state.model_params, model_bundle.model, modality,
+          method_kwargs["update_bn_statistics"])
+      model_outputs = flax_utils.unreplicate(model_outputs)
+      logit2proba = nn.sigmoid if multi_label else nn.softmax
+      pseudo_label = self.compute_pseudo_label(
+          batch_feature=model_outputs.embedding,
+          dataset_feature=method_state["dataset_feature"],
+          batch_proba=logit2proba(model_outputs.label),
+          dataset_proba=method_state["dataset_proba"],
+          multi_label=multi_label,
+          knn=method_kwargs["knn"],
+          lambda_=method_kwargs["lambda_"],
+          alpha=method_kwargs["alpha"])
+
+      # Update global information
+      method_state["dataset_feature"] = method_state["dataset_feature"].at[
+          batch_indexes].set(model_outputs.embedding)
+      method_state["dataset_proba"] = method_state["dataset_proba"].at[
+          batch_indexes].set(logit2proba(model_outputs.label))
+      adaptation_state = adaptation_state.replace(
+          method_state=flax_utils.replicate(method_state))
     else:
       # In the offline version, we simply grab the pseudo-labels that were
       # computed before the epoch.
-      method_state = flax_utils.unreplicate(adaptation_state.method_state)
-      id2index = method_state["id2index"]
-      batch_indexes = np.array(
-          [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
       pseudo_label = method_state["pseudo_label"][batch_indexes]
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label)
