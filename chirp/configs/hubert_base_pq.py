@@ -111,7 +111,7 @@ def get_config() -> config_dict.ConfigDict:
 
   # Configure the masking parameters.
   mask_config = config_dict.ConfigDict()
-  mask_config.mask_prob = 0.08
+  mask_config.mask_prob = 0.16
   mask_config.mask_length = 5
   mask_config.min_masks = 1
   model_config.mask_config = mask_config
@@ -120,18 +120,20 @@ def get_config() -> config_dict.ConfigDict:
   classifier_config = config_dict.ConfigDict()
   classifier_config.classify_from_all = True
   classifier_config.per_frame_predictions = False
-  classifier_config.classify_pool_width = 50
-  classifier_config.classify_stride = 50
+  classifier_config.classify_pool_width = 3
+  classifier_config.classify_stride = 3
   classifier_config.classify_features = 512
   classifier_config.reduction_type = "AVG"
   model_config.classifier_config = classifier_config
 
   # Configure the quantizer parameters.
   base_quantizer_config = config_dict.ConfigDict()
-  base_quantizer_config.num_centroids = 128
-  base_quantizer_config.gamma = 1e-5
+  base_quantizer_config.num_centroids = 64
+  base_quantizer_config.gamma = 2
+  base_quantizer_config.init_scale = 0.1
   quantizer_config = config_dict.ConfigDict()
-  quantizer_config.num_sections = 8
+  quantizer_config.num_sections = 16
+  quantizer_config.use_entropy_quantizer = True
   init_config.quantizer_config = quantizer_config
   init_config.base_quantizer_config = base_quantizer_config
   init_config.reload_quantizer_from = ""
@@ -151,11 +153,12 @@ def get_config() -> config_dict.ConfigDict:
   # Configure HuBERT.
   model_config.final_dim = 64  # the dim to project *each feature section* (PQ)
   model_config.logit_temp = 0.1
-  model_config.alpha = 0.75
+  model_config.alpha = 1.0
   model_config.taxonomy_loss_weight = 0.
   model_config.readout_points = [0, 2, 4, 6, 8, 10, 11]
-  model_config.quantizer_points = [-1]
-  model_config.stop_gradient_earlyfs = True
+  model_config.quantizer_points = [-2]
+  model_config.stop_gradient_earlyfs = False
+  model_config.use_raw_audio = True
   init_config.model_config = model_config
 
   # Configure the training loop.

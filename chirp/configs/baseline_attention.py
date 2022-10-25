@@ -23,7 +23,7 @@ _c = config_utils.callable_config
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
-  batch_size = config_dict.FieldReference(32)
+  batch_size = config_dict.FieldReference(64)
   target_class_list = config_dict.FieldReference("xenocanto")
   add_taxonomic_labels = config_dict.FieldReference(True)
 
@@ -32,20 +32,28 @@ def get_config() -> config_dict.ConfigDict:
   config.batch_size = batch_size
 
   # Configure the data
-  window_size_s = config_dict.FieldReference(30)
+  train_window_size = config_dict.FieldReference(30)
+  eval_window_size = config_dict.FieldReference(5)
+  frame_rate_hz = config_dict.FieldReference(100)
+  num_channels = config_dict.FieldReference(160)
+
+  config.train_window_size = train_window_size
+  config.eval_window_size = eval_window_size
+  config.frame_rate_hz = frame_rate_hz
+  config.num_channels = num_channels
 
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
-          _c("pipeline.Shuffle", shuffle_buffer_size=512),
+          _c("pipeline.Shuffle", shuffle_buffer_size=128),
           _c("pipeline.OnlyJaxTypes"),
           _c("pipeline.ConvertBirdTaxonomyLabels",
              source_namespace="ebird2021",
              target_class_list=target_class_list,
              add_taxonomic_labels=add_taxonomic_labels),
-          _c("pipeline.Pad", pad_size=window_size_s),
-          _c("pipeline.RandomSlice", window_size=window_size_s),
+          _c("pipeline.Pad", pad_size=train_window_size),
+          _c("pipeline.RandomSlice", window_size=train_window_size),
           _c("pipeline.MixAudio", mixin_prob=0.75),
           _c("pipeline.Batch", batch_size=batch_size,
              split_across_devices=True),
@@ -64,8 +72,8 @@ def get_config() -> config_dict.ConfigDict:
              source_namespace="ebird2021",
              target_class_list=target_class_list,
              add_taxonomic_labels=add_taxonomic_labels),
-          _c("pipeline.Pad", pad_size=window_size_s, random=False),
-          _c("pipeline.Slice", window_size=window_size_s, start=0.0),
+          _c("pipeline.Pad", pad_size=eval_window_size, random=False),
+          _c("pipeline.Slice", window_size=eval_window_size, start=0.0),
           _c("pipeline.Batch", batch_size=batch_size,
              split_across_devices=True),
           _c("pipeline.NormalizeAudio", target_gain=0.2),
@@ -76,24 +84,20 @@ def get_config() -> config_dict.ConfigDict:
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
   init_config.learning_rate = 0.0001
-  init_config.input_size = window_size_s * sample_rate_hz
+  init_config.input_shape = (train_window_size * sample_rate_hz,)
   init_config.rng_seed = 0
   init_config.target_class_list = target_class_list
   config.init_config = init_config
 
   model_config = config_dict.ConfigDict()
-  model_config.encoder = _c("taxonomy_model.ConformerModel")
+  # Aim to have output targets of 256, starting at 144
+  s = (256 / 144)**(1 / 5)
+  model_config.encoder = _c(
+      "taxonomy_model.ConformerModel",
+      downsample=[(2, s), (5, s), (8, s), (11, s), (14, s)],
+      kernel_size=15)
   model_config.taxonomy_loss_weight = 0.0
   init_config.model_config = model_config
-
-  model_config.frontend = _c(
-      "frontend.MelSpectrogram",
-      features=160,
-      stride=sample_rate_hz // 100,
-      kernel_size=2_048,  # ~0.08 * 32,000
-      sample_rate=sample_rate_hz,
-      freq_range=(60, 10_000),
-      scaling_config=_c("frontend.PCENScalingConfig", conv_width=256))
 
   # Configure the training loop
   num_train_steps = config_dict.FieldReference(1_000_000)
@@ -101,14 +105,14 @@ def get_config() -> config_dict.ConfigDict:
   train_config = config_dict.ConfigDict()
   train_config.num_train_steps = num_train_steps
   train_config.log_every_steps = 250
-  train_config.checkpoint_every_steps = 25_000
+  train_config.checkpoint_every_steps = 5_000
   config.train_config = train_config
 
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = num_train_steps
   eval_config.eval_steps_per_checkpoint = 1000
   eval_config.tflite_export = True
-  eval_config.input_size = window_size_s * sample_rate_hz
+  eval_config.input_shape = (eval_window_size * sample_rate_hz,)
   config.eval_config = eval_config
 
   return config

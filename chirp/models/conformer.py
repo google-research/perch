@@ -14,8 +14,9 @@
 # limitations under the License.
 
 """Conformer layers."""
+import dataclasses
 import math
-from typing import Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from chirp.models import layers
 from flax import linen as nn
@@ -40,7 +41,8 @@ class Conformer(nn.Module):
   ffn_relu_dropout: Optional[float] = None
   fflayer_weight_sharing: bool = False
   num_blocks: int = 1
-  downsample: int = 0
+  # tuples of layer index and corresponding scaling of number of channels
+  downsample: List[Tuple[int, float]] = dataclasses.field(default_factory=list)
   skip_layer_norm: bool = True
 
   @nn.compact
@@ -94,18 +96,16 @@ class Conformer(nn.Module):
       ffn_relu_dropout = self.ffn_relu_dropout
 
     intermediate = []
+    model_dims = self.model_dims
+    downsample = list(self.downsample).copy()
     for i in range(self.num_blocks):
-      if self.downsample:
-        # TODO(bartvm): Make target_dim a parameter or have a more flexible way
-        # of configuring the downsampling behaviour
-        target_dim = 1024
-        model_dim_scaling = (target_dim / self.model_dims)**(
-            1 / (self.num_blocks // self.downsample))
-        model_dims = int(self.model_dims *
-                         model_dim_scaling**((i + 1) // self.downsample))
+      if downsample and downsample[0][0] == i:
+        should_downsample = True
+        model_dims = int(model_dims * self.downsample[0][1])
         model_dims = (model_dims // self.atten_num_heads) * self.atten_num_heads
+        downsample = downsample[1:]
       else:
-        model_dims = self.model_dims
+        should_downsample = False
       inputs = layers.Conformer(
           model_dims=model_dims,
           kernel_size=self.kernel_size,
@@ -122,7 +122,7 @@ class Conformer(nn.Module):
           ffn_relu_dropout=ffn_relu_dropout,
           fflayer_weight_sharing=self.fflayer_weight_sharing,
           name='conformer_block_{}'.format(i),
-          downsample=self.downsample and ((i + 1) % self.downsample) == 0,
+          downsample=should_downsample,
           skip_layer_norm=self.skip_layer_norm,
       )(inputs, train, use_running_average=use_running_average)
       intermediate.append(inputs)

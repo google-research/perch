@@ -74,7 +74,7 @@ def get_config() -> config_dict.ConfigDict:
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
   init_config.learning_rate = 0.0001
-  init_config.input_size = window_size_s * sample_rate_hz
+  init_config.input_shape = ((window_size_s * sample_rate_hz).get(),)
   init_config.rng_seed = 0
   init_config.target_class_list = target_class_list
   config.init_config = init_config
@@ -108,7 +108,7 @@ def get_config() -> config_dict.ConfigDict:
   eval_config.num_train_steps = num_train_steps
   eval_config.eval_steps_per_checkpoint = 1000
   eval_config.tflite_export = True
-  eval_config.input_size = window_size_s * sample_rate_hz
+  eval_config.input_shape = ((window_size_s * sample_rate_hz).get(),)
   config.eval_config = eval_config
 
   return config

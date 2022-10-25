@@ -21,14 +21,12 @@ from absl import app
 from absl import flags
 from absl import logging
 from chirp import config_utils
-from chirp.configs import config_globals
-from chirp.sfda import adapt
-from chirp.sfda import data_utils
+from chirp.projects.sfda import adapt
+from chirp.projects.sfda import data_utils
+from chirp.projects.sfda.configs import config_globals
 import jax
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
-
-from xmanager import xm  # pylint: disable=unused-import
 
 _CONFIG = config_flags.DEFINE_config_file("config")
 _METHOD_CONFIG = config_flags.DEFINE_config_file(
@@ -60,19 +58,37 @@ def main(argv: Sequence[str]) -> None:
   config = config.unlock()
   method_config = getattr(method_config, config.modality.value)
 
-  adaptation_dataset, val_dataset = data_utils.get_audio_datasets(
-      adaptation_data_config=config.adaptation_data_config,
-      eval_data_config=config.eval_data_config,
-      sample_rate_hz=config.sample_rate_hz)
+  if config.modality == adapt.Modality.AUDIO:
+    adaptation_dataset, val_dataset = data_utils.get_audio_datasets(
+        adaptation_data_config=config.adaptation_data_config,
+        eval_data_config=config.eval_data_config,
+        sample_rate_hz=config.sample_rate_hz)
+  else:
+    if "corrupted" in config.init_config.target_class_list:
+      builder_kwargs = {
+          "config":
+              "{}_{}".format(config.init_config.corruption_name,
+                             config.init_config.corruption_severity)
+      }
+    else:
+      builder_kwargs = {}
+    adaptation_dataset, val_dataset = data_utils.get_image_datasets(
+        image_model=config.model_config.encoder,
+        dataset_name=config.init_config.target_class_list,
+        batch_size_train=config.batch_size_adaptation,
+        batch_size_eval=config.batch_size_eval,
+        data_seed=config.init_config.rng_seed,
+        builder_kwargs=builder_kwargs)
 
   # Initialize state and bundles
   model_bundle, adaptation_state, key = sfda_method.initialize(
       model_config=config.model_config,
-      pretrained_ckpt_dir=config.init_config.pretrained_ckpt_dir,
+      pretrained=config.init_config.pretrained_model,
       rng_seed=config.init_config.rng_seed,
-      input_size=config.init_config.input_size,
+      input_shape=None if config.modality == adapt.Modality.IMAGE else
+      config.init_config.input_shape,
       target_class_list=config.init_config.target_class_list,
-      adaptation_iter=len(adaptation_dataset) * method_config.num_epochs,
+      adaptation_iterations=len(adaptation_dataset) * method_config.num_epochs,
       modality=config.modality,
       optimizer_config=method_config.optimizer_config)
 

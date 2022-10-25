@@ -31,7 +31,74 @@ _WINDOW_FNS = {
     "hann": tf.signal.hann_window,
     "hamming": tf.signal.hamming_window,
 }
-_BOUNDARY_TO_PADDING_MODE = {"zeros": "constant", "constant": "edge"}
+_BOUNDARY_TO_PADDING_MODE = {"zeros": "CONSTANT"}
+
+
+# pylint: disable=g-doc-return-or-yield,g-doc-args,unused-argument
+def stft_tf(x,
+            fs=1.0,
+            window="hann",
+            nperseg=256,
+            noverlap=None,
+            nfft=None,
+            detrend=False,
+            return_onesided=True,
+            boundary="zeros",
+            padded=True) -> tf.Tensor:
+  """Computes the Short Time Fourier Transform (STFT).
+
+  This is a port of `scipy.signal.stft` to TensorFlow. This allows us to exactly
+  reproduce the frontend in the data preprocessing pipeline.
+  """
+
+  # Use SciPy's original variable names
+  # pylint: disable=invalid-name
+  nfft = nperseg if nfft is None else nfft
+  noverlap = nperseg // 2 if noverlap is None else noverlap
+  nstep = nperseg - noverlap
+  if x.dtype.is_complex:
+    raise ValueError("tf.signal.stft only supports real signals")
+  if window not in _WINDOW_FNS:
+    raise ValueError(f"tf.signal.stft does not support window {window}, "
+                     f"supported functions are {', '.join(_WINDOW_FNS)}")
+  if boundary is not None and boundary not in _BOUNDARY_TO_PADDING_MODE:
+    raise ValueError("tf.signal.stft only supports boundary modes None and "
+                     ", ".join(_BOUNDARY_TO_PADDING_MODE))
+  if detrend:
+    raise ValueError("tf.signal.stft only supports detrend = False")
+  if not return_onesided:
+    raise ValueError("tf.signal.stft only supports return_onesided = True")
+
+  input_length = tf.shape(x)[-1]
+  # Put the time axis at the end and then put it back
+  if boundary in _BOUNDARY_TO_PADDING_MODE:
+    mode = _BOUNDARY_TO_PADDING_MODE[boundary]
+    paddings = tf.concat([
+        tf.repeat([[0, 0]], tf.rank(x) - 1, axis=0),
+        [[nperseg // 2, nperseg // 2]]
+    ],
+                         axis=0)
+    x = tf.pad(x, paddings, mode)
+    input_length += nperseg
+  Zxx = tf.signal.stft(
+      x,
+      frame_length=nperseg,
+      frame_step=nstep,
+      fft_length=nfft,
+      window_fn=_WINDOW_FNS[window],
+      pad_end=padded)
+  Zxx = tf.linalg.matrix_transpose(Zxx)
+
+  # TODO(bartvm): tf.signal.frame seems to have a bug which sometimes adds
+  # too many frames, so we strip those if necessary
+  nadd = (-(input_length - nperseg) % nstep) % nperseg if padded else 0
+  length = -((input_length + nadd - nperseg + 1) // (noverlap - nperseg))
+  Zxx = Zxx[..., :length]
+
+  # Scaling
+  Zxx *= 2 / nperseg
+
+  return Zxx
 
 
 def ema(xs: jnp.ndarray,
@@ -111,9 +178,9 @@ def pcen(filterbank_energy: jnp.ndarray,
     eps: Epsilon floor value to prevent division by zero.
     state: Optional state produced by a previous call to fixed_pcen. Used in
       streaming mode.
-    conv_width: If non-zero, use a convolutional approximation of the EMA,
-      with kernel size indicated here. If set to -1, the sequence length will be
-      used as the kernel size.
+    conv_width: If non-zero, use a convolutional approximation of the EMA, with
+      kernel size indicated here. If set to -1, the sequence length will be used
+      as the kernel size.
 
   Returns:
     Filterbank energies with PCEN compression applied (type and shape are

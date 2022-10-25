@@ -19,12 +19,6 @@ First use `callable_config` to construct a `ConfigDict` as follows:
 
   config.foo = callable_config("my_module.Foo", bar=4)
 
-You can also pass a `ConfigDict` as an argument:
-
-  foo_config = ConfigDict()
-  foo_config.bar = 4
-  config.foo = callable_config("my_module.Foo", config.foo_config)
-
 This will construct a `ConfigDict` that looks as follows:
 
   ConfigDict({
@@ -106,7 +100,7 @@ def parse_config(config: config_dict.ConfigDict,
   def _parse_value(value: config_dict.ConfigDict) -> Any:
     if set(value.keys()) == {_CALLABLE, _KWARGS}:
       return eval(value[_CALLABLE], globals_)(  # pylint: disable=eval-used
-          **parse_config(value[_KWARGS], globals_).to_dict())
+          **parse_config(value[_KWARGS], globals_))
     elif set(value.keys()) == {_OBJECT}:
       return eval(value[_OBJECT], globals_)  # pylint: disable=eval-used
     else:

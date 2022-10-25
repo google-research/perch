@@ -14,8 +14,10 @@
 # limitations under the License.
 
 """HuBERT model."""
+import enum
 from typing import Any, Dict, Tuple, List, Optional, Union
 
+from chirp.models import conformer
 from chirp.models import layers
 import flax
 from flax import linen as nn
@@ -25,7 +27,7 @@ from jax import numpy as jnp
 
 @flax.struct.dataclass
 class ModelOutputs:
-  embedding: jnp.ndarray
+  embedding: List[jnp.ndarray]
   logits: List[jnp.ndarray]
   targets: List[jnp.ndarray]
   mask_idc: jnp.ndarray
@@ -34,6 +36,12 @@ class ModelOutputs:
   genus: Optional[List[jnp.ndarray]] = None
   family: Optional[List[jnp.ndarray]] = None
   order: Optional[List[jnp.ndarray]] = None
+
+
+class QuantizerPoints(enum.Enum):
+  """A point in the architecture to add a quantizer."""
+  FRONTEND = -2
+  EARLY_FS = -1
 
 
 def compute_mask_indices(key: jnp.ndarray,
@@ -139,6 +147,10 @@ class HuBERTModel(nn.Module):
       contain only a single element, or several in the case of quantizing in
       different feature spaces.
     frontend: The frontend to use to generate features.
+    use_raw_audio: Whether to feed raw audio into the feature extractor to get
+      HuBERT's predictions (as opposed to audio processed with a frontend).
+      The current best configuration sets this option to True but performs
+      quantization after the frontend to obtain targets for HuBERT.
     mask_config: The config for generating masks.
     classifier_config: The config for the classifier.
     taxonomy_loss_weight: Weight for taxonomic label losses. These are used to
@@ -148,12 +160,14 @@ class HuBERTModel(nn.Module):
       which to add a readout layer (for classification). The allowed values are
       in the range [0, len(x_list)) where x_list is the list of Jax ndarrays
       returned by the late feature extractor.
-    quantizer_points: A list of integers indicating where to quantize. The value
-      of -1 stands for quantizing right after the early feature extractor, while
-      any non-negative integer represents quantizing after the late feature
-      extractor block with that integer index. The allowed values are -1 and
-      ints in the range [0, len(x_list)) where x_list is the list of ndarrays
-      returned by the late feature extractor.
+    quantizer_points: A list of integers indicating where to quantize. The
+      allowed values are ints in the range [0, len(x_list)) where x_list is the
+      list of ndarrays returned by the late feature extractor and values of the
+      QuantizerPoints class. Specifically, any non-negative integer represents
+      quantizing after the late feature extractor block with that integer index,
+      whereas QuantizerPoints values also allow to quantize right after the
+      frontend (QuantizerPoints.FRONTEND) and right after the early feature
+      extractor (QuantizerPoints.EARLY_FS).
     final_dim: The dimensionality after the final projection layer.
     logit_temp: The temperature to use for the logits of which cluster each
       timestep belongs to.
@@ -161,12 +175,15 @@ class HuBERTModel(nn.Module):
       unmasked losses for HuBERT. By default it's 1, considering only masked.
     stop_gradient_earlyfs: Whether to stop gradient after the early feature
       extractor.
+    add_positional_embeddings: Whether to add positional embeddings to the
+      late feature extractor.
   """
   num_classes: Dict[str, int]
   early_feature_extractor: Union[nn.Module, None]
   late_feature_extractor: nn.Module
   quantizer: List[nn.Module]
   frontend: nn.Module
+  use_raw_audio: bool
   mask_config: Dict[str, Any]
   classifier_config: Dict[str, Any]
   taxonomy_loss_weight: float
@@ -176,6 +193,7 @@ class HuBERTModel(nn.Module):
   logit_temp: float = 0.1
   alpha: float = 1.0
   stop_gradient_earlyfs: bool = True
+  add_positional_embeddings: bool = False
 
   def classify(self, x_list, mask_idc, per_frame_predictions,
                classify_pool_width, classify_stride, classify_features,
@@ -391,19 +409,38 @@ class HuBERTModel(nn.Module):
     model_outputs = {}
     quantizers = []
 
-    # Pass x through the frontend and the "early" feature extractor.
-    if self.frontend is None:
-      x = jnp.expand_dims(inputs, -1)  # (bsz, sz, 1)
+    if self.use_raw_audio:
+      # Raw audio (no frontend) is fed through the early feature extractor.
+      early_fs_inputs = jnp.expand_dims(inputs, -1)  # (bsz, sz, 1)
+      x_earlyfs = self.early_feature_extractor(early_fs_inputs, train=train)
+      if QuantizerPoints.FRONTEND.value in self.quantizer_points:
+        x_frontend = self.frontend(inputs)  # (bsz, sz, csz)
+        if x_earlyfs.shape[-2] != x_frontend.shape[-2]:
+          raise ValueError(
+              f"Expected the number of frontend frames ({x_frontend.shape[-2]})"
+              " to match the number of frames from the early feature extractor "
+              f"({x_earlyfs.shape[-2]}) in order to have as many HuBERT "
+              "predictions as there are targets, since `quantizer_points` "
+              "includes quantizing on top of the frontend.")
+      x = x_earlyfs
     else:
-      x = self.frontend(inputs)  # (bsz, sz, csz)
-    if self.early_feature_extractor is not None:
-      x = self.early_feature_extractor(x, train=train)
+      # Process audio with a frontend before the early feature extractor.
+      x_frontend = self.frontend(inputs)  # (bsz, sz, csz)
+      if self.early_feature_extractor is not None:
+        x_earlyfs = self.early_feature_extractor(x_frontend, train=train)
+      x = x_earlyfs
+
+    # Add quantizers on frontend and/or early fs, if requested.
+    if QuantizerPoints.FRONTEND.value in self.quantizer_points:
+      quantizers = self.add_projected_quantizer(x_frontend, quantizers, train)
+
+    if QuantizerPoints.EARLY_FS.value in self.quantizer_points:
+      # Add the first quantizer, directly on top of the "early features".
+      quantizers = self.add_projected_quantizer(x_earlyfs, quantizers, train)
 
     bsz, sz, csz = x.shape
-
-    if -1 in self.quantizer_points:
-      # Add the first quantizer, directly on top of the "early features".
-      quantizers = self.add_projected_quantizer(x, quantizers, train)
+    if self.add_positional_embeddings:
+      x = x + conformer.PositionalEmbedding(embedding_dims=csz)(seq_length=sz)
 
     if self.stop_gradient_earlyfs:
       # If no early feature extractor is used, this should have no effect.
@@ -439,26 +476,26 @@ class HuBERTModel(nn.Module):
                          "the late feature extractor returns. Found element "
                          "{} and len(x_list) is {}".format(
                              block_ind, len(x_list)))
-    x = x_list[-1]  # the "embeddings"
+    x = x_list[-1]  # the final-layer "embeddings"
     _, _, csz = x.shape
-    model_outputs["embedding"] = x
+    model_outputs["embedding"] = x_list
 
-    # Add additional quantizers.
-    for block_ind in list(self.quantizer_points):
-      if block_ind == -1:
-        # -1 stands for quantizing right after the early feature extractor
-        # and a quantizer has already been added there, nothing to do.
+    # Add additional quantizers on blocks of the late feature extractor.
+    for point in list(self.quantizer_points):
+      if (point == QuantizerPoints.FRONTEND.value or
+          point == QuantizerPoints.EARLY_FS.value):
+        # Quantizers on the frontend and the early feature extractor will have
+        # already been added, if requested. Nothing more to do here.
         continue
-      elif block_ind < 0:
+      elif point < 0:
         raise ValueError("An element of `quantizer_points` can only be "
-                         "negative if it's -1, but found {}.".format(block_ind))
-      elif block_ind >= len(x_list):
+                         f"negative if it's -1 or -2, but found {point}.")
+      elif point >= len(x_list):
         raise ValueError("Each element of `quantizer_points` should be in the "
                          "range [0, len(x_list)) where x_list is the list that "
                          "the late feature extractor returns. Found element "
-                         "{} and len(x_list) is {}".format(
-                             block_ind, len(x_list)))
-      quantizers = self.add_projected_quantizer(x_list[block_ind], quantizers,
+                         "{} and len(x_list) is {}".format(point, len(x_list)))
+      quantizers = self.add_projected_quantizer(x_list[point], quantizers,
                                                 train)
 
     # Linear readouts for supervised classification on top of HuBERT embeddings.

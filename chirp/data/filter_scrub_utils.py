@@ -217,95 +217,82 @@ def apply_parallel(
   return final_df
 
 
-def is_in(feature_dict: Dict[str, Any], key: str,
-          values: List[SerializableType]) -> bool:
-  """Ensures if feature_dict[key] is in values.
+def is_in(df: pd.DataFrame, key: str,
+          values: List[SerializableType]) -> pd.Series:
+  """Builds a binary mask of whether `df[key]` is in `values`.
 
   Useful for filtering.
 
   Args:
-    feature_dict: A dictionary that represents the row (=recording) to be
-      potentially filtered in a DataFrame.
-    key: The field from feature_dict used for filtering.
-    values: The set of values that feature_dict[key] needs to be belong to in
-      order to trigger a True response.
+    df: The DataFrame.
+    key: The column used for filtering.
+    values: Values to look out for.
 
   Returns:
-    True if feature_dict[key] is in values, False otherwise.
+    A boolean Series representing whether `df[key]` is in `values`.
 
   Raises:
     ValueError: 'key' does not exist in df.
-    TypeError: any element of 'values' has a type different from the type at
-      df[key].
+    TypeError: inconsistent types in df[key] and values.
   """
-  if key not in feature_dict:
+  if key not in df:
     raise ValueError(f'{key} is not a correct field. Please choose among'
-                     f'{list(feature_dict.keys())}')
-  expected_type = type(feature_dict[key])
-  for index, val in enumerate(values):
-    if not isinstance(val, expected_type):
-      raise TypeError(
-          'Values[{}] has type {}, while feature_dict[{}] has type {}'.format(
-              index, type(val), key, expected_type))
-  return feature_dict[key] in values
+                     f'{list(df.columns)}')
+  values_types = set(type(v) for v in values)
+  df_column_types = set(df[key].map(type).unique())
+  if len(values_types.union(df_column_types)) != 1:
+    raise TypeError("Inconsistent types between df['{key}'] and values")
+  return df[key].isin(values)
 
 
-def contains_any(feature_dict: Dict[str, Any], key: str,
-                 values: List[SerializableType]) -> bool:
-  """Checks if feature_dict[key] contains any of the values.
+def contains_any(df: pd.DataFrame, key: str, values: List[str]) -> pd.Series:
+  """Builds a binary mask of whether `df[key]` contains any of `values`.
 
   Args:
-    feature_dict: A dictionary that represents a recording (row in the dataframe
-      of audios). Note that feature_dict[key] must be a Sequence, e.g. the
+    df: The DataFrame. Note that `df[key]` must be a Sequence, e.g. the
       background labels.
-    key: The field from feature_dict used to check.
-    values: list of values such that if any element of this list is in
-      feature_dict[key], the function returns True
+    key: The column used for filtering.
+    values: Values to look out for.
 
   Returns:
-    True if any value in values is in feature_dict[key] , False otherwise.
+    A boolean Series representing whether `df[key]` contains any of `values`.
 
   Raises:
     ValueError: key does not exist in df.
-    TypeError: feature_dict[key] is neither a list or np.ndarray, therefore
-      checking if it contains anything can have unexpected behaviour.
+    ValueError: inconsistent types in df[key] and values.
   """
-  return not contains_no(feature_dict, key, values)
+  if key not in df:
+    raise ValueError(f'{key} is not a correct field. Please choose among'
+                     f'{list(df.columns)}')
+  values_types = set(type(v) for v in values)
+  df_column_types = set().union(
+      *df[key].map(lambda xs: set(type(x) for x in xs)))
+  if len(values_types.union(df_column_types)) != 1:
+    raise ValueError("Inconsistent types between df['{key}'] and values")
+  return df[key].map(' '.join).str.contains('|'.join(values))
 
 
-def contains_no(feature_dict: Dict[str, Any], key: str,
-                values: List[SerializableType]) -> bool:
-  """Checks that feature_dict[key] contains none of the values.
+def contains_no(df: pd.DataFrame, key: str, values: List[str]) -> pd.Series:
+  """Builds a binary mask of whether `df[key]` contains none of `values`.
 
   Args:
-    feature_dict: A dictionary that represents a recording (row in the dataframe
-      of audios). Note that feature_dict[key] must be a Sequence, e.g. the
+    df: The DataFrame. Note that `df[key]` must be a Sequence, e.g. the
       background labels.
-    key: The field from feature_dict used to check.
-    values: The values that must not be in feature_dict[key] in order to trigger
-      a True response.
+    key: The column used for filtering.
+    values: Values to look out for.
 
   Returns:
-    True if feature_dict[key] contains no element in values, False otherwise.
+    A boolean Series representing whether `df[key]` contains none of `values`.
 
   Raises:
     ValueError: key does not exist in df.
-    TypeError: feature_dict[key] is neither a list or np.ndarray, therefore
-      checking if it contains anything can have unexpected behaviour.
   """
-  if key not in feature_dict:
-    raise ValueError(f'{key} is not a correct field. Please choose among'
-                     f'{list(feature_dict.keys())}')
-  if type(feature_dict[key]) not in [list, np.ndarray]:
-    raise TypeError(
-        f'{feature_dict[key]} must be a Sequence to check if it contains anything.'
-    )
-  return all([v not in feature_dict[key] for v in values])
+  return ~contains_any(df, key, values)
 
 
-def is_not_in(feature_dict: Dict[str, Any], key: str,
-              values: List[SerializableType]) -> bool:
-  return not is_in(feature_dict, key, values)
+def is_not_in(df: pd.DataFrame, key: str,
+              values: List[SerializableType]) -> pd.Series:
+  return ~is_in(df, key, values)
 
 
 def append(df: pd.DataFrame, row: Dict[str, Any]):
@@ -509,6 +496,7 @@ def scrub_all_but_class_list(key: str, class_list_name: str) -> Query:
           'values': classes,
       })
 
+
 APPLY_FN = {
     Query: apply_query,
     QuerySequence: apply_sequence,
@@ -525,23 +513,13 @@ MERGE_FN = {
 OPS = {
     # pylint: disable=g-long-lambda
     MaskOp.IN:
-        lambda df, **kwargs: df.apply(
-            functools.partial(is_in, **kwargs), axis=1, result_type='expand'),
+        is_in,
     MaskOp.CONTAINS_NO:
-        lambda df, **kwargs: df.apply(
-            functools.partial(contains_no, **kwargs),
-            axis=1,
-            result_type='expand'),
+        contains_no,
     MaskOp.CONTAINS_ANY:
-        lambda df, **kwargs: df.apply(
-            functools.partial(contains_any, **kwargs),
-            axis=1,
-            result_type='expand'),
+        contains_any,
     MaskOp.NOT_IN:
-        lambda df, **kwargs: df.apply(
-            functools.partial(is_not_in, **kwargs),
-            axis=1,
-            result_type='expand'),
+        is_not_in,
     TransformOp.SAMPLE_UNDER_CONSTRAINTS:
         su.sample_recordings_under_constraints,
     TransformOp.SCRUB:

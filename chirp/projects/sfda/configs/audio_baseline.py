@@ -15,7 +15,7 @@
 
 """Base configuration for bio-acoustic SFDA experiments."""
 from chirp import config_utils
-from chirp.sfda import adapt
+from chirp.projects.sfda import adapt
 from ml_collections import config_dict
 
 _c = config_utils.callable_config
@@ -24,11 +24,11 @@ _c = config_utils.callable_config
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
-  target_class_list = config_dict.FieldReference("ebird2021")
+  target_class_list = config_dict.FieldReference("xenocanto")
+  namespace = config_dict.FieldReference("ebird2021")
   add_taxonomic_labels = config_dict.FieldReference(True)
 
   config = config_dict.ConfigDict()
-  config.debug = False
   config.modality = adapt.Modality.AUDIO
   config.multi_label = True
   config.eval_every = 1  # in epochs
@@ -50,18 +50,17 @@ def get_config() -> config_dict.ConfigDict:
   adaptation_data_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
-          _c("pipeline.HashId"),
-          _c("pipeline.OnlyJaxTypes"),
           _c("pipeline.ConvertBirdTaxonomyLabels",
-             source_namespace=target_class_list,
+             source_namespace=namespace,
              target_class_list=target_class_list,
              add_taxonomic_labels=add_taxonomic_labels),
           _c("pipeline.Shuffle", shuffle_buffer_size=512, seed=seed),
-          _c("pipeline.Batch", batch_size=batch_size,
+          _c("sfda_pipeline.Batch",
+             batch_size=batch_size,
              split_across_devices=True),
           _c("pipeline.NormalizeAudio", target_gain=0.2),
       ])
-  adaptation_data_config.split = [(0, 75)]
+  adaptation_data_config.split = "[(0, 75)]"
   adaptation_data_config.tfds_data_dir = tfds_data_dir
   adaptation_data_config.dataset_directory = "soundscapes/high_sierras:1.0.1"
   config.adaptation_data_config = adaptation_data_config
@@ -70,20 +69,18 @@ def get_config() -> config_dict.ConfigDict:
   eval_data_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
-          _c("pipeline.HashId"),
-          _c("pipeline.OnlyJaxTypes"),
           _c("pipeline.ConvertBirdTaxonomyLabels",
-             source_namespace=target_class_list,
+             source_namespace=namespace,
              target_class_list=target_class_list,
              add_taxonomic_labels=add_taxonomic_labels),
           _c(
-              "pipeline.Batch",
+              "sfda_pipeline.Batch",
               batch_size=batch_size,
               split_across_devices=True,
           ),
           _c("pipeline.NormalizeAudio", target_gain=0.2),
       ])
-  eval_data_config.split = [(75, 100)]
+  eval_data_config.split = "[(75, 100)]"
   eval_data_config.tfds_data_dir = tfds_data_dir
   eval_data_config.dataset_directory = "soundscapes/high_sierras:1.0.1"
 
@@ -93,8 +90,8 @@ def get_config() -> config_dict.ConfigDict:
   init_config = config_dict.ConfigDict()
   init_config.rng_seed = seed
   init_config.target_class_list = target_class_list
-  init_config.input_size = window_size_s * sample_rate_hz
-  init_config.pretrained_ckpt_dir = ""
+  init_config.input_shape = ((window_size_s * sample_rate_hz).get(),)
+  init_config.pretrained_model = True
 
   # Configure model
   model_config = config_dict.ConfigDict()
@@ -111,6 +108,7 @@ def get_config() -> config_dict.ConfigDict:
       sample_rate=sample_rate_hz,
       freq_range=(60, 10_000),
       scaling_config=_c("frontend.PCENScalingConfig"))
+  init_config.pretrained_ckpt_dir = ""
 
   config.model_config = model_config
   config.init_config = init_config

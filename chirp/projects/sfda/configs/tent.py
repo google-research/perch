@@ -19,10 +19,32 @@ Wang, Dequan, et al. "Tent: Fully test-time adaptation by entropy minimization."
 arXiv preprint arXiv:2006.10726 (2020).
 """
 from chirp import config_utils
+from chirp.projects.sfda import model_utils
 from ml_collections import config_dict
 
 
-def get_audio_config() -> config_dict.ConfigDict:
+def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-function-docstring
+
+  # Configure adaptation
+  image_config = config_dict.ConfigDict()
+
+  optimizer_cfg = config_dict.ConfigDict()
+  optimizer_cfg.optimizer = "adam"
+  optimizer_cfg.opt_kwargs = {}
+  optimizer_cfg.weight_decay = 0.
+  optimizer_cfg.learning_rate = 1e-4
+  optimizer_cfg.use_cosine_decay = True
+  optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
+  image_config.optimizer_config = optimizer_cfg
+
+  # Forward options
+  image_config.num_epochs = 10
+  image_config.use_dropout = False
+  image_config.update_bn_statistics = True
+  return image_config
+
+
+def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-function-docstring
 
   # Configure adaptation
   audio_config = config_dict.ConfigDict()
@@ -33,6 +55,7 @@ def get_audio_config() -> config_dict.ConfigDict:
   optimizer_cfg.weight_decay = 0.
   optimizer_cfg.learning_rate = 1e-4
   optimizer_cfg.use_cosine_decay = True
+  optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
   audio_config.optimizer_config = optimizer_cfg
 
   # Forward options
@@ -47,4 +70,5 @@ def get_config() -> config_dict.ConfigDict:
   method_config = config_dict.ConfigDict()
   method_config.sfda_method = config_utils.callable_config("tent.Tent")
   method_config.audio = get_audio_config()
+  method_config.image = get_image_config()
   return method_config

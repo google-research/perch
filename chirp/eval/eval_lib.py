@@ -79,7 +79,8 @@ class EvalSetSpecification:
       form the collection of class representatives.
     num_representatives_per_class: Number of class representatives to sample. If
       the pool of potential representatives is larger, it's downsampled
-      uniformly at random to the correct size.
+      uniformly at random to the correct size. If -1, all representatives are
+      used.
   """
   class_names: Sequence[str]
   search_corpus_global_mask_fn: MaskFunction
@@ -89,14 +90,15 @@ class EvalSetSpecification:
   num_representatives_per_class: int
 
   @classmethod
-  def mvp_specification(cls: Type[_T], location: str, corpus_type: str,
-                        num_representatives_per_class: int) -> _T:
-    """Instantiates an eval MVP EvalSetSpecification.
+  def v1_specification(cls: Type[_T], location: str, corpus_type: str,
+                       num_representatives_per_class: int) -> _T:
+    """Instantiates an eval protocol v1 EvalSetSpecification.
 
     Args:
       location: Geographical location in {'ssw', 'colombia', 'hawaii'}.
       corpus_type: Corpus type in {'xc_fg', 'xc_bg', 'birdclef'}.
       num_representatives_per_class: Number of class representatives to sample.
+        If -1, all representatives are used.
 
     Returns:
       The EvalSetSpecification.
@@ -138,7 +140,7 @@ class EvalSetSpecification:
         lambda df: has_some_fg_annotation(df) | has_some_bg_annotation(df))
 
     class_representative_dataset_name = {
-        'ssw': 'learned_representations',
+        'ssw': 'xc_artificially_rare',
         'colombia': 'xc_downstream',
         'hawaii': 'xc_downstream'
     }[location]
@@ -165,23 +167,31 @@ class EvalSetSpecification:
 
 
 @dataclasses.dataclass
-class FlaxCheckpointCallback:
-  """A model callback implementation for Flax checkpoints.
+class TaxonomyModelCallback:
+  """A model callback implementation for TaxonomyModel checkpoints.
 
   Attributes:
-    init_config: Flax model configuration.
+    init_config: TaxonomyModel configuration.
     workdir: path to the model checkpoint.
+    use_learned_representations: If True, use the model's output weights as a
+      learned representation for species seen during training. If False, reverts
+      to the default behavior of using all embedded upstream recordings for
+      artificially rare species to form search queries.
     model_callback: the fprop function used as part of the model callback,
       created automatically post-initialization.
     learned_representations: mapping from class name to its learned
-      representation, created automatically post-initialization.
+      representation, created automatically post-initialization. If
+      `use_learned_representations` is False, it is left empty, which results in
+      the evaluation protocol relying instead on embedded upstream recordings to
+      form search queries.
   """
   init_config: ConfigDict
   workdir: str
+  use_learned_representations: bool = True
   model_callback: Callable[[np.ndarray],
                            np.ndarray] = dataclasses.field(init=False)
-  learned_representations: Mapping[str,
-                                   np.ndarray] = dataclasses.field(init=False)
+  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+      init=False, default_factory=dict)
 
   def __post_init__(self):
     model_bundle, train_state = train.initialize_model(
@@ -199,7 +209,8 @@ class FlaxCheckpointCallback:
     head_index = list(model_bundle.model.num_classes.keys()).index('label')
     output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
 
-    self.learned_representations = dict(zip(class_list, output_weights))
+    if self.use_learned_representations:
+      self.learned_representations.update(dict(zip(class_list, output_weights)))
 
   def __call__(self, inputs: np.ndarray) -> np.ndarray:
     return np.asarray(self.model_callback(inputs))
@@ -280,10 +291,10 @@ def _get_class_representatives_df(embeddings_df: pd.DataFrame,
     class_representative_mask: A boolean mask indicating which embeddings to
       consider for the class representatives.
     num_representatives_per_class: Number of representatives per class to
-      select. If 0, an empty DataFrame is returned. If smaller than the number
-      of potential representatives indicated by `class_representative_mask`, the
-      class representatives are downsampled at random to
-      `num_representatives_per_class`.
+      select. If -1, all representatives are returned. When the number of
+      representatives indicated by `class_representative_mask` is greater than
+      `num_representatives_per_class`, they are downsampled at random to that
+      threshold.
     rng_key: PRNG key used to perform the random downsampling operation.
 
   Returns:
@@ -291,7 +302,7 @@ def _get_class_representatives_df(embeddings_df: pd.DataFrame,
   """
 
   num_potential_class_representatives = class_representative_mask.sum()
-  if num_representatives_per_class > 0:
+  if num_representatives_per_class >= 0:
     # If needed, downsample to `num_representatives_per_class` at random.
     if num_potential_class_representatives > num_representatives_per_class:
       locations = sorted(
@@ -306,11 +317,10 @@ def _get_class_representatives_df(embeddings_df: pd.DataFrame,
       # subsample those rows and retrieve the resulting index subset.
       index_subset = class_representative_mask[class_representative_mask].iloc[
           locations].index
+      class_representative_mask = class_representative_mask.copy()
       class_representative_mask[~class_representative_mask.index
                                 .isin(index_subset)] = False
-    return embeddings_df[class_representative_mask]
-  else:
-    return embeddings_df.iloc[:0, :]
+  return embeddings_df[class_representative_mask]
 
 
 def _get_search_corpus_df(
@@ -374,7 +384,8 @@ def _eval_set_generator(
 
     # TODO(vdumoulin): fix the issue upstream to avoid having to skip
     # classes in the first place.
-    if class_representative_mask.sum() < num_representatives_per_class:
+    if (num_representatives_per_class >= 0 and
+        class_representative_mask.sum() < num_representatives_per_class):
       logging.warning('Skipping %s as we cannot find enough representatives',
                       class_name)
       continue
@@ -421,8 +432,8 @@ def _numpy_iterator_with_progress_logging(embedded_dataset):
 
   for i, example in enumerate(embedded_dataset.as_numpy_iterator()):
     yield example
-    logging.log_every_n(logging.INFO, 'Computing embeddings (%.2f%% done)...',
-                        roughly_5_per_cent, (i + 1) / num_embeddings)
+    logging.log_every_n(logging.INFO, 'Computing embeddings (%.1f%% done)...',
+                        roughly_5_per_cent, 100 * (i + 1) / num_embeddings)
 
 
 def _create_embeddings_dataframe(embedded_datasets: Dict[str, tf.data.Dataset],
@@ -446,27 +457,6 @@ def _create_embeddings_dataframe(embedded_datasets: Dict[str, tf.data.Dataset],
   embedded_dataset = next(it)
   for dataset in it:
     embedded_dataset = embedded_dataset.concatenate(dataset)
-
-  learned_representations = config.model_callback.learned_representations
-  num_representations = len(learned_representations)
-  tensors = {
-      'label':
-          tf.constant(list(learned_representations.keys())),
-      'embedding':
-          tf.constant(list(learned_representations.values())),
-      'dataset_name':
-          tf.constant(['learned_representations'] * num_representations),
-  }
-  for feature_name, spec in embedded_dataset.element_spec.items():
-    if feature_name not in tensors:
-      tensors[feature_name] = tf.constant(
-          ['' if spec.dtype == tf.string else 0] * num_representations,
-          dtype=spec.dtype)
-  upstream_class_representations_dataset = tf.data.Dataset.from_tensor_slices(
-      tensors)
-
-  embedded_dataset = embedded_dataset.concatenate(
-      upstream_class_representations_dataset)
 
   if config.debug.embedded_dataset_cache_path:
     embedded_dataset = embedded_dataset.cache(
@@ -533,6 +523,7 @@ def prepare_eval_sets(
 # values.
 def search(
     eval_and_search_corpus: ClasswiseEvalSetGenerator,
+    learned_representations: Mapping[str, np.ndarray],
     create_species_query: Callable[[Sequence[np.ndarray]], np.ndarray],
     search_score: Callable[[np.ndarray, np.ndarray], float]
 ) -> Mapping[str, pd.DataFrame]:
@@ -544,6 +535,10 @@ def search(
       (class_name), a DataFrame containing a collection of representatives of
       the eval set species, and a DataFrame containing a collection of search
       corpus species examples to perform search over.
+    learned_representations: Mapping from class name to its learned
+      representation. If a key exists in the mapping, the corresponding
+      representation is used instead of calling `create_species_query` on the
+      class representatives.
     create_species_query: A function callback provided by the user to construct
       a search query from a collection of species vectors. Choice of methodology
       left up to the user.
@@ -564,8 +559,11 @@ def search(
   eval_search_results = dict()
 
   for species_id, eval_reps, search_corpus in eval_and_search_corpus:
-    eval_embeddings = eval_reps['embedding']
-    query = create_species_query(eval_embeddings)
+    if species_id in learned_representations:
+      query = learned_representations[species_id]
+    else:
+      query = create_species_query(eval_reps['embedding'])
+
     species_scores = query_search(
         query=query,
         species_id=species_id,

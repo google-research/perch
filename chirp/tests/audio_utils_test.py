@@ -21,6 +21,7 @@ from jax import random
 from jax import scipy as jsp
 from librosa.core import spectrum
 import numpy as np
+import tensorflow as tf
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -70,6 +71,50 @@ class AudioUtilsTest(parameterized.TestCase):
         axis=-2)
 
     np.testing.assert_allclose(out, librosa_out, rtol=5e-2)
+
+  @parameterized.product(
+      # NOTE: TF and JAX have different outputs when nperseg is odd.
+      nperseg=(256, 230),
+      noverlap=(0, 17),
+      # NOTE: FFT length must be factorizable into primes less than 127 (this
+      # is a cuFFT restriction).
+      nfft=(256, 301),
+      boundary=("zeros", None),
+      padded=(True, False))
+  def test_stft_tf(self, nperseg, noverlap, nfft, boundary, padded):
+    batch_size = 3
+    sample_rate_hz = 22050
+    window = "hann"
+    # NOTE: We don't test the Hamming window, since TensorFlow and SciPy have
+    # different implementations, which leads to slightly different results.
+    # To be precise, the difference is that:
+    # sp.signal.get_window("hamming", N) == tf.signal.hamming_window(N + 1)[:-1]
+
+    time_size = 5 * sample_rate_hz
+    audio = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, time_size))
+    noise = 0.01 * random.normal(random.PRNGKey(0), (batch_size, time_size))
+    signal = audio + noise
+
+    _, _, stfts = jsp.signal.stft(
+        signal,
+        fs=1 / sample_rate_hz,
+        window=window,
+        nperseg=nperseg,
+        noverlap=noverlap,
+        nfft=nfft,
+        boundary=boundary,
+        padded=padded)
+    stfts_tf = audio_utils.stft_tf(
+        tf.constant(signal),
+        fs=1 / sample_rate_hz,
+        window=window,
+        nperseg=nperseg,
+        noverlap=noverlap,
+        nfft=nfft,
+        boundary=boundary,
+        padded=padded)
+
+    np.testing.assert_allclose(stfts, stfts_tf.numpy(), atol=1e-5)
 
   def test_pad_to_length_if_shorter(self):
     audio = jnp.asarray([-1, 0, 1, 0], dtype=jnp.float32)

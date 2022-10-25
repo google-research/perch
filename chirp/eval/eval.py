@@ -48,9 +48,9 @@ def main(argv: Sequence[str]) -> None:
       config, embedded_datasets):
     logging.info(eval_set_name)
 
-    search_results = eval_lib.search(eval_set_generator,
-                                     config.create_species_query,
-                                     config.search_score)
+    search_results = eval_lib.search(
+        eval_set_generator, config.model_callback.learned_representations,
+        config.create_species_query, config.score_search)
 
     eval_set_search_results[eval_set_name] = search_results
 
