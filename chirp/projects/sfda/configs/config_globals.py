@@ -26,6 +26,8 @@ from chirp.models import hubert
 from chirp.models import layers
 from chirp.models import quantizers
 from chirp.models import soundstream_unet
+from chirp.projects.sfda.data import pipeline as sfda_pipeline
+from chirp.projects.sfda.methods import notela
 from chirp.projects.sfda.methods import tent
 from flax import linen as nn
 
@@ -42,6 +44,8 @@ def get_globals() -> Dict[str, Any]:
       "layers": layers,
       "nn": nn,
       "pipeline": pipeline,
+      "sfda_pipeline": sfda_pipeline,
       "soundstream_unet": soundstream_unet,
       "tent": tent,
+      "notela": notela,
   }

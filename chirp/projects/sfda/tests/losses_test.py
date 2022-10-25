@@ -21,10 +21,9 @@ import jax
 import jax.numpy as jnp
 
 from absl.testing import absltest
-from absl.testing import parameterized
 
 
-class LossesTest(parameterized.TestCase):
+class LossesTest(absltest.TestCase):
 
   def test_binary_entropy(self):
     num_classes = 5

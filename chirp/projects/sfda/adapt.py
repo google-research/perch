@@ -18,7 +18,7 @@
 import abc
 import enum
 import functools
-from typing import Dict, Tuple, Type
+from typing import Any, Dict, Tuple, Type
 
 from chirp import train
 from chirp.models import cmap
@@ -55,12 +55,14 @@ class AdaptationState:
     epoch: The epoch of adaptation.
     model_params: The parameters of the model.
     model_state: The state of the model.
+    method_state: All values a method needs to keep track of during adaptation.
     opt_state: The optimizer's state.
   """
   step: int
   epoch: int
   model_params: flax.core.scope.VariableDict
   model_state: flax.core.scope.FrozenVariableDict
+  method_state: Dict[str, Any]
   opt_state: optax.OptState
 
 
@@ -68,6 +70,19 @@ class Modality(enum.Enum):
   """Used to specify which modality we're using for adaptation."""
   IMAGE = "image"
   AUDIO = "audio"
+
+
+def keep_jax_types(batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+  """Remove non-numeric arrays from batch, to make it jit-compliant.
+
+  Args:
+    batch: The batch of data.
+
+  Returns:
+    The filtered batch of data, where any array containing non-numeric values
+      has been filtered out.
+  """
+  return {k: v for k, v in batch.items() if v.dtype != np.dtype("O")}
 
 
 class SFDAMethod(metaclass=abc.ABCMeta):
@@ -135,6 +150,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         epoch=0,
         model_params=params,
         opt_state=opt_state,
+        method_state={},
         model_state=model_state)
 
     return model_bundle, adaptation_state, key
@@ -155,6 +171,60 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         multi-label. Used to define appropriate metrics.
     """
     pass
+
+  def before_epoch(self, key: jax.random.PRNGKeyArray,
+                   model_bundle: model_utils.ModelBundle,
+                   adaptation_state: AdaptationState,
+                   adaptation_dataset: tf.data.Dataset, modality: Modality,
+                   multi_label: bool, **method_kwargs) -> AdaptationState:
+    """Any operation that a method needs to do before an epoch.
+
+    An example of application is to compute all pseudo-labels for the next
+    epoch.
+
+    Args:
+      key: The jax random key used for random operations in this epoch.
+      model_bundle: The ModelBundle used for adaptation.
+      adaptation_state: The current state of adaptation.
+      adaptation_dataset: The dataset used for adaptation.
+      modality: The modality.
+      multi_label: Whether this is a multi-label problem.
+      **method_kwargs: Additional method-specific kwargs.
+
+    Returns:
+      The adaptation state, with a potentially updated 'method_state' attribute.
+    """
+    del (key, model_bundle, adaptation_dataset, modality, multi_label,
+         method_kwargs)
+    return adaptation_state
+
+  def before_iter(
+      self, key: jax.random.PRNGKeyArray, model_bundle: model_utils.ModelBundle,
+      adaptation_state: AdaptationState, batch: Dict[str, np.ndarray],
+      modality: Modality, multi_label: bool,
+      **method_kwargs) -> Tuple[AdaptationState, Dict[str, jnp.ndarray]]:
+    """Any operation that a method needs to do before an adaptation iteration.
+
+    An example of application is to grab the pseudo-labels needed for the
+    current iteration.
+
+    Args:
+      key: The jax random key used for random operations in this epoch.
+      model_bundle: The ModelBundle used for adaptation.
+      adaptation_state: The current state of adaptation.
+      batch: The iteration's batch of data.
+      modality: The modality.
+      multi_label: Whether this is a multi-label problem.
+      **method_kwargs: Additional method-specific kwargs.
+
+    Returns:
+      A potentially updated version of the adaptation state
+      A dictionary containing any variable the method may need during the next
+        epoch of adaptation. All values in this dictionnary must be
+        numeric-typed (they will be passed to a jitted function).
+    """
+    del (key, model_bundle, batch, modality, multi_label, method_kwargs)
+    return adaptation_state, {}
 
   def do_epoch(self, key: jax.random.PRNGKeyArray,
                model_bundle: model_utils.ModelBundle,
@@ -188,7 +258,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       An updated version of the adaptation state.
     """
 
-    def forward(params, key, batch, model_state):
+    def forward(params, key, batch, model_state, **method_gather_args):
       """Forwards the batch through the current model."""
       dropout_key, low_pass_key = jax.random.split(key)
       variables = {"params": params, **model_state}
@@ -229,6 +299,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
               jnp.ones_like(model_outputs.label)
               if "label_mask" not in batch else batch["label_mask"],
       }
+      gather_args.update(method_gather_args)
       if use_supervised_metrics:
         gather_args.update({"label": batch["label"].astype(np.int32)})
 
@@ -249,8 +320,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     @functools.partial(jax.pmap, axis_name="batch")
     def update_step(
         batch: Dict[str, jnp.ndarray], adaptation_state: AdaptationState,
-        key: jax.random.PRNGKeyArray
-    ) -> Tuple[Dict[str, jnp.ndarray], AdaptationState]:
+        key: jax.random.PRNGKeyArray,
+        **method_gather_args) -> Tuple[Dict[str, jnp.ndarray], AdaptationState]:
       """Updates the model's state and params using the given batch."""
 
       params = adaptation_state.model_params
@@ -264,7 +335,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
               key=key,
               batch=batch,
               model_state=model_state,
-          )
+              **method_gather_args)
       grads = jax.lax.pmean(grads, axis_name="batch")
 
       # Update model's parameters from gradient transformations.
@@ -290,9 +361,21 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       step_key, key = jax.random.split(key)
       step_key = jax.random.split(step_key, num=jax.local_device_count())
 
+      adaptation_state, method_gather_args = self.before_iter(
+          key=step_key,
+          model_bundle=model_bundle,
+          adaptation_state=adaptation_state,
+          batch=batch,
+          modality=modality,
+          multi_label=multi_label,
+          **method_kwargs)
+
       # Perform the update
       batch_metrics, adaptation_state = update_step(
-          batch=batch, adaptation_state=adaptation_state, key=step_key)
+          batch=keep_jax_types(batch),
+          adaptation_state=adaptation_state,
+          key=step_key,
+          **method_gather_args)
       reporter(current_step)
       writer.write_scalars(current_step, flax_utils.unreplicate(batch_metrics))
 
@@ -358,7 +441,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       batch = jax.tree_map(np.asarray, batch)
       verify_batch(batch)
       model_outputs, valid_metrics = update_metrics(
-          metric_collection=valid_metrics, batch=batch)
+          metric_collection=valid_metrics, batch=keep_jax_types(batch))
       cmap_metrics = cmap.update_cmap_metrics_dict(cmap_metrics, model_outputs,
                                                    batch)
 
@@ -431,6 +514,16 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
           modality=modality,
           multi_label=multi_label)
       validation_writer.flush()
+
+    adaptation_state = sfda_method.before_epoch(
+        key=key,
+        model_bundle=model_bundle,
+        adaptation_state=adaptation_state,
+        multi_label=multi_label,
+        modality=modality,
+        adaptation_dataset=adaptation_dataset,
+        writer=adaptation_writer,
+        **method_kwargs)
 
     adaptation_state = sfda_method.do_epoch(
         key=key,

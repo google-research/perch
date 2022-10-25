@@ -50,14 +50,13 @@ def get_config() -> config_dict.ConfigDict:
   adaptation_data_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
-          _c("pipeline.HashId"),
-          _c("pipeline.OnlyJaxTypes"),
           _c("pipeline.ConvertBirdTaxonomyLabels",
              source_namespace=namespace,
              target_class_list=target_class_list,
              add_taxonomic_labels=add_taxonomic_labels),
           _c("pipeline.Shuffle", shuffle_buffer_size=512, seed=seed),
-          _c("pipeline.Batch", batch_size=batch_size,
+          _c("sfda_pipeline.Batch",
+             batch_size=batch_size,
              split_across_devices=True),
           _c("pipeline.NormalizeAudio", target_gain=0.2),
       ])
@@ -70,14 +69,12 @@ def get_config() -> config_dict.ConfigDict:
   eval_data_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
-          _c("pipeline.HashId"),
-          _c("pipeline.OnlyJaxTypes"),
           _c("pipeline.ConvertBirdTaxonomyLabels",
              source_namespace=namespace,
              target_class_list=target_class_list,
              add_taxonomic_labels=add_taxonomic_labels),
           _c(
-              "pipeline.Batch",
+              "sfda_pipeline.Batch",
               batch_size=batch_size,
               split_across_devices=True,
           ),

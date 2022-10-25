@@ -233,7 +233,7 @@ class ResNet(image_model.ImageModel):
       image = preprocess_for_eval(example['image'], dtype=dtype)
       label = tf.one_hot(example['label'],
                          data_builder.info.features['label'].num_classes)
-      return {'image': image, 'label': label}
+      return {'image': image, 'label': label, 'tfds_id': example['tfds_id']}
 
     dataset = data_builder.as_dataset(
         split=split,

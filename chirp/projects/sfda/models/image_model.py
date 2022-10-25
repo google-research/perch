@@ -112,6 +112,6 @@ class ImageModel(nn.Module):
       label = tf.one_hot(example['label'],
                          data_builder.info.features['label'].num_classes)
 
-      return {'image': image, 'label': label}
+      return {'image': image, 'label': label, 'tfds_id': example['tfds_id']}
 
     return dataset.map(_pp, tf.data.experimental.AUTOTUNE)

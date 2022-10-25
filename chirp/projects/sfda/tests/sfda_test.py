@@ -15,6 +15,7 @@
 
 """Tests for adaptation part."""
 
+import itertools
 import shutil
 import tempfile
 
@@ -27,6 +28,7 @@ from chirp.projects.sfda import models
 from chirp.projects.sfda.configs import audio_baseline
 from chirp.projects.sfda.configs import config_globals
 from chirp.projects.sfda.configs import image_baseline
+from chirp.projects.sfda.configs import notela as notela_config
 from chirp.projects.sfda.configs import tent as tent_config
 from chirp.projects.sfda.tests import fake_image_dataset
 from chirp.tests import fake_dataset
@@ -37,7 +39,7 @@ import jax.numpy as jnp
 from absl.testing import absltest
 from absl.testing import parameterized
 
-_unparsed_configs = {"tent": tent_config}
+_UNPARSED_CONFIGS = {"tent": tent_config, "notela": notela_config}
 
 
 class ConstantEncoder(nn.Module):
@@ -79,17 +81,18 @@ class AdaptationTest(parameterized.TestCase):
   def _get_datasets(self, config, modality: adapt.Modality):
     if modality == adapt.Modality.AUDIO:
       adaptation_dataset, _ = pipeline.get_dataset(
-          "train[:2]",
+          "train[:1]",
           dataset_directory=self.audio_builder.data_dir,
           pipeline=config.adaptation_data_config.pipeline)
       val_dataset, _ = pipeline.get_dataset(
-          "train[2:4]",
+          "train[1:2]",
           dataset_directory=self.audio_builder.data_dir,
           pipeline=config.eval_data_config.pipeline)
     else:
       input_pipeline = models.MODEL_REGISTRY[config.model_config.encoder](
           num_classes=1).get_input_pipeline
-      dataset = input_pipeline(data_builder=self.image_builder, split="train")
+      dataset = input_pipeline(
+          data_builder=self.image_builder, split="train[:1]")
       dataset = dataset.batch(
           1, drop_remainder=False).batch(
               1, drop_remainder=False)
@@ -106,12 +109,11 @@ class AdaptationTest(parameterized.TestCase):
       config.init_config.target_class_list = "xenocanto"
       config.sample_rate_hz = 50
       toy_pipeline = pipeline.Pipeline(ops=[
-          pipeline.OnlyJaxTypes(),
           pipeline.ConvertBirdTaxonomyLabels(
               source_namespace="ebird2021",
               target_class_list=config.init_config.target_class_list,
               add_taxonomic_labels=True),
-          pipeline.Batch(batch_size=2, split_across_devices=True),
+          pipeline.Batch(batch_size=1, split_across_devices=True),
           pipeline.RandomSlice(window_size=1),
       ])
 
@@ -134,17 +136,18 @@ class AdaptationTest(parameterized.TestCase):
       if use_constant_encoder:
         config.model_config.encoder = models.ImageModelName.CONSTANT
     method_configs = {}
-    for method in ["tent"]:
-      method_config = _unparsed_configs[method].get_config()
+    for method in ["tent", "notela"]:
+      method_config = _UNPARSED_CONFIGS[method].get_config()
       method_config = config_utils.parse_config(method_config,
                                                 config_globals.get_globals())
       method_configs[method] = method_config
     return config, method_configs
 
-  @parameterized.named_parameters(
-      ("image", "tent", adapt.Modality.IMAGE),
-      ("audio", "tent", adapt.Modality.AUDIO),
-  )
+  @parameterized.named_parameters(*[
+      (f"{method}_{modality.value}", method, modality)
+      for method, modality in itertools.product(
+          ["tent", "notela"], [adapt.Modality.IMAGE, adapt.Modality.AUDIO])
+  ])
   def test_adapt_one_epoch(self, method, modality: adapt.Modality):
     """Test an epoch of adaptation for SFDA methods."""
 
@@ -236,6 +239,7 @@ class AdaptationTest(parameterized.TestCase):
                                                 model_utils.TrainableParams.ALL)
     for p, masked in traverse_util.flatten_dict(masked_params).items():
       self.assertFalse(masked)
+
 
 if __name__ == "__main__":
   absltest.main()

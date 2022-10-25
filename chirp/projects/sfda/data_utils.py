@@ -178,7 +178,7 @@ def get_metadata(dataset_name: str) -> Dict[str, Any]:
     split = {'train': 'test[:75%]', 'eval': 'test[75%:]'}
     return {'num_classes': 10, 'resolution': 32, 'splits': split}
   elif dataset_name == 'fake_image_dataset':
-    split = {'train': 'train[:2]', 'eval': 'train[2:4]'}
+    split = {'train': 'train[:1]', 'eval': 'train[1:2]'}
     return {'num_classes': 2, 'resolution': 12, 'splits': split}
   else:
     raise NotImplementedError(
