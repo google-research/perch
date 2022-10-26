@@ -25,6 +25,7 @@ from chirp.models import frontend
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import model_utils
 from chirp.projects.sfda import models
+from chirp.projects.sfda.configs import ada_bn as ada_bn_config
 from chirp.projects.sfda.configs import audio_baseline
 from chirp.projects.sfda.configs import config_globals
 from chirp.projects.sfda.configs import image_baseline
@@ -45,7 +46,8 @@ _UNPARSED_CONFIGS = {
     "tent": tent_config,
     "notela": notela_config,
     "pseudo_label": pseudo_label_config,
-    "shot": shot_config
+    "shot": shot_config,
+    "ada_bn": ada_bn_config,
 }
 
 
@@ -143,7 +145,7 @@ class AdaptationTest(parameterized.TestCase):
       if use_constant_encoder:
         config.model_config.encoder = models.ImageModelName.CONSTANT
     method_configs = {}
-    for method in ["tent", "notela", "pseudo_label", "shot"]:
+    for method in ["ada_bn", "tent", "notela", "pseudo_label", "shot"]:
       method_config = _UNPARSED_CONFIGS[method].get_config()
       method_config = config_utils.parse_config(method_config,
                                                 config_globals.get_globals())
@@ -152,7 +154,7 @@ class AdaptationTest(parameterized.TestCase):
 
   @parameterized.named_parameters(*[
       (f"{method}_{modality.value}", method, modality) for method, modality in
-      itertools.product(["tent", "notela", "pseudo_label", "shot"],
+      itertools.product(["ada_bn", "tent", "notela", "pseudo_label", "shot"],
                         [adapt.Modality.IMAGE, adapt.Modality.AUDIO])
   ])
   def test_adapt_one_epoch(self, method: str, modality: adapt.Modality):
