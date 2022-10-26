@@ -53,6 +53,7 @@ class NOTELA(adapt.SFDAMethod):
       dataset_feature: jnp.ndarray,
       knn: int,
       sparse_storage: bool,
+      memory_efficient_computation: bool = True
   ) -> Union[jnp.ndarray, sparse.BCOO]:
     """Compute batch_feature's nearest-neighbors among dataset_feature.
 
@@ -63,6 +64,11 @@ class NOTELA(adapt.SFDAMethod):
         feature_dim]
       knn: The number of nearest-neighbors to use.
       sparse_storage: whether to use sparse storage for the affinity matrix.
+      memory_efficient_computation: Whether to make computation memory
+        efficient. This option trades speed for memory footprint by looping over
+        samples in the batch instead of fully vectorizing nearest-neighbor
+        computation. For large datasets, memory usage can be a bottleneck, which
+        is why we set this option to True by default.
 
     Returns:
       The batch's nearest-neighbors affinity matrix of shape
@@ -84,12 +90,27 @@ class NOTELA(adapt.SFDAMethod):
       )
 
     # Compute the nearest-neighbors
-    pairwise_distances = method_utils.jax_cdist(
-        batch_feature, dataset_feature)  # [batch_size, dataset_size]
     neighbors = min(dataset_shape[0], knn)
-    col_indexes = jax.lax.top_k(-pairwise_distances,
-                                neighbors)[1][:,
-                                              1:]  # [batch_size, neighbors-1]
+    if memory_efficient_computation:
+      # We loop over samples in the current batch to avoid storing a
+      # batch_size x dataset_size float array. That slows down computation, but
+      # reduces memory footprint, which becomes the bottleneck for large
+      # datasets.
+      col_indexes = []
+      for sample_feature in batch_feature:
+        pairwise_distances = method_utils.jax_cdist(
+            jnp.expand_dims(sample_feature, 0),
+            dataset_feature)  # [1, dataset_size]
+        col_indexes.append(
+            jax.lax.top_k(-pairwise_distances,
+                          neighbors)[1][:, 1:])  # [1, neighbors-1]
+      col_indexes = jnp.stack(col_indexes)
+    else:
+      pairwise_distances = method_utils.jax_cdist(
+          batch_feature, dataset_feature)  # [batch_size, dataset_size]
+      col_indexes = jax.lax.top_k(-pairwise_distances,
+                                  neighbors)[1][:,
+                                                1:]  # [batch_size, neighbors-1]
     col_indexes = col_indexes.flatten()  # [batch_size * neighbors-1]
     row_indexes = jnp.repeat(np.arange(batch_shape[0]),
                              neighbors - 1)  # [0, ..., 0, 1, ...]

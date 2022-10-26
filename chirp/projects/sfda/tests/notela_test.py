@@ -15,6 +15,9 @@
 
 """Tests for NOTELA method."""
 
+import functools
+import itertools
+
 from chirp.projects.sfda.methods import notela
 import flax.linen as nn
 import jax
@@ -35,22 +38,36 @@ class NOTELATest(absltest.TestCase):
     key = jax.random.PRNGKey(0)
     batch_feature = jax.random.normal(key, (n_points_batch, feature_dim))
     dataset_feature = jax.random.normal(key, (n_points_dataset, feature_dim))
-    nearest_neighbors = notela.NOTELA.compute_nearest_neighbors(
+    compute_nearest_neighbor_fn = functools.partial(
+        notela.NOTELA.compute_nearest_neighbors,
         batch_feature=batch_feature,
         dataset_feature=dataset_feature,
-        knn=knn,
-        sparse_storage=False)
-    sparse_nearest_neighbors = notela.NOTELA.compute_nearest_neighbors(
-        batch_feature=batch_feature,
-        dataset_feature=dataset_feature,
-        knn=knn,
-        sparse_storage=True)
-    self.assertEqual(nearest_neighbors.shape,
+        knn=knn)
+
+    def to_dense(matrix):
+      if isinstance(matrix, jnp.ndarray):
+        return matrix
+      else:
+        return matrix.todense()
+
+    nearest_neighbors_matrices = []
+    for (efficient, sparse_storage) in itertools.product((True, False),
+                                                         (True, False)):
+      nearest_neighbors_matrices.append(
+          compute_nearest_neighbor_fn(
+              sparse_storage=sparse_storage,
+              memory_efficient_computation=efficient))
+
+    nearest_neighbors_reference = to_dense(nearest_neighbors_matrices[0])
+    self.assertEqual(nearest_neighbors_reference.shape,
                      (n_points_batch, n_points_dataset))
-    self.assertTrue((nearest_neighbors.sum(-1) >= 0).all())
-    self.assertTrue((nearest_neighbors.sum(-1) <= knn).all())
-    self.assertTrue(
-        jnp.allclose(sparse_nearest_neighbors.todense(), nearest_neighbors))
+    self.assertTrue((nearest_neighbors_reference.sum(-1) >= 0).all())
+    self.assertTrue((nearest_neighbors_reference.sum(-1) <= knn).all())
+
+    for nn_matrix_version in nearest_neighbors_matrices[1:]:
+      self.assertTrue(
+          jnp.allclose(nearest_neighbors_reference,
+                       to_dense(nn_matrix_version)))
 
   def test_teacher_step(self):
     """Ensure that NOTELA's teacher-step produces valid pseudo-labels."""
