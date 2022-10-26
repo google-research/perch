@@ -39,6 +39,9 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   image_config.lambda_ = 0.1
   image_config.alpha = 0.1
 
+  # Efficiency options
+  image_config.sparse_storage = True
+
   # Foward options
   image_config.num_epochs = 10
   image_config.use_dropout = True
@@ -65,6 +68,9 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   audio_config.lambda_ = 1.0
   audio_config.alpha = 1.0
   audio_config.online_pl_updates = False
+
+  # Efficiency options
+  audio_config.sparse_storage = True
 
   # Forward options
   audio_config.num_epochs = 10

@@ -18,6 +18,7 @@
 from chirp.projects.sfda.methods import notela
 import flax.linen as nn
 import jax
+from jax.experimental import sparse
 import jax.numpy as jnp
 
 from absl.testing import absltest
@@ -38,11 +39,18 @@ class NOTELATest(absltest.TestCase):
         batch_feature=batch_feature,
         dataset_feature=dataset_feature,
         knn=knn,
-    )
+        sparse_storage=False)
+    sparse_nearest_neighbors = notela.NOTELA.compute_nearest_neighbors(
+        batch_feature=batch_feature,
+        dataset_feature=dataset_feature,
+        knn=knn,
+        sparse_storage=True)
     self.assertEqual(nearest_neighbors.shape,
                      (n_points_batch, n_points_dataset))
     self.assertTrue((nearest_neighbors.sum(-1) >= 0).all())
     self.assertTrue((nearest_neighbors.sum(-1) <= knn).all())
+    self.assertTrue(
+        jnp.allclose(sparse_nearest_neighbors.todense(), nearest_neighbors))
 
   def test_teacher_step(self):
     """Ensure that NOTELA's teacher-step produces valid pseudo-labels."""
@@ -59,10 +67,18 @@ class NOTELATest(absltest.TestCase):
     dataset_proba = nn.sigmoid(jax.random.normal(key, (n_points_dataset,)))
     nn_matrix = jax.random.randint(key, (n_points_batch, n_points_dataset), 0,
                                    2)
+    sparse_nn_matrix = sparse.BCOO.fromdense(nn_matrix)
     pseudo_labels = notela.NOTELA.teacher_step(
         batch_proba=one_hot(batch_proba),
         dataset_proba=one_hot(dataset_proba),
         nn_matrix=nn_matrix,
+        lambda_=lambda_,
+        alpha=alpha,
+    )
+    pseudo_labels_from_sparse = notela.NOTELA.teacher_step(
+        batch_proba=one_hot(batch_proba),
+        dataset_proba=one_hot(dataset_proba),
+        nn_matrix=sparse_nn_matrix,
         lambda_=lambda_,
         alpha=alpha,
     )
@@ -71,6 +87,10 @@ class NOTELATest(absltest.TestCase):
             pseudo_labels.sum(-1),
             jnp.ones_like(pseudo_labels.sum(-1)),
             atol=1e-4))
+    self.assertTrue(jnp.allclose(
+        pseudo_labels,
+        pseudo_labels_from_sparse,
+    ))
 
 
 if __name__ == "__main__":

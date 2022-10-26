@@ -148,7 +148,7 @@ class AdaptationTest(parameterized.TestCase):
       for method, modality in itertools.product(
           ["tent", "notela"], [adapt.Modality.IMAGE, adapt.Modality.AUDIO])
   ])
-  def test_adapt_one_epoch(self, method, modality: adapt.Modality):
+  def test_adapt_one_epoch(self, method: str, modality: adapt.Modality):
     """Test an epoch of adaptation for SFDA methods."""
 
     # Recover the configurations dict.
@@ -157,6 +157,9 @@ class AdaptationTest(parameterized.TestCase):
     sfda_method = method_config.sfda_method
     method_config = getattr(method_config, modality.value)
     method_config.num_epochs = 1
+    if method == "notela":
+      # Sparse storage slows computations and can cause test timeouts.
+      method_config.sparse_storage = False
 
     # Get data
     adaptation_dataset, val_dataset = self._get_datasets(config, modality)
