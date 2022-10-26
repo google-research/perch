@@ -32,7 +32,8 @@ class QuantizersTest(absltest.TestCase):
         num_centroids=num_centroids,
         commitment_loss=0.0,
         ema_decay=0.99,
-        demean=True)
+        demean=True,
+        rescale=True)
     key = jax.random.PRNGKey(17)
     rngs = {}
     rngs['params'], key = jax.random.split(key)
@@ -52,12 +53,14 @@ class QuantizersTest(absltest.TestCase):
     expected = jnp.array([1., 1.])
     expected_means = jnp.zeros([embedding_dim])
     for _ in range(5):
-      expected = 0.99 * expected + 0.01 * jnp.array([0., 8.])
+      expected = 0.99 * expected + 0.01 * jnp.array([8., 0.])
       expected_means = 0.99 * expected_means + 0.01 * jnp.ones([embedding_dim])
 
     np.testing.assert_allclose(params['quantizer']['cluster_counts'], expected)
     np.testing.assert_allclose(params['quantizer']['feature_means'],
                                expected_means)
+    np.testing.assert_allclose(
+        params['quantizer']['feature_stdev'], 0.0, atol=1e-6)
 
   def test_refresh_codebooks(self):
     num_centroids = 2

@@ -154,6 +154,15 @@ class BaseQuantizer(nn.Module):
       self._ema_update(feature_means, new_observation)
     return feature_means.value
 
+  def update_stdev_estimate(self, flat_inputs, train):
+    """Update an EMA estimate of the feature standard deviation."""
+    feature_stdev = self.variable('quantizer', 'feature_stdev', jnp.std,
+                                  flat_inputs)
+    new_observation = jnp.std(flat_inputs)
+    if train:
+      self._ema_update(feature_stdev, new_observation)
+    return feature_stdev.value
+
   def _ema_update(self, variable, new_value):
     """Apply an EMA variable update, possibly in cross-device context."""
     if self.cross_replica_axis:
@@ -170,6 +179,7 @@ class VectorQuantizer(BaseQuantizer):
   """
   commitment_loss: float = 0.0
   demean: bool = False
+  rescale: bool = False
 
   def loss(self, inputs, quantized):
     quant_loss = jnp.square(quantized - jax.lax.stop_gradient(inputs))
@@ -185,6 +195,9 @@ class VectorQuantizer(BaseQuantizer):
     if self.demean:
       feature_means = self.update_mean_estimate(flat_inputs, train)
       flat_inputs -= feature_means
+    if self.rescale:
+      stdev = self.update_stdev_estimate(flat_inputs, train)
+      flat_inputs /= stdev + 1e-8
     codebook = self.create_codebook(flat_inputs)
 
     # Find nearest neighbor indices.
@@ -196,13 +209,15 @@ class VectorQuantizer(BaseQuantizer):
     encodings = jax.nn.one_hot(nn_idx, self.num_centroids)
     counts = self.update_cluster_counts(encodings, train)
     quantized = jnp.matmul(encodings, codebook)
+    quantization_loss = self.loss(flat_inputs, quantized)
 
+    if self.rescale:
+      quantized *= stdev + 1e-8
     if self.demean:
       quantized += feature_means
     quantized = jnp.reshape(quantized, inputs.shape)
 
     nn_idx = jnp.reshape(nn_idx, inputs.shape[:-1])
-    quantization_loss = self.loss(inputs, quantized)
 
     # Apply stop gradient to protect the encodings from downstream losses.
     quantized = inputs + jax.lax.stop_gradient(quantized - inputs)
