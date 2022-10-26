@@ -92,6 +92,16 @@ class NOTELATest(absltest.TestCase):
         pseudo_labels_from_sparse,
     ))
 
+  def test_pad_pseudo_label(self):
+    key = jax.random.PRNGKey(0)
+    num_samples = 3
+    label_mask = jnp.array([0, 1, 0, 0, 1]).astype(bool)
+    used_classes = label_mask.sum()
+    pseudo_labels = jax.random.normal(key, (num_samples, used_classes))
+    padded_pseudo_label = notela.NOTELA.pad_pseudo_label(
+        label_mask, pseudo_labels)
+    self.assertTrue((padded_pseudo_label[:, label_mask] == pseudo_labels).all())
+
 
 if __name__ == "__main__":
   absltest.main()

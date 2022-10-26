@@ -120,7 +120,8 @@ def forward_dataset(
     model_bundle: model_utils.ModelBundle,
     modality: adapt.Modality,
     multi_label: bool,
-    use_batch_statistics: bool = False
+    use_batch_statistics: bool = False,
+    only_keep_unmasked_classes: bool = False
 ) -> Dict[str, Union[jnp.ndarray, np.ndarray]]:
   """Fowards a dataset through a given model.
 
@@ -134,6 +135,11 @@ def forward_dataset(
       probabilities are packaged.
     use_batch_statistics: Whether to use batch's statistics for BatchNorm layers
       during feature extraction.
+    only_keep_unmasked_classes: In case 'label_mask' is provided as a key in
+      batches of data, this option allows to only store the model's probabilties
+      for classes that are not masked. This can result in large memory savings,
+      e.g. for the bio-acoustic model where <100 classes are present versus the
+      ~11k total species.
 
   Returns:
     A dictionnary with the following keys:
@@ -145,7 +151,8 @@ def forward_dataset(
        probas, of shape [N]. ids[i] corresponds to embeddings[i] and probas[i].
 
   Raises:
-    ValueError: In case the ids do not uniquely identify each sample.
+    ValueError: In case the ids do not uniquely identify each sample, or if
+      the samples don't have the same label_mask.
   """
   logging.info("Starting feature extraction...")
   all_ouputs = []
@@ -156,11 +163,27 @@ def forward_dataset(
 
   # Forward the whole dataset. Store embeddings, samples' ids, labels, and
   # model's probabilities.
-  for batch in tqdm.tqdm(dataset.as_numpy_iterator(), total=len(dataset)):
+  for index, batch in tqdm.tqdm(
+      enumerate(dataset.as_numpy_iterator()), total=len(dataset)):
     batch = jax.tree_map(np.asarray, batch)
+    if "label_mask" in batch and only_keep_unmasked_classes and index == 0:
+      # We will use the first sample's label_mask as a reference, and ensure
+      # all label_masks are the same.
+      reference_mask = flax_utils.unreplicate(batch["label_mask"])[0]
     model_outputs = batch_forward(
         adapt.keep_jax_types(batch), model_state, params, model, modality,
         use_batch_statistics)
+    if "label_mask" in batch and only_keep_unmasked_classes:
+      # We make sure that the label_mask is the same for all samples in the
+      # dataset.
+      if not (jnp.tile(reference_mask, (batch["label_mask"].shape[0], 1))
+              == batch["label_mask"]).all():
+        raise ValueError("All samples should have the same label_mask for the"
+                         "'only_keep_unmasked_classes' option to work"
+                         "adequately.")
+      # We only keep unmasked classes.
+      model_outputs = model_outputs.replace(
+          label=model_outputs.label[..., reference_mask.astype(bool)])
     all_ouputs.append(flax_utils.unreplicate(model_outputs))
     all_ids += list(batch["tfds_id"].reshape(-1))
 
