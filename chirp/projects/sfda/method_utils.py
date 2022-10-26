@@ -145,10 +145,10 @@ def forward_dataset(
     A dictionnary with the following keys:
       -embeddings: The extracted embeddings of shape [dataset_size,
        embedding_dimension].
-      -probas: The output classwise probabities of shape [dataset_size,
+      -proba: The output classwise probabities of shape [dataset_size,
        num_classes].
       -ids: The ids of the examples extracted, consistent with  embeddings and
-       probas, of shape [N]. ids[i] corresponds to embeddings[i] and probas[i].
+       proba, of shape [N]. ids[i] corresponds to embeddings[i] and proba[i].
 
   Raises:
     ValueError: In case the ids do not uniquely identify each sample, or if
