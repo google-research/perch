@@ -157,7 +157,7 @@ def get_config() -> config_dict.ConfigDict:
   model_config.alpha = 0.5  # gets loss for both masked and unmasked
   model_config.taxonomy_loss_weight = 0.25
   model_config.readout_points = [2, 4, 6, 8, 10]
-  model_config.quantizer_points = [-1]
+  model_config.quantizer_points = (-2,)
   init_config.model_config = model_config
 
   # Configure the training loop.

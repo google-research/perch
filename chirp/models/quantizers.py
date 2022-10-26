@@ -355,6 +355,8 @@ class ProductQuantizer(nn.Module):
   def __call__(self, inputs, train):
     ns = self.get_num_sections()
     embedding_dim = inputs.shape[-1]
+    bsz, sz, _ = inputs.shape
+    nc = self.get_num_centroids()
     flat_inputs = jnp.reshape(inputs, [-1, embedding_dim])
     flat_inputs, pca_loss, projection, pre_bias = self.pca_project(flat_inputs)
 
@@ -372,7 +374,7 @@ class ProductQuantizer(nn.Module):
       nn_idx.append(outputs.nn_idx)
 
       codebook_list.append(outputs.codebook)
-      loss.append(outputs.quantization_loss)
+      loss.append(jnp.reshape(outputs.quantization_loss, [bsz, sz, nc]))
       counts += outputs.cluster_counts
 
     # Aggregate across 'sections' to get the following shapes:

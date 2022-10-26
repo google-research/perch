@@ -188,7 +188,7 @@ class HuBERTModel(nn.Module):
   classifier_config: Dict[str, Any]
   taxonomy_loss_weight: float
   readout_points: List[int]
-  quantizer_points: List[int]
+  quantizer_points: Tuple[int]
   final_dim: int = 512
   logit_temp: float = 0.1
   alpha: float = 1.0

@@ -614,10 +614,14 @@ class EarlyFeatureExtractor(nn.Module):
         each of the convolutional layers.
       dropout_prob: A float. The dropout probability.
       activation: The activation to apply after each convolutional "block".
+      old_version: Whether to use the older version of this layer (which used
+        grouped convolutions), for compatibility with old experiments. This 
+        option will be removed in the future.
   """
   conv_layer_tuples: Tuple[Tuple[int, int, int], ...]
   dropout_prob: float = 0.
   activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu
+  old_version: bool = False
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
@@ -630,20 +634,40 @@ class EarlyFeatureExtractor(nn.Module):
     Returns:
       A jnp.ndarray with shape [B, T, D].
     """
+    if self.old_version:
+      if inputs.ndim != 3:
+        raise ValueError("Expected the input to have 3 dimensions.")
+      model_dims = self.conv_layer_tuples[0][0]
+      if inputs.shape[-1] != model_dims:
+        inputs = FeedForward(output_dims=model_dims)(inputs)
+
     # TODO(etriantafillou): Experiment with adding residual connections.
     for i, (dim, k, stride) in enumerate(self.conv_layer_tuples):
-      inputs = nn.Conv(
-          features=dim,
-          kernel_size=(k,),
-          strides=(stride,),
-          use_bias=False,
-          name="conv_layer_{}".format(i))(
-              inputs)
+      if self.old_version:
+        inputs = nn.Conv(
+            features=dim,
+            kernel_size=(k,),
+            strides=(stride,),
+            feature_group_count=dim,
+            use_bias=False,
+            name="conv_layer_{}".format(i))(
+                inputs)
+      else:
+        inputs = nn.Conv(
+            features=dim,
+            kernel_size=(k,),
+            strides=(stride,),
+            use_bias=False,
+            name="conv_layer_{}".format(i))(
+                inputs)
 
       inputs = nn.Dropout(self.dropout_prob)(inputs, deterministic=not train)
 
       if i == 0:
-        inputs = nn.GroupNorm(num_groups=dim)(inputs)
+        if self.old_version:
+          inputs = nn.GroupNorm(num_groups=None, group_size=dim)(inputs)
+        else:
+          inputs = nn.GroupNorm(num_groups=dim)(inputs)
 
       inputs = self.activation(inputs)
 
