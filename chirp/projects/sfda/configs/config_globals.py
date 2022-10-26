@@ -28,6 +28,7 @@ from chirp.models import quantizers
 from chirp.models import soundstream_unet
 from chirp.projects.sfda.data import pipeline as sfda_pipeline
 from chirp.projects.sfda.methods import notela
+from chirp.projects.sfda.methods import pseudo_label
 from chirp.projects.sfda.methods import tent
 from flax import linen as nn
 
@@ -46,6 +47,7 @@ def get_globals() -> Dict[str, Any]:
       "pipeline": pipeline,
       "sfda_pipeline": sfda_pipeline,
       "soundstream_unet": soundstream_unet,
+      "pseudo_label": pseudo_label,
       "tent": tent,
       "notela": notela,
   }
