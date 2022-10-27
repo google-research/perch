@@ -204,8 +204,9 @@ class AdaptationTest(parameterized.TestCase):
 
   def test_mask_parameters_audio(self):
     """Testing parameter masking used to restrict trainable parameters."""
-    config, _ = self._get_configs(adapt.Modality.AUDIO, "tent")
-    _, params, _, _ = model_utils.prepare_audio_model(
+    config, _ = self._get_configs(
+        adapt.Modality.AUDIO, "tent", use_constant_encoder=False)
+    model_bundle, params, _, _ = model_utils.prepare_audio_model(
         model_config=config.model_config,
         optimizer_config=None,
         total_steps=0,
@@ -214,7 +215,7 @@ class AdaptationTest(parameterized.TestCase):
         pretrained=False,
         target_class_list=config.init_config.target_class_list)
 
-    self._test_mask_parameters(params)
+    self._test_mask_parameters(params, model_bundle.model)
 
   @parameterized.named_parameters(
       ("resnet", models.ImageModelName.RESNET),
@@ -224,7 +225,7 @@ class AdaptationTest(parameterized.TestCase):
 
     config, _ = self._get_configs(adapt.Modality.IMAGE, "tent")
     config.model_config.encoder = model
-    _, params, _, _ = model_utils.prepare_image_model(
+    model_bundle, params, _, _ = model_utils.prepare_image_model(
         model_config=config.model_config,
         optimizer_config=None,
         total_steps=1,
@@ -232,23 +233,23 @@ class AdaptationTest(parameterized.TestCase):
         pretrained=False,
         input_shape=config.init_config.input_shape,
         target_class_list=config.init_config.target_class_list)
-    self._test_mask_parameters(params)
+    self._test_mask_parameters(params, model_bundle.model)
 
-  def _test_mask_parameters(self, params):
+  def _test_mask_parameters(self, params, model):
     # Test BN masking
     masked_params = model_utils.mask_parameters(params,
-                                                model_utils.TrainableParams.BN)
+                                                model_utils.TrainableParams.BN,
+                                                model)
     for p, masked in traverse_util.flatten_dict(masked_params).items():
-      if any(["norm" in x.lower() for x in p
-             ]) and (any(["scale" in x.lower() for x in p]) or
-                     any(["bias" in x.lower() for x in p])):
+      if model.is_bn_parameter(p):
         self.assertFalse(masked)
       else:
         self.assertTrue(masked)
 
     # Test no masking
     masked_params = model_utils.mask_parameters(params,
-                                                model_utils.TrainableParams.ALL)
+                                                model_utils.TrainableParams.ALL,
+                                                model)
     for p, masked in traverse_util.flatten_dict(masked_params).items():
       self.assertFalse(masked)
 

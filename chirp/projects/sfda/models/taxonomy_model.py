@@ -13,32 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A toy model, used for testing/debugging purposes only."""
-
+"""An extension of chirp's original taxonomy_model."""
 from typing import List
 from chirp.models import taxonomy_model
-from chirp.projects.sfda.models import image_model
-from flax import linen as nn
-import jax.numpy as jnp
 
 
-class ConstantEncoderModel(image_model.ImageModel):
-  """A toy model, used for testing/debugging purposes only.
-
-    The model contains a trainable head. The encoder part simply returns the
-    raw images, after spatial average-pooling.
-  """
-  num_classes: int
-
-  @nn.compact
-  def __call__(self, x, train: bool, use_running_average: bool):
-
-    x = jnp.mean(x, axis=(1, 2))
-    model_outputs = {}
-    model_outputs['embedding'] = x
-    x = nn.Dense(self.num_classes, dtype=jnp.float32)(x)
-    model_outputs['label'] = x
-    return taxonomy_model.ModelOutputs(**model_outputs)
+class TaxonomyModel(taxonomy_model.TaxonomyModel):
+  """Adding parameters masking utility to chirp's original taxonomy_model."""
 
   @staticmethod
   def is_bn_parameter(parameter_name: List[str]) -> bool:
@@ -49,6 +30,6 @@ class ConstantEncoderModel(image_model.ImageModel):
         describes the name of a layer. E.g. ('Block1', 'batch_norm_1', 'bias').
 
     Returns:
-      Whether this parameter belongs to a BatchNorm layer.
+      True if this parameter belongs to a BatchNorm layer.
     """
-    return False
+    return any(['BatchNorm' in x for x in parameter_name])
