@@ -28,6 +28,7 @@ from chirp.models import quantizers
 from chirp.models import soundstream_unet
 from chirp.projects.sfda.data import pipeline as sfda_pipeline
 from chirp.projects.sfda.methods import ada_bn
+from chirp.projects.sfda.methods import dropout_student
 from chirp.projects.sfda.methods import notela
 from chirp.projects.sfda.methods import pseudo_label
 from chirp.projects.sfda.methods import shot
@@ -54,4 +55,5 @@ def get_globals() -> Dict[str, Any]:
       "notela": notela,
       "shot": shot,
       "ada_bn": ada_bn,
+      "dropout_student": dropout_student,
   }
