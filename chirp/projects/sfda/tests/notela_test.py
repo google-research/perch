@@ -21,8 +21,8 @@ import itertools
 from chirp.projects.sfda.methods import notela
 import flax.linen as nn
 import jax
-from jax.experimental import sparse
 import jax.numpy as jnp
+from scipy import sparse
 
 from absl.testing import absltest
 
@@ -84,7 +84,7 @@ class NOTELATest(absltest.TestCase):
     dataset_proba = nn.sigmoid(jax.random.normal(key, (n_points_dataset,)))
     nn_matrix = jax.random.randint(key, (n_points_batch, n_points_dataset), 0,
                                    2)
-    sparse_nn_matrix = sparse.BCOO.fromdense(nn_matrix)
+    sparse_nn_matrix = sparse.csr_matrix(nn_matrix)
     pseudo_labels = notela.NOTELA.teacher_step(
         batch_proba=one_hot(batch_proba),
         dataset_proba=one_hot(dataset_proba),
@@ -120,32 +120,6 @@ class NOTELATest(absltest.TestCase):
     padded_pseudo_label = notela.NOTELA.pad_pseudo_label(
         label_mask, pseudo_labels)
     self.assertTrue((padded_pseudo_label[:, label_mask] == pseudo_labels).all())
-
-  def test_sparse_set_at(self):
-    """Test notela.NOTELA.sparse_set_at function."""
-    full_nn_matrix = sparse.BCOO.fromdense(
-        jnp.array([[1, 1, 0], [1, 1, 0], [0, 1, 1]]))
-    sparse_matrix_chunk = sparse.BCOO.fromdense(
-        jnp.array([[1, 0, 1], [1, 1, 0]]))
-    batch_indices = jnp.array([0, 2])
-    new_sparse_matrix = notela.NOTELA.sparse_set_at(full_nn_matrix,
-                                                    sparse_matrix_chunk,
-                                                    batch_indices)
-    self.assertTrue((new_sparse_matrix.todense() == jnp.array([[1, 0, 1],
-                                                               [1, 1, 0],
-                                                               [1, 1,
-                                                                0]])).all())
-
-  def test_sparse_select(self):
-    """Test notela.NOTELA.sparse_select_indices function."""
-    full_nn_matrix = sparse.BCOO.fromdense(
-        jnp.array([[1, 1, 0], [1, 1, 0], [0, 1, 1]]))
-    batch_indices = jnp.array([0, 2])
-    sparse_matrix_chunk = notela.NOTELA.sparse_select_indices(
-        full_nn_matrix, batch_indices)
-    self.assertTrue((sparse_matrix_chunk.todense() == jnp.array([[1, 1, 0],
-                                                                 [0, 1,
-                                                                  1]])).all())
 
 
 if __name__ == "__main__":

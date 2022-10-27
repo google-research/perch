@@ -166,9 +166,6 @@ class AdaptationTest(parameterized.TestCase):
     sfda_method = method_config.sfda_method
     method_config = getattr(method_config, modality.value)
     method_config.num_epochs = 1
-    if method == "notela":
-      # Sparse storage slows computations and can cause test timeouts.
-      method_config.sparse_storage = False
 
     # Get data
     adaptation_dataset, val_dataset = self._get_datasets(config, modality)

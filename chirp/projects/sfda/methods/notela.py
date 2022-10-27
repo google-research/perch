@@ -16,7 +16,7 @@
 """NOisy TEacher-student with Laplacian Adjustment (NOTELA), our method."""
 
 import functools
-from typing import Dict, Tuple, Type, Union, Optional
+from typing import Dict, Tuple, Type, Optional, Union
 
 from absl import logging
 from chirp.projects.sfda import adapt
@@ -27,9 +27,9 @@ from clu import metrics as clu_metrics
 import flax.jax_utils as flax_utils
 import flax.linen as nn
 import jax
-from jax.experimental import sparse
 import jax.numpy as jnp
 import numpy as np
+from scipy import sparse
 import tensorflow as tf
 
 
@@ -54,7 +54,7 @@ class NOTELA(adapt.SFDAMethod):
       knn: int,
       sparse_storage: bool,
       memory_efficient_computation: bool = True
-  ) -> Union[jnp.ndarray, sparse.BCOO]:
+  ) -> Union[jnp.ndarray, sparse.csr_matrix]:
     """Compute batch_feature's nearest-neighbors among dataset_feature.
 
     Args:
@@ -115,10 +115,9 @@ class NOTELA(adapt.SFDAMethod):
     row_indices = jnp.repeat(np.arange(batch_shape[0]),
                              neighbors - 1)  # [0, ..., 0, 1, ...]
     if sparse_storage:
-      data = np.ones_like(row_indices)
-      indices = jnp.stack([row_indices, col_indices], axis=1)
-      nn_matrix = sparse.BCOO((data, indices),
-                              shape=(batch_shape[0], dataset_shape[0]))
+      data = jnp.ones(row_indices.shape[0])
+      nn_matrix = sparse.csr_matrix((data, (row_indices, col_indices)),
+                                    shape=(batch_shape[0], dataset_shape[0]))
     else:
       nn_matrix = jnp.zeros((batch_shape[0], dataset_shape[0]), dtype=jnp.uint8)
       nn_matrix = nn_matrix.at[row_indices, col_indices].set(1)
@@ -127,7 +126,7 @@ class NOTELA(adapt.SFDAMethod):
   @staticmethod
   def teacher_step(batch_proba: jnp.ndarray,
                    dataset_proba: jnp.ndarray,
-                   nn_matrix: Union[jnp.ndarray, sparse.BCOO],
+                   nn_matrix: Union[jnp.ndarray, sparse.csr_matrix],
                    lambda_: float,
                    alpha: float = 1.0,
                    normalize_pseudo_labels: bool = True,
@@ -155,10 +154,12 @@ class NOTELA(adapt.SFDAMethod):
       The soft pseudo-labels for the current batch of data, shape
         [batch_size, proba_dim]
     """
-    denominator = nn_matrix.sum(axis=-1, keepdims=True)
-    if isinstance(denominator, sparse.BCOO):
-      # Cast denominator to dense, otherwise adding eps will raise an error.
-      denominator = denominator.todense()
+    if isinstance(nn_matrix, sparse.csr_matrix):
+      # By default, sum operation on a csr_matrix keeps the dimensions of the
+      # original matrix.
+      denominator = nn_matrix.sum(axis=-1)
+    else:
+      denominator = nn_matrix.sum(axis=-1, keepdims=True)
     pseudo_label = batch_proba**(1 / alpha) * jnp.exp(
         (lambda_ / alpha) * (nn_matrix @ dataset_proba) /
         (denominator + eps))  # [*, batch_size, proba_dim]
@@ -201,15 +202,22 @@ class NOTELA(adapt.SFDAMethod):
 
       # Initialize global nearest-neighbor matrix
       nn_matrix = self.compute_nearest_neighbors(
-          forward_result["embedding"], forward_result["embedding"],
-          method_kwargs["knn"], method_kwargs["sparse_storage"])
+          batch_feature=forward_result["embedding"],
+          dataset_feature=forward_result["embedding"],
+          knn=method_kwargs["knn"],
+          sparse_storage=True,
+          memory_efficient_computation=True)
 
-      # Store everything in the method_state dictionnary.
+      # Store everything in the method_state dictionnary. The nn_matrix cannot
+      # be directly stored as a sparse.csr_matrix (otherwise jax won't be able
+      # to replicate the method_state. Instead, it is stored as a jnp array,
+      # whose columns indicate the row and column indexes of all non-zeros
+      # elements in the matrix.
       ids = forward_result["id"]
       method_state = {
           "dataset_feature": forward_result["embedding"],
           "dataset_proba": forward_result["proba"],
-          "nn_matrix": nn_matrix,
+          "nn_matrix": jnp.stack(nn_matrix.nonzero(), axis=1),  # [?, 2]
           "id2index": {ids[i]: i for i in range(len(ids))},
       }
       adaptation_state = adaptation_state.replace(method_state=method_state)
@@ -264,8 +272,7 @@ class NOTELA(adapt.SFDAMethod):
           lambda_=method_kwargs["lambda_"],
           alpha=method_kwargs["alpha"],
           use_mutual_nn=method_kwargs["use_mutual_nn"],
-          normalize_pseudo_labels=method_kwargs["normalize_pseudo_labels"],
-          sparse_storage=method_kwargs["sparse_storage"])
+          normalize_pseudo_labels=method_kwargs["normalize_pseudo_labels"])
 
       # method_state will act as a memory, from which pseudo-labels will be
       # grabbed on-the-go over the next epoch of adaptation.
@@ -331,6 +338,9 @@ class NOTELA(adapt.SFDAMethod):
             label=model_outputs.label[...,
                                       reference_label_mask.astype(bool)])
       logit2proba = nn.sigmoid if multi_label else nn.softmax
+      previous_nn_matrix = self.indices_to_sparse_matrix(
+          method_state["nn_matrix"], (method_state["dataset_feature"].shape[0],
+                                      method_state["dataset_feature"].shape[0]))
       batch_nn_matrix, pseudo_label = self.compute_pseudo_label(
           batch_feature=model_outputs.embedding,
           dataset_feature=method_state["dataset_feature"],
@@ -340,20 +350,17 @@ class NOTELA(adapt.SFDAMethod):
           knn=method_kwargs["knn"],
           lambda_=method_kwargs["lambda_"],
           alpha=method_kwargs["alpha"],
-          sparse_storage=method_kwargs["sparse_storage"],
           use_mutual_nn=method_kwargs["use_mutual_nn"],
           normalize_pseudo_labels=method_kwargs["normalize_pseudo_labels"],
-          transpose_nn_matrix=self.sparse_select_indices(
-              method_state["nn_matrix"].T, batch_indices))
+          transpose_nn_matrix=previous_nn_matrix.T[batch_indices])
 
       # Update global information
+      previous_nn_matrix[batch_indices] = batch_nn_matrix
       method_state["dataset_feature"] = method_state["dataset_feature"].at[
           batch_indices].set(model_outputs.embedding)
       method_state["dataset_proba"] = method_state["dataset_proba"].at[
           batch_indices].set(logit2proba(model_outputs.label))
-      method_state["nn_matrix"] = self.sparse_set_at(method_state["nn_matrix"],
-                                                     batch_nn_matrix,
-                                                     batch_indices)
+      method_state["nn_matrix"] = jnp.stack(previous_nn_matrix.nonzero(), 1)
       adaptation_state = adaptation_state.replace(
           method_state=flax_utils.replicate(method_state))
     else:
@@ -366,71 +373,6 @@ class NOTELA(adapt.SFDAMethod):
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label)
     }
-
-  @staticmethod
-  def sparse_select_indices(sparse_matrix: sparse.BCOO,
-                            batch_indices: jnp.ndarray) -> sparse.BCOO:
-    """Implementation of sparse_matrix[batch_indices] for a BCOO matrix.
-
-    Jax's Batched-coordinate (BCOO) sparse matrices don't support the gather
-    operation. Therefore, we implement it ourselves here.
-
-    Args:
-      sparse_matrix: The sparse nearest-neighbor matrix from which to select
-        batch_indices. Shape [num_rows, num_columns].
-      batch_indices: The row indices to select. Shape [batch_size,]
-
-    Returns:
-      The chunk corresponding to sparse_matrix[batch_indices],
-        shape [batch_size, num_columns].
-    """
-    num_columns = sparse_matrix.shape[1]
-    batch_size = batch_indices.shape[0]
-    all_indices = sparse_matrix.indices
-    chunk_indices = jnp.concatenate([
-        all_indices[jnp.where(all_indices[:, 0] == row_index)[0]].at[:,
-                                                                     0].set(i)
-        for i, row_index in enumerate(batch_indices)
-    ], 0)  # [?, 2]
-    return sparse.BCOO((jnp.ones(chunk_indices.shape[0]), chunk_indices),
-                       shape=(batch_size, num_columns))
-
-  @staticmethod
-  def sparse_set_at(sparse_matrix: sparse.BCOO, sparse_chunk: sparse.BCOO,
-                    row_indices: jnp.ndarray) -> sparse.BCOO:
-    """Equivalent of .at[batch_indices].set(sparse_chunk) for a BCOO matrix.
-
-    The sparse BCOO jax implementation does not support assignement,
-    https://github.com/google/jax/issues/11334. Therefore, we propose an
-    implementation. This is used to easily update some rows of the
-    nearest-neighbors matrix for the online version of NOTELA.
-
-    Args:
-      sparse_matrix: A matrix, stored in sparse format.
-      sparse_chunk: The rows that will appear in the updated sparse_matrix, at
-        the row indices specified by row_indices.
-      row_indices: The row indices (in sparse_matrix) at which the rows of
-        sparse_chunk should be placed.
-
-    Returns:
-      An updated version of sparse_matrix that satisfies
-        sparse_matrix[row_indices] = sparse_chunk
-    """
-    num_rows = sparse_matrix.shape[0]
-    original_indices = sparse_matrix.indices
-    new_chunk_indices = sparse_chunk.indices
-    indices_to_add = []
-    for i, row_index in enumerate(row_indices):
-      # Progressively remove indices that should be replaced.
-      original_indices = original_indices[original_indices[:, 0] != row_index]
-      # At the same time, keep track of indices that will be added.
-      indices_to_add.append(
-          new_chunk_indices[new_chunk_indices[:, 0] == i].at[:,
-                                                             0].set(row_index))
-    concatenated_indices = jnp.concatenate(indices_to_add)
-    full_indices = jnp.concatenate([concatenated_indices, original_indices])
-    return sparse.BCOO((jnp.ones(full_indices.shape[0]), full_indices),
-                       shape=(num_rows, num_rows))
 
   @staticmethod
   def pad_pseudo_label(label_mask: jnp.ndarray,
@@ -468,6 +410,24 @@ class NOTELA(adapt.SFDAMethod):
     return padded_pseudo_label.at[(row_index,
                                    col_index)].set(pseudo_label.flatten())
 
+  @staticmethod
+  def indices_to_sparse_matrix(indices: jnp.ndarray,
+                               shape: Tuple[int, int]) -> sparse.csr_matrix:
+    """Converts non-zero indices to a sparse.csr_matrix.
+
+    Args:
+      indices: Non-zero indices of the matrix, of shape [?, 2]. Each row
+        indicates (row_index, column_index) of a non-zero element of the matrix.
+      shape: Shape of the final matrix.
+
+    Returns:
+      The sparse.csr_matrix of shape `shape`, with non-zero elements at
+        `indices`.
+    """
+    row_indices, col_indices = indices[:, 0], indices[:, 1]
+    data = jnp.ones(row_indices.shape[0])
+    return sparse.csr_matrix((data, (row_indices, col_indices)), shape=shape)
+
   def compute_pseudo_label(
       self,
       batch_feature: jnp.ndarray,
@@ -478,11 +438,10 @@ class NOTELA(adapt.SFDAMethod):
       knn: int,
       lambda_: float,
       alpha: float,
-      sparse_storage: bool,
       use_mutual_nn: bool,
       normalize_pseudo_labels: bool,
-      transpose_nn_matrix: Optional[Union[jnp.ndarray, sparse.BCOO]] = None,
-  ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+      transpose_nn_matrix: Optional[sparse.csr_matrix] = None,
+  ) -> Tuple[sparse.csr_matrix, jnp.ndarray]:
     """The pipeline for computing NOTELA's pseudo labels.
 
     First, we compute the nearest neighbors of each point in batch_feature
@@ -502,8 +461,6 @@ class NOTELA(adapt.SFDAMethod):
       knn: The number of nearest-neighbors use to compute the affinity matrix.
       lambda_: The weight controlling the Laplacian regularization.
       alpha: The weight controlling the softness regularization.
-      sparse_storage: Whether to use sparse storage for the nearest-neighbor
-        matrix.
       use_mutual_nn: Whether to use mutual nearest-neighbors (points i and j
         must belong to each other's nearest-neighbor to be called 'mutual') or
         standard nearest-neighbors.
@@ -527,13 +484,14 @@ class NOTELA(adapt.SFDAMethod):
         batch_feature=batch_feature,
         dataset_feature=dataset_feature,
         knn=knn,
-        sparse_storage=sparse_storage)
+        sparse_storage=True)
 
     # Potentially keep mutual nearest-neighbors only.
     if use_mutual_nn:
       if transpose_nn_matrix is None:
-        transpose_nn_matrix = nn_matrix.T
-      final_nn_matrix = nn_matrix * transpose_nn_matrix
+        final_nn_matrix = nn_matrix.multiply(nn_matrix.T)
+      else:
+        final_nn_matrix = nn_matrix.multiply(transpose_nn_matrix)
     else:
       final_nn_matrix = nn_matrix
 
