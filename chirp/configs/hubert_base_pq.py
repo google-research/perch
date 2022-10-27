@@ -73,8 +73,8 @@ def get_config() -> config_dict.ConfigDict:
 
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
-  init_config.learning_rate = 5e-4  # This is the peak. Should linearly increase
-  init_config.start_learning_rate = 5e-8  # This is the start of the increase.
+  init_config.learning_rate = 0.0001
+  init_config.start_learning_rate = 0.000001
   init_config.quant_start_learning_rate = 1e-5
   init_config.input_size = window_size_s * sample_rate_hz
   init_config.rng_seed = 0
@@ -98,6 +98,7 @@ def get_config() -> config_dict.ConfigDict:
   conformer_config.ffn_relu_dropout = None
   conformer_config.fflayer_weight_sharing = False
   conformer_config.num_blocks = 12
+  conformer_config.skip_layer_norm = True
   model_config = config_dict.ConfigDict()
   model_config.late_feature_extractor = config_utils.callable_config(
       "conformer.Conformer", conformer_config)
@@ -106,20 +107,20 @@ def get_config() -> config_dict.ConfigDict:
   early_fs_config.omit_earlyfs = False
   early_fs_config.dropout_prob = 0.
   early_fs_config.activation = config_utils.object_config("nn.gelu")
-  early_fs_config.num_frames = 125
+  early_fs_config.num_frames = 500
   init_config.early_fs_config = early_fs_config
 
   # Configure the masking parameters.
   mask_config = config_dict.ConfigDict()
   mask_config.mask_prob = 0.16
-  mask_config.mask_length = 5
+  mask_config.mask_length = 10
   mask_config.min_masks = 1
   model_config.mask_config = mask_config
 
   # Configure the classifier parameters.
   classifier_config = config_dict.ConfigDict()
   classifier_config.classify_from_all = True
-  classifier_config.per_frame_predictions = False
+  classifier_config.per_frame_predictions = True
   classifier_config.classify_pool_width = 3
   classifier_config.classify_stride = 3
   classifier_config.classify_features = 512
@@ -156,7 +157,7 @@ def get_config() -> config_dict.ConfigDict:
   model_config.alpha = 1.0
   model_config.taxonomy_loss_weight = 0.
   model_config.readout_points = [0, 2, 4, 6, 8, 10, 11]
-  model_config.quantizer_points = [-2]
+  model_config.quantizer_points = (-2,)
   model_config.stop_gradient_earlyfs = False
   model_config.use_raw_audio = True
   init_config.model_config = model_config

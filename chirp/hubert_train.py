@@ -356,7 +356,7 @@ def initialize_model(
     base_quantizer_config: config_dict.ConfigDict,
     frontend_config: config_dict.ConfigDict,
     early_fs_config: config_dict.ConfigDict, reload_quantizer_from: str,
-    target_class_list: str, **unused_kwargs):
+    reload_hubert_from: str, target_class_list: str, **unused_kwargs):
   """Creates model for training, eval, or inference."""
   del unused_kwargs
   # Initialize random number generator
@@ -384,8 +384,7 @@ def initialize_model(
     base_quantizers = [
         quantizer_class(**kwargs) for _ in range(quantizer_config.num_sections)
     ]
-    quantizer = quantizers.ProductQuantizer(
-        base_quantizers=base_quantizers)
+    quantizer = quantizers.ProductQuantizer(base_quantizers=base_quantizers)
     quantizer_list.append(quantizer)
 
   # Initialize the frontend.
@@ -416,7 +415,8 @@ def initialize_model(
     early_fs = layers.EarlyFeatureExtractor(
         dropout_prob=early_fs_config.dropout_prob,
         activation=early_fs_config.activation,
-        conv_layer_tuples=conv_layer_tuples)
+        conv_layer_tuples=conv_layer_tuples,
+        deprecated_group_conv=early_fs_config.deprecated_group_conv)
 
   else:
     if early_fs_config.omit_earlyfs:
@@ -509,7 +509,8 @@ def initialize_model(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
 
   did_reload = False
-  while not did_reload:
+  num_attempts = 0
+  while not did_reload and num_attempts < 5:
     try:
       train_state = ckpt.restore_or_initialize(train_state)
       did_reload = True
@@ -523,11 +524,13 @@ def initialize_model(
           "Reloading from %s failed for some unexpected reason. Taking a nap "
           "and will try again.", workdir)
       time.sleep(5)
+    num_attempts += 1
 
   if reload_quantizer_from:
     ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_quantizer_from)
     did_reload = False
-    while not did_reload:
+    num_attempts = 0
+    while not did_reload and num_attempts < 5:
       try:
         reloaded_quantizer = ckpt_to_reload.restore(None)
         did_reload = True
@@ -537,9 +540,38 @@ def initialize_model(
             "Reloading from %s failed. Taking a nap and will try again.",
             reload_quantizer_from)
         time.sleep(5)
+      num_attempts += 1
     print("reloaded_quantizer codebook {}".format(
         reloaded_quantizer["params"]["quantizer"]))
     train_state.params["quantizer"] = reloaded_quantizer["params"]["quantizer"]
+
+  if reload_hubert_from:
+    ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_hubert_from)
+    did_reload = False
+    num_attempts = 0
+    while not did_reload and num_attempts < 5:
+      try:
+        reloaded_hubert = ckpt_to_reload.restore(None)
+        did_reload = True
+        break
+      except tf.errors.NotFoundError:
+        logging.warning(
+            "Reloading from %s failed. Taking a nap and will try again.",
+            reload_hubert_from)
+        time.sleep(5)
+      num_attempts += 1
+    logging.info("Reloaded HuBERT params with keys %s",
+                 reloaded_hubert["params"].keys())
+    for k, v in reloaded_hubert["params"].items():
+      # Since this reloading is done for continuing to train HuBERT with a new
+      # quantizer (in a different space), we assume it's best to re-initialize
+      # the projections between the features and these new codes.
+      if k.startswith("codes_proj") or k.startswith(
+          "final_proj") or k.startswith("quantizer"):
+        logging.info("Ignoring HuBERT parameters for key %s.", k)
+        continue
+      train_state.params[k] = v
+      logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
 
   return ModelBundle(model, optimizer, key, ckpt), train_state
 

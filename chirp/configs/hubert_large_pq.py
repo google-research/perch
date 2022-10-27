@@ -88,7 +88,7 @@ def get_config() -> config_dict.ConfigDict:
   conformer_config.ff_activation = config_utils.object_config("nn.swish")
   conformer_config.ff_residual_weight = 0.5
   conformer_config.ffn_dim_multiplier = 4
-  conformer_config.atten_num_heads = 8
+  conformer_config.atten_num_heads = 12
   conformer_config.layer_order = "mhsa_before_conv"
   conformer_config.dropout_prob = 0.
   conformer_config.conv_residual_dropout = None
@@ -97,7 +97,7 @@ def get_config() -> config_dict.ConfigDict:
   conformer_config.atten_dropout = None
   conformer_config.ffn_relu_dropout = None
   conformer_config.fflayer_weight_sharing = False
-  conformer_config.num_blocks = 12
+  conformer_config.num_blocks = 16
   conformer_config.skip_layer_norm = True
   model_config = config_dict.ConfigDict()
   model_config.late_feature_extractor = config_utils.callable_config(
@@ -107,7 +107,7 @@ def get_config() -> config_dict.ConfigDict:
   early_fs_config.omit_earlyfs = False
   early_fs_config.dropout_prob = 0.
   early_fs_config.activation = config_utils.object_config("nn.gelu")
-  early_fs_config.num_frames = 500
+  early_fs_config.num_frames = 500  # not used.
   init_config.early_fs_config = early_fs_config
 
   # Configure the masking parameters.
@@ -156,8 +156,8 @@ def get_config() -> config_dict.ConfigDict:
   model_config.logit_temp = 0.1
   model_config.alpha = 1.0
   model_config.taxonomy_loss_weight = 0.
-  model_config.readout_points = [0, 2, 4, 6, 8, 10, 11]
-  model_config.quantizer_points = [-2]
+  model_config.readout_points = [0, 4, 8, 12, 15]
+  model_config.quantizer_points = (-2,)
   model_config.stop_gradient_earlyfs = False
   model_config.use_raw_audio = True
   init_config.model_config = model_config
