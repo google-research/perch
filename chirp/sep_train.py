@@ -354,11 +354,12 @@ def evaluate_loop(model_bundle: ModelBundle,
 
   while last_step < num_train_steps:
     ckpt = checkpoint.MultihostCheckpoint(workdir)
-    if ckpt.latest_checkpoint == last_ckpt:
+    next_ckpt = ckpt.get_latest_checkpoint_to_restore_from()
+    if next_ckpt is None or next_ckpt == last_ckpt:
       time.sleep(eval_sleep_s)
       continue
     try:
-      train_state = ckpt.restore_or_initialize(train_state)
+      ckpt.restore(train_state, next_ckpt)
     except tf.errors.NotFoundError:
       logging.warning('Checkpoint %s not found in workdir %s',
                       ckpt.latest_checkpoint, workdir)
@@ -370,7 +371,7 @@ def evaluate_loop(model_bundle: ModelBundle,
     if tflite_export:
       export_tf(model_bundle, train_state, workdir, frame_size)
     last_step = int(train_state.step)
-    last_ckpt = ckpt.latest_checkpoint
+    last_ckpt = next_ckpt
 
 
 def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,

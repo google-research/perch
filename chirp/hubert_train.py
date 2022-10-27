@@ -368,18 +368,23 @@ def initialize_model(
   num_classes = {k: v.size for (k, v) in class_lists.items()}
 
   # Initialize the quantizer.
-  kwargs = {
-      "num_centroids": base_quantizer_config.num_centroids,
-      "gamma": base_quantizer_config.gamma
-  }
+  if quantizer_config.use_entropy_quantizer:
+    kwargs = {
+        "num_centroids": base_quantizer_config.num_centroids,
+        "gamma": base_quantizer_config.gamma,
+    }
+    quantizer_class = quantizers.VectorQuantizerEnt
+  else:
+    kwargs = {
+        "num_centroids": base_quantizer_config.num_centroids,
+    }
+    quantizer_class = quantizers.VectorQuantizer
   quantizer_list = []
   for _ in range(len(model_config.quantizer_points)):
     base_quantizers = [
-        quantizers.VectorQuantizerEnt(**kwargs)
-        for _ in range(quantizer_config.num_sections)
+        quantizer_class(**kwargs) for _ in range(quantizer_config.num_sections)
     ]
     quantizer = quantizers.ProductQuantizer(
-        num_sections=quantizer_config.num_sections,
         base_quantizers=base_quantizers)
     quantizer_list.append(quantizer)
 
@@ -395,46 +400,64 @@ def initialize_model(
         scaling_config=frontend_config.scaling_config)
 
   # Initialize the early feature extractor.
-  if early_fs_config.omit_earlyfs:
-    early_fs = None
-  else:
-    if early_fs_config.num_frames not in [125, 63, 32, 16]:
-      raise ValueError(
-          "Expected early_fs_config.num_frames to be 125, 63, 32 or 16.")
+  if model_config.use_raw_audio:
+    if early_fs_config.omit_earlyfs:
+      raise ValueError("Expected the early feature extractor to be provided if "
+                       "using raw audio.")
+    if (hubert.QuantizerPoints.FRONTEND.value in model_config.quantizer_points
+        and frontend is None):
+      raise ValueError("Expected frontend to be provided in order to "
+                       "perform quantization on the frontend outputs.")
 
-    if frontend is None:
-      # Their original architecture led to 500 frames which causes OOM.
-      # Added an additional conv layer with stride 2 which makes it 250 instead.
-      # and another, making it 125. Still was getting OOM with this with batch
-      # size 128, so reduced it to 64.
-      conv_layer_tuples = tuple([(512, 10, 5), (512, 3, 2), (512, 3, 2),
-                                 (512, 3, 2), (512, 3, 2), (512, 2, 2),
-                                 (512, 2, 2), (512, 2, 2), (512, 2, 2)])
-    else:
-      nf = 512
-      if early_fs_config.num_frames == 125:
-        # With this configuration, the number of frames is reduced from 500 to
-        # 125 and the framerate is reduced from 100Hz (which the frontend
-        # outputs) 25Hz.
-        conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 1),
-                                   (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
-                                   (nf, 2, 1)])
-      elif early_fs_config.num_frames == 63:
-        conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
-                                   (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
-                                   (nf, 2, 1)])
-      elif early_fs_config.num_frames == 32:
-        conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
-                                   (nf, 3, 2), (nf, 3, 1), (nf, 2, 1),
-                                   (nf, 2, 1)])
-      elif early_fs_config.num_frames == 16:
-        conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
-                                   (nf, 3, 2), (nf, 3, 2), (nf, 2, 1),
-                                   (nf, 2, 1)])
+    # The original architecture, from wav2vec, which leads to 500 frames.
+    conv_layer_tuples = tuple([(512, 10, 5), (512, 3, 2), (512, 3, 2),
+                               (512, 3, 2), (512, 3, 2), (512, 2, 2),
+                               (512, 2, 2)])
     early_fs = layers.EarlyFeatureExtractor(
         dropout_prob=early_fs_config.dropout_prob,
         activation=early_fs_config.activation,
         conv_layer_tuples=conv_layer_tuples)
+
+  else:
+    if early_fs_config.omit_earlyfs:
+      early_fs = None
+    else:
+      if early_fs_config.num_frames not in [125, 63, 32, 16]:
+        raise ValueError(
+            "Expected early_fs_config.num_frames to be 125, 63, 32 or 16.")
+
+      if frontend is None:
+        # Their original architecture led to 500 frames which caused OOM.
+        # Added 2 additional conv layers with stride 2 which makes it 125.
+        # Still was getting OOM with this with batch size 128, so reduced to 64.
+        conv_layer_tuples = tuple([(512, 10, 5), (512, 3, 2), (512, 3, 2),
+                                   (512, 3, 2), (512, 3, 2), (512, 2, 2),
+                                   (512, 2, 2), (512, 2, 2), (512, 2, 2)])
+      else:
+        nf = 512
+        if early_fs_config.num_frames == 125:
+          # With this configuration, the number of frames is reduced from 500 to
+          # 125 and the framerate is reduced from 100Hz (which the frontend
+          # outputs) 25Hz.
+          conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 1),
+                                     (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
+                                     (nf, 2, 1)])
+        elif early_fs_config.num_frames == 63:
+          conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
+                                     (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
+                                     (nf, 2, 1)])
+        elif early_fs_config.num_frames == 32:
+          conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
+                                     (nf, 3, 2), (nf, 3, 1), (nf, 2, 1),
+                                     (nf, 2, 1)])
+        elif early_fs_config.num_frames == 16:
+          conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
+                                     (nf, 3, 2), (nf, 3, 2), (nf, 2, 1),
+                                     (nf, 2, 1)])
+      early_fs = layers.EarlyFeatureExtractor(
+          dropout_prob=early_fs_config.dropout_prob,
+          activation=early_fs_config.activation,
+          conv_layer_tuples=conv_layer_tuples)
 
   # Now set up the HuBERT model.
   model = hubert.HuBERTModel(
@@ -461,7 +484,7 @@ def initialize_model(
       "linear",
       init_value=start_learning_rate,
       boundaries_and_scales={
-          int(num_train_steps / 2): peak_scaling_factor,
+          int(0.08 * num_train_steps): peak_scaling_factor,
           num_train_steps: start_learning_rate
       })
 
@@ -733,11 +756,12 @@ def evaluate_loop(model_bundle: ModelBundle,
 
   while last_step < num_train_steps:
     ckpt = checkpoint.MultihostCheckpoint(workdir)
-    if ckpt.latest_checkpoint == last_ckpt:
+    next_ckpt = ckpt.get_latest_checkpoint_to_restore_from()
+    if next_ckpt is None or next_ckpt == last_ckpt:
       time.sleep(eval_sleep_s)
       continue
     try:
-      train_state = ckpt.restore_or_initialize(train_state)
+      train_state = ckpt.restore(train_state, next_ckpt)
     except tf.errors.NotFoundError:
       logging.warning("Checkpoint %s not found in workdir %s",
                       ckpt.latest_checkpoint, workdir)
@@ -749,7 +773,7 @@ def evaluate_loop(model_bundle: ModelBundle,
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_size)
     last_step = int(train_state.step)
-    last_ckpt = ckpt.latest_checkpoint
+    last_ckpt = next_ckpt
 
 
 def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,

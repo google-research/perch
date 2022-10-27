@@ -34,8 +34,10 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
   """Tests for the bird taxonomy dataset."""
   DATASET_CLASS = bird_taxonomy.BirdTaxonomy
   BUILDER_CONFIG_NAMES_TO_TEST = [
-      config.name for config in DATASET_CLASS.BUILDER_CONFIGS if config.name
-      not in ['slice_peaked_tiny', 'slice_peaked_tiny_reference']
+      config.name
+      for config in DATASET_CLASS.BUILDER_CONFIGS
+      if not ('tiny' in config.name or 'upstream' in config.name or
+              'downstream' in config.name)
   ]
   EXAMPLE_DIR = DATASET_CLASS.code_path.parent / 'placeholder_data'
   DL_EXTRACT_RESULT = {'taxonomy_info': 'taxonomy_info.json'}
@@ -67,7 +69,7 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
     cls.url_patcher.start()
     for patcher in cls.query_patchers:
       patcher.start()
-    subdir = epath.Path(cls.tempdir) / 'audio-data' / 'fakecode1'
+    subdir = epath.Path(cls.tempdir) / 'audio-data' / 'arcter'
     subdir.mkdir(parents=True)
     for i in range(4):
       tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(

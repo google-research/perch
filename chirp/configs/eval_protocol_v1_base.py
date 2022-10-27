@@ -13,53 +13,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration for evaluating using the MVP protocol."""
+"""Base configuration for model evaluation using the v1 protocol."""
 
 import itertools
 
 from chirp import config_utils
-from chirp.configs import baseline
 from ml_collections import config_dict
 
-_c = config_utils.callable_config
+_callable_config = config_utils.callable_config
 _object_config = config_utils.object_config
 
 _TFDS_DATA_DIR = None
 
 
-def get_config() -> config_dict.ConfigDict:
-  """Creates a configuration dictionary for the MVP evaluation protocol.
+def _slice_if_xc(is_xc: bool, **kwargs):
+  return [_callable_config('pipeline.Slice', **kwargs)] if is_xc else []
 
-  The MVP protocol evaluates on artificially rare Sapsucker Woods (SSW) species
-  as well as on held-out Colombia and Hawaii species.
+
+def _melspec_if_baseline(config_string: str, **kwargs):
+  return ([_callable_config('pipeline.MelSpectrogram', **kwargs)]
+          if config_string == 'baseline' else [])
+
+
+def get_config(config_string: str = 'baseline') -> config_dict.ConfigDict:
+  """Creates a base configuration dictionary for the v1 evaluation protocol.
+
+  The v1 protocol evaluates on artificially rare Sapsucker Woods (SSW) species
+  and on held-out Colombia and Hawaii species.
+
+  Args:
+    config_string: A config string indicating the pipeline variant to use, in
+      {'baseline', 'hubert'}.
 
   Returns:
-    The configuration dictionary for the MVP evaluation protocol.
+    The base configuration dictionary for the v1 evaluation protocol.
   """
   config = config_dict.ConfigDict()
+
   tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
   config.tfds_data_dir = tfds_data_dir
-  # The model_callback is expected to be a Callable[[np.ndarray], np.ndarray].
-  model_checkpoint_path = config_dict.FieldReference('')
-  config.model_checkpoint_path = model_checkpoint_path
-  config.model_callback = _c(
-      'eval_lib.FlaxCheckpointCallback',
-      init_config=baseline.get_config().init_config,
-      workdir=model_checkpoint_path)
-  config.batch_size = 16
+
   # The PRNG seed controls the random subsampling of class representatives down
   # to the right number of when forming eval sets.
   config.rng_seed = 1234
-
-  # TODO(bringingjoy): extend create_species_query to support returning multiple
-  # queries for a given eval species.
-  config.create_species_query = _object_config('eval_lib.create_averaged_query')
-  config.score_search = _object_config('eval_lib.cosine_similarity')
-  config.score_search_ordering = 'high'
-  # TODO(hamer): consider enforcing similarity ordering assumption for the user
-  # in place of adding an ordering flag (to be passed to ../model/metric).
-  # TODO(hamer): determine how to structure paths for model evaluation results.
   config.write_results_dir = '/tmp/'
+  config.batch_size = 16
 
   # Xeno-Canto's slice_peaked variants contain 6-second audio segments that are
   # randomly cropped to 5-second segments during training. At evaluation, we
@@ -71,6 +69,11 @@ def get_config() -> config_dict.ConfigDict:
   target_gain = 0.2
 
   required_datasets = (
+      {
+          'dataset_name': 'xc_artificially_rare',
+          'is_xc': True,
+          'tfds_name': 'bird_taxonomy/upstream_ar_only_slice_peaked'
+      },
       {
           'dataset_name': 'xc_downstream',
           'is_xc': True,
@@ -88,6 +91,8 @@ def get_config() -> config_dict.ConfigDict:
       },
   )
 
+  scaling_config = _callable_config('frontend.LogScalingConfig')
+
   dataset_configs = {}
   for dataset_description in required_datasets:
     dataset_config = config_dict.ConfigDict()
@@ -95,20 +100,28 @@ def get_config() -> config_dict.ConfigDict:
     dataset_config.tfds_data_dir = tfds_data_dir
 
     ops = [
-        _c('pipeline.OnlyKeep',
-           names=['audio', 'label', 'bg_labels', 'recording_id', 'segment_id']),
-        _c('pipeline.NormalizeAudio', target_gain=target_gain),
-        _c('pipeline.LabelsToString')
-    ]
-    # Xeno-Canto data needs to be cropped before normalizing the audio.
-    if dataset_description['is_xc']:
-      slice_op = _c(
-          'pipeline.Slice',
-          window_size=xc_window_size_seconds,
-          start=xc_slice_start)
-      ops.insert(1, slice_op)
+        _callable_config(
+            'pipeline.OnlyKeep',
+            names=['audio', 'label', 'bg_labels', 'recording_id', 'segment_id'
+                  ]),
+    ] + _slice_if_xc(
+        # Xeno-Canto data needs to be cropped before normalizing the audio.
+        dataset_description['is_xc'],
+        window_size=xc_window_size_seconds,
+        start=xc_slice_start) + [
+            _callable_config(
+                'pipeline.NormalizeAudio', target_gain=target_gain)
+        ] + _melspec_if_baseline(
+            config_string,
+            features=160,
+            stride=320,
+            kernel_size=2_048,  # ~0.08 * 32,000
+            sample_rate=32_000,
+            freq_range=(60, 10_000),
+            scaling_config=scaling_config,
+        ) + [_callable_config('pipeline.LabelsToString')]
 
-    dataset_config.pipeline = _c('pipeline.Pipeline', ops=ops)
+    dataset_config.pipeline = _callable_config('pipeline.Pipeline', ops=ops)
     dataset_config.split = 'train'
     dataset_configs[dataset_description['dataset_name']] = dataset_config
 
@@ -118,23 +131,25 @@ def get_config() -> config_dict.ConfigDict:
   config.eval_set_specifications = {}
   for corpus_type, location in itertools.product(('xc_fg', 'xc_bg', 'birdclef'),
                                                  ('ssw', 'colombia', 'hawaii')):
-    # SSW species are "artificially rare" (a limited number of examples were included
-    # during upstream training). We use the singular learned vector representation
-    # from upstream training during search.
+    # SSW species are "artificially rare" (a limited number of examples were
+    # included during upstream training). If provided, we use the singular
+    # learned vector representation from upstream training during search.
+    # Otherwise, we use all available upstream recordings.
     if location == 'ssw':
-      config.eval_set_specifications[f'artificially_rare_{corpus_type}'] = _c(
-          'eval_lib.EvalSetSpecification.mvp_specification',
-          location=location,
-          corpus_type=corpus_type,
-          num_representatives_per_class=1)
+      config.eval_set_specifications[
+          f'artificially_rare_{corpus_type}'] = _callable_config(
+              'eval_lib.EvalSetSpecification.v1_specification',
+              location=location,
+              corpus_type=corpus_type,
+              num_representatives_per_class=-1)
     # For downstream species, we sweep over {1, 2, 4, 8, 16} representatives
     # per class, and in each case we resample the collection of class
     # representatives 5 times to get confidence intervals on the metrics.
     else:
       for k, seed in itertools.product((1, 2, 4, 8, 16), range(1, 6)):
         config.eval_set_specifications[
-            f'{location}_{corpus_type}_{k}_seed{seed}'] = _c(
-                'eval_lib.EvalSetSpecification.mvp_specification',
+            f'{location}_{corpus_type}_{k}_seed{seed}'] = _callable_config(
+                'eval_lib.EvalSetSpecification.v1_specification',
                 location=location,
                 corpus_type=corpus_type,
                 num_representatives_per_class=k)

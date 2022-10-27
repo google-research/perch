@@ -16,11 +16,12 @@
 """Training loop."""
 import functools
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from absl import logging
 from chirp import export_utils
 from chirp.models import cmap
+from chirp.models import frontend
 from chirp.models import metrics
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
@@ -144,11 +145,15 @@ class ModelBundle:
 
 
 def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
-                     input_size: int, learning_rate: float, workdir: str,
-                     target_class_list: str):
+                     input_shape: Tuple[int, ...], learning_rate: float,
+                     workdir: str,
+                     target_class_list: str) -> Tuple[ModelBundle, TrainState]:
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
+
+  # Handle lazy computation
+  input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
 
   # Load model
   model_init_key, key = random.split(key)
@@ -156,28 +161,30 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
   model = taxonomy_model.TaxonomyModel(
       num_classes={k: v.size for (k, v) in class_lists.items()}, **model_config)
   variables = model.init(
-      model_init_key, jnp.zeros((1, input_size)), train=False)
+      model_init_key, jnp.zeros((1,) + input_shape), train=False)
   model_state, params = variables.pop("params")
   # NOTE: https://github.com/deepmind/optax/issues/160
   params = params.unfreeze()
 
   # Initialize optimizer and handle constraints
   std_to_fwhm = jnp.sqrt(2 * jnp.log(2)) / jnp.pi
-  optimizer = optax.chain(
-      optax.adam(learning_rate=learning_rate),
-      optax.masked(
-          project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)),
-      optax.masked(project(0.0, jnp.pi), mask_by_name("gabor_mean", params)),
-      optax.masked(
-          project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
-          mask_by_name("gabor_std", params)))
+  if isinstance(model.frontend, frontend.MorletWaveletTransform):
+    optimizer = optax.chain(
+        optax.adam(learning_rate=learning_rate),
+        optax.masked(
+            project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)),
+        optax.masked(project(0.0, jnp.pi), mask_by_name("gabor_mean", params)),
+        optax.masked(
+            project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
+            mask_by_name("gabor_std", params)))
+  else:
+    optimizer = optax.adam(learning_rate=learning_rate)
   opt_state = optimizer.init(params)
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
   train_state = TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
-  train_state = ckpt.restore_or_initialize(train_state)
   return ModelBundle(model, optimizer, key, ckpt, class_lists), train_state
 
 
@@ -330,7 +337,7 @@ def evaluate_loop(model_bundle: ModelBundle,
                   num_train_steps: int,
                   eval_steps_per_checkpoint: Optional[int] = None,
                   tflite_export: bool = False,
-                  input_size: Optional[int] = None,
+                  input_shape: Optional[Tuple[int, ...]] = None,
                   eval_sleep_s: int = EVAL_LOOP_SLEEP_S):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -340,13 +347,17 @@ def evaluate_loop(model_bundle: ModelBundle,
   last_step = -1
   last_ckpt = ""
 
+  # Handle lazy computation
+  input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
+
   while last_step < num_train_steps:
     ckpt = checkpoint.MultihostCheckpoint(workdir)
-    if ckpt.latest_checkpoint == last_ckpt:
+    next_ckpt = ckpt.get_latest_checkpoint_to_restore_from()
+    if next_ckpt is None or next_ckpt == last_ckpt:
       time.sleep(eval_sleep_s)
       continue
     try:
-      train_state = ckpt.restore_or_initialize(train_state)
+      train_state = ckpt.restore(train_state, next_ckpt)
     except tf.errors.NotFoundError:
       logging.warning("Checkpoint %s not found in workdir %s",
                       ckpt.latest_checkpoint, workdir)
@@ -356,13 +367,13 @@ def evaluate_loop(model_bundle: ModelBundle,
     evaluate(model_bundle, flax_utils.replicate(train_state), valid_dataset,
              writer, reporter, eval_steps_per_checkpoint)
     if tflite_export:
-      export_tf(model_bundle, train_state, workdir, input_size)
+      export_tf(model_bundle, train_state, workdir, input_shape)
     last_step = int(train_state.step)
-    last_ckpt = ckpt.latest_checkpoint
+    last_ckpt = next_ckpt
 
 
 def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
-              input_size: int):
+              input_shape: Tuple[int, ...]):
   """Export SavedModel and TFLite."""
   variables = {"params": train_state.params, **train_state.model_state}
 
@@ -374,6 +385,6 @@ def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
   # Note: Polymorphic batch size currently isn't working with the STFT op,
   # so we provide a static batch size.
   converted_model = export_utils.Jax2TfModelWrapper(infer_fn, variables,
-                                                    [1, input_size], False)
+                                                    (1,) + input_shape, False)
   converted_model.export_converted_model(workdir, train_state.step,
                                          model_bundle.class_lists)

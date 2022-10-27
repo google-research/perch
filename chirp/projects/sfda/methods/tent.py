@@ -16,8 +16,8 @@
 """Test-Time Entropy Minimization (TENT) method."""
 
 from typing import Type
-from chirp.sfda import adapt
-from chirp.sfda import losses
+from chirp.projects.sfda import adapt
+from chirp.projects.sfda import losses
 from clu import metrics as clu_metrics
 
 
@@ -33,11 +33,10 @@ class Tent(adapt.SFDAMethod):
 
     metrics_dict = vars(
         adapt.get_common_metrics(
-            supervised=supervised, multi_label=multi_label))["__annotations__"]
+            supervised=supervised, multi_label=multi_label))['__annotations__']
     if multi_label:
       entropy_fn = losses.label_binary_ent
     else:
-      raise ValueError("Multi-label case will be supported in a subsequent"
-                       "release.")
-    metrics_dict["main_loss"] = clu_metrics.Average.from_fun(entropy_fn)
+      entropy_fn = losses.label_ent
+    metrics_dict['main_loss'] = clu_metrics.Average.from_fun(entropy_fn)
     return clu_metrics.Collection.create(**metrics_dict)

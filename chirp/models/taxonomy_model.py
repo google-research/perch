@@ -14,10 +14,12 @@
 # limitations under the License.
 
 """Taxonomy model."""
-from typing import Dict, Optional
+import dataclasses
+from typing import Dict, List, Optional, Tuple
 
 from chirp.models import conformer
 from chirp.models import frontend
+from chirp.models import layers
 import flax
 from flax import linen as nn
 from jax import numpy as jnp
@@ -41,15 +43,15 @@ class TaxonomyModel(nn.Module):
 
   Attributes:
     num_classes: Number of classes for each output head.
-    frontend: The frontend to use to generate features.
     encoder: A network (e.g., a 2D convolutional network) that takes
       spectrograms and returns feature vectors.
     taxonomy_loss_weight: Weight for taxonomic label losses.
+    frontend: The frontend to use to generate features.
   """
   num_classes: Dict[str, int]
-  frontend: nn.Module
   encoder: nn.Module
   taxonomy_loss_weight: float
+  frontend: Optional[nn.Module] = None
 
   @nn.compact
   def __call__(self,
@@ -74,20 +76,22 @@ class TaxonomyModel(nn.Module):
     """
     if use_running_average is None:
       use_running_average = not train
-    x = self.frontend(inputs)
+    kwargs = {} if mask is None else {"mask": mask}
+    if self.frontend is not None:
+      x = self.frontend(inputs)
+      if mask is not None:
+        # Go from time steps to frames
+        mask = frontend.frames_mask(mask, self.frontend.stride)
+        # Add axes for broadcasting over frequencies and channels
+        kwargs = {"mask": mask[..., jnp.newaxis, jnp.newaxis]}
+    else:
+      x = inputs
     if isinstance(self.encoder, conformer.Conformer):
       x = self.encoder(x, train=train, use_running_average=use_running_average)
       # Silly baseline: average over the time dimension.
       x = jnp.mean(x, axis=1)
     else:
       # Treat the spectrogram as a gray-scale image
-      if mask is not None:
-        # Go from time steps to frames
-        mask = frontend.frames_mask(mask, self.frontend.stride)
-        # Add axes for broadcasting over frequencies and channels
-        kwargs = {"mask": mask[..., jnp.newaxis, jnp.newaxis]}
-      else:
-        kwargs = {}
       x = self.encoder(
           x[..., jnp.newaxis],
           train=train,
@@ -108,14 +112,25 @@ class ConformerModel(nn.Module):
   num_conformer_blocks: int = 16
   features: int = 144
   num_heads: int = 4
+  kernel_size: int = 15
+  downsample: List[Tuple[int, float]] = dataclasses.field(default_factory=list)
 
   @nn.compact
   def __call__(self,
                inputs: jnp.ndarray,
                train: bool,
+               use_running_average: Optional[bool] = None,
                mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
-    # Subsample from (160, x) to (40, x // 4)
-    x = inputs
+    # Apply frontend
+    dim = 512
+    conv_layer_tuples = ((dim, 20, 10), (dim, 3, 2), (dim, 3, 2), (dim, 3, 2),
+                         (dim, 3, 2), (dim, 2, 2), (160, 2, 2))
+    x = layers.EarlyFeatureExtractor(conv_layer_tuples)(inputs, train=train)
+
+    # At this point, think of channels as frequencies and add single channel
+    x = x[..., jnp.newaxis]
+
+    # Subsample from (x, 160) to (x // 4, 40)
     x = conformer.ConvolutionalSubsampling(features=self.features)(
         x, train=train)
 
@@ -124,9 +139,13 @@ class ConformerModel(nn.Module):
         model_dims=self.features,
         atten_num_heads=self.num_heads,
         num_blocks=self.num_conformer_blocks,
-        downsample=3,
+        kernel_size=self.kernel_size,
+        downsample=self.downsample,
         dropout_prob=0.1)(
-            x, train=train, return_intermediate_list=False)
+            x,
+            train=train,
+            use_running_average=use_running_average,
+            return_intermediate_list=False)
 
     # To get a global embedding we now just pool
     return jnp.mean(x, axis=-2)

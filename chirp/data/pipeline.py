@@ -19,8 +19,10 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 # Import bird_taxonomy and soundscapes to register the datasets with TFDS.
 from absl import logging
+from chirp import audio_utils
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
 import chirp.data.soundscapes  # pylint: disable=unused-import
+from chirp.models import frontend
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 import jax
@@ -60,9 +62,11 @@ class Pipeline:
   Attributes:
     ops: The preprocessing operations to apply.
     num_parallel_calls: Passed to `dataset.map`.
+    deterministic: Whether the ordering of the samples should be deterministic.
   """
   ops: Sequence[Union[FeaturesPreprocessOp, DatasetPreprocessOp]]
   num_parallel_calls: int = tf.data.AUTOTUNE
+  deterministic: bool = False
 
   def __call__(self, dataset: tf.data.Dataset,
                dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
@@ -76,13 +80,15 @@ class Pipeline:
         if feature_preprocess_ops:
           dataset = dataset.map(
               map_func=self.chain(feature_preprocess_ops, dataset_info),
-              num_parallel_calls=self.num_parallel_calls)
+              num_parallel_calls=self.num_parallel_calls,
+              deterministic=self.deterministic)
           feature_preprocess_ops.clear()
         dataset = op(dataset, dataset_info)
     if feature_preprocess_ops:
       dataset = dataset.map(
           map_func=self.chain(feature_preprocess_ops, dataset_info),
-          num_parallel_calls=self.num_parallel_calls)
+          num_parallel_calls=self.num_parallel_calls,
+          deterministic=self.deterministic)
     return dataset
 
   @staticmethod
@@ -366,6 +372,78 @@ class MultiHot(FeaturesPreprocessOp):
                   dataset_info.features[name].feature.num_classes,
                   dtype=tf.int32),
               axis=0), 0, 1)
+
+    return features
+
+
+@dataclasses.dataclass
+class MergeBackgroundLabels(FeaturesPreprocessOp):
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    features = features.copy()
+    features['label'] = tf.clip_by_value(
+        features['label'] + features['bg_labels'], 0, 1)
+    features['label_mask'] = tf.clip_by_value(
+        features['label_mask'] + features['bg_labels_mask'], 0, 1)
+    return features
+
+
+@dataclasses.dataclass
+class MelSpectrogram(FeaturesPreprocessOp):
+  """Convert audio to a spectrogram.
+
+  Attributes:
+    features: The number of channels to create.
+    kernel_size: The kernel size to use.
+    stride: The stride to use.
+    sample_rate: The sample rate of the original audio.
+    freq_range: The frequency range to capture.
+    name: The name of the feature to process.
+    power: The power of the magnitude spectrogram.
+    scaling_config: The magnitude scaling to use.
+  """
+  features: int
+  kernel_size: int
+  stride: int
+  sample_rate: int
+  freq_range: Tuple[int, int]
+  name: str = 'audio'
+  power: float = 2.0
+  scaling_config: Optional[frontend.ScalingConfig] = None
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    features = features.copy()
+    stfts = audio_utils.stft_tf(
+        features[self.name],
+        nperseg=self.kernel_size,
+        noverlap=self.kernel_size - self.stride,
+        padded=False)
+    if tf.shape(features[self.name])[-1] % self.stride == 0:
+      stfts = stfts[..., :-1]
+    stfts = tf.experimental.numpy.swapaxes(stfts, -1, -2)
+    magnitude_spectrograms = tf.math.abs(stfts)**self.power
+
+    num_spectrogram_bins = self.kernel_size // 2 + 1
+    mel_matrix = tf.signal.linear_to_mel_weight_matrix(self.features,
+                                                       num_spectrogram_bins,
+                                                       self.sample_rate,
+                                                       *self.freq_range)
+    mel_spectrograms = magnitude_spectrograms @ mel_matrix
+
+    def log_scale(x, floor, offset, scalar):
+      """TensorFlow port of audio_utils.log_scale."""
+      return scalar * tf.math.log(tf.maximum(x, floor) + offset)
+
+    if isinstance(self.scaling_config, frontend.LogScalingConfig):
+      # TODO(bartvm): Probably needs standardization step to stabilize training.
+      features[self.name] = log_scale(mel_spectrograms,
+                                      **dataclasses.asdict(self.scaling_config))
+    elif self.scaling_config is None:
+      features[self.name] = mel_spectrograms
+    else:
+      raise ValueError('unknown scaling config')
 
     return features
 
@@ -690,7 +768,8 @@ def get_dataset(
         split=split,
         data_dir=tfds_data_dir,
         with_info=True,
-        read_config=read_config)
+        read_config=read_config,
+        shuffle_files=True)
   else:
     builder = tfds.builder_from_directory(dataset_directory)
     ds = builder.as_dataset(split=split, read_config=read_config)
@@ -710,8 +789,8 @@ def get_dataset(
   if is_train and tf_data_service_address:
     ds = ds.apply(
         tf.data.experimental.service.distribute(
-            processing_mode=tf.data.experimental.service.ShardingPolicy.DYNAMIC,
+            processing_mode=tf.data.experimental.service.ShardingPolicy.OFF,
             service=tf_data_service_address,
             job_name='chirp_job'))
-  ds = ds.prefetch(tf.data.AUTOTUNE)
+  ds = ds.prefetch(2)
   return ds, dataset_info

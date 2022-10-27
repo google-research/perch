@@ -67,13 +67,20 @@ def main(argv: Sequence[str]) -> None:
         "need to set the sample rate in the config to {}.".format(
             dataset_info.features["audio"].sample_rate))
 
-  model = train.initialize_model(workdir=_WORKDIR.value, **config.init_config)
+  model_bundle, train_state = train.initialize_model(
+      workdir=_WORKDIR.value, **config.init_config)
   if _MODE.value == TRAIN:
+    train_state = model_bundle.ckpt.restore_or_initialize(train_state)
     train.train(
-        *model, train_dataset, logdir=_LOGDIR.value, **config.train_config)
+        model_bundle,
+        train_state,
+        train_dataset,
+        logdir=_LOGDIR.value,
+        **config.train_config)
   elif _MODE.value == EVAL:
     train.evaluate_loop(
-        *model,
+        model_bundle,
+        train_state,
         valid_dataset,
         workdir=_WORKDIR.value,
         logdir=_LOGDIR.value,

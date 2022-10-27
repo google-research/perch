@@ -62,9 +62,6 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
   `metadata_processing_query` applied to the metadata (used in _info()).
   Checks are made downstream to ensure both dataframes encode consistent
   label spaces.
-  Second note, we kept the original implementation of the tiny dataset, renamed
-  here as `reference`, to ensure consistency with the new implementation based
-  on queries.
   """
   sample_rate_hz: int = 32_000
   resampling_method: str = 'polyphase'
@@ -78,7 +75,7 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.2.5')
+  VERSION = tfds.core.Version('1.4.0')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
       '1.1.0': ('Switched to higher sampling rate, added recording metadata '
@@ -99,6 +96,11 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                'processing pipeline.',
       '1.2.4': 'Adds a unique recording ID and a segment ID to all samples.',
       '1.2.5': 'Refactor Int16AsFloatTensor out of BirdTaxonomy.',
+      '1.3.0': ('Added "upstream_full_length", "downstream_full_length", '
+                '"upstream_ar_only_slice_peaked", and '
+                '"upstream_ar_only_full_length" variants. Removed '
+                '"slice_peaked_tiny_reference" variant.'),
+      '1.4.0': 'Added a seabird_sliced_peaked dataset.'
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
@@ -109,22 +111,12 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           description=('Chunked audio sequences processed with '
                        'chirp.audio_utils.slice_peaked_audio.')),
       BirdTaxonomyConfig(
-          name='slice_peaked_tiny_reference',
-          localization_fn=functools.partial(
-              audio_utils.slice_peaked_audio, max_intervals=1),
-          interval_length_s=6.0,
-          class_list_name='tiny_species',
-          description=('A reference tiny version of the slice_peaked dataset '
-                       'containing only two species, built using Pandas'
-                       'built-in functions.')),
-      BirdTaxonomyConfig(
           name='slice_peaked_tiny',
           localization_fn=functools.partial(
               audio_utils.slice_peaked_audio, max_intervals=1),
           interval_length_s=6.0,
           description=('A tiny version of the slice_peaked dataset '
-                       'containing only two species, built using homemade '
-                       'queries.'),
+                       'containing only two species'),
           data_processing_query=fsu.QuerySequence([
               fsu.filter_in_class_list('species_code', 'tiny_species'),
               fsu.scrub_all_but_class_list('bg_species_codes', 'tiny_species'),
@@ -142,6 +134,17 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           description=('Upstream data version with chunked audio sequences '
                        'processed with chirp.audio_utils.slice_peaked_audio.')),
       BirdTaxonomyConfig(
+          name='upstream_ar_only_slice_peaked',
+          localization_fn=audio_utils.slice_peaked_audio,
+          interval_length_s=6.0,
+          data_processing_query=premade_queries.get_upstream_data_query(
+              ar_only=True),
+          metadata_processing_query=premade_queries.get_upstream_metadata_query(
+          ),
+          description=('Upstream data version (AR-only) with chunked audio '
+                       'sequences processed with '
+                       'chirp.audio_utils.slice_peaked_audio.')),
+      BirdTaxonomyConfig(
           name='downstream_slice_peaked',
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
@@ -154,6 +157,44 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           name='full_length',
           localization_fn=None,
           description='Full-length audio sequences.'),
+      BirdTaxonomyConfig(
+          name='upstream_full_length',
+          localization_fn=None,
+          data_processing_query=premade_queries.get_upstream_data_query(),
+          metadata_processing_query=premade_queries.get_upstream_metadata_query(
+          ),
+          description='Upstream data with full-length audio sequences.'),
+      BirdTaxonomyConfig(
+          name='upstream_ar_only_full_length',
+          localization_fn=None,
+          data_processing_query=premade_queries.get_upstream_data_query(
+              ar_only=True),
+          metadata_processing_query=premade_queries.get_upstream_metadata_query(
+          ),
+          description=('Upstream data (AR-only) with full-length audio '
+                       'sequences.')),
+      BirdTaxonomyConfig(
+          name='downstream_full_length',
+          localization_fn=None,
+          data_processing_query=premade_queries.get_downstream_data_query(),
+          metadata_processing_query=premade_queries
+          .get_downstream_metadata_query(),
+          description='Downstream data with full-length audio sequences.'),
+      BirdTaxonomyConfig(
+          name='seabird_slice_peaked',
+          localization_fn=audio_utils.slice_peaked_audio,
+          interval_length_s=6.0,
+          description=('Seabird dataset consisting of data '
+                       'with chunked audio sequences processed with '
+                       'chirp.audio_utils.slice_peaked_audio.'),
+          data_processing_query=fsu.QuerySequence([
+              fsu.filter_in_class_list('species_code', 'global_seabirds'),
+              fsu.scrub_all_but_class_list('bg_species_codes',
+                                           'global_seabirds'),
+          ]),
+          metadata_processing_query=fsu.QuerySequence([
+              fsu.filter_in_class_list('species_code', 'global_seabirds'),
+          ])),
   ]
 
   GCS_URL = epath.Path('gs://chirp-public-bucket/xeno-canto')

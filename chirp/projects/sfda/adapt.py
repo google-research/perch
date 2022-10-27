@@ -18,12 +18,13 @@
 import abc
 import enum
 import functools
-from typing import Dict, Tuple, Type
+from typing import Any, Dict, Tuple, Type
 
 from chirp import train
 from chirp.models import cmap
-from chirp.sfda import losses
-from chirp.sfda import model_utils
+from chirp.projects.sfda import losses
+from chirp.projects.sfda import metrics
+from chirp.projects.sfda import model_utils
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
@@ -54,12 +55,14 @@ class AdaptationState:
     epoch: The epoch of adaptation.
     model_params: The parameters of the model.
     model_state: The state of the model.
+    method_state: All values a method needs to keep track of during adaptation.
     opt_state: The optimizer's state.
   """
   step: int
   epoch: int
   model_params: flax.core.scope.VariableDict
   model_state: flax.core.scope.FrozenVariableDict
+  method_state: Dict[str, Any]
   opt_state: optax.OptState
 
 
@@ -69,6 +72,19 @@ class Modality(enum.Enum):
   AUDIO = "audio"
 
 
+def keep_jax_types(batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+  """Remove non-numeric arrays from batch, to make it jit-compliant.
+
+  Args:
+    batch: The batch of data.
+
+  Returns:
+    The filtered batch of data, where any array containing non-numeric values
+      has been filtered out.
+  """
+  return {k: v for k, v in batch.items() if v.dtype != np.dtype("O")}
+
+
 class SFDAMethod(metaclass=abc.ABCMeta):
   """A template for a Source-Free Domain Adaptation (SFDA) method."""
 
@@ -76,12 +92,12 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       self,
       model_config: config_dict.ConfigDict,
       rng_seed: int,
-      pretrained_ckpt_dir: str,
       modality: Modality,
-      input_size: int,
+      input_shape: Tuple[int, ...],
       target_class_list: str,
       adaptation_iterations: int,
       optimizer_config: config_dict.ConfigDict,
+      pretrained: bool,
   ) -> Tuple[model_utils.ModelBundle, AdaptationState, jax.random.PRNGKeyArray]:
     """Loads model's params and state, and instantiates the adaptation state.
 
@@ -90,46 +106,42 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         different parts of the architecture.
       rng_seed: The random seed used to define the jax random key and seed other
         non-jax random operations.
-      pretrained_ckpt_dir: The directory from where to fetch the pretrained
-        model.
       modality: The modality currently used between 'image' and 'audio'.
-        input_size: The size of the input.
+      input_shape: The shape of the input.
       target_class_list: The classlist in which labels are expressed. Used to
         define the size of the classifier's head.
       adaptation_iterations: The total number of steps used for adaptation. Used
         to adequately define learning rate scheduling.
       optimizer_config: The optimizer configuration, including the name of the
         optimizer, the learning rate etc.
+      pretrained: Whether to use a pretrained model or not.
 
     Returns:
       The model_bundle to use, the initial adaptation_state, and the jax
         random key to use for adaptation.
 
     Raises:
-      ValueError: In case the chosen modality is Modality.IMAGE.
-      NotImplementedError: In case the chosen modality is neither Modality.AUDIO
+      ValueError: In case the chosen modality is neither Modality.AUDIO
         nor Modality.IMAGE.
     """
     # Generate a random key
     key = jax.random.PRNGKey(rng_seed)
-
-    # Load classification model and optimizer.
     if modality == Modality.AUDIO:
-      (model_bundle, params, model_state,
-       opt_state) = model_utils.prepare_audio_model(
-           model_config=model_config,
-           rng_seed=rng_seed,
-           input_size=input_size,
-           target_class_list=target_class_list,
-           pretrained_ckpt_dir=pretrained_ckpt_dir,
-           total_steps=adaptation_iterations,
-           optimizer_config=optimizer_config)
+      prepare_fn = model_utils.prepare_audio_model
     elif modality == Modality.IMAGE:
-      raise NotImplementedError(
-          "Image modality will be supported in a susbsequent"
-          "release.")
+      prepare_fn = model_utils.prepare_image_model
     else:
       raise ValueError(f"Modality {modality} not supported.")
+
+    (model_bundle, params, model_state, opt_state) = prepare_fn(
+        model_config=model_config,
+        optimizer_config=optimizer_config,
+        pretrained=pretrained,
+        rng_seed=rng_seed,
+        input_shape=input_shape,
+        target_class_list=target_class_list,
+        total_steps=adaptation_iterations,
+    )
 
     # Package model, parameters and states in structures.
     # TODO(mboudiaf): Add support for restoring previous adaptation state.
@@ -138,6 +150,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         epoch=0,
         model_params=params,
         opt_state=opt_state,
+        method_state={},
         model_state=model_state)
 
     return model_bundle, adaptation_state, key
@@ -158,6 +171,85 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         multi-label. Used to define appropriate metrics.
     """
     pass
+
+  def before_run(self, key: jax.random.PRNGKeyArray,
+                 model_bundle: model_utils.ModelBundle,
+                 adaptation_state: AdaptationState,
+                 adaptation_dataset: tf.data.Dataset, modality: Modality,
+                 multi_label: bool, **method_kwargs) -> AdaptationState:
+    """Any operation that a method needs to do before a run.
+
+    An example of application is to initialize memories.
+
+    Args:
+      key: The jax random key used for random operations in this epoch.
+      model_bundle: The ModelBundle used for adaptation.
+      adaptation_state: The current state of adaptation.
+      adaptation_dataset: The dataset used for adaptation.
+      modality: The current modality.
+      multi_label: Whether this is a multi-label problem.
+      **method_kwargs: Additional method-specific kwargs.
+
+    Returns:
+      A potentially updated adaptation_state.
+    """
+    del (key, model_bundle, modality, multi_label, method_kwargs,
+         adaptation_dataset)
+    return adaptation_state
+
+  def before_epoch(self, key: jax.random.PRNGKeyArray,
+                   model_bundle: model_utils.ModelBundle,
+                   adaptation_state: AdaptationState,
+                   adaptation_dataset: tf.data.Dataset, modality: Modality,
+                   multi_label: bool, **method_kwargs) -> AdaptationState:
+    """Any operation that a method needs to do before an epoch.
+
+    An example of application is to compute all pseudo-labels for the next
+    epoch.
+
+    Args:
+      key: The jax random key used for random operations in this epoch.
+      model_bundle: The ModelBundle used for adaptation.
+      adaptation_state: The current state of adaptation.
+      adaptation_dataset: The dataset used for adaptation.
+      modality: The modality.
+      multi_label: Whether this is a multi-label problem.
+      **method_kwargs: Additional method-specific kwargs.
+
+    Returns:
+      The adaptation state, with a potentially updated 'method_state' attribute.
+    """
+    del (key, model_bundle, adaptation_dataset, modality, multi_label,
+         method_kwargs)
+    return adaptation_state
+
+  def before_iter(
+      self, key: jax.random.PRNGKeyArray, model_bundle: model_utils.ModelBundle,
+      adaptation_state: AdaptationState, batch: Dict[str, np.ndarray],
+      modality: Modality, multi_label: bool,
+      **method_kwargs) -> Tuple[AdaptationState, Dict[str, jnp.ndarray]]:
+    """Any operation that a method needs to do before an adaptation iteration.
+
+    An example of application is to compute the pseudo-labels needed for the
+    current iteration.
+
+    Args:
+      key: The jax random key used for random operations in this epoch.
+      model_bundle: The ModelBundle used for adaptation.
+      adaptation_state: The current state of adaptation.
+      batch: The iteration's batch of data.
+      modality: The modality.
+      multi_label: Whether this is a multi-label problem.
+      **method_kwargs: Additional method-specific kwargs.
+
+    Returns:
+      A potentially updated version of the adaptation state
+      A dictionary containing any variable the method may need during the next
+        epoch of adaptation. All values in this dictionnary must be
+        numeric-typed (they will be passed to a jitted function).
+    """
+    del (key, model_bundle, batch, modality, multi_label, method_kwargs)
+    return adaptation_state, {}
 
   def do_epoch(self, key: jax.random.PRNGKeyArray,
                model_bundle: model_utils.ModelBundle,
@@ -189,9 +281,13 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
     Returns:
       An updated version of the adaptation state.
+
+    Raises:
+      ValueError: If model_bundle's optimizer is not None and batchwise_metrics
+        does not contain a 'main_loss' metric.
     """
 
-    def forward(params, key, batch, model_state):
+    def forward(params, key, batch, model_state, **method_gather_args):
       """Forwards the batch through the current model."""
       dropout_key, low_pass_key = jax.random.split(key)
       variables = {"params": params, **model_state}
@@ -226,14 +322,13 @@ class SFDAMethod(metaclass=abc.ABCMeta):
               multi_label,
           "outputs":
               model_outputs,
-          "probas":
+          "probabilities":
               logits2probas(model_outputs.label),
-          "logits":
-              model_outputs.label,
           "label_mask":
               jnp.ones_like(model_outputs.label)
               if "label_mask" not in batch else batch["label_mask"],
       }
+      gather_args.update(method_gather_args)
       if use_supervised_metrics:
         gather_args.update({"label": batch["label"].astype(np.int32)})
 
@@ -243,39 +338,53 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
       # Extract the loss to optimize, and add weight decay.
       if "main_loss" not in batch_metrics:
-        raise ValueError("Any SFDA method should specify the key 'main_loss'"
-                         " when overriding 'get_adaptation_metrics'.")
-      main_loss = batch_metrics["main_loss"]
-      if method_kwargs["optimizer_config"].weight_decay > 0.:
-        main_loss += method_kwargs[
-            "optimizer_config"].weight_decay * losses.l2_loss(params)
+        if model_bundle.optimizer is not None:
+          raise ValueError(
+              "Any SFDA method that defines an optimizer should also specify "
+              "the key 'main_loss' by overriding 'get_adaptation_metrics'.")
+        main_loss = None
+      else:
+        main_loss = batch_metrics["main_loss"]
+        if method_kwargs["optimizer_config"].weight_decay > 0.:
+          main_loss += method_kwargs[
+              "optimizer_config"].weight_decay * losses.l2_loss(params)
       return main_loss, (batch_metrics, model_state)
 
     @functools.partial(jax.pmap, axis_name="batch")
     def update_step(
         batch: Dict[str, jnp.ndarray], adaptation_state: AdaptationState,
-        key: jax.random.PRNGKeyArray
-    ) -> Tuple[Dict[str, jnp.ndarray], AdaptationState]:
+        key: jax.random.PRNGKeyArray,
+        **method_gather_args) -> Tuple[Dict[str, jnp.ndarray], AdaptationState]:
       """Updates the model's state and params using the given batch."""
 
       params = adaptation_state.model_params
       model_state = adaptation_state.model_state
       opt_state = adaptation_state.opt_state
 
-      # Compute gradient transformations. Doing so, get the new model state.
-      grads, (batch_metrics, model_state) = jax.grad(
-          forward, has_aux=True)(
-              params,
-              key=key,
-              batch=batch,
-              model_state=model_state,
-          )
-      grads = jax.lax.pmean(grads, axis_name="batch")
+      if model_bundle.optimizer is not None:
+        # If an optimizer is defined, compute gradient transformations.
+        # Doing so, get the new model state.
+        grads, (batch_metrics, model_state) = jax.grad(
+            forward, has_aux=True)(
+                params,
+                key=key,
+                batch=batch,
+                model_state=model_state,
+                **method_gather_args)
+        grads = jax.lax.pmean(grads, axis_name="batch")
 
-      # Update model's parameters from gradient transformations.
-      updates, opt_state = model_bundle.optimizer.update(
-          grads, opt_state, params)
-      params = optax.apply_updates(params, updates)
+        # Update model's parameters from gradient transformations.
+        updates, opt_state = model_bundle.optimizer.update(
+            grads, opt_state, params)
+        params = optax.apply_updates(params, updates)
+      else:
+        # Otherwise, we simply forward the data through the model.
+        _, (batch_metrics, model_state) = forward(
+            params,
+            key=key,
+            batch=batch,
+            model_state=model_state,
+            **method_gather_args)
 
       # Update adaptation state
       adaptation_state = adaptation_state.replace(
@@ -290,14 +399,26 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     for batch in tqdm.tqdm(
         adaptation_dataset.as_numpy_iterator(), total=len(adaptation_dataset)):
       batch = jax.tree_map(np.asarray, batch)
-
+      verify_batch(batch)
       current_step = int(flax_utils.unreplicate(adaptation_state.step))
       step_key, key = jax.random.split(key)
       step_key = jax.random.split(step_key, num=jax.local_device_count())
 
+      adaptation_state, method_gather_args = self.before_iter(
+          key=step_key,
+          model_bundle=model_bundle,
+          adaptation_state=adaptation_state,
+          batch=batch,
+          modality=modality,
+          multi_label=multi_label,
+          **method_kwargs)
+
       # Perform the update
       batch_metrics, adaptation_state = update_step(
-          batch=batch, adaptation_state=adaptation_state, key=step_key)
+          batch=keep_jax_types(batch),
+          adaptation_state=adaptation_state,
+          key=step_key,
+          **method_gather_args)
       reporter(current_step)
       writer.write_scalars(current_step, flax_utils.unreplicate(batch_metrics))
 
@@ -352,9 +473,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       return model_outputs, metric_collection.merge(
           metric_collection.gather_from_model_output(
               multi_label=multi_label,
-              logits=model_outputs.label,
               outputs=model_outputs,
-              probas=logits2probas(model_outputs.label),
+              probabilities=logits2probas(model_outputs.label),
               label_mask=jnp.ones_like(model_outputs.label)
               if "label_mask" not in batch else batch["label_mask"],
               label=batch["label"].astype(np.int32)))
@@ -362,8 +482,9 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     # Loop over validation dataset
     for batch in tqdm.tqdm(eval_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
+      verify_batch(batch)
       model_outputs, valid_metrics = update_metrics(
-          metric_collection=valid_metrics, batch=batch)
+          metric_collection=valid_metrics, batch=keep_jax_types(batch))
       cmap_metrics = cmap.update_cmap_metrics_dict(cmap_metrics, model_outputs,
                                                    batch)
 
@@ -424,6 +545,16 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
   validation_writer = metric_writers.create_default_writer(
       logdir, asynchronous=False, collection="validation")
 
+  # Before run.
+  adaptation_state = sfda_method.before_run(
+      key=key,
+      model_bundle=model_bundle,
+      adaptation_state=adaptation_state,
+      multi_label=multi_label,
+      modality=modality,
+      adaptation_dataset=adaptation_dataset,
+      **method_kwargs)
+
   for epoch in range(method_kwargs["num_epochs"]):
 
     # Before every epoch, perform a round of evaluation on the validation set.
@@ -436,6 +567,16 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
           modality=modality,
           multi_label=multi_label)
       validation_writer.flush()
+
+    adaptation_state = sfda_method.before_epoch(
+        key=key,
+        model_bundle=model_bundle,
+        adaptation_state=adaptation_state,
+        multi_label=multi_label,
+        modality=modality,
+        adaptation_dataset=adaptation_dataset,
+        writer=adaptation_writer,
+        **method_kwargs)
 
     adaptation_state = sfda_method.do_epoch(
         key=key,
@@ -480,10 +621,6 @@ def get_common_metrics(supervised: bool,
 
   Returns:
     A collection of metrics.
-
-  Raises:
-    NotImplementedError: If multi-label is set to False. Single-label will be
-      supported in a subsequent release.
   """
   metrics_dict = {}
   if supervised:
@@ -492,9 +629,36 @@ def get_common_metrics(supervised: bool,
           functools.partial(train.keyed_map, key="label"))
       metrics_dict["supervised_loss"] = clu_metrics.Average.from_fun(
           losses.label_binary_xent)
+      metrics_dict["entropy_loss"] = clu_metrics.Average.from_fun(
+          losses.label_binary_ent)
+      metrics_dict["marginal_entropy"] = metrics.MarginalBinaryEntropy
     else:
-      raise NotImplementedError("Single-label case will be supported in a "
-                                "subsequent release.")
-  metrics_dict["entropy_loss"] = clu_metrics.Average.from_fun(
-      losses.label_binary_ent)
+      metrics_dict["supervised_loss"] = clu_metrics.Average.from_fun(
+          losses.label_xent)
+      metrics_dict["entropy_loss"] = clu_metrics.Average.from_fun(
+          losses.label_ent)
+      metrics_dict["accuracy"] = metrics.Accuracy
+      metrics_dict["marginal_entropy"] = metrics.MarginalEntropy
+
   return clu_metrics.Collection.create(**metrics_dict)
+
+
+def verify_batch(batch: Dict[str, jnp.ndarray]) -> None:
+  """Performs non-jittable verifications on a batch of data.
+
+  Args:
+    batch: The current batch of data.
+
+  Raises:
+    ValueError: If the batch has a label_mask, and label_mask differs across
+      samples.
+  """
+  if "label_mask" in batch:
+    label_mask = flax_utils.unreplicate(batch["label_mask"])
+    if not (jnp.tile(label_mask[0],
+                     (label_mask.shape[0], 1)) == label_mask).all():
+      raise ValueError(
+          "Some metrics (e.g. marginal entropy) can only be computed if each "
+          "sample's probability distribution is defined over the same set of"
+          "classes. Therefore, we verify that `label_mask` is the same across "
+          "samples.")
