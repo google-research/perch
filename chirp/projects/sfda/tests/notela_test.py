@@ -91,6 +91,7 @@ class NOTELATest(absltest.TestCase):
         nn_matrix=nn_matrix,
         lambda_=lambda_,
         alpha=alpha,
+        normalize_pseudo_labels=True,
     )
     pseudo_labels_from_sparse = notela.NOTELA.teacher_step(
         batch_proba=one_hot(batch_proba),
@@ -98,6 +99,7 @@ class NOTELATest(absltest.TestCase):
         nn_matrix=sparse_nn_matrix,
         lambda_=lambda_,
         alpha=alpha,
+        normalize_pseudo_labels=True,
     )
     self.assertTrue(
         jnp.allclose(

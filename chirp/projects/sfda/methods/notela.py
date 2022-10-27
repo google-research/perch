@@ -130,6 +130,7 @@ class NOTELA(adapt.SFDAMethod):
                    nn_matrix: Union[jnp.ndarray, sparse.BCOO],
                    lambda_: float,
                    alpha: float = 1.0,
+                   normalize_pseudo_labels: bool = True,
                    eps: float = 1e-8) -> jnp.ndarray:
     """Computes the pseudo-labels (teacher-step) following Eq.(3) in the paper.
 
@@ -145,6 +146,9 @@ class NOTELA(adapt.SFDAMethod):
         nearest-neighbors.
       lambda_: Weight controlling the Laplacian regularization.
       alpha: Weight controlling the Softness regularization
+      normalize_pseudo_labels: Whether to normalize pseudo-labels to turn them
+        into valid probability distributions. This option should be kept to
+        True, and only be used for experimental purposes.
       eps: For numerical stability.
 
     Returns:
@@ -158,7 +162,8 @@ class NOTELA(adapt.SFDAMethod):
     pseudo_label = batch_proba**(1 / alpha) * jnp.exp(
         (lambda_ / alpha) * (nn_matrix @ dataset_proba) /
         (denominator + eps))  # [*, batch_size, proba_dim]
-    pseudo_label /= (pseudo_label.sum(axis=-1, keepdims=True) + eps)
+    if normalize_pseudo_labels:
+      pseudo_label /= (pseudo_label.sum(axis=-1, keepdims=True) + eps)
     return pseudo_label
 
   def before_run(self, key: jax.random.PRNGKeyArray,
@@ -259,6 +264,7 @@ class NOTELA(adapt.SFDAMethod):
           lambda_=method_kwargs["lambda_"],
           alpha=method_kwargs["alpha"],
           use_mutual_nn=method_kwargs["use_mutual_nn"],
+          normalize_pseudo_labels=method_kwargs["normalize_pseudo_labels"],
           sparse_storage=method_kwargs["sparse_storage"])
 
       # method_state will act as a memory, from which pseudo-labels will be
@@ -336,6 +342,7 @@ class NOTELA(adapt.SFDAMethod):
           alpha=method_kwargs["alpha"],
           sparse_storage=method_kwargs["sparse_storage"],
           use_mutual_nn=method_kwargs["use_mutual_nn"],
+          normalize_pseudo_labels=method_kwargs["normalize_pseudo_labels"],
           transpose_nn_matrix=self.sparse_select_indices(
               method_state["nn_matrix"].T, batch_indices))
 
@@ -473,6 +480,7 @@ class NOTELA(adapt.SFDAMethod):
       alpha: float,
       sparse_storage: bool,
       use_mutual_nn: bool,
+      normalize_pseudo_labels: bool,
       transpose_nn_matrix: Optional[Union[jnp.ndarray, sparse.BCOO]] = None,
   ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """The pipeline for computing NOTELA's pseudo labels.
@@ -499,6 +507,9 @@ class NOTELA(adapt.SFDAMethod):
       use_mutual_nn: Whether to use mutual nearest-neighbors (points i and j
         must belong to each other's nearest-neighbor to be called 'mutual') or
         standard nearest-neighbors.
+      normalize_pseudo_labels: Whether to normalize pseudo-labels to turn them
+        into valid probability distributions. This option should generally be
+        set to True, and only be used for experimental purposes.
       transpose_nn_matrix: The relevant chunk of the nearest-neighbor's
         transpose. Precisely, matrix of shape [batch_size, dataset_size], where
         position [i,j] informs whether point i (in the current batch) belongs to
@@ -531,7 +542,8 @@ class NOTELA(adapt.SFDAMethod):
         self.teacher_step,
         nn_matrix=final_nn_matrix,
         lambda_=lambda_,
-        alpha=alpha)
+        alpha=alpha,
+        normalize_pseudo_labels=normalize_pseudo_labels)
 
     if multi_label:
       # In the multi-label scnenario, we're solving `num_classes` independent

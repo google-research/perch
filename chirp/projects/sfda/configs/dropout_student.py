@@ -36,6 +36,7 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   # Method-specifc hparams
   image_config.online_pl_updates = True
   image_config.alpha = 0.1
+  image_config.normalize_pseudo_labels = True
 
   # Foward options
   image_config.num_epochs = 10
@@ -61,6 +62,7 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   # Method-specifc hparams
   audio_config.online_pl_updates = False
   audio_config.alpha = 1.0
+  audio_config.normalize_pseudo_labels = True
 
   # Forward options
   audio_config.num_epochs = 10

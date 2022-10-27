@@ -46,14 +46,20 @@ class DropoutStudent(adapt.SFDAMethod):
       "classification.' Proceedings of the IEEE/CVF conference on computer "
       "vision and pattern recognition. 2020.")
 
-  def compute_pseudo_label(self, probabilities: jnp.ndarray, multi_label: bool,
-                           alpha: float) -> jnp.ndarray:
+  def compute_pseudo_label(self,
+                           probabilities: jnp.ndarray,
+                           multi_label: bool,
+                           alpha: float,
+                           normalize_pseudo_labels: bool = True) -> jnp.ndarray:
     """Compute the pseudo-labels from the model's probabilities.
 
     Args:
       probabilities: Model's output probabilities. Shape [*, num_classes]
       multi_label: Whether this is a multi-label problem.
       alpha: Weight controlling the 'softness' of pseudo-labels.
+      normalize_pseudo_labels: Whether to normalize pseudo-labels to turn them
+        into valid probability distributions. This option should be kept to
+        True, and only be used for experimental purposes.
 
     Returns:
       The pseudo-labels.
@@ -62,7 +68,8 @@ class DropoutStudent(adapt.SFDAMethod):
     if multi_label:
       pseudo_labels = jnp.stack([1 - pseudo_labels, pseudo_labels], axis=-1)
     pseudo_labels = pseudo_labels**(1 / alpha)
-    pseudo_labels /= pseudo_labels.sum(-1, keepdims=True)
+    if normalize_pseudo_labels:
+      pseudo_labels /= pseudo_labels.sum(-1, keepdims=True)
     if multi_label:
       pseudo_labels = pseudo_labels[
           ..., -1]  # we only keep the 'positive' probability
@@ -106,7 +113,9 @@ class DropoutStudent(adapt.SFDAMethod):
               self.compute_pseudo_label(
                   forward_result["proba"],
                   multi_label=multi_label,
-                  alpha=method_kwargs["alpha"]),
+                  alpha=method_kwargs["alpha"],
+                  normalize_pseudo_labels=method_kwargs[
+                      "normalize_pseudo_labels"]),
           "id2index": {sample_ids[i]: i for i in range(len(sample_ids))},
       }
       adaptation_state = adaptation_state.replace(method_state=method_state)
@@ -150,7 +159,8 @@ class DropoutStudent(adapt.SFDAMethod):
       model_outputs = flax_utils.unreplicate(model_outputs)
       logit2proba = nn.sigmoid if multi_label else nn.softmax
       pseudo_label = self.compute_pseudo_label(
-          logit2proba(model_outputs.label), multi_label, method_kwargs["alpha"])
+          logit2proba(model_outputs.label), multi_label, method_kwargs["alpha"],
+          method_kwargs["normalize_pseudo_labels"])
     else:
       # In the offline version, we simply grab the pseudo-labels that were
       # computed before the epoch.

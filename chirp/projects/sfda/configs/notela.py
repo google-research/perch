@@ -39,6 +39,7 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   image_config.lambda_ = 0.1
   image_config.alpha = 0.1
   image_config.use_mutual_nn = False
+  image_config.normalize_pseudo_labels = True
 
   # Efficiency options
   image_config.sparse_storage = True
@@ -70,6 +71,7 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   audio_config.alpha = 1.0
   audio_config.online_pl_updates = False
   audio_config.use_mutual_nn = False
+  audio_config.normalize_pseudo_labels = True
 
   # Efficiency options
   audio_config.sparse_storage = True
