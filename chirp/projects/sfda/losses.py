@@ -24,6 +24,7 @@ import jax.numpy as jnp
 
 def label_xent(probabilities: jnp.ndarray,
                label: jnp.ndarray,
+               sample_mask: Optional[jnp.ndarray] = None,
                eps: float = 1e-10,
                **_) -> jnp.ndarray:
   """Cross entropy for single-label classification settings.
@@ -31,13 +32,17 @@ def label_xent(probabilities: jnp.ndarray,
   Args:
     probabilities: Model's probabilities, expected shape [*, num_classes].
     label: One-hot labels, expected shape [*, num_classes].
+    sample_mask: A way to mask out some samples when computing the loss. Useful
+      for instance to only keep high-confidence samples in pseudo-labelling.
     eps: For numerical stability
 
   Returns:
     Multi-class xent. Shape [*,].
   """
+  if sample_mask is None:
+    sample_mask = jnp.ones(probabilities.shape[:-1])
   xent = -(label * jnp.log(probabilities + eps)).sum(-1)
-  return xent
+  return sample_mask * xent
 
 
 def label_ent(probabilities: jnp.ndarray,
@@ -78,7 +83,8 @@ def label_binary_ent(probabilities: jnp.ndarray,
   binary_entropies = -(probabilities * jnp.log(probabilities + eps) +
                        (1 - probabilities) * jnp.log((1 - probabilities) + eps)
                       )  # [..., num_classes]
-  return (label_mask * binary_entropies).sum(axis=-1) / label_mask.sum(axis=-1)
+  return (label_mask * binary_entropies).sum(axis=-1) / (
+      label_mask.sum(axis=-1) + eps)
 
 
 def label_binary_xent(probabilities: jnp.ndarray,
@@ -104,7 +110,8 @@ def label_binary_xent(probabilities: jnp.ndarray,
   binary_entropies = -(label * jnp.log(probabilities + eps) +
                        (1 - label) * jnp.log((1 - probabilities) + eps)
                       )  # [..., num_classes]
-  return (label_mask * binary_entropies).sum(axis=-1) / label_mask.sum(axis=-1)
+  return (label_mask * binary_entropies).sum(axis=-1) / (
+      label_mask.sum(axis=-1) + eps)
 
 
 def l2_loss(params: flax.core.scope.VariableDict):

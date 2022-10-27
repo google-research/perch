@@ -32,7 +32,8 @@ class QuantizersTest(absltest.TestCase):
         num_centroids=num_centroids,
         commitment_loss=0.0,
         ema_decay=0.99,
-        demean=True)
+        demean=True,
+        rescale=True)
     key = jax.random.PRNGKey(17)
     rngs = {}
     rngs['params'], key = jax.random.split(key)
@@ -52,12 +53,14 @@ class QuantizersTest(absltest.TestCase):
     expected = jnp.array([1., 1.])
     expected_means = jnp.zeros([embedding_dim])
     for _ in range(5):
-      expected = 0.99 * expected + 0.01 * jnp.array([0., 8.])
+      expected = 0.99 * expected + 0.01 * jnp.array([8., 0.])
       expected_means = 0.99 * expected_means + 0.01 * jnp.ones([embedding_dim])
 
     np.testing.assert_allclose(params['quantizer']['cluster_counts'], expected)
     np.testing.assert_allclose(params['quantizer']['feature_means'],
                                expected_means)
+    np.testing.assert_allclose(
+        params['quantizer']['feature_stdev'], 0.0, atol=1e-6)
 
   def test_refresh_codebooks(self):
     num_centroids = 2
@@ -106,7 +109,7 @@ class QuantizersTest(absltest.TestCase):
 
   def test_product_quantizer(self):
     num_centroids = 2
-    embedding_dim = 8
+    embedding_dim = 16
     num_sections = 4
     base_quantizers = [
         quantizers.VectorQuantizer(
@@ -115,7 +118,7 @@ class QuantizersTest(absltest.TestCase):
             ema_decay=0.99,
             demean=True) for _ in range(num_sections)
     ]
-    pvq = quantizers.ProductQuantizer(base_quantizers)
+    pvq = quantizers.ProductQuantizer(base_quantizers, pca_dim=8)
     key = jax.random.PRNGKey(17)
     rngs = {}
     rngs['params'], key = jax.random.split(key)
@@ -125,6 +128,8 @@ class QuantizersTest(absltest.TestCase):
     # Just check that it runs for now.
     quantizer_outputs, _ = pvq.apply(params, inputs, train=True, mutable=True)
     self.assertSequenceEqual(quantizer_outputs.quantized.shape, inputs.shape)
+    self.assertSequenceEqual(quantizer_outputs.nn_idx.shape,
+                             [num_sections, 2, 4])
 
   def test_residual_quantizer(self):
     num_centroids = 2

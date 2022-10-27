@@ -16,7 +16,7 @@
 """NOisy TEacher-student with Laplacian Adjustment (NOTELA), our method."""
 
 import functools
-from typing import Dict, Tuple, Type
+from typing import Dict, Tuple, Type, Union
 
 from absl import logging
 from chirp.projects.sfda import adapt
@@ -25,7 +25,9 @@ from chirp.projects.sfda import method_utils
 from chirp.projects.sfda import model_utils
 from clu import metrics as clu_metrics
 import flax.jax_utils as flax_utils
+import flax.linen as nn
 import jax
+from jax.experimental import sparse
 import jax.numpy as jnp
 import numpy as np
 import tensorflow as tf
@@ -38,10 +40,9 @@ class NOTELA(adapt.SFDAMethod):
   to the teacher step. NOTELA works in two different modes:
     - offline mode: Pseudo-labels are computed only once every epoch (before the
     epoch starts).
-    - online mode: (Coming in next release) We track a memory of the dataset's
-      extracted features and probabilities. Pseudo-labels are computed on-the-go
-      by comparing samples from the current batch to the features/probabilities
-      in memory.
+    - online mode: We track a memory of the dataset's extracted features and
+    probabilities. Pseudo-labels are computed on-the-go by comparing samples
+    from the current batch to the features/probabilities in memory.
   In both cases, the student-step remains to match the pseudo-labels using a
   noisy (dropout) model forward.
   """
@@ -51,7 +52,9 @@ class NOTELA(adapt.SFDAMethod):
       batch_feature: jnp.ndarray,
       dataset_feature: jnp.ndarray,
       knn: int,
-  ) -> jnp.ndarray:
+      sparse_storage: bool,
+      memory_efficient_computation: bool = True
+  ) -> Union[jnp.ndarray, sparse.BCOO]:
     """Compute batch_feature's nearest-neighbors among dataset_feature.
 
     Args:
@@ -60,6 +63,12 @@ class NOTELA(adapt.SFDAMethod):
       dataset_feature: The features for the whole dataset, shape [dataset_size,
         feature_dim]
       knn: The number of nearest-neighbors to use.
+      sparse_storage: whether to use sparse storage for the affinity matrix.
+      memory_efficient_computation: Whether to make computation memory
+        efficient. This option trades speed for memory footprint by looping over
+        samples in the batch instead of fully vectorizing nearest-neighbor
+        computation. For large datasets, memory usage can be a bottleneck, which
+        is why we set this option to True by default.
 
     Returns:
       The batch's nearest-neighbors affinity matrix of shape
@@ -81,24 +90,44 @@ class NOTELA(adapt.SFDAMethod):
       )
 
     # Compute the nearest-neighbors
-    pairwise_distances = method_utils.jax_cdist(
-        batch_feature, dataset_feature)  # [batch_size, dataset_size]
     neighbors = min(dataset_shape[0], knn)
-    col_indexes = jax.lax.top_k(-pairwise_distances,
-                                neighbors)[1][:,
-                                              1:]  # [batch_size, neighbors-1]
+    if memory_efficient_computation:
+      # We loop over samples in the current batch to avoid storing a
+      # batch_size x dataset_size float array. That slows down computation, but
+      # reduces memory footprint, which becomes the bottleneck for large
+      # datasets.
+      col_indexes = []
+      for sample_feature in batch_feature:
+        pairwise_distances = method_utils.jax_cdist(
+            jnp.expand_dims(sample_feature, 0),
+            dataset_feature)  # [1, dataset_size]
+        col_indexes.append(
+            jax.lax.top_k(-pairwise_distances,
+                          neighbors)[1][:, 1:])  # [1, neighbors-1]
+      col_indexes = jnp.stack(col_indexes)
+    else:
+      pairwise_distances = method_utils.jax_cdist(
+          batch_feature, dataset_feature)  # [batch_size, dataset_size]
+      col_indexes = jax.lax.top_k(-pairwise_distances,
+                                  neighbors)[1][:,
+                                                1:]  # [batch_size, neighbors-1]
     col_indexes = col_indexes.flatten()  # [batch_size * neighbors-1]
     row_indexes = jnp.repeat(np.arange(batch_shape[0]),
-                             neighbors - 1)  # [1, ..., 1, 2, ...]
-    # TODO(mboudiaf): Add option for sparse storage.
-    nn_matrix = jnp.zeros((batch_shape[0], dataset_shape[0]), dtype=jnp.uint8)
-    nn_matrix = nn_matrix.at[row_indexes, col_indexes].set(1)
+                             neighbors - 1)  # [0, ..., 0, 1, ...]
+    if sparse_storage:
+      data = np.ones_like(row_indexes)
+      indices = jnp.stack([row_indexes, col_indexes], axis=1)
+      nn_matrix = sparse.BCOO((data, indices),
+                              shape=(batch_shape[0], dataset_shape[0]))
+    else:
+      nn_matrix = jnp.zeros((batch_shape[0], dataset_shape[0]), dtype=jnp.uint8)
+      nn_matrix = nn_matrix.at[row_indexes, col_indexes].set(1)
     return nn_matrix
 
   @staticmethod
   def teacher_step(batch_proba: jnp.ndarray,
                    dataset_proba: jnp.ndarray,
-                   nn_matrix: jnp.ndarray,
+                   nn_matrix: Union[jnp.ndarray, sparse.BCOO],
                    lambda_: float,
                    alpha: float = 1.0,
                    eps: float = 1e-8) -> jnp.ndarray:
@@ -123,6 +152,9 @@ class NOTELA(adapt.SFDAMethod):
         [batch_size, proba_dim]
     """
     denominator = nn_matrix.sum(axis=-1, keepdims=True)
+    if isinstance(denominator, sparse.BCOO):
+      # Cast denominator to dense, otherwise adding eps will raise an error.
+      denominator = denominator.todense()
     pseudo_label = batch_proba**(1 / alpha) * jnp.exp(
         (lambda_ / alpha) * (nn_matrix @ dataset_proba) /
         (denominator + eps))  # [*, batch_size, proba_dim]
@@ -148,12 +180,28 @@ class NOTELA(adapt.SFDAMethod):
     Returns:
       An updated version of adaptation_state, where method_state contains
         all initialized memories.
-
-    Raises:
-      NotImplementedError: In the case the 'online mode' is activated.
     """
     if method_kwargs["online_pl_updates"]:
-      raise NotImplementedError("Coming in the next release.")
+      logging.info("Initializing memories...")
+
+      # Extract embeddings and model's probabilities.
+      forward_result = method_utils.forward_dataset(
+          dataset=adaptation_dataset,
+          adaptation_state=adaptation_state,
+          model_bundle=model_bundle,
+          modality=modality,
+          multi_label=multi_label,
+          use_batch_statistics=method_kwargs["update_bn_statistics"],
+          only_keep_unmasked_classes=True)
+
+      # Store everything in the method_state dictionnary.
+      ids = forward_result["id"]
+      method_state = {
+          "dataset_feature": forward_result["embedding"],
+          "dataset_proba": forward_result["proba"],
+          "id2index": {ids[i]: i for i in range(len(ids))},
+      }
+      adaptation_state = adaptation_state.replace(method_state=method_state)
     return adaptation_state
 
   def before_epoch(self, key: jax.random.PRNGKeyArray,
@@ -190,7 +238,8 @@ class NOTELA(adapt.SFDAMethod):
           model_bundle=model_bundle,
           modality=modality,
           multi_label=multi_label,
-          use_batch_statistics=method_kwargs["update_bn_statistics"])
+          use_batch_statistics=method_kwargs["update_bn_statistics"],
+          only_keep_unmasked_classes=True)
 
       # Compute pseudo-labels that will be used during the next epoch of
       # adaptation.
@@ -202,7 +251,8 @@ class NOTELA(adapt.SFDAMethod):
           multi_label=multi_label,
           knn=method_kwargs["knn"],
           lambda_=method_kwargs["lambda_"],
-          alpha=method_kwargs["alpha"])
+          alpha=method_kwargs["alpha"],
+          sparse_storage=method_kwargs["sparse_storage"])
 
       # method_state will act as a memory, from which pseudo-labels will be
       # grabbed on-the-go over the next epoch of adaptation.
@@ -222,8 +272,8 @@ class NOTELA(adapt.SFDAMethod):
       **method_kwargs) -> Tuple[adapt.AdaptationState, Dict[str, jnp.ndarray]]:
     """Grab or compute the pseudo-labels for the current batch.
 
-    In 'offline mode', grabs the pre-computed pseudo-labels from method_state's
-    memory.
+    In 'offline mode', we only grab pre-computed pseudo-labels from the
+    pseudo_label memory.
 
     Args:
       key: The jax random key used for random operations.
@@ -239,36 +289,105 @@ class NOTELA(adapt.SFDAMethod):
         updated version in which the method_state's memories have been
         updated
       A dictionary containing the pseudo-labels to use for the iteration.
-
-    Raises:
-      NotImplementedError: If the online mode of NOTELA is activated.
     """
-
+    method_state = flax_utils.unreplicate(adaptation_state.method_state)
+    id2index = method_state["id2index"]
+    batch_indexes = np.array(
+        [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
+    if "label_mask" in batch:
+      label_mask = flax_utils.unreplicate(batch["label_mask"])
+      reference_label_mask = label_mask[0]  # [num_classes]
+      # Ensure that the label_mask is the same for all samples.
+      assert (jnp.tile(reference_label_mask,
+                       (label_mask.shape[0], 1)) == label_mask).all()
+    else:
+      label_mask = None
     if method_kwargs["online_pl_updates"]:
-      raise NotImplementedError("Coming in the next release.")
+
+      # In the online version, we compute the pseudo-labels on-the-go.
+      model_outputs = method_utils.batch_forward(
+          adapt.keep_jax_types(batch), adaptation_state.model_state,
+          adaptation_state.model_params, model_bundle.model, modality,
+          method_kwargs["update_bn_statistics"])
+      model_outputs = flax_utils.unreplicate(model_outputs)
+      if label_mask is not None:
+        # We restrict the model's logits to the classes that appear in the
+        # current dataset to ensure compatibility with
+        # method_state["dataset_proba"].
+        model_outputs = model_outputs.replace(
+            label=model_outputs.label[...,
+                                      reference_label_mask.astype(bool)])
+      logit2proba = nn.sigmoid if multi_label else nn.softmax
+      pseudo_label = self.compute_pseudo_label(
+          batch_feature=model_outputs.embedding,
+          dataset_feature=method_state["dataset_feature"],
+          batch_proba=logit2proba(model_outputs.label),
+          dataset_proba=method_state["dataset_proba"],
+          multi_label=multi_label,
+          knn=method_kwargs["knn"],
+          lambda_=method_kwargs["lambda_"],
+          alpha=method_kwargs["alpha"],
+          sparse_storage=method_kwargs["sparse_storage"])
+
+      # Update global information
+      method_state["dataset_feature"] = method_state["dataset_feature"].at[
+          batch_indexes].set(model_outputs.embedding)
+      method_state["dataset_proba"] = method_state["dataset_proba"].at[
+          batch_indexes].set(logit2proba(model_outputs.label))
+      adaptation_state = adaptation_state.replace(
+          method_state=flax_utils.replicate(method_state))
     else:
       # In the offline version, we simply grab the pseudo-labels that were
       # computed before the epoch.
-      method_state = flax_utils.unreplicate(adaptation_state.method_state)
-      id2index = method_state["id2index"]
-      batch_indexes = np.array(
-          [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
       pseudo_label = method_state["pseudo_label"][batch_indexes]
+    if label_mask is not None:
+      # Here, we project back the pseudo-labels to the global label space.
+      pseudo_label = self.pad_pseudo_label(reference_label_mask, pseudo_label)
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label)
     }
 
-  def compute_pseudo_label(
-      self,
-      batch_feature: jnp.ndarray,
-      dataset_feature: jnp.ndarray,
-      batch_proba: jnp.ndarray,
-      dataset_proba: jnp.ndarray,
-      multi_label: bool,
-      knn: int,
-      lambda_: float,
-      alpha: float,
-  ) -> jnp.ndarray:
+  @staticmethod
+  def pad_pseudo_label(label_mask: jnp.ndarray,
+                       pseudo_label: jnp.ndarray) -> jnp.ndarray:
+    """Pads pseudo-labels back to the global probability space.
+
+    Args:
+      label_mask: The mask indicating which 'global' classes are used for the
+        adaptation, shape [num_classes].
+      pseudo_label: Pseudo-label, expressed in a potentially reduced probability
+        space, shape [batch_size, label_mask.sum()].
+
+    Returns:
+      The zero-padded pseudo-labels, of shape [batch_size, num_classes]
+
+    Raises:
+      ValueError: If pseudo_label's last dimension does not match the number of
+        classes used for adaptation, as indicated by label_mask
+    """
+    if label_mask.ndim != 1:
+      raise ValueError("Expecting a vector for label_mask. Current shape is"
+                       f" {label_mask.shape}")
+    batch_size = pseudo_label.shape[0]
+    num_classes_used = label_mask.sum()
+    num_classes_total = label_mask.shape[0]
+    if pseudo_label.shape[-1] != num_classes_used:
+      raise ValueError("Pseudo-labels should be expressed in the same"
+                       "restricted set of classes provided by the label_mask."
+                       "Currently, label_mask indicates that "
+                       f"{num_classes_used} should be used, but pseudo_label "
+                       f"is defined over {pseudo_label.shape[-1]} classes.")
+    padded_pseudo_label = jnp.zeros((batch_size, num_classes_total))
+    col_index = jnp.tile(jnp.where(label_mask)[0], batch_size)
+    row_index = jnp.repeat(jnp.arange(batch_size), num_classes_used)
+    return padded_pseudo_label.at[(row_index,
+                                   col_index)].set(pseudo_label.flatten())
+
+  def compute_pseudo_label(self, batch_feature: jnp.ndarray,
+                           dataset_feature: jnp.ndarray,
+                           batch_proba: jnp.ndarray, dataset_proba: jnp.ndarray,
+                           multi_label: bool, knn: int, lambda_: float,
+                           alpha: float, sparse_storage: bool) -> jnp.ndarray:
     """The pipeline for computing NOTELA's pseudo labels.
 
     First, we compute the nearest neighbors of each point in batch_feature
@@ -288,6 +407,8 @@ class NOTELA(adapt.SFDAMethod):
       knn: The number of nearest-neighbors use to compute the affinity matrix.
       lambda_: The weight controlling the Laplacian regularization.
       alpha: The weight controlling the softness regularization.
+      sparse_storage: Whether to use sparse storage for the nearest-neighbor
+        matrix.
 
     Returns:
       The nearest-neighbor matrix used to compute the pseudo-labels.
@@ -296,7 +417,10 @@ class NOTELA(adapt.SFDAMethod):
     """
     # Start by computing the affinity matrix
     nn_matrix = self.compute_nearest_neighbors(
-        batch_feature=batch_feature, dataset_feature=dataset_feature, knn=knn)
+        batch_feature=batch_feature,
+        dataset_feature=dataset_feature,
+        knn=knn,
+        sparse_storage=sparse_storage)
 
     # Prepare the teacher function.
     teacher_step_fn = functools.partial(

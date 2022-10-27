@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Config file for NOTELA (our proposed method)."""
+"""Config file for Dropout Student method."""
 from chirp import config_utils
 from chirp.projects.sfda import model_utils
 from ml_collections import config_dict
@@ -34,13 +34,8 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   image_config.optimizer_config = optimizer_cfg
 
   # Method-specifc hparams
-  image_config.online_pl_updates = False
-  image_config.knn = 5
-  image_config.lambda_ = 0.1
+  image_config.online_pl_updates = True
   image_config.alpha = 0.1
-
-  # Efficiency options
-  image_config.sparse_storage = True
 
   # Foward options
   image_config.num_epochs = 10
@@ -64,13 +59,8 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   audio_config.optimizer_config = optimizer_cfg
 
   # Method-specifc hparams
-  audio_config.knn = 5
-  audio_config.lambda_ = 1.0
-  audio_config.alpha = 1.0
   audio_config.online_pl_updates = False
-
-  # Efficiency options
-  audio_config.sparse_storage = True
+  audio_config.alpha = 1.0
 
   # Forward options
   audio_config.num_epochs = 10
@@ -82,7 +72,8 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
 def get_config() -> config_dict.ConfigDict:
 
   method_config = config_dict.ConfigDict()
-  method_config.sfda_method = config_utils.callable_config("notela.NOTELA")
+  method_config.sfda_method = config_utils.callable_config(
+      "dropout_student.DropoutStudent")
   method_config.audio = get_audio_config()
   method_config.image = get_image_config()
   return method_config

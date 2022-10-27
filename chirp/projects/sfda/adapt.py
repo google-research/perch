@@ -172,6 +172,31 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     """
     pass
 
+  def before_run(self, key: jax.random.PRNGKeyArray,
+                 model_bundle: model_utils.ModelBundle,
+                 adaptation_state: AdaptationState,
+                 adaptation_dataset: tf.data.Dataset, modality: Modality,
+                 multi_label: bool, **method_kwargs) -> AdaptationState:
+    """Any operation that a method needs to do before a run.
+
+    An example of application is to initialize memories.
+
+    Args:
+      key: The jax random key used for random operations in this epoch.
+      model_bundle: The ModelBundle used for adaptation.
+      adaptation_state: The current state of adaptation.
+      adaptation_dataset: The dataset used for adaptation.
+      modality: The current modality.
+      multi_label: Whether this is a multi-label problem.
+      **method_kwargs: Additional method-specific kwargs.
+
+    Returns:
+      A potentially updated adaptation_state.
+    """
+    del (key, model_bundle, modality, multi_label, method_kwargs,
+         adaptation_dataset)
+    return adaptation_state
+
   def before_epoch(self, key: jax.random.PRNGKeyArray,
                    model_bundle: model_utils.ModelBundle,
                    adaptation_state: AdaptationState,
@@ -205,7 +230,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       **method_kwargs) -> Tuple[AdaptationState, Dict[str, jnp.ndarray]]:
     """Any operation that a method needs to do before an adaptation iteration.
 
-    An example of application is to grab the pseudo-labels needed for the
+    An example of application is to compute the pseudo-labels needed for the
     current iteration.
 
     Args:
@@ -256,6 +281,10 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
     Returns:
       An updated version of the adaptation state.
+
+    Raises:
+      ValueError: If model_bundle's optimizer is not None and batchwise_metrics
+        does not contain a 'main_loss' metric.
     """
 
     def forward(params, key, batch, model_state, **method_gather_args):
@@ -309,12 +338,16 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
       # Extract the loss to optimize, and add weight decay.
       if "main_loss" not in batch_metrics:
-        raise ValueError("Any SFDA method should specify the key 'main_loss'"
-                         " when overriding 'get_adaptation_metrics'.")
-      main_loss = batch_metrics["main_loss"]
-      if method_kwargs["optimizer_config"].weight_decay > 0.:
-        main_loss += method_kwargs[
-            "optimizer_config"].weight_decay * losses.l2_loss(params)
+        if model_bundle.optimizer is not None:
+          raise ValueError(
+              "Any SFDA method that defines an optimizer should also specify "
+              "the key 'main_loss' by overriding 'get_adaptation_metrics'.")
+        main_loss = None
+      else:
+        main_loss = batch_metrics["main_loss"]
+        if method_kwargs["optimizer_config"].weight_decay > 0.:
+          main_loss += method_kwargs[
+              "optimizer_config"].weight_decay * losses.l2_loss(params)
       return main_loss, (batch_metrics, model_state)
 
     @functools.partial(jax.pmap, axis_name="batch")
@@ -328,20 +361,30 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       model_state = adaptation_state.model_state
       opt_state = adaptation_state.opt_state
 
-      # Compute gradient transformations. Doing so, get the new model state.
-      grads, (batch_metrics, model_state) = jax.grad(
-          forward, has_aux=True)(
-              params,
-              key=key,
-              batch=batch,
-              model_state=model_state,
-              **method_gather_args)
-      grads = jax.lax.pmean(grads, axis_name="batch")
+      if model_bundle.optimizer is not None:
+        # If an optimizer is defined, compute gradient transformations.
+        # Doing so, get the new model state.
+        grads, (batch_metrics, model_state) = jax.grad(
+            forward, has_aux=True)(
+                params,
+                key=key,
+                batch=batch,
+                model_state=model_state,
+                **method_gather_args)
+        grads = jax.lax.pmean(grads, axis_name="batch")
 
-      # Update model's parameters from gradient transformations.
-      updates, opt_state = model_bundle.optimizer.update(
-          grads, opt_state, params)
-      params = optax.apply_updates(params, updates)
+        # Update model's parameters from gradient transformations.
+        updates, opt_state = model_bundle.optimizer.update(
+            grads, opt_state, params)
+        params = optax.apply_updates(params, updates)
+      else:
+        # Otherwise, we simply forward the data through the model.
+        _, (batch_metrics, model_state) = forward(
+            params,
+            key=key,
+            batch=batch,
+            model_state=model_state,
+            **method_gather_args)
 
       # Update adaptation state
       adaptation_state = adaptation_state.replace(
@@ -501,6 +544,16 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
 
   validation_writer = metric_writers.create_default_writer(
       logdir, asynchronous=False, collection="validation")
+
+  # Before run.
+  adaptation_state = sfda_method.before_run(
+      key=key,
+      model_bundle=model_bundle,
+      adaptation_state=adaptation_state,
+      multi_label=multi_label,
+      modality=modality,
+      adaptation_dataset=adaptation_dataset,
+      **method_kwargs)
 
   for epoch in range(method_kwargs["num_epochs"]):
 

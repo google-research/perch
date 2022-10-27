@@ -25,10 +25,14 @@ from chirp.models import frontend
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import model_utils
 from chirp.projects.sfda import models
+from chirp.projects.sfda.configs import ada_bn as ada_bn_config
 from chirp.projects.sfda.configs import audio_baseline
 from chirp.projects.sfda.configs import config_globals
+from chirp.projects.sfda.configs import dropout_student as ds_config
 from chirp.projects.sfda.configs import image_baseline
 from chirp.projects.sfda.configs import notela as notela_config
+from chirp.projects.sfda.configs import pseudo_label as pseudo_label_config
+from chirp.projects.sfda.configs import shot as shot_config
 from chirp.projects.sfda.configs import tent as tent_config
 from chirp.projects.sfda.tests import fake_image_dataset
 from chirp.tests import fake_dataset
@@ -39,7 +43,14 @@ import jax.numpy as jnp
 from absl.testing import absltest
 from absl.testing import parameterized
 
-_UNPARSED_CONFIGS = {"tent": tent_config, "notela": notela_config}
+_UNPARSED_CONFIGS = {
+    "tent": tent_config,
+    "notela": notela_config,
+    "pseudo_label": pseudo_label_config,
+    "shot": shot_config,
+    "ada_bn": ada_bn_config,
+    "dropout_student": ds_config,
+}
 
 
 class ConstantEncoder(nn.Module):
@@ -101,6 +112,7 @@ class AdaptationTest(parameterized.TestCase):
 
   def _get_configs(self,
                    modality: adapt.Modality,
+                   method: str,
                    use_constant_encoder: bool = True):
     """Create configuration dictionary for training."""
     if modality == adapt.Modality.AUDIO:
@@ -135,28 +147,28 @@ class AdaptationTest(parameterized.TestCase):
       config.init_config.input_shape = None
       if use_constant_encoder:
         config.model_config.encoder = models.ImageModelName.CONSTANT
-    method_configs = {}
-    for method in ["tent", "notela"]:
-      method_config = _UNPARSED_CONFIGS[method].get_config()
-      method_config = config_utils.parse_config(method_config,
-                                                config_globals.get_globals())
-      method_configs[method] = method_config
-    return config, method_configs
+    method_config = _UNPARSED_CONFIGS[method].get_config()
+    method_config = config_utils.parse_config(method_config,
+                                              config_globals.get_globals())
+    return config, method_config
 
   @parameterized.named_parameters(*[
       (f"{method}_{modality.value}", method, modality)
-      for method, modality in itertools.product(
-          ["tent", "notela"], [adapt.Modality.IMAGE, adapt.Modality.AUDIO])
+      for method, modality in itertools.product([
+          "dropout_student", "ada_bn", "tent", "notela", "pseudo_label", "shot"
+      ], [adapt.Modality.IMAGE, adapt.Modality.AUDIO])
   ])
-  def test_adapt_one_epoch(self, method, modality: adapt.Modality):
+  def test_adapt_one_epoch(self, method: str, modality: adapt.Modality):
     """Test an epoch of adaptation for SFDA methods."""
 
     # Recover the configurations dict.
-    config, method_configs = self._get_configs(modality)
-    method_config = method_configs[method]
+    config, method_config = self._get_configs(modality, method)
     sfda_method = method_config.sfda_method
     method_config = getattr(method_config, modality.value)
     method_config.num_epochs = 1
+    if method == "notela":
+      # Sparse storage slows computations and can cause test timeouts.
+      method_config.sparse_storage = False
 
     # Get data
     adaptation_dataset, val_dataset = self._get_datasets(config, modality)
@@ -192,7 +204,7 @@ class AdaptationTest(parameterized.TestCase):
 
   def test_mask_parameters_audio(self):
     """Testing parameter masking used to restrict trainable parameters."""
-    config, _ = self._get_configs(modality=adapt.Modality.AUDIO)
+    config, _ = self._get_configs(adapt.Modality.AUDIO, "tent")
     _, params, _, _ = model_utils.prepare_audio_model(
         model_config=config.model_config,
         optimizer_config=None,
@@ -210,7 +222,7 @@ class AdaptationTest(parameterized.TestCase):
   def test_mask_parameters_image(self, model: models.ImageModelName):
     """Testing parameter masking used to restrict trainable parameters."""
 
-    config, _ = self._get_configs(modality=adapt.Modality.IMAGE)
+    config, _ = self._get_configs(adapt.Modality.IMAGE, "tent")
     config.model_config.encoder = model
     _, params, _, _ = model_utils.prepare_image_model(
         model_config=config.model_config,
