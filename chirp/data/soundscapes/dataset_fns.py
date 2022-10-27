@@ -160,7 +160,7 @@ def combine_hawaii_annotations(dataset_path: epath.Path,
                                output_filepath: epath.Path) -> None:
   """Combine all Hawaii dataset annotations into a single csv."""
   tables = dataset_path.glob('*/*.txt')
-  rows = []
+  rows = {}
   for table_fp in tables:
     with table_fp.open('r') as f:
       reader = csv.DictReader(f, delimiter='\t')
@@ -168,10 +168,11 @@ def combine_hawaii_annotations(dataset_path: epath.Path,
         # The filename in the row doesn't include the file's directory.
         folder_name = table_fp.parent.name
         row['Begin File'] = os.path.join(folder_name, row['Begin File'])
-        # The Spectrogram rows are redundant with the Waveform rows, but contain
-        # a couple extra columns.
-        if 'Spectrogram' not in row['View']:
-          rows.append(row)
+        # Many files contain redundant 'Waveform' and 'Spectrogram' views of
+        # the same annotation.
+        key = (row['Begin File'], row['Begin Time (s)'], row['Species'])
+        rows[key] = row
+  rows = list(rows.values())
 
   with output_filepath.open('w') as f:
     writer = csv.DictWriter(f, rows[0].keys())
@@ -183,7 +184,7 @@ def load_hawaii_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   """Load the dataframe of all Hawaii annotations from annotation CSV."""
   start_time_fn = lambda row: float(row['Begin Time (s)'])
   end_time_fn = lambda row: float(row['End Time (s)'])
-  filter_fn = lambda row: 'Spectrogram' in row['View']
+  filter_fn = lambda row: False
 
   # Convert dataset labels to ebird2021.
   db = namespace_db.NamespaceDatabase.load_csvs()
