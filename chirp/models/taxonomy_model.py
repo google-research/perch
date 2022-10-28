@@ -20,6 +20,7 @@ from typing import Dict, List, Optional, Tuple
 from chirp.models import conformer
 from chirp.models import frontend
 from chirp.models import layers
+from chirp.models import hubert
 import flax
 from flax import linen as nn
 from jax import numpy as jnp
@@ -47,11 +48,15 @@ class TaxonomyModel(nn.Module):
       spectrograms and returns feature vectors.
     taxonomy_loss_weight: Weight for taxonomic label losses.
     frontend: The frontend to use to generate features.
+    hubert_feature_extractor: Optionally, a pre-trained frozen feature extractor
+      trained in a self-superivsed way. This option is mutually exclusive with
+      frontend and is used for evaluation of self-superviesd representations.
   """
   num_classes: Dict[str, int]
   encoder: nn.Module
   taxonomy_loss_weight: float
   frontend: Optional[nn.Module] = None
+  hubert_feature_extractor: Optional[nn.Module] = None
 
   @nn.compact
   def __call__(self,
@@ -70,10 +75,16 @@ class TaxonomyModel(nn.Module):
         (train mode). If not specified (or specified to None), default to 'not
         train'.
       mask: An optional mask of the inputs.
+    Raises: ValueError if both `frontend` and `hubert_feature_extractor` are not
+      None.
 
     Returns:
       Logits for each output head.
     """
+    if self.frontend is not None and self.hubert_feature_extractor is not None:
+      raise ValueError("`frontend` and `hubert_feature_extractor` are mutually "
+                       "exclusive.")
+
     if use_running_average is None:
       use_running_average = not train
     kwargs = {} if mask is None else {"mask": mask}
@@ -84,6 +95,8 @@ class TaxonomyModel(nn.Module):
         mask = frontend.frames_mask(mask, self.frontend.stride)
         # Add axes for broadcasting over frequencies and channels
         kwargs = {"mask": mask[..., jnp.newaxis, jnp.newaxis]}
+    elif self.hubert_feature_extractor is not None:
+      x = self.hubert_feature_extractor(inputs)
     else:
       x = inputs
     if isinstance(self.encoder, conformer.Conformer):
