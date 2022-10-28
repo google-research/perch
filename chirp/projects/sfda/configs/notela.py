@@ -35,10 +35,10 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
 
   # Method-specifc hparams
   image_config.online_pl_updates = True
-  image_config.knn = 5
-  image_config.lambda_ = 0.1
-  image_config.alpha = 0.1
-  image_config.use_mutual_nn = False
+  image_config.knn = 15
+  image_config.lambda_ = 2.0
+  image_config.alpha = 1.0
+  image_config.use_mutual_nn = True
   image_config.normalize_pseudo_labels = True
 
   # Foward options
@@ -58,7 +58,7 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   optimizer_cfg.opt_kwargs = {}
   optimizer_cfg.weight_decay = 0.
   optimizer_cfg.learning_rate = 1e-4
-  optimizer_cfg.use_cosine_decay = True
+  optimizer_cfg.use_cosine_decay = False
   optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
   audio_config.optimizer_config = optimizer_cfg
 
@@ -67,7 +67,7 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   audio_config.lambda_ = 1.0
   audio_config.alpha = 1.0
   audio_config.online_pl_updates = False
-  audio_config.use_mutual_nn = False
+  audio_config.use_mutual_nn = True
   audio_config.normalize_pseudo_labels = True
 
   # Forward options
