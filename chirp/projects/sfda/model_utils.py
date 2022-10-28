@@ -155,6 +155,7 @@ def prepare_audio_model(
         learning_rate=0.,
         workdir=ckpt_dir,
         target_class_list=target_class_list)
+    train_state = model_bundle.ckpt.restore(train_state)
     params = train_state.params
     model_state = train_state.model_state
   else:
