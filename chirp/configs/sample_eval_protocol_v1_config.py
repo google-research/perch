@@ -42,6 +42,9 @@ def get_config() -> config_dict.ConfigDict:
   # queries for a given eval species.
   config.create_species_query = _object_config('eval_lib.create_averaged_query')
   config.score_search = _object_config('eval_lib.cosine_similarity')
-  config.score_search_ordering = 'high'
+  # Determines the ordering of search results for use in average-precision based
+  # metrics. For similarity-based metrics, set sort_descending to True. For
+  # distance-based metrics, set this to False (for ascending ordering).
+  config.sort_descending = None
 
   return config

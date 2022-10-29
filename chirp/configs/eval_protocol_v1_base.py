@@ -166,4 +166,16 @@ def get_config(config_string: str = 'baseline') -> config_dict.ConfigDict:
   # embeddings).
   config.debug.embedded_dataset_cache_path = ''
 
+  # The two below fields should be populated by the user in an eval config.
+  # Each should point to a local function or callable or one of the provided
+
+  # functions in google-research/chirp/eval/eval_lib.py.
+  config.create_species_query = None
+  config.score_search = None
+
+  # Determines the ordering of search results for use in average-precision based
+  # metrics. For similarity-based metrics, set sort_descending to True. For
+  # distance-based metrics, set this to False (for ascending ordering).
+  config.sort_descending = None
+
   return config

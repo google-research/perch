@@ -518,9 +518,6 @@ def prepare_eval_sets(
         rng_key=eval_set_key)
 
 
-# TODO(hamer): add function to rank the produced search results.
-# TODO(hamer): add flag to indicate whether search_score prefers high or low
-# values.
 def search(
     eval_and_search_corpus: ClasswiseEvalSetGenerator,
     learned_representations: Mapping[str, np.ndarray],
@@ -605,9 +602,10 @@ def query_search(
   return search_species_scores
 
 
-def compute_metrics(eval_set_name: str, eval_set_results: Mapping[str,
-                                                                  pd.DataFrame],
-                    write_results_dir: str):
+def compute_metrics(eval_set_name: str,
+                    eval_set_results: Mapping[str, pd.DataFrame],
+                    write_results_dir: str,
+                    sort_descending: bool = True):
   """Operates over a DataFrame of eval results and produces average precision.
 
   Args:
@@ -615,6 +613,9 @@ def compute_metrics(eval_set_name: str, eval_set_results: Mapping[str,
     eval_set_results: A mapping from species ID to a DataFrame of the search
       results for that species (with columns 'score' and 'species_match').
     write_results_dir: The path to write the computed metrics to file.
+    sort_descending: An indicator if the search result ordering is in descending
+      order to be used post-search by average-precision based metrics. Sorts in
+      descending order by default.
 
   Returns:
     Produces the specified metrics computed for each species in the given eval
@@ -625,8 +626,8 @@ def compute_metrics(eval_set_name: str, eval_set_results: Mapping[str,
   for eval_species, eval_results in eval_set_results.items():
     eval_scores = eval_results['score'].values
     species_label_match = eval_results['species_match'].values
-    average_precision = metrics.average_precision(eval_scores,
-                                                  species_label_match)
+    average_precision = metrics.average_precision(
+        eval_scores, species_label_match, sort_descending=sort_descending)
     species_to_metric[eval_species] = average_precision
 
   write_results_path = os.path.join(write_results_dir,

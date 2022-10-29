@@ -36,6 +36,20 @@ def main(argv: Sequence[str]) -> None:
   config = config_utils.parse_config(_CONFIG.value,
                                      config_globals.get_globals())
 
+  # Check that the required user-specified fields are set in the config.
+  if config.create_species_query is None:
+    raise ValueError('eval.py requires `config.create_species_query` to be set '
+                     'to a boolean value (True or False) in the passed config. '
+                     'Please update your config file and run again.')
+  if config.score_search is None:
+    raise ValueError('eval.py requires `config.score_search` to be set to a '
+                     'boolean value (True or False) in the passed config. '
+                     'Please update your config file and run again.')
+  if config.sort_descending is None:
+    raise ValueError('eval.py requires `sort_descending` to be set to a '
+                     'boolean value (True or False) in the passed config. '
+                     'Please update your config file and run again.')
+
   eval_datasets = eval_lib.load_eval_datasets(config)
   embedded_datasets = dict()
   for dataset_name, dataset in eval_datasets.items():
@@ -56,7 +70,7 @@ def main(argv: Sequence[str]) -> None:
 
   for eval_set_name, eval_set_results in eval_set_search_results.items():
     eval_lib.compute_metrics(eval_set_name, eval_set_results,
-                             config.write_results_dir)
+                             config.write_results_dir, config.sort_descending)
 
 
 if __name__ == '__main__':

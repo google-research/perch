@@ -30,12 +30,20 @@ def mean_cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
 
 def map_(logits: jnp.ndarray,
          labels: jnp.ndarray,
-         label_mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
-  return average_precision(scores=logits, labels=labels, label_mask=label_mask)
+         label_mask: Optional[jnp.ndarray] = None,
+         sort_descending: bool = True) -> jnp.ndarray:
+  return average_precision(
+      scores=logits,
+      labels=labels,
+      label_mask=label_mask,
+      sort_descending=sort_descending)
 
 
-def cmap_(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
-  return average_precision(scores=logits.T, labels=labels.T)
+def cmap_(logits: jnp.ndarray,
+          labels: jnp.ndarray,
+          sort_descending: bool = True) -> jnp.ndarray:
+  return average_precision(
+      scores=logits.T, labels=labels.T, sort_descending=sort_descending)
 
 
 def log_mse_loss(source: jnp.ndarray,
@@ -121,6 +129,7 @@ def source_sparsity_l1l2ratio_loss(separated_waveforms: jnp.ndarray,
 def average_precision(scores: jnp.ndarray,
                       labels: jnp.ndarray,
                       label_mask: Optional[jnp.ndarray] = None,
+                      sort_descending: bool = True,
                       interpolated: bool = False) -> jnp.ndarray:
   """Average precision.
 
@@ -135,6 +144,10 @@ def average_precision(scores: jnp.ndarray,
     labels: A multi-hot encoding of the ground truth positives. Must match the
       shape of scores.
     label_mask: A mask indicating which labels to involve in the calculation.
+    sort_descending: An indicator if the search result ordering is in descending
+      order (e.g. for evaluating over similarity metrics where higher scores are
+      preferred). If false, computes average_precision on descendingly sorted
+      inputs.
     interpolated: Whether to use interpolation.
 
   Returns:
@@ -147,7 +160,9 @@ def average_precision(scores: jnp.ndarray,
     labels = labels * label_mask
     min_score = jnp.min(scores) - 1.0
     scores = scores * label_mask + min_score * (1 - label_mask)
-  idx = jnp.flip(jnp.argsort(scores), axis=-1)
+  idx = jnp.argsort(scores)
+  if sort_descending:
+    idx = jnp.flip(idx, axis=-1)
   scores = jnp.take_along_axis(scores, idx, axis=-1)
   labels = jnp.take_along_axis(labels, idx, axis=-1)
   pr_curve = jnp.cumsum(labels, axis=-1) / (jnp.arange(labels.shape[-1]) + 1)
