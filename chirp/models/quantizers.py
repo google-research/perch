@@ -427,6 +427,7 @@ class ResidualQuantizer(nn.Module):
     # codebook: [ns, nc, csz / ns].
     # Using non-homogenous quantizers means we can't concat the outputs.
     nn_idx = jnp.concatenate(nn_idx, axis=0)
+    nn_idx = jnp.reshape(nn_idx, (len(self.quantizers),) + inputs.shape[:-1])
     codebooks = jnp.concatenate(codebooks, axis=0)
     if self.stop_gradient_codes:
       codebooks = jax.lax.stop_gradient(codebooks)

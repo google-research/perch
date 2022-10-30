@@ -104,8 +104,6 @@ class QuantizersTest(absltest.TestCase):
     for k in flat_params:
       diff = np.sum(np.abs(flat_params[k] - flat_updated_params[k]))
       self.assertGreater(diff, 0.1)
-    # The counts for updated codebooks should be all ones again post-reset.
-    print(flat_updated_state)
 
   def test_product_quantizer(self):
     num_centroids = 2
@@ -152,7 +150,8 @@ class QuantizersTest(absltest.TestCase):
     # Just check that it runs for now.
     quantizer_outputs, _ = rvq.apply(params, inputs, train=True, mutable=True)
     self.assertSequenceEqual(quantizer_outputs.quantized.shape, inputs.shape)
-
+    self.assertSequenceEqual(quantizer_outputs.nn_idx.shape,
+                             [num_sections, 2, 4])
 
 if __name__ == '__main__':
   absltest.main()
