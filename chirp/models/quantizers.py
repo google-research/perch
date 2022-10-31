@@ -210,6 +210,7 @@ class VectorQuantizer(BaseQuantizer):
     counts = self.update_cluster_counts(encodings, train)
     quantized = jnp.matmul(encodings, codebook)
     quantization_loss = self.loss(flat_inputs, quantized)
+    quantization_loss = jnp.reshape(quantization_loss, inputs.shape)
 
     if self.rescale:
       quantized *= stdev + 1e-8
@@ -354,6 +355,7 @@ class ProductQuantizer(nn.Module):
   @nn.compact
   def __call__(self, inputs, train):
     ns = self.get_num_sections()
+    nc = self.get_num_centroids()
     embedding_dim = inputs.shape[-1]
     flat_inputs = jnp.reshape(inputs, [-1, embedding_dim])
     flat_inputs, pca_loss, projection, pre_bias = self.pca_project(flat_inputs)
@@ -372,7 +374,8 @@ class ProductQuantizer(nn.Module):
       nn_idx.append(outputs.nn_idx)
 
       codebook_list.append(outputs.codebook)
-      loss.append(outputs.quantization_loss)
+      loss.append(
+          jnp.reshape(outputs.quantization_loss, inputs.shape[:-1] + (nc,)))
       counts += outputs.cluster_counts
 
     # Aggregate across 'sections' to get the following shapes:
@@ -403,6 +406,13 @@ class ResidualQuantizer(nn.Module):
   quantizers: Sequence[nn.Module] = ()
   stop_gradient_codes: bool = True
 
+  def get_num_centroids(self):
+    nc = [q.num_centroids for q in self.quantizers]
+    assert len(
+        list(set(nc))
+    ) == 1, 'Expected all quantizers to have the same number of centroids.'
+    return nc[0]
+
   @nn.compact
   def __call__(self, inputs, train=True):
     quantized = 0.0
@@ -432,5 +442,7 @@ class ResidualQuantizer(nn.Module):
     if self.stop_gradient_codes:
       codebooks = jax.lax.stop_gradient(codebooks)
     quantized = jnp.reshape(quantized, inputs.shape)
+    quantization_loss = jnp.full(
+        inputs.shape[:-1] + (self.get_num_centroids(),), quantization_loss)
     return QuantizerOutputs(quantized, quantization_loss, nn_idx, codebooks,
                             counts)

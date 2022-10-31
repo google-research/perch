@@ -125,6 +125,9 @@ class QuantizersTest(absltest.TestCase):
     params = pvq.init(rngs, inputs, train=False, mutable=True)
     # Just check that it runs for now.
     quantizer_outputs, _ = pvq.apply(params, inputs, train=True, mutable=True)
+    # hubert_train.py expects the quantization loss to be of dim 3, e.g.
+    # [batch size, num frames, num clusters].
+    self.assertLen(quantizer_outputs.quantization_loss.shape, 3)
     self.assertSequenceEqual(quantizer_outputs.quantized.shape, inputs.shape)
     self.assertSequenceEqual(quantizer_outputs.nn_idx.shape,
                              [num_sections, 2, 4])
@@ -149,6 +152,9 @@ class QuantizersTest(absltest.TestCase):
     params = rvq.init(rngs, inputs, train=False, mutable=True)
     # Just check that it runs for now.
     quantizer_outputs, _ = rvq.apply(params, inputs, train=True, mutable=True)
+    # hubert_train.py expects the quantization loss to be of dim 3, e.g.
+    # [batch size, num frames, num clusters].
+    self.assertLen(quantizer_outputs.quantization_loss.shape, 3)
     self.assertSequenceEqual(quantizer_outputs.quantized.shape, inputs.shape)
     self.assertSequenceEqual(quantizer_outputs.nn_idx.shape,
                              [num_sections, 2, 4])

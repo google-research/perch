@@ -103,7 +103,7 @@ def get_config() -> config_dict.ConfigDict:
       dropout_prob=0.,
       activation=config_utils.object_config("nn.gelu"),
       conv_layer_tuples=conv_layer_tuples,
-      deprecated_group_conv=True)
+      deprecated_group_conv=False)
 
   # HuBERT's early feature extractor.
   conformer_config = config_dict.ConfigDict()
