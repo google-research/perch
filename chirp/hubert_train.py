@@ -107,7 +107,7 @@ def quantizer_loss(outputs: hubert.ModelOutputs, quant_loss_mult: float,
                    **unused_kwargs) -> jnp.ndarray:
   """Get quantization loss from model outputs."""
   del unused_kwargs
-  # [bsz, sz, csz].
+  # [bsz, sz, csz] or [bsz, sz, 1] (depending on the quantizer).
   quant_loss = outputs.quantization_loss
   quant_loss = jnp.squeeze(jnp.mean(quant_loss, -1))
   # [bsz, sz].
@@ -219,7 +219,6 @@ def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
         "min_per_cluster_{}".format(i): min_per_cluster,
         "h_diversity_{}".format(i): h_diversity
     })
-  print("ret has keys {}".format(ret.keys()))
   return ret[key]
 
 
@@ -377,14 +376,26 @@ def initialize_model(
   else:
     kwargs = {
         "num_centroids": base_quantizer_config.num_centroids,
+        "demean": True,
+        "rescale": True,
     }
     quantizer_class = quantizers.VectorQuantizer
   quantizer_list = []
   for _ in range(len(model_config.quantizer_points)):
-    base_quantizers = [
-        quantizer_class(**kwargs) for _ in range(quantizer_config.num_sections)
-    ]
-    quantizer = quantizers.ProductQuantizer(base_quantizers=base_quantizers)
+    if (quantizer_config.strategy ==
+        quantizers.QuantizationStrategy.PRODUCT_QUANTIZATION.value):
+      base_quantizers = [
+          quantizer_class(**kwargs)
+          for _ in range(quantizer_config.num_sections)
+      ]
+      quantizer = quantizers.ProductQuantizer(base_quantizers=base_quantizers)
+    elif (quantizer_config.strategy ==
+          quantizers.QuantizationStrategy.RESIDUAL_QUANTIZATION.value):
+      base_quantizers = [
+          quantizer_class(**kwargs)
+          for _ in range(quantizer_config.num_sections)
+      ]
+      quantizer = quantizers.ResidualQuantizer(quantizers=base_quantizers)
     quantizer_list.append(quantizer)
 
   # Initialize the frontend.
@@ -541,8 +552,6 @@ def initialize_model(
             reload_quantizer_from)
         time.sleep(5)
       num_attempts += 1
-    print("reloaded_quantizer codebook {}".format(
-        reloaded_quantizer["params"]["quantizer"]))
     train_state.params["quantizer"] = reloaded_quantizer["params"]["quantizer"]
 
   if reload_hubert_from:

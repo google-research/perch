@@ -135,6 +135,7 @@ def get_config() -> config_dict.ConfigDict:
   base_quantizer_config.init_scale = 0.1
   quantizer_config = config_dict.ConfigDict()
   quantizer_config.num_sections = 16
+  quantizer_config.strategy = "product_quantization"
   quantizer_config.use_entropy_quantizer = True
   init_config.quantizer_config = quantizer_config
   init_config.base_quantizer_config = base_quantizer_config

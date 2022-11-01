@@ -137,7 +137,7 @@ def get_config() -> config_dict.ConfigDict:
   model_config.frontend = None
 
   # Configure the training loop
-  num_train_steps = config_dict.FieldReference(1_000_000)
+  num_train_steps = config_dict.FieldReference(2_000_000)
 
   train_config = config_dict.ConfigDict()
   train_config.num_train_steps = num_train_steps

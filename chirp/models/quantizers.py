@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """Quantizers."""
+import enum
 from typing import List, Optional, Sequence, Tuple
 import flax
 from flax import linen as nn
@@ -28,6 +29,12 @@ class QuantizerOutputs:
   nn_idx: jnp.ndarray
   codebook: jnp.ndarray
   cluster_counts: List[jnp.ndarray]
+
+
+class QuantizationStrategy(enum.Enum):
+  """The Quantization strategy."""
+  PRODUCT_QUANTIZATION = 'product_quantization'
+  RESIDUAL_QUANTIZATION = 'residual_quantization'
 
 
 def refresh_codebooks(
@@ -273,8 +280,7 @@ class VectorQuantizerEnt(BaseQuantizer):
     nn_idx = jnp.reshape(nn_idx, inputs.shape[:-1])
 
     quantization_loss = self.loss(scores)
-    quantization_loss = jnp.full(inputs.shape[:-1] + (self.num_centroids,),
-                                 quantization_loss)
+    quantization_loss = jnp.full(inputs.shape[:-1] + (1,), quantization_loss)
     # Apply stop gradient to protect the encodings from downstream losses.
     quantized = inputs + jax.lax.stop_gradient(quantized - inputs)
 
@@ -355,7 +361,6 @@ class ProductQuantizer(nn.Module):
   @nn.compact
   def __call__(self, inputs, train):
     ns = self.get_num_sections()
-    nc = self.get_num_centroids()
     embedding_dim = inputs.shape[-1]
     flat_inputs = jnp.reshape(inputs, [-1, embedding_dim])
     flat_inputs, pca_loss, projection, pre_bias = self.pca_project(flat_inputs)
@@ -372,10 +377,9 @@ class ProductQuantizer(nn.Module):
       outputs = quantizer(sec, train)
       quantized.append(outputs.quantized)
       nn_idx.append(outputs.nn_idx)
-
       codebook_list.append(outputs.codebook)
       loss.append(
-          jnp.reshape(outputs.quantization_loss, inputs.shape[:-1] + (nc,)))
+          jnp.reshape(outputs.quantization_loss, inputs.shape[:-1] + (-1,)))
       counts += outputs.cluster_counts
 
     # Aggregate across 'sections' to get the following shapes:
@@ -413,6 +417,9 @@ class ResidualQuantizer(nn.Module):
     ) == 1, 'Expected all quantizers to have the same number of centroids.'
     return nc[0]
 
+  def get_num_sections(self):
+    return len(self.quantizers)
+
   @nn.compact
   def __call__(self, inputs, train=True):
     quantized = 0.0
@@ -442,7 +449,6 @@ class ResidualQuantizer(nn.Module):
     if self.stop_gradient_codes:
       codebooks = jax.lax.stop_gradient(codebooks)
     quantized = jnp.reshape(quantized, inputs.shape)
-    quantization_loss = jnp.full(
-        inputs.shape[:-1] + (self.get_num_centroids(),), quantization_loss)
+    quantization_loss = jnp.full(inputs.shape[:-1] + (1,), quantization_loss)
     return QuantizerOutputs(quantized, quantization_loss, nn_idx, codebooks,
                             counts)
