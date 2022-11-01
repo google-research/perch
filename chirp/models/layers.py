@@ -614,8 +614,8 @@ class EarlyFeatureExtractor(nn.Module):
         each of the convolutional layers.
       dropout_prob: A float. The dropout probability.
       activation: The activation to apply after each convolutional "block".
-      deprecated_group_conv: Whether to use the older version of this layer 
-        (which used grouped convolutions), for compatibility with old 
+      deprecated_group_conv: Whether to use the older version of this layer
+        (which used grouped convolutions), for compatibility with old
         experiments. This option will be removed in the future.
   """
   conv_layer_tuples: Tuple[Tuple[int, int, int], ...]
