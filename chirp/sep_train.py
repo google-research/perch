@@ -390,6 +390,8 @@ def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
   """
   variables = {'params': train_state.params, **train_state.model_state}
 
+  # CAUTION: If the infer_fn signature changes, then the SeparatorTFCallback
+  # in the eval benchmark code will also need to be changed.
   def infer_fn(framed_audio_batch, variables):
     flat_inputs = jnp.reshape(framed_audio_batch,
                               [framed_audio_batch.shape[0], -1])

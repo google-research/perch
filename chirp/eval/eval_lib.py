@@ -25,7 +25,9 @@ from absl import logging
 from chirp import train
 from chirp.data import pipeline
 from chirp.models import metrics
+from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
+from etils import epath
 import jax
 import ml_collections
 import numpy as np
@@ -188,6 +190,7 @@ class TaxonomyModelCallback:
   init_config: ConfigDict
   workdir: str
   use_learned_representations: bool = True
+  # The following are populated during init.
   model_callback: Callable[[np.ndarray],
                            np.ndarray] = dataclasses.field(init=False)
   learned_representations: Dict[str, np.ndarray] = dataclasses.field(
@@ -204,13 +207,78 @@ class TaxonomyModelCallback:
 
     self.model_callback = fprop
 
-    class_list = namespace_db.load_db().class_lists[
-        self.init_config['target_class_list']].classes
-    head_index = list(model_bundle.model.num_classes.keys()).index('label')
-    output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
-
     if self.use_learned_representations:
+      class_list = namespace_db.load_db().class_lists[
+          self.init_config['target_class_list']].classes
+      head_index = list(model_bundle.model.num_classes.keys()).index('label')
+      output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
       self.learned_representations.update(dict(zip(class_list, output_weights)))
+
+  def __call__(self, inputs: np.ndarray) -> np.ndarray:
+    return np.asarray(self.model_callback(inputs))
+
+
+@dataclasses.dataclass
+class SeparatorTFCallback:
+  """An eval model callback the embedding from an audio separator."""
+  model_path: str
+  use_learned_representations: bool = False
+  frame_size: int = 32000
+  # The following are populated during init.
+  model_callback: Callable[[np.ndarray],
+                           np.ndarray] = dataclasses.field(init=False)
+  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+      init=False, default_factory=dict)
+
+  def _load_learned_representations(self):
+    """Loads classifier output weights from the separator."""
+    label_csv_path = epath.Path(self.model_path) / 'label.csv'
+    with label_csv_path.open('r') as f:
+      class_list = namespace.ClassList.from_csv('label', f)
+    # Load the output layer weights.
+    variables_path = (epath.Path(self.model_path) /
+                      'savedmodel/variables/variables').as_posix()
+    variables = tf.train.list_variables(variables_path)
+    candidates = []
+    for v, v_shape in variables:
+      # The classifier output layer is a 1D convolution with kernel size
+      # (1, embedding_dim, num_classes).
+      if (len(v_shape) == 3 and v_shape[0] == 1 and
+          v_shape[-1] == class_list.size):
+        candidates.append(v)
+    if not candidates:
+      raise ValueError('Could not locate output weights layer.')
+    elif len(candidates) > 1:
+      raise ValueError('Found multiple layers which could be the output '
+                       'weights layer (%s).' % candidates)
+    else:
+      output_weights = tf.train.load_variable(variables_path, candidates[0])
+      output_weights = np.squeeze(output_weights)
+    self.learned_representations.update(
+        dict(zip(class_list.classes, output_weights)))
+
+  def __post_init__(self):
+    logging.info('Loading separation model...')
+    separation_model = tf.saved_model.load(
+        epath.Path(self.model_path) / 'savedmodel')
+
+    def fprop(inputs):
+      framed_inputs = np.reshape(inputs, [
+          inputs.shape[0], inputs.shape[1] // self.frame_size, self.frame_size
+      ])
+      # Outputs are separated audio, logits, and embeddings.
+      _, _, embeddings = separation_model.infer_tf(framed_inputs)
+      # Embeddings have shape [B, T, D]; we need to aggregate over time.
+      # For separation models, the mid-point embedding is usually best.
+      midpt = embeddings.shape[1] // 2
+      embeddings = embeddings[:, midpt, :]
+      return embeddings
+
+    self.model_callback = fprop
+    if self.use_learned_representations:
+      logging.info('Loading learned representations...')
+      self._load_learned_representations()
+    logging.info('Model loaded.')
 
   def __call__(self, inputs: np.ndarray) -> np.ndarray:
     return np.asarray(self.model_callback(inputs))
