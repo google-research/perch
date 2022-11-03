@@ -68,9 +68,14 @@ def main(argv: Sequence[str]) -> None:
 
     eval_set_search_results[eval_set_name] = search_results
 
+  # Collect eval set species performance results as a list of tuples.
+  eval_metrics = [('eval_species', 'average_precision', 'eval_set_name')]
   for eval_set_name, eval_set_results in eval_set_search_results.items():
-    eval_lib.compute_metrics(eval_set_name, eval_set_results,
-                             config.write_results_dir, config.sort_descending)
+    eval_metrics.extend(
+        eval_lib.compute_metrics(eval_set_name, eval_set_results,
+                                 config.sort_descending))
+
+  eval_lib.write_results_to_csv(eval_metrics, config.write_results_dir)
 
 
 if __name__ == '__main__':
