@@ -179,6 +179,10 @@ class TaxonomyModelCallback:
       learned representation for species seen during training. If False, reverts
       to the default behavior of using all embedded upstream recordings for
       artificially rare species to form search queries.
+    learned_representation_blocklist: Species codes for learned representations
+      which should *not* appear in the `learned_representations` mapping. This is
+      analogous in result to having an allowlist for which species codes use the
+      `learned_representations`.
     model_callback: the fprop function used as part of the model callback,
       created automatically post-initialization.
     learned_representations: mapping from class name to its learned
@@ -190,6 +194,8 @@ class TaxonomyModelCallback:
   init_config: ConfigDict
   workdir: str
   use_learned_representations: bool = True
+  learned_representation_blocklist: Sequence[str] = dataclasses.field(
+      default_factory=list)
   # The following are populated during init.
   model_callback: Callable[[np.ndarray],
                            np.ndarray] = dataclasses.field(init=False)
@@ -199,6 +205,7 @@ class TaxonomyModelCallback:
   def __post_init__(self):
     model_bundle, train_state = train.initialize_model(
         workdir=self.workdir, **self.init_config)
+    train_state = model_bundle.ckpt.restore(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
 
     @jax.jit
@@ -209,10 +216,14 @@ class TaxonomyModelCallback:
 
     if self.use_learned_representations:
       class_list = namespace_db.load_db().class_lists[
-          self.init_config['target_class_list']].classes
+          self.init_config.target_class_list].classes
       head_index = list(model_bundle.model.num_classes.keys()).index('label')
       output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
-      self.learned_representations.update(dict(zip(class_list, output_weights)))
+      self.learned_representations.update({
+          n: w
+          for n, w in zip(class_list, output_weights)
+          if n not in self.learned_representation_blocklist
+      })
 
   def __call__(self, inputs: np.ndarray) -> np.ndarray:
     return np.asarray(self.model_callback(inputs))
@@ -223,6 +234,8 @@ class SeparatorTFCallback:
   """An eval model callback the embedding from an audio separator."""
   model_path: str
   use_learned_representations: bool = False
+  learned_representation_blocklist: Sequence[str] = dataclasses.field(
+      default_factory=list)
   frame_size: int = 32000
   # The following are populated during init.
   model_callback: Callable[[np.ndarray],
@@ -254,8 +267,11 @@ class SeparatorTFCallback:
     else:
       output_weights = tf.train.load_variable(variables_path, candidates[0])
       output_weights = np.squeeze(output_weights)
-    self.learned_representations.update(
-        dict(zip(class_list.classes, output_weights)))
+    self.learned_representations.update({
+        n: w
+        for n, w in zip(class_list.classes, output_weights)
+        if n not in self.learned_representation_blocklist
+    })
 
   def __post_init__(self):
     logging.info('Loading separation model...')

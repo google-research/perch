@@ -16,14 +16,18 @@
 """Tests for eval_lib."""
 
 import functools
+import os
 import shutil
 import tempfile
 from typing import Any, Sequence, Tuple
 
 from chirp import config_utils
+from chirp import train
+from chirp.configs import baseline_mel_conformer
 from chirp.configs import config_globals
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.eval import eval_lib
+from chirp.taxonomy import namespace_db
 from chirp.tests import fake_dataset
 import ml_collections
 import numpy as np
@@ -319,6 +323,45 @@ class DefaultFunctionsTest(absltest.TestCase):
                                                    opposite_embedding1)
     expected_similarity = -1.0
     self.assertAlmostEqual(actual_similarity, expected_similarity)
+
+
+class TaxonomyModelCallbackTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.workdir = tempfile.TemporaryDirectory('workdir').name
+
+  def test_learned_representation_blocklist(self):
+    workdir = os.path.join(self.workdir, '1')
+    init_config = config_utils.parse_config(
+        baseline_mel_conformer.get_config(),
+        config_globals.get_globals()).init_config
+    model_bundle, train_state = train.initialize_model(
+        workdir=workdir, **init_config)
+    _ = model_bundle.ckpt.restore_or_initialize(train_state)
+
+    db = namespace_db.load_db()
+    all_species = db.class_lists['xenocanto'].classes
+    downstream_species = db.class_lists['downstream_species'].classes
+
+    # By default, the model callback should load all available learned
+    # representations.
+    self.assertLen(
+        eval_lib.TaxonomyModelCallback(
+            init_config=init_config, workdir=workdir).learned_representations,
+        len(all_species))
+    # When learned_representation_blocklist is passed, the model callback
+    # should *not* load any learned representation for species in the blocklist.
+    self.assertNoCommonElements(
+        eval_lib.TaxonomyModelCallback(
+            init_config=init_config,
+            workdir=workdir,
+            learned_representation_blocklist=downstream_species,
+        ).learned_representations.keys(), downstream_species)
+
+  def tearDown(self):
+    super().tearDown()
+    shutil.rmtree(self.workdir)
 
 
 if __name__ == '__main__':
