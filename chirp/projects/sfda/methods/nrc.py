@@ -56,15 +56,16 @@ class NRCLoss(clu_metrics.Metric):
     """Computes the standard extended nearest-neighbors loss.
 
     Args:
-      probabilities (jnp.ndarray): Model's probability for the batch.
-      nn_probability (jnp.ndarray): Batch's nearest-neighbors' probability
+      probabilities: Model's probability for the batch.
+      nn_probability: Batch's nearest-neighbors' probability
         vectors.
-      extended_nn_probability (jnp.ndarray): Batch's extended
+      extended_nn_probability: Batch's extended
         nearest-neighbors' probability vectors.
-      nn_weight (jnp.ndarray): The weight to use for each
-        nearest-neighbor.
-      extended_nn_weight (jnp.ndarray): The weight to use for each
-        extended nearest-neighbor.
+      nn_weight: The weight used for each
+        nearest-neighbor. Expected shape [batch_size, nn]
+      extended_nn_weight: The weight used for each
+        extended nearest-neighbor. Expected shape [1] (as the
+        same weight is used for all extended neighbors).
     Returns:
       NRCLoss: An instance of NRCLoss.
     """
@@ -304,7 +305,7 @@ class NRC(adapt.SFDAMethod):
 
     NRC relies on aligning model's probabilities with 'pseudo-labels'
     computed from the (extended) nearest-neighbors. Here, we compute those
-    pseudo-labels, and their associated `weights` (i.e 1 for reciprocal
+    pseudo-labels, and their associated `weights` (i.e. 1 for reciprocal
     nearest-neighbors, and 'base_affinity' for the others).
 
     Args:
