@@ -32,28 +32,30 @@ from chirp.projects.sfda.methods import dropout_student
 from chirp.projects.sfda.methods import notela
 from chirp.projects.sfda.methods import pseudo_label
 from chirp.projects.sfda.methods import shot
+from chirp.projects.sfda.methods import nrc
 from chirp.projects.sfda.methods import tent
 from flax import linen as nn
 
 
 def get_globals() -> Dict[str, Any]:
-  return {
-      "audio_utils": audio_utils,
-      "conformer": conformer,
-      "efficientnet": efficientnet,
-      "eval_lib": eval_lib,
-      "hubert": hubert,
-      "quantizers": quantizers,
-      "frontend": frontend,
-      "layers": layers,
-      "nn": nn,
-      "pipeline": pipeline,
-      "sfda_pipeline": sfda_pipeline,
-      "soundstream_unet": soundstream_unet,
-      "pseudo_label": pseudo_label,
-      "tent": tent,
-      "notela": notela,
-      "shot": shot,
-      "ada_bn": ada_bn,
-      "dropout_student": dropout_student,
-  }
+    return {
+        "audio_utils": audio_utils,
+        "conformer": conformer,
+        "efficientnet": efficientnet,
+        "eval_lib": eval_lib,
+        "hubert": hubert,
+        "quantizers": quantizers,
+        "frontend": frontend,
+        "layers": layers,
+        "nn": nn,
+        "pipeline": pipeline,
+        "sfda_pipeline": sfda_pipeline,
+        "soundstream_unet": soundstream_unet,
+        "pseudo_label": pseudo_label,
+        "tent": tent,
+        "notela": notela,
+        "shot": shot,
+        "ada_bn": ada_bn,
+        "dropout_student": dropout_student,
+        "nrc": nrc
+    }
