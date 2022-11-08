@@ -5,7 +5,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#   http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,106 +26,106 @@ import tensorflow_datasets as tfds
 
 
 class ImageModel(nn.Module):
-    """A template for any image model."""
+  """A template for any image model."""
 
-    @nn.compact
-    def __call__(
-            self, x, train: bool,
-            use_running_average: Optional[bool]) -> taxonomy_model.ModelOutputs:
-        """Just like any standard nn.Module, defines the foward pass of the model.
+  @nn.compact
+  def __call__(
+      self, x, train: bool,
+      use_running_average: Optional[bool]) -> taxonomy_model.ModelOutputs:
+    """Just like any standard nn.Module, defines the foward pass of the model.
 
-        We formulate two non-standard requirements for the forward pass. First, it
-        must disentangle the train/test behavior of BatchNorm layers and those of
-        other noisy layers (e.g. Dropout). This is achieved through the use of
-        'train' and 'use_running_average' options. Second, we require that the
-        outputs are packaged into a taxonomy_model.ModelOutputs, thereby including
-        both the encoder's features, as well as the head's output. See
-        chirp/projects/sfda/models/resnet.py for an example.
+    We formulate two non-standard requirements for the forward pass. First, it
+    must disentangle the train/test behavior of BatchNorm layers and those of
+    other noisy layers (e.g. Dropout). This is achieved through the use of
+    'train' and 'use_running_average' options. Second, we require that the
+    outputs are packaged into a taxonomy_model.ModelOutputs, thereby including
+    both the encoder's features, as well as the head's output. See
+    chirp/projects/sfda/models/resnet.py for an example.
 
-        Args:
-          x: Batch of input images.
-          train: Whether this is training. This affects noisy layers' behavior (e.g.
-            Dropout). It also affects BatchNorm behavior in case
-            'use_running_average' is set to None.
-          use_running_average: Optional, used to decide whether to use running
-            statistics in BatchNorm (test mode), or the current batch's statistics
-            (train mode). If not specified (or specified to None), default to 'not
-            train'.
+    Args:
+      x: Batch of input images.
+      train: Whether this is training. This affects noisy layers' behavior (e.g.
+        Dropout). It also affects BatchNorm behavior in case
+        'use_running_average' is set to None.
+      use_running_average: Optional, used to decide whether to use running
+        statistics in BatchNorm (test mode), or the current batch's statistics
+        (train mode). If not specified (or specified to None), default to 'not
+        train'.
 
-        Returns:
-          The model's outputs, packaged as a taxonomy_model.ModelOutputs.
-        """
-        raise NotImplementedError
+    Returns:
+      The model's outputs, packaged as a taxonomy_model.ModelOutputs.
+    """
+    raise NotImplementedError
 
-    @staticmethod
-    def load_ckpt(dataset_name: str) -> flax.core.frozen_dict.FrozenDict:
-        """Loads the checkpoint for the current dataset.
+  @staticmethod
+  def load_ckpt(dataset_name: str) -> flax.core.frozen_dict.FrozenDict:
+    """Loads the checkpoint for the current dataset.
 
-        Args:
-          dataset_name: The current dataset used.
+    Args:
+      dataset_name: The current dataset used.
 
-        Returns:
-          variables: The flax variables corresponding to the loaded checkpoint.
-        """
-        raise NotImplementedError
+    Returns:
+      variables: The flax variables corresponding to the loaded checkpoint.
+    """
+    raise NotImplementedError
 
-    @staticmethod
-    def get_ckpt_path(dataset_name: str) -> epath.Path:
-        """Returns the path to the checkpoint for the current dataset.
+  @staticmethod
+  def get_ckpt_path(dataset_name: str) -> epath.Path:
+    """Returns the path to the checkpoint for the current dataset.
 
-        Using a separate function from 'load_ckpt' (the latter uses 'get_ckpt_path')
-        to make it easier to verify checkpoints paths.
+    Using a separate function from 'load_ckpt' (the latter uses 'get_ckpt_path')
+    to make it easier to verify checkpoints paths.
 
-        Args:
-          dataset_name: The current dataset used.
+    Args:
+      dataset_name: The current dataset used.
 
-        Returns:
-          variables: The path to load the checkpoint.
-        """
-        raise NotImplementedError
+    Returns:
+      variables: The path to load the checkpoint.
+    """
+    raise NotImplementedError
 
-    @staticmethod
-    def is_bn_parameter(parameter_name: List[str]) -> bool:
-        """Verifies whether some parameter belong to a BatchNorm layer.
+  @staticmethod
+  def is_bn_parameter(parameter_name: List[str]) -> bool:
+    """Verifies whether some parameter belong to a BatchNorm layer.
 
-        Args:
-          parameter_name: The name of the parameter, as a list in which each member
-            describes the name of a layer. E.g. ('Block1', 'batch_norm_1', 'bias').
+    Args:
+      parameter_name: The name of the parameter, as a list in which each member
+      describes the name of a layer. E.g. ('Block1', 'batch_norm_1', 'bias').
 
-        Returns:
-          True if this parameter belongs to a BatchNorm layer.
-        """
-        raise NotImplementedError
+    Returns:
+      True if this parameter belongs to a BatchNorm layer.
+    """
+    raise NotImplementedError
 
-    @staticmethod
-    def get_input_pipeline(data_builder: tfds.core.DatasetBuilder, split: str,
-                           **kwargs) -> tf.data.Dataset:
-        """Get the data pipeline for the current model.
+  @staticmethod
+  def get_input_pipeline(data_builder: tfds.core.DatasetBuilder, split: str,
+        **kwargs) -> tf.data.Dataset:
+    """Get the data pipeline for the current model.
 
-        Because we're relying on pretrained models from the web, this part of the
-        data pipeline can hardly be factorized. We hereby provide a default
-        pipeline that converts image to tf.float32, and one-hots the labels.
-        However, we **leave it for each model to specify its own processing
-        pipeline**, with the only requirement of producing one-hot labels.
+    Because we're relying on pretrained models from the web, this part of the
+    data pipeline can hardly be factorized. We hereby provide a default
+    pipeline that converts image to tf.float32, and one-hots the labels.
+    However, we **leave it for each model to specify its own processing
+    pipeline**, with the only requirement of producing one-hot labels.
 
-        Args:
-          data_builder: The dataset's data builder.
-          split: The split of the dataset used.
-          **kwargs: Additional kwargs that may be useful for model-specific
-            pipelines.
+    Args:
+      data_builder: The dataset's data builder.
+      split: The split of the dataset used.
+      **kwargs: Additional kwargs that may be useful for model-specific
+        pipelines.
 
-        Returns:
-          The processed dataset.
-        """
-        read_config = tfds.ReadConfig(add_tfds_id=True)
-        data_builder.download_and_prepare()
-        dataset = data_builder.as_dataset(split=split, read_config=read_config)
+    Returns:
+      The processed dataset.
+    """
+    read_config = tfds.ReadConfig(add_tfds_id=True)
+    data_builder.download_and_prepare()
+    dataset = data_builder.as_dataset(split=split, read_config=read_config)
 
-        def _pp(example):
-            image = tf.image.convert_image_dtype(example['image'], tf.float32)
-            label = tf.one_hot(example['label'],
-                               data_builder.info.features['label'].num_classes)
+    def _pp(example):
+      image = tf.image.convert_image_dtype(example['image'], tf.float32)
+      label = tf.one_hot(example['label'],
+            data_builder.info.features['label'].num_classes)
 
-            return {'image': image, 'label': label, 'tfds_id': example['tfds_id']}
+      return {'image': image, 'label': label, 'tfds_id': example['tfds_id']}
 
-        return dataset.map(_pp, tf.data.experimental.AUTOTUNE)
+    return dataset.map(_pp, tf.data.experimental.AUTOTUNE)

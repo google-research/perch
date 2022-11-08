@@ -5,7 +5,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#   http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,29 +33,30 @@ from chirp.projects.sfda.methods import notela
 from chirp.projects.sfda.methods import pseudo_label
 from chirp.projects.sfda.methods import shot
 from chirp.projects.sfda.methods import nrc
+from chirp.projects.sfda.methods import nrc
 from chirp.projects.sfda.methods import tent
 from flax import linen as nn
 
 
 def get_globals() -> Dict[str, Any]:
-    return {
-        "audio_utils": audio_utils,
-        "conformer": conformer,
-        "efficientnet": efficientnet,
-        "eval_lib": eval_lib,
-        "hubert": hubert,
-        "quantizers": quantizers,
-        "frontend": frontend,
-        "layers": layers,
-        "nn": nn,
-        "pipeline": pipeline,
-        "sfda_pipeline": sfda_pipeline,
-        "soundstream_unet": soundstream_unet,
-        "pseudo_label": pseudo_label,
-        "tent": tent,
-        "notela": notela,
-        "shot": shot,
-        "ada_bn": ada_bn,
-        "dropout_student": dropout_student,
-        "nrc": nrc
-    }
+  return {
+    "audio_utils": audio_utils,
+    "conformer": conformer,
+    "efficientnet": efficientnet,
+    "eval_lib": eval_lib,
+    "hubert": hubert,
+    "quantizers": quantizers,
+    "frontend": frontend,
+    "layers": layers,
+    "nn": nn,
+    "pipeline": pipeline,
+    "sfda_pipeline": sfda_pipeline,
+    "soundstream_unet": soundstream_unet,
+    "pseudo_label": pseudo_label,
+    "tent": tent,
+    "notela": notela,
+    "shot": shot,
+    "ada_bn": ada_bn,
+    "dropout_student": dropout_student,
+    "nrc": nrc
+  }
