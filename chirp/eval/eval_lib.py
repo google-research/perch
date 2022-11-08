@@ -23,6 +23,7 @@ from typing import (Callable, Dict, Generator, Mapping, Sequence, Tuple, Type,
 
 from absl import logging
 from chirp import hubert_train
+from chirp import sep_train
 from chirp import train
 from chirp.data import pipeline
 from chirp.models import metrics
@@ -335,6 +336,45 @@ class HuBERTModelCallback:
       model_outputs = model_bundle.model.apply(
           variables, inputs, train=False, mask_key=None)
       return model_outputs.embedding[self.embedding_index].mean(axis=-2)
+
+    self.model_callback = fprop
+
+  def __call__(self, inputs: np.ndarray) -> np.ndarray:
+    return np.asarray(self.model_callback(inputs))
+
+
+@dataclasses.dataclass
+class SeparationModelCallback:
+  """A model callback implementation for SeparationModel checkpoints.
+
+  Attributes:
+    init_config: SeparationModel configuration.
+    workdir: path to the model checkpoint.
+    model_callback: the fprop function used as part of the model callback,
+      created automatically post-initialization.
+    learned_representations: mapping from class name to its learned
+      representation, created automatically post-initialization. If
+      `use_learned_representations` is False, it is left empty, which results in
+      the evaluation protocol relying instead on embedded upstream recordings to
+      form search queries.
+  """
+  init_config: ConfigDict
+  workdir: str
+  model_callback: Callable[[np.ndarray],
+                           np.ndarray] = dataclasses.field(init=False)
+  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+      init=False, default_factory=dict)
+
+  def __post_init__(self):
+    model_bundle, train_state = sep_train.initialize_model(
+        workdir=self.workdir, **self.init_config)
+    train_state = model_bundle.ckpt.restore_or_initialize(train_state)
+    variables = {'params': train_state.params, **train_state.model_state}
+
+    @jax.jit
+    def fprop(inputs):
+      return model_bundle.model.apply(
+          variables, inputs, train=False).embedding.mean(axis=-2)
 
     self.model_callback = fprop
 
