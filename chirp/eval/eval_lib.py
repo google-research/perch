@@ -22,6 +22,7 @@ from typing import (Callable, Dict, Generator, Mapping, Sequence, Tuple, Type,
                     TypeVar)
 
 from absl import logging
+from chirp import hubert_train
 from chirp import train
 from chirp.data import pipeline
 from chirp.models import metrics
@@ -295,6 +296,46 @@ class SeparatorTFCallback:
       logging.info('Loading learned representations...')
       self._load_learned_representations()
     logging.info('Model loaded.')
+
+  def __call__(self, inputs: np.ndarray) -> np.ndarray:
+    return np.asarray(self.model_callback(inputs))
+
+
+@dataclasses.dataclass
+class HuBERTModelCallback:
+  """A model callback implementation for HuBERTModel checkpoints.
+
+  Attributes:
+    init_config: TaxonomyModel configuration.
+    workdir: path to the model checkpoint.
+    embedding_index: index of the embedding vector to retrieve in the list of
+      embeddings output by the model.
+    model_callback: the fprop function used as part of the model callback,
+      created automatically post-initialization.
+    learned_representations: mapping from class name to its learned
+      representation, created automatically post-initialization and left empty
+      (because HuBERT is self-supervised).
+  """
+  init_config: ConfigDict
+  workdir: str
+  embedding_index: int
+  model_callback: Callable[[np.ndarray],
+                           np.ndarray] = dataclasses.field(init=False)
+  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+      init=False, default_factory=dict)
+
+  def __post_init__(self):
+    model_bundle, train_state = hubert_train.initialize_model(
+        workdir=self.workdir, num_train_steps=1, **self.init_config)
+    variables = {'params': train_state.params, **train_state.model_state}
+
+    @jax.jit
+    def fprop(inputs):
+      model_outputs = model_bundle.model.apply(
+          variables, inputs, train=False, mask_key=None)
+      return model_outputs.embedding[self.embedding_index].mean(axis=-2)
+
+    self.model_callback = fprop
 
   def __call__(self, inputs: np.ndarray) -> np.ndarray:
     return np.asarray(self.model_callback(inputs))
