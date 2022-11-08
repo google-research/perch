@@ -27,7 +27,7 @@ SEP_PATH = ''
 
 def get_config() -> config_dict.ConfigDict:
   """Creates a configuration dictionary for the evaluation protocol v1."""
-  config = eval_protocol_v1_base.get_config('separator')
+  config = eval_protocol_v1_base.get_config()
 
   # The model_callback is expected to be a Callable[[np.ndarray], np.ndarray].
   model_checkpoint_path = config_dict.FieldReference(SEP_PATH)

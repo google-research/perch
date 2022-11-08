@@ -327,6 +327,7 @@ class HuBERTModelCallback:
   def __post_init__(self):
     model_bundle, train_state = hubert_train.initialize_model(
         workdir=self.workdir, num_train_steps=1, **self.init_config)
+    train_state = model_bundle.ckpt.restore(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
 
     @jax.jit
