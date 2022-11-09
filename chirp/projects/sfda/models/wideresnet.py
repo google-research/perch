@@ -179,7 +179,7 @@ class WideResnet(image_model.ImageModel):
       # np.savez(output_path, **torch.load(torch_checkpoint_path,
       # map_location=torch.device('cpu'))['state_dict'])
       # Finally, replace the '' below by the `output_path` above.
-      return ''
+      return epath.Path('')
     else:
       raise NotImplementedError('No pretrained checkpoint available for '
                                 f'dataset {dataset_name}.')

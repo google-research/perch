@@ -32,6 +32,7 @@ from chirp.projects.sfda.configs import dropout_student as ds_config
 from chirp.projects.sfda.configs import image_baseline
 from chirp.projects.sfda.configs import notela as notela_config
 from chirp.projects.sfda.configs import pseudo_label as pseudo_label_config
+from chirp.projects.sfda.configs import nrc as nrc_config
 from chirp.projects.sfda.configs import shot as shot_config
 from chirp.projects.sfda.configs import tent as tent_config
 from chirp.projects.sfda.tests import fake_image_dataset
@@ -50,6 +51,7 @@ _UNPARSED_CONFIGS = {
     "shot": shot_config,
     "ada_bn": ada_bn_config,
     "dropout_student": ds_config,
+    "nrc": nrc_config,
 }
 
 
@@ -92,7 +94,7 @@ class AdaptationTest(parameterized.TestCase):
   def _get_datasets(self, config, modality: adapt.Modality):
     if modality == adapt.Modality.AUDIO:
       adaptation_dataset, _ = pipeline.get_dataset(
-          "train[:1]",
+          "train[:2]",
           dataset_directory=self.audio_builder.data_dir,
           pipeline=config.adaptation_data_config.pipeline)
       val_dataset, _ = pipeline.get_dataset(
@@ -103,7 +105,7 @@ class AdaptationTest(parameterized.TestCase):
       input_pipeline = models.MODEL_REGISTRY[config.model_config.encoder](
           num_classes=1).get_input_pipeline
       dataset = input_pipeline(
-          data_builder=self.image_builder, split="train[:1]")
+          data_builder=self.image_builder, split="train[:2]")
       dataset = dataset.batch(
           1, drop_remainder=False).batch(
               1, drop_remainder=False)
@@ -155,7 +157,8 @@ class AdaptationTest(parameterized.TestCase):
   @parameterized.named_parameters(*[
       (f"{method}_{modality.value}", method, modality)
       for method, modality in itertools.product([
-          "dropout_student", "ada_bn", "tent", "notela", "pseudo_label", "shot"
+          "dropout_student", "ada_bn", "tent", "notela", "pseudo_label", "shot",
+          "nrc"
       ], [adapt.Modality.IMAGE, adapt.Modality.AUDIO])
   ])
   def test_adapt_one_epoch(self, method: str, modality: adapt.Modality):

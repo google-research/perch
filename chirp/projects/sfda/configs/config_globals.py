@@ -32,6 +32,7 @@ from chirp.projects.sfda.methods import dropout_student
 from chirp.projects.sfda.methods import notela
 from chirp.projects.sfda.methods import pseudo_label
 from chirp.projects.sfda.methods import shot
+from chirp.projects.sfda.methods import nrc
 from chirp.projects.sfda.methods import tent
 from flax import linen as nn
 
@@ -56,4 +57,5 @@ def get_globals() -> Dict[str, Any]:
       "shot": shot,
       "ada_bn": ada_bn,
       "dropout_student": dropout_student,
+      "nrc": nrc
   }
