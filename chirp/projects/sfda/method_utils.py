@@ -15,7 +15,7 @@
 
 """Some utils functions shared across methods."""
 
-from typing import Dict, Union
+from typing import Dict, Union, Optional
 
 from absl import logging
 from chirp.models import taxonomy_model
@@ -71,7 +71,8 @@ def batch_forward(batch: Dict[str, jnp.ndarray],
                   model: nn.Module,
                   modality: adapt.Modality,
                   use_batch_statistics: bool,
-                  train: bool = False) -> taxonomy_model.ModelOutputs:
+                  train: bool = False,
+                  key: Optional[jax.random.PRNGKeyArray] = None) -> taxonomy_model.ModelOutputs:
   """Collects the model's output on the current batch of data.
 
   Args:
@@ -85,13 +86,20 @@ def batch_forward(batch: Dict[str, jnp.ndarray],
     train: Whether to use the model in training mode. Default to False, as this
       function is nominally used to compute pseudo-labels (e.g. Teacher step of
       Notela), which usually removes any source of noise (including dropout).
+    key: Jax random key to use for the forward pass in case train is set to
+      True.
 
   Returns:
     The model's output.
-  """
 
+  Raises:
+    ValueError: In case train is set to True, but no random key is specified.
+  """
+  if train and key is None:
+    raise ValueError("Please specifify a random key when using train=True.")
+  rngs = {"dropout": key} if key is not None else None
   @jax.pmap
-  def forward(batch, model_state, params):
+  def forward(batch, model_state, params, rngs):
     if use_batch_statistics:
       outputs, _ = model.apply({
           "params": params,
@@ -100,7 +108,8 @@ def batch_forward(batch: Dict[str, jnp.ndarray],
                                batch[modality.value],
                                train=train,
                                mutable=list(model_state.keys()),
-                               use_running_average=False)
+                               use_running_average=False,
+                               rngs=rngs)
     else:
       outputs = model.apply({
           "params": params,
@@ -108,10 +117,11 @@ def batch_forward(batch: Dict[str, jnp.ndarray],
       },
                             batch[modality.value],
                             use_running_average=True,
-                            train=train)
+                            train=train,
+                            rngs=rngs)
     return outputs
 
-  return forward(batch, model_state, params)
+  return forward(batch, model_state, params, rngs)
 
 
 def forward_dataset(
@@ -121,7 +131,9 @@ def forward_dataset(
     modality: adapt.Modality,
     multi_label: bool,
     use_batch_statistics: bool = False,
-    only_keep_unmasked_classes: bool = False
+    only_keep_unmasked_classes: bool = False,
+    train: bool = False,
+    key: Optional[jax.random.PRNGKeyArray] = None
 ) -> Dict[str, Union[jnp.ndarray, np.ndarray]]:
   """Fowards a dataset through a given model.
 
@@ -140,6 +152,8 @@ def forward_dataset(
       for classes that are not masked. This can result in large memory savings,
       e.g. for the bio-acoustic model where <100 classes are present versus the
       ~11k total species.
+    train: Whether to use dropout or not during the forward pass.
+    key: The random key to use if train is set to True.
 
   Returns:
     A dictionnary with the following keys:
@@ -166,13 +180,18 @@ def forward_dataset(
   for index, batch in tqdm.tqdm(
       enumerate(dataset.as_numpy_iterator()), total=len(dataset)):
     batch = jax.tree_map(np.asarray, batch)
+    if key is not None:
+      batch_key, key = jax.random.split(key)
+      batch_key = jax.random.split(batch_key, num=jax.local_device_count())
+    else:
+      batch_key = None
     if "label_mask" in batch and only_keep_unmasked_classes and index == 0:
       # We will use the first sample's label_mask as a reference, and ensure
       # all label_masks are the same.
       reference_mask = flax_utils.unreplicate(batch["label_mask"])[0]
     model_outputs = batch_forward(
         adapt.keep_jax_types(batch), model_state, params, model, modality,
-        use_batch_statistics)
+        use_batch_statistics, train, batch_key)
     if "label_mask" in batch and only_keep_unmasked_classes:
       # We make sure that the label_mask is the same for all samples in the
       # dataset.
