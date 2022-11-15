@@ -35,6 +35,7 @@ from chirp.projects.sfda.configs import pseudo_label as pseudo_label_config
 from chirp.projects.sfda.configs import nrc as nrc_config
 from chirp.projects.sfda.configs import shot as shot_config
 from chirp.projects.sfda.configs import tent as tent_config
+from chirp.projects.sfda.configs import dust as dust_config
 from chirp.projects.sfda.tests import fake_image_dataset
 from chirp.tests import fake_dataset
 from flax import traverse_util
@@ -52,6 +53,7 @@ _UNPARSED_CONFIGS = {
     "ada_bn": ada_bn_config,
     "dropout_student": ds_config,
     "nrc": nrc_config,
+    "dust": dust_config
 }
 
 
@@ -158,7 +160,7 @@ class AdaptationTest(parameterized.TestCase):
       (f"{method}_{modality.value}", method, modality)
       for method, modality in itertools.product([
           "dropout_student", "ada_bn", "tent", "notela", "pseudo_label", "shot",
-          "nrc"
+          "nrc", "dust"
       ], [adapt.Modality.IMAGE, adapt.Modality.AUDIO])
   ])
   def test_adapt_one_epoch(self, method: str, modality: adapt.Modality):
