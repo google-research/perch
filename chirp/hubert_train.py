@@ -552,7 +552,7 @@ def initialize_model(
             reload_quantizer_from)
         time.sleep(5)
       num_attempts += 1
-    train_state.params["quantizer"] = reloaded_quantizer["params"]["quantizer"]
+    train_state.params["quantizer"] = reloaded_quantizer["params"]["quantizer"]  # pytype: disable=unsupported-operands  # py310-upgrade
 
   if reload_hubert_from:
     ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_hubert_from)
@@ -579,7 +579,7 @@ def initialize_model(
           "final_proj") or k.startswith("quantizer"):
         logging.info("Ignoring HuBERT parameters for key %s.", k)
         continue
-      train_state.params[k] = v
+      train_state.params[k] = v  # pytype: disable=unsupported-operands  # py310-upgrade
       logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
 
   return ModelBundle(model, optimizer, key, ckpt), train_state
