@@ -28,7 +28,7 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   optimizer_cfg.optimizer = "adam"
   optimizer_cfg.opt_kwargs = {}
   optimizer_cfg.weight_decay = 0.
-  optimizer_cfg.learning_rate = 1e-4
+  optimizer_cfg.learning_rate = 0.001
   optimizer_cfg.use_cosine_decay = True
   optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
   image_config.optimizer_config = optimizer_cfg
@@ -39,7 +39,7 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
   image_config.extended_nn = 5
 
   # Forward options
-  image_config.num_epochs = 10
+  image_config.num_epochs = 15
   image_config.use_dropout = False
   image_config.update_bn_statistics = True
   return image_config

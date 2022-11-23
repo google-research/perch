@@ -15,8 +15,7 @@
 
 """Exploiting the Intrinsic Neighborhood Structure for SFDA."""
 
-import functools
-from typing import Dict, Tuple, Type, Optional, Union
+from typing import Dict, Tuple, Type
 
 from absl import logging
 from chirp.projects.sfda import adapt
@@ -24,13 +23,12 @@ from chirp.projects.sfda import losses
 from chirp.projects.sfda import method_utils
 from chirp.projects.sfda import model_utils
 from clu import metrics as clu_metrics
+import flax
 import flax.jax_utils as flax_utils
 import flax.linen as nn
-import flax
 import jax
 import jax.numpy as jnp
 import numpy as np
-from scipy import sparse
 import tensorflow as tf
 
 
@@ -363,10 +361,14 @@ class NRC(adapt.SFDAMethod):
         method_state["dataset_probability"].at[batch_indices].set(
             logit2proba(model_outputs.label)))
     return adaptation_state, {
-        "nn_weight": nn_weight,
-        "extended_nn_weight": extended_nn_weight,
-        "nn_probability": nn_probability,
-        "extended_nn_probability": extended_nn_probability,
+        "nn_weight":
+            flax_utils.replicate(nn_weight),
+        "extended_nn_weight":
+            flax_utils.replicate(extended_nn_weight),
+        "nn_probability":
+            flax_utils.replicate(nn_probability),
+        "extended_nn_probability":
+            flax_utils.replicate(extended_nn_probability),
     }
 
   def get_adaptation_metrics(self, supervised: bool, multi_label: bool,

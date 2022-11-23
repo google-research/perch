@@ -180,6 +180,11 @@ def get_metadata(dataset_name: str) -> Dict[str, Any]:
   elif dataset_name == 'fake_image_dataset':
     split = {'train': 'train[:1]', 'eval': 'train[1:2]'}
     return {'num_classes': 2, 'resolution': 12, 'splits': split}
+  elif dataset_name == 'vis_da_c':
+    # In line with NRC's results, we do both the adaptation and the evaluation
+    # on the validation set of VisDA-C.
+    split = {'train': 'validation', 'eval': 'validation'}
+    return {'num_classes': 12, 'resolution': 224, 'splits': split}
   else:
     raise NotImplementedError(
         f'Unknown number of classes for dataset {dataset_name}.')

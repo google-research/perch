@@ -33,6 +33,8 @@ _METHOD_CONFIG = config_flags.DEFINE_config_file(
     "method_config",
     help_string="Configuration file for method-specific hyperparamaters.")
 _LOGDIR = flags.DEFINE_string("logdir", None, "Work unit logging directory.")
+_VISDA_DIR = flags.DEFINE_string("visda_dir", None,
+ "Data directory for VisDa dataset.")
 flags.mark_flags_as_required(["config", "logdir"])
 
 
@@ -69,6 +71,10 @@ def main(argv: Sequence[str]) -> None:
           "config":
               "{}_{}".format(config.init_config.corruption_name,
                              config.init_config.corruption_severity)
+      }
+    if config.init_config.target_class_list == "vis_da_c":
+      builder_kwargs = {
+          "data_dir": _VISDA_DIR.value,
       }
     else:
       builder_kwargs = {}

@@ -639,6 +639,7 @@ def get_common_metrics(supervised: bool,
           losses.label_ent)
       metrics_dict["accuracy"] = metrics.Accuracy
       metrics_dict["marginal_entropy"] = metrics.MarginalEntropy
+      metrics_dict["mean_class_accuracy"] = metrics.MeanClassAccuracy
 
   return clu_metrics.Collection.create(**metrics_dict)
 

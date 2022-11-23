@@ -17,6 +17,7 @@
 import enum
 
 from chirp.projects.sfda.models.constant_model import ConstantEncoderModel
+from chirp.projects.sfda.models.nrc_resnet import NRCResNet101
 from chirp.projects.sfda.models.resnet import ResNet50
 from chirp.projects.sfda.models.wideresnet import WideResNet2810
 
@@ -24,12 +25,14 @@ from chirp.projects.sfda.models.wideresnet import WideResNet2810
 class ImageModelName(enum.Enum):
   """Supported model architectures for image experiments."""
   RESNET = "resnet"
+  NRC_RESNET = "nrc_resnet"
   WIDERESNET = "wideresnet"
   CONSTANT = "constant"
 
 
 MODEL_REGISTRY = {
     ImageModelName.RESNET: ResNet50,
+    ImageModelName.NRC_RESNET: NRCResNet101,
     ImageModelName.WIDERESNET: WideResNet2810,
     ImageModelName.CONSTANT: ConstantEncoderModel,
 }
