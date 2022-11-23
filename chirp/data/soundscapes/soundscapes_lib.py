@@ -227,6 +227,83 @@ def _has_overlap(start1, end1, start2, end2):
   return True
 
 
+def get_full_length_annotations(
+    audio: np.ndarray,
+    file_segments: pd.DataFrame,
+    class_list: namespace.ClassList,
+    sample_rate_hz: int,
+    unknown_guard: bool = False,
+) -> pd.DataFrame:
+  """Extracts annotations from file segments for full-length recordings.
+
+  `file_segments` corresponds to the segments annotated by recordists.
+
+  Args:
+    audio: The full audio file, already loaded.
+    file_segments: The annotated segments for this audio. Each row (=segment)
+      must minimally contain the following fields: ['label', 'start_time_s',
+      'end_time_s'].
+    class_list: List of labels which will appear in the processed dataset.
+    sample_rate_hz: Sample rate of audio.
+    unknown_guard: If True, add an "unknown" annotation from the beginning of
+      the recording to the beginning of the first annotation and another
+      "unknown" annotation from the end of the last annotation to the end of the
+      recording.
+
+  Returns:
+    annotations: A DataFrame of annotations with the same columns as
+      `file_segments`.
+  """
+  logging.info('Found %d annotations for target file.', len(file_segments))
+  annotations = file_segments.copy()
+  beam = tfds.core.lazy_imports.apache_beam
+
+  # Convert start and end times into array indices.
+  to_index = lambda t: audio.shape[-1] if t == -1 else int(t * sample_rate_hz)
+  annotations['annotation_start'] = annotations['start_time_s'].map(to_index)
+  annotations['annotation_end'] = annotations['end_time_s'].map(to_index)
+
+  # Discard malformed segments, i.e., segments for which the end time is
+  # anterior to the start time.
+  malformed_segment = (
+      annotations['annotation_end'] < annotations['annotation_start'])
+  if malformed_segment.sum() > 0:
+    logging.warning(
+        'Skipping %d annotated segment(s) because end time is anterior '
+        'to start time.', malformed_segment.sum())
+    beam.metrics.Metrics.counter('soundscapes', 'dropped_malformed').inc(
+        malformed_segment.sum())
+
+  # Split multi-label annotations into multiple single-label annotations.
+  annotations = annotations.explode(column='label')
+
+  # Discard annotations with labels not in the class list.
+  is_in_class_list = annotations['label'].isin(class_list.classes)
+  if (~is_in_class_list).sum() > 0:
+    logging.info(
+        'Skipping %d annotated segment(s) because the corresponding label is '
+        'not in the class list.', (~is_in_class_list).sum())
+    for label in annotations[~is_in_class_list]['label']:
+      beam.metrics.Metrics.counter('soundscapes', f'dropped_{label}').inc()
+
+  annotations = annotations[~malformed_segment & is_in_class_list]
+
+  if unknown_guard:
+    prefix_annotation = annotations.iloc[:1].copy()
+    prefix_annotation['annotation_start'] = 0
+    prefix_annotation['annotation_end'] = annotations['annotation_start'].min()
+
+    suffix_annotation = annotations.iloc[-1:].copy()
+    suffix_annotation['annotation_start'] = annotations['annotation_end'].max()
+    suffix_annotation['annotation_end'] = audio.shape[-1]
+
+    annotations = pd.concat([prefix_annotation, annotations, suffix_annotation],
+                            axis='rows',
+                            ignore_index=True)
+
+  return annotations
+
+
 def get_labeled_intervals(
     audio: np.ndarray,
     file_segments: pd.DataFrame,

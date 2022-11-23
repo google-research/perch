@@ -208,7 +208,9 @@ class SoundscapesLibTest(parameterized.TestCase):
       dict(testcase_name='_' + bc.name, builder_config=bc)
       for bc in SUPERVISED_CONFIGS)
   def test_create_annotated_segments_df(self, builder_config):
-    annotations_path = self.testdata_dir / f'{builder_config.name}.csv'
+    filename = (
+        builder_config.annotation_filename or f'{builder_config.name}.csv')
+    annotations_path = self.testdata_dir / filename
     annos = builder_config.annotation_load_fn(annotations_path)
     if not builder_config.supervised:
       raise ValueError('Running a supervised test on an unsupervised config.')

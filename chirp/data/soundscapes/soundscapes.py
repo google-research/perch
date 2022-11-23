@@ -66,12 +66,18 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
       metadata_fields.
     metadata_fields: Maps the fields of the metadata DataFrame to tfds.features
       datatypes.
+    annotation_filename: Filename for the annotations file. Defaults to None,
+      in which case the filename is derived from the config name.
     annotation_load_fn: Because the annotations don't always appear in the same
       format, we specify a function to load the annotations.
     keep_unknown_annotation: An "unknown" annotations appears in some datasets.
       This boolean decides whether it should keep this annotation (and
       therefore) add a species named "unknown" in the label space, or just scrub
       all "unknown" annotations.
+    full_length_unknown_guard: If True, add an "unknown" annotation from the
+      beginning of the recording to the beginning of the first annotation and
+      another "unknown" annotation from the end of the last annotation to the
+      end of the recording.
     supervised: Whether this is a supervised dataset. If so, any segment which
       overlaps an 'unknown' label will be dropped (to avoid downward bias on
       eval stats).
@@ -81,8 +87,10 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
   class_list_name: str = ''
   metadata_load_fn: Optional[soundscapes_lib.MetadataLoaderType] = None
   metadata_fields: Optional[Dict[str, soundscapes_lib.MetadataFeature]] = None
+  annotation_filename: Optional[str] = None
   annotation_load_fn: Optional[Callable[[epath.Path], pd.DataFrame]] = None
   keep_unknown_annotation: bool = False
+  full_length_unknown_guard: bool = False
   supervised: bool = True
   audio_dir = epath.Path('gs://chirp-public-bucket/soundscapes')
 
@@ -90,7 +98,7 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
   """DatasetBuilder for soundscapes data."""
 
-  VERSION = tfds.core.Version('1.0.7')
+  VERSION = tfds.core.Version('1.1.0')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release. The label set corresponds to the full '
                'set of ~11 000 Xeno-Canto species.',
@@ -105,6 +113,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
                'Supervised segments with the "unknown" label are now dropped.',
       '1.0.6': 'Updates the dataset following Int16AsFloatTensor refactoring.',
       '1.0.7': 'Fix some dropped annotations in the Hawaii dataset.',
+      '1.1.0': 'Adds full-length variants.',
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
@@ -117,6 +126,20 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           annotation_load_fn=dataset_fns.load_caples_annotations,
           description=('Annotated Caples recordings from 2018/2019.')),
       SoundscapesConfig(
+          name='caples_full_length',
+          class_list_name='caples',
+          audio_glob='caples/audio/*',
+          annotation_filename='caples.csv',
+          annotation_load_fn=dataset_fns.load_caples_annotations,
+          keep_unknown_annotation=True,
+          # Some recordings in Caples are only partially-annotated, so to avoid
+          # scoring legitimate model predictions as false positives we pad with
+          # "unknown" annotations before the first annotation and after the last
+          # annotation.
+          full_length_unknown_guard=True,
+          description=('Full-length annotated Caples recordings from '
+                       '2018/2019.')),
+      SoundscapesConfig(
           name='hawaii',
           audio_glob='hawaii/*/*.wav',
           interval_length_s=5.0,
@@ -125,12 +148,29 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           description=('Fully annotated Hawaii recordings.'),
           class_list_name='hawaii'),
       SoundscapesConfig(
+          name='hawaii_full_length',
+          audio_glob='hawaii/*/*.wav',
+          annotation_filename='hawaii.csv',
+          annotation_load_fn=dataset_fns.load_hawaii_annotations,
+          keep_unknown_annotation=True,
+          description=('Full-length, fully annotated Hawaii recordings.'),
+          class_list_name='hawaii'),
+      SoundscapesConfig(
           name='ssw',
           audio_glob='ssw/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=dataset_fns.load_ssw_annotations,
           description=('Annotated Sapsucker Woods recordings. '
+                       'https://zenodo.org/record/7018484'),
+          class_list_name='new_york'),
+      SoundscapesConfig(
+          name='ssw_full_length',
+          audio_glob='ssw/audio/*.flac',
+          annotation_filename='ssw.csv',
+          annotation_load_fn=dataset_fns.load_ssw_annotations,
+          keep_unknown_annotation=True,
+          description=('Full-length, annotated Sapsucker Woods recordings. '
                        'https://zenodo.org/record/7018484'),
           class_list_name='new_york'),
       SoundscapesConfig(
@@ -145,6 +185,17 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
               'Colombian recordings from the Birdclef 2019 challenge.'),
           class_list_name='birdclef2019_colombia'),
       SoundscapesConfig(
+          name='birdclef2019_colombia_full_length',
+          audio_glob='birdclef2019/audio/*.wav',
+          metadata_load_fn=dataset_fns.load_birdclef_metadata,
+          metadata_fields=dataset_fns.birdclef_metadata_features(),
+          annotation_filename='birdclef2019_colombia.csv',
+          annotation_load_fn=dataset_fns.load_birdclef_annotations,
+          keep_unknown_annotation=True,
+          description=('Full-length Colombian recordings from the Birdclef '
+                       '2019 challenge.'),
+          class_list_name='birdclef2019_colombia'),
+      SoundscapesConfig(
           name='high_sierras',
           audio_glob='high_sierras/audio/*.wav',
           interval_length_s=5.0,
@@ -153,12 +204,29 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           description=('High Sierras recordings.'),
           class_list_name='high_sierras'),
       SoundscapesConfig(
+          name='high_sierras_full_length',
+          audio_glob='high_sierras/audio/*.wav',
+          annotation_filename='high_sierras.csv',
+          annotation_load_fn=dataset_fns.load_birdclef_annotations,
+          keep_unknown_annotation=True,
+          description=('Full-length High Sierras recordings.'),
+          class_list_name='high_sierras'),
+      SoundscapesConfig(
           name='sierras_kahl',
           audio_glob='sierras_kahl/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=dataset_fns.load_sierras_kahl_annotations,
           description=('Sierra Nevada recordings. '
+                       'https://zenodo.org/record/7050014'),
+          class_list_name='sierras_kahl'),
+      SoundscapesConfig(
+          name='sierras_kahl_full_length',
+          audio_glob='sierras_kahl/audio/*.flac',
+          annotation_filename='sierras_kahl.csv',
+          annotation_load_fn=dataset_fns.load_sierras_kahl_annotations,
+          keep_unknown_annotation=True,
+          description=('Full-length Sierra Nevada recordings. '
                        'https://zenodo.org/record/7050014'),
           class_list_name='sierras_kahl'),
       SoundscapesConfig(
@@ -171,12 +239,31 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
                        'Rector, PA. https://doi.org/10.1002/ecy.3329'),
           class_list_name='powdermill'),
       SoundscapesConfig(
+          name='powdermill_full_length',
+          audio_glob='powdermill/*/*.wav',
+          annotation_filename='powdermill.csv',
+          annotation_load_fn=dataset_fns.load_powdermill_annotations,
+          keep_unknown_annotation=True,
+          description=('Full-length New England recordings from Powdermill '
+                       'Nature Reserve, Rector, PA. '
+                       'https://doi.org/10.1002/ecy.3329'),
+          class_list_name='powdermill'),
+      SoundscapesConfig(
           name='peru',
           audio_glob='peru/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=dataset_fns.load_peru_annotations,
           description=('Soundscapes from the SW Amazon basin. '
+                       'https://zenodo.org/record/7079124#.YypL8-xufhM'),
+          class_list_name='peru'),
+      SoundscapesConfig(
+          name='peru_full_length',
+          audio_glob='peru/audio/*.flac',
+          annotation_filename='peru.csv',
+          annotation_load_fn=dataset_fns.load_peru_annotations,
+          keep_unknown_annotation=True,
+          description=('Full-length soundscapes from the SW Amazon basin. '
                        'https://zenodo.org/record/7079124#.YypL8-xufhM'),
           class_list_name='peru'),
   ]
@@ -187,8 +274,11 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         self.builder_config.keep_unknown_annotation)
     logging.info('Currently considering a total of %s species.',
                  dataset_class_list.size)
-    audio_feature_shape = (int(self.builder_config.interval_length_s *
-                               self.builder_config.sample_rate_hz),)
+    full_length = self.builder_config.localization_fn is None
+    audio_feature_shape = [
+        None if full_length else int(self.builder_config.sample_rate_hz *
+                                     self.builder_config.interval_length_s)
+    ]
     common_features = {
         'audio':
             tfds_features.Int16AsFloatTensor(
@@ -210,6 +300,13 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         'segment_end':
             tfds.features.Scalar(dtype=tf.uint64),
     }
+    if full_length:
+      common_features.update({
+          'annotation_start':
+              tfds.features.Sequence(tfds.features.Scalar(dtype=tf.uint64)),
+          'annotation_end':
+              tfds.features.Sequence(tfds.features.Scalar(dtype=tf.uint64)),
+      })
     if self.builder_config.metadata_load_fn is not None:
       if self.builder_config.metadata_fields is None:
         raise ValueError("If a 'metadata_load_fn' is specified, then the"
@@ -237,9 +334,12 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         self.builder_config.audio_glob)
     if self.builder_config.supervised:
       # For supervised data, we first grab the annotated segments.
+      filename = (
+          self.builder_config.annotation_filename or
+          f'{self.builder_config.name}.csv')
       annotations_path = dl_manager.download_and_extract({
           'segments': (self.builder_config.audio_dir / 'metadata' /
-                       f'{self.builder_config.name}.csv').as_posix(),
+                       filename).as_posix(),
       })['segments']
       annotations_df = self.builder_config.annotation_load_fn(annotations_path)
     else:
@@ -267,6 +367,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
     beam = tfds.core.lazy_imports.apache_beam
     librosa = tfds.core.lazy_imports.librosa
     info = self._info()
+    full_length = self.builder_config.localization_fn is None
     # Drop any extraneous columns.
     for k in segments.columns.values:
       if (k not in info.features and
@@ -285,8 +386,15 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       recording_template = segment_group.iloc[0].copy()
       recording_template['recording_id'] = recording_id
 
-      # Load the audio associated with this group of segments
       url = recording_template['url']
+
+      # Remove all the fields we don't need from the recording_template. We
+      # set errors='ignore' as some fields to be dropped may already not
+      # exist.
+      recording_template = recording_template.drop(
+          ['url', 'start_time_s', 'end_time_s'], errors='ignore').to_dict()
+
+      # Load the audio associated with this group of segments
       with tempfile.NamedTemporaryFile(mode='w+b', suffix=url.suffix) as f:
         f.write(url.read_bytes())
         # librosa outputs lots of warnings which we can safely ignore when
@@ -304,12 +412,13 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
                 'The audio at %s could not be loaded. Following'
                 'exception occured: %s', url, inst)
             return []
-          # We remove all short audios. These short audios are only observed
-          # among caples_2020 unlabelled recordings.
-          target_length = int(sr * self.builder_config.interval_length_s)
-          if len(audio) < target_length:
-            logging.warning('Skipping audio at %s because too short.', url)
-            return []
+          if not full_length:
+            # We remove all short audios. These short audios are only observed
+            # among caples_2020 unlabelled recordings.
+            target_length = int(sr * self.builder_config.interval_length_s)
+            if len(audio) < target_length:
+              logging.warning('Skipping audio at %s because too short.', url)
+              return []
 
           # Resampling can introduce artifacts that push the signal outside the
           # [-1, 1) interval.
@@ -318,31 +427,50 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       class_list = soundscapes_lib.load_class_list(
           self.builder_config.class_list_name,
           self.builder_config.keep_unknown_annotation)
-      labeled_intervals = soundscapes_lib.get_labeled_intervals(
-          audio, segment_group, class_list, self.builder_config.sample_rate_hz,
-          self.builder_config.interval_length_s,
-          self.builder_config.localization_fn, self.builder_config.supervised)
 
-      # Remove all the fields we don't need from the recording_template. We set
-      # errors='ignore' as some fields to be dropped may already not exist.
-      recording_template = recording_template.drop(
-          ['url', 'start_time_s', 'end_time_s'], errors='ignore').to_dict()
-
-      # Create a tf.Example for every segment.
-      valid_segments = []
-      for index, ((start, end),
-                  segment_labels) in enumerate(labeled_intervals.items()):
-        key = f'{filename}_{index}'
-        valid_segments.append((key, {
-            **recording_template,
-            'label': list(segment_labels),
-            'audio': audio[start:end],
-            'segment_start': start,
-            'segment_end': end,
-            'segment_id': index,
-        }))
+      if full_length:
+        annotations = soundscapes_lib.get_full_length_annotations(
+            audio,
+            segment_group,
+            class_list,
+            self.builder_config.sample_rate_hz,
+            unknown_guard=self.builder_config.full_length_unknown_guard,
+        )
+        if annotations.empty:
+          return []
         beam.metrics.Metrics.counter('soundscapes', 'examples').inc()
-      return valid_segments
+        return [(filename, {
+            **recording_template,
+            'label': annotations['label'].tolist(),
+            'audio': audio,
+            'segment_start': 0,
+            'segment_end': len(audio),
+            'segment_id': 0,
+            'annotation_start': annotations['annotation_start'].tolist(),
+            'annotation_end': annotations['annotation_end'].tolist(),
+        })]
+      else:
+        labeled_intervals = soundscapes_lib.get_labeled_intervals(
+            audio, segment_group, class_list,
+            self.builder_config.sample_rate_hz,
+            self.builder_config.interval_length_s,
+            self.builder_config.localization_fn, self.builder_config.supervised)
+
+        # Create a tf.Example for every segment.
+        valid_segments = []
+        for index, ((start, end),
+                    segment_labels) in enumerate(labeled_intervals.items()):
+          key = f'{filename}_{index}'
+          valid_segments.append((key, {
+              **recording_template,
+              'label': list(segment_labels),
+              'audio': audio[start:end],
+              'segment_start': start,
+              'segment_end': end,
+              'segment_id': index,
+          }))
+          beam.metrics.Metrics.counter('soundscapes', 'examples').inc()
+        return valid_segments
 
     pipeline = (
         beam.Create(enumerate(segments.groupby('filename')))
