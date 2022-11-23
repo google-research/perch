@@ -38,6 +38,7 @@ SEPARATED_AUDIO_SHAPE = 'separated_audio_shape'
 
 MODEL_CLASSES: Dict[str, Any] = {
     'taxonomy_model_tf': models.TaxonomyModelTF,
+    'birdnet': models.BirdNet,
     'dummy_model': models.DummyModel,
 }
 
@@ -81,11 +82,27 @@ def create_source_infos(source_files, num_shards_per_file):
 class EmbedFn(beam.DoFn):
   """Beam worker function for creating audio embeddings."""
 
-  def __init__(self, hop_size_s: float, model_key: str,
+  def __init__(self, hop_size_s: float, write_embeddings: bool,
+               write_logits: bool, write_separated_audio: bool, model_key: str,
                model_config: config_dict.ConfigDict):
+    """Initialize the embedding DoFn.
+
+    Args:
+      hop_size_s: Number of seconds to hop. Ignored if the model handles
+        windowing itself; ie, the model's window_size_s == -1.
+      write_embeddings: Whether to write embeddings.
+      write_logits: Whether to write output logits.
+      write_separated_audio: Whether to write out separated audio tracks.
+      model_key: String indicating which model wrapper to use. See MODEL_KEYS.
+      model_config: Keyword arg dictionary for the model wrapper class.
+    """
+
     self.hop_size_s = hop_size_s
     self.model_key = model_key
     self.model_config = model_config
+    self.write_embeddings = write_embeddings
+    self.write_logits = write_logits
+    self.write_separated_audio = write_separated_audio
 
   def setup(self):
     self.embedding_model = MODEL_CLASSES[self.model_key](**self.model_config)
@@ -138,20 +155,18 @@ class EmbedFn(beam.DoFn):
     for i in range(outputs.embeddings.shape[0]):
       offset = timestamp_offset + i * hops_size_samples
       feature = {
-          FILE_NAME:
-              bytes_feature(bytes(file_id, encoding='utf8')),
-          TIMESTAMP:
-              int_feature(offset),
-          EMBEDDING:
-              bytes_feature(self.serialize_tensor(outputs.embeddings[i])),
-          EMBEDDING_SHAPE:
-              int_feature(outputs.embeddings.shape),
+          FILE_NAME: bytes_feature(bytes(file_id, encoding='utf8')),
+          TIMESTAMP: int_feature(offset),
       }
-      if outputs.logits is not None:
+      if self.write_embeddings and outputs.embeddings is not None:
+        feature[EMBEDDING] = bytes_feature(
+            self.serialize_tensor(outputs.embeddings[i]))
+        feature[EMBEDDING_SHAPE] = int_feature(outputs.embeddings[i].shape),
+      if self.write_logits and outputs.logits is not None:
         for logits_key, value in outputs.logits.items():
           feature[logits_key] = bytes_feature(self.serialize_tensor(value[i]))
           feature[logits_key + '_shape'] = int_feature(value[i].shape)
-      if outputs.separated_audio is not None:
+      if self.write_separated_audio and outputs.separated_audio is not None:
         feature[SEPARATED_AUDIO] = bytes_feature(
             self.serialize_tensor(outputs.separated_audio[i]))
         feature[SEPARATED_AUDIO_SHAPE] = int_feature(

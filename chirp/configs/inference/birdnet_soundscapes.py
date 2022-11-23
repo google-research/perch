@@ -29,7 +29,10 @@ def get_config() -> config_dict.ConfigDict:
 
   config.output_dir = ''
   config.source_file_patterns = ['soundscapes/*.wav']
-  model_checkpoint_path = ''
+
+  Note that the model path should be either the location of the '.tflite' file
+  or the directory contraining the 'saved_model.pb'.
+  model_path = ''
 
   config.num_shards_per_file = 1
   config.embed_fn_config = {
@@ -37,11 +40,11 @@ def get_config() -> config_dict.ConfigDict:
       'write_embeddings': True,
       'write_logits': True,
       'write_separated_audio': False,
-      'model_key': 'taxonomy_model_tf',
+      'model_key': 'birdnet',
       'model_config': {
-          'model_path': model_checkpoint_path,
-          'window_size_s': 5,
-          'sample_rate': 32000,
-      },
+          'model_path': model_path,
+          'window_size_s': 3,
+          'sample_rate': 48000,
+      }
   }
   return config
