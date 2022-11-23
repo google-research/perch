@@ -107,7 +107,7 @@ def quantizer_loss(outputs: hubert.ModelOutputs, quant_loss_mult: float,
                    **unused_kwargs) -> jnp.ndarray:
   """Get quantization loss from model outputs."""
   del unused_kwargs
-  # [bsz, sz, csz].
+  # [bsz, sz, csz] or [bsz, sz, 1] (depending on the quantizer).
   quant_loss = outputs.quantization_loss
   quant_loss = jnp.squeeze(jnp.mean(quant_loss, -1))
   # [bsz, sz].
@@ -219,7 +219,6 @@ def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
         "min_per_cluster_{}".format(i): min_per_cluster,
         "h_diversity_{}".format(i): h_diversity
     })
-  print("ret has keys {}".format(ret.keys()))
   return ret[key]
 
 
@@ -356,7 +355,7 @@ def initialize_model(
     base_quantizer_config: config_dict.ConfigDict,
     frontend_config: config_dict.ConfigDict,
     early_fs_config: config_dict.ConfigDict, reload_quantizer_from: str,
-    target_class_list: str, **unused_kwargs):
+    reload_hubert_from: str, target_class_list: str, **unused_kwargs):
   """Creates model for training, eval, or inference."""
   del unused_kwargs
   # Initialize random number generator
@@ -377,15 +376,26 @@ def initialize_model(
   else:
     kwargs = {
         "num_centroids": base_quantizer_config.num_centroids,
+        "demean": True,
+        "rescale": True,
     }
     quantizer_class = quantizers.VectorQuantizer
   quantizer_list = []
   for _ in range(len(model_config.quantizer_points)):
-    base_quantizers = [
-        quantizer_class(**kwargs) for _ in range(quantizer_config.num_sections)
-    ]
-    quantizer = quantizers.ProductQuantizer(
-        base_quantizers=base_quantizers)
+    if (quantizer_config.strategy ==
+        quantizers.QuantizationStrategy.PRODUCT_QUANTIZATION.value):
+      base_quantizers = [
+          quantizer_class(**kwargs)
+          for _ in range(quantizer_config.num_sections)
+      ]
+      quantizer = quantizers.ProductQuantizer(base_quantizers=base_quantizers)
+    elif (quantizer_config.strategy ==
+          quantizers.QuantizationStrategy.RESIDUAL_QUANTIZATION.value):
+      base_quantizers = [
+          quantizer_class(**kwargs)
+          for _ in range(quantizer_config.num_sections)
+      ]
+      quantizer = quantizers.ResidualQuantizer(quantizers=base_quantizers)
     quantizer_list.append(quantizer)
 
   # Initialize the frontend.
@@ -416,7 +426,8 @@ def initialize_model(
     early_fs = layers.EarlyFeatureExtractor(
         dropout_prob=early_fs_config.dropout_prob,
         activation=early_fs_config.activation,
-        conv_layer_tuples=conv_layer_tuples)
+        conv_layer_tuples=conv_layer_tuples,
+        deprecated_group_conv=early_fs_config.deprecated_group_conv)
 
   else:
     if early_fs_config.omit_earlyfs:
@@ -509,7 +520,8 @@ def initialize_model(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
 
   did_reload = False
-  while not did_reload:
+  num_attempts = 0
+  while not did_reload and num_attempts < 5:
     try:
       train_state = ckpt.restore_or_initialize(train_state)
       did_reload = True
@@ -523,11 +535,13 @@ def initialize_model(
           "Reloading from %s failed for some unexpected reason. Taking a nap "
           "and will try again.", workdir)
       time.sleep(5)
+    num_attempts += 1
 
   if reload_quantizer_from:
     ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_quantizer_from)
     did_reload = False
-    while not did_reload:
+    num_attempts = 0
+    while not did_reload and num_attempts < 5:
       try:
         reloaded_quantizer = ckpt_to_reload.restore(None)
         did_reload = True
@@ -537,9 +551,36 @@ def initialize_model(
             "Reloading from %s failed. Taking a nap and will try again.",
             reload_quantizer_from)
         time.sleep(5)
-    print("reloaded_quantizer codebook {}".format(
-        reloaded_quantizer["params"]["quantizer"]))
-    train_state.params["quantizer"] = reloaded_quantizer["params"]["quantizer"]
+      num_attempts += 1
+    train_state.params["quantizer"] = reloaded_quantizer["params"]["quantizer"]  # pytype: disable=unsupported-operands  # py310-upgrade
+
+  if reload_hubert_from:
+    ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_hubert_from)
+    did_reload = False
+    num_attempts = 0
+    while not did_reload and num_attempts < 5:
+      try:
+        reloaded_hubert = ckpt_to_reload.restore(None)
+        did_reload = True
+        break
+      except tf.errors.NotFoundError:
+        logging.warning(
+            "Reloading from %s failed. Taking a nap and will try again.",
+            reload_hubert_from)
+        time.sleep(5)
+      num_attempts += 1
+    logging.info("Reloaded HuBERT params with keys %s",
+                 reloaded_hubert["params"].keys())
+    for k, v in reloaded_hubert["params"].items():
+      # Since this reloading is done for continuing to train HuBERT with a new
+      # quantizer (in a different space), we assume it's best to re-initialize
+      # the projections between the features and these new codes.
+      if k.startswith("codes_proj") or k.startswith(
+          "final_proj") or k.startswith("quantizer"):
+        logging.info("Ignoring HuBERT parameters for key %s.", k)
+        continue
+      train_state.params[k] = v  # pytype: disable=unsupported-operands  # py310-upgrade
+      logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
 
   return ModelBundle(model, optimizer, key, ckpt), train_state
 

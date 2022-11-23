@@ -15,6 +15,7 @@
 
 """Common utilities for exporting SavedModels and TFLite models."""
 
+from absl import logging
 import os
 from typing import Dict, Optional, Sequence
 
@@ -62,6 +63,7 @@ class Jax2TfModelWrapper(tf.Module):
 
     # The variables structure needs to be flattened for the saved_model.
     self._variables = tf.nest.flatten(self._structured_variables)
+    logging.info('Running jax2tf conversion...')
     converted_infer_fn = jax2tf.convert(
         infer_fn,
         enable_xla=enable_xla,
@@ -73,6 +75,7 @@ class Jax2TfModelWrapper(tf.Module):
         infer_partial,
         jit_compile=True,
         input_signature=[tf.TensorSpec(input_shape)])
+    logging.info('Jax2TfModelWrapper initialized.')
 
   def __call__(self, inputs):
     return self.infer_tf(inputs)
@@ -95,22 +98,28 @@ class Jax2TfModelWrapper(tf.Module):
       export_tf_lite: bool = True):
     """Export converted TF models."""
     fake_inputs = self.get_tf_zero_inputs()
+    logging.info('Creating concrete function...')
     concrete_fn = self.infer_tf.get_concrete_function(fake_inputs)
 
+    logging.info('Saving TF SavedModel...')
     tf.saved_model.save(
         self, os.path.join(workdir, 'savedmodel'), signatures=concrete_fn)
     with tf.io.gfile.GFile(
         os.path.join(workdir, 'savedmodel', 'ckpt.txt'), 'w') as f:
       f.write(f'train_state.step: {train_step}\n')
 
+    logging.info('Writing class lists...')
     if class_lists is not None:
       for key, class_list in class_lists.items():
         with tf.io.gfile.GFile(os.path.join(workdir, f'{key}.csv'), 'w') as f:
           f.write(class_list.to_csv())
 
     if not export_tf_lite:
+      logging.info('Skipping TFLite export.')
+      logging.info('Export complete.')
       return
     # Export TFLite model.
+    logging.info('Converting to TFLite...')
     converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_fn],
                                                                 self)
 
@@ -126,3 +135,4 @@ class Jax2TfModelWrapper(tf.Module):
       f.write(tflite_float_model)
     with tf.io.gfile.GFile(os.path.join(workdir, 'tflite_ckpt.txt'), 'w') as f:
       f.write(f'train_state.step: {train_step}\n')
+    logging.info('Export complete.')

@@ -21,6 +21,8 @@ import tempfile
 from chirp import config_utils
 from chirp import train
 from chirp.configs import baseline
+from chirp.configs import baseline_attention
+from chirp.configs import baseline_mel_conformer
 from chirp.configs import config_globals
 from chirp.data import pipeline
 from chirp.models import efficientnet
@@ -34,6 +36,9 @@ from ml_collections import config_dict
 import tensorflow as tf
 
 from absl.testing import absltest
+from absl.testing import parameterized
+
+TEST_WINDOW_S = 1
 
 
 class ConstantEncoder(nn.Module):
@@ -51,7 +56,7 @@ class ConstantEncoder(nn.Module):
     return jnp.zeros([inputs.shape[0], self.output_dim])
 
 
-class TrainTest(absltest.TestCase):
+class TrainTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -69,9 +74,9 @@ class TrainTest(absltest.TestCase):
         pipeline=config.train_dataset_config.pipeline)
     return ds, dataset_info
 
-  def _get_test_config(self, use_const_encoder=False) -> config_dict.ConfigDict:
-    """Create configuration dictionary for training."""
-    config = baseline.get_config()
+  def _get_test_config(self, config_module=baseline) -> config_dict.ConfigDict:
+    """Reduces test config sizes to avoid memory blowouts."""
+    config = config_module.get_config()
     config = config_utils.parse_config(config, config_globals.get_globals())
 
     config.sample_rate_hz = 11_025
@@ -84,7 +89,7 @@ class TrainTest(absltest.TestCase):
             add_taxonomic_labels=True),
         pipeline.MixAudio(mixin_prob=0.0),
         pipeline.Batch(batch_size=1, split_across_devices=True),
-        pipeline.RandomSlice(window_size=1),
+        pipeline.RandomSlice(window_size=TEST_WINDOW_S),
         pipeline.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
     ])
 
@@ -92,7 +97,7 @@ class TrainTest(absltest.TestCase):
         pipeline.OnlyJaxTypes(),
         pipeline.MultiHot(),
         pipeline.Batch(batch_size=1, split_across_devices=True),
-        pipeline.Slice(window_size=1, start=0.5, names=("audio",)),
+        pipeline.Slice(window_size=TEST_WINDOW_S, start=0.5, names=("audio",)),
         pipeline.NormalizeAudio(target_gain=0.2, names=("audio",)),
     ])
 
@@ -100,14 +105,20 @@ class TrainTest(absltest.TestCase):
     config.train_config.log_every_steps = 1
     config.train_config.checkpoint_every_steps = 1
     config.eval_config.eval_steps_per_checkpoint = 1
-    config.init_config.input_shape = (config.sample_rate_hz,)
-    config.eval_config.input_shape = (config.sample_rate_hz,)
-    if use_const_encoder:
-      config.init_config.model_config.encoder = ConstantEncoder(output_dim=32)
-    else:
-      config.init_config.model_config.encoder = efficientnet.EfficientNet(
-          efficientnet.EfficientNetModel.B0)
+    config.init_config.input_shape = (TEST_WINDOW_S * config.sample_rate_hz,)
+    config.eval_config.input_shape = (TEST_WINDOW_S * config.sample_rate_hz,)
+    return config
 
+  def _add_const_model_config(self, config):
+    config.init_config.model_config.encoder = ConstantEncoder(output_dim=32)
+    return config
+
+  def _add_b0_model_config(self, config):
+    config.init_config.model_config.encoder = efficientnet.EfficientNet(
+        efficientnet.EfficientNetModel.B0)
+    return config
+
+  def _add_pcen_melspec_frontend(self, config):
     config.init_config.model_config.frontend = frontend.MelSpectrogram(
         features=32,
         stride=32_000 // 25,
@@ -125,22 +136,21 @@ class TrainTest(absltest.TestCase):
     parsed_config = config_utils.parse_config(raw_config,
                                               config_globals.get_globals())
     test_config = self._get_test_config()
+    test_config = self._add_pcen_melspec_frontend(test_config)
+    test_config = self._add_b0_model_config(test_config)
     print(jax.tree_util.tree_structure(parsed_config.to_dict()))
     print(jax.tree_util.tree_structure(test_config.to_dict()))
     self.assertEqual(
         jax.tree_util.tree_structure(parsed_config.to_dict()),
         jax.tree_util.tree_structure(test_config.to_dict()))
 
-  def test_config_field_reference(self):
-    config = self._get_test_config()
-    self.assertEqual(config.train_config.num_train_steps,
-                     config.eval_config.num_train_steps)
-
   def test_export_model(self):
     # NOTE: This test might fail when run on a machine that has a GPU but when
     # CUDA is not linked (JAX will detect the GPU so jax2tf will try to create
     # a TF graph on the GPU and fail)
-    config = self._get_test_config(use_const_encoder=True)
+    config = self._get_test_config()
+    config = self._add_const_model_config(config)
+    config = self._add_pcen_melspec_frontend(config)
 
     model_bundle, train_state = train.initialize_model(
         workdir=self.train_dir, **config.init_config)
@@ -163,16 +173,27 @@ class TrainTest(absltest.TestCase):
     audio = jnp.zeros([1, config.sample_rate_hz])
     reloaded.infer_tf(audio)
 
-  def test_init_baseline(self):
-    # Ensure that we can initialize the model with the baseline config.
-    config = self._get_test_config()
+  @parameterized.parameters(
+      baseline,
+      baseline_attention,
+      baseline_mel_conformer,
+  )
+  def test_init(self, config_module):
+    # Ensure that we can initialize the model with the each config.
+    config = self._get_test_config(config_module)
+    # Check that field reference for num_train_steps propogated appropriately.
+    self.assertEqual(config.train_config.num_train_steps,
+                     config.eval_config.num_train_steps)
+
     model_bundle, train_state = train.initialize_model(
         workdir=self.train_dir, **config.init_config)
     self.assertIsNotNone(model_bundle)
     self.assertIsNotNone(train_state)
 
   def test_train_one_step(self):
-    config = self._get_test_config(use_const_encoder=True)
+    config = self._get_test_config()
+    config = self._add_const_model_config(config)
+    config = self._add_pcen_melspec_frontend(config)
     ds, _ = self._get_test_dataset(config)
     model_bundle, train_state = train.initialize_model(
         workdir=self.train_dir, **config.init_config)
@@ -187,7 +208,9 @@ class TrainTest(absltest.TestCase):
     self.assertIsNotNone(ckpt.latest_checkpoint)
 
   def test_eval_one_step(self):
-    config = self._get_test_config(use_const_encoder=True)
+    config = self._get_test_config()
+    config = self._add_const_model_config(config)
+    config = self._add_pcen_melspec_frontend(config)
     ds, _ = self._get_test_dataset(config)
     model_bundle, train_state = train.initialize_model(
         workdir=self.train_dir, **config.init_config)

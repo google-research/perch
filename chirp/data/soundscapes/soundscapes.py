@@ -90,7 +90,7 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
   """DatasetBuilder for soundscapes data."""
 
-  VERSION = tfds.core.Version('1.0.6')
+  VERSION = tfds.core.Version('1.0.7')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release. The label set corresponds to the full '
                'set of ~11 000 Xeno-Canto species.',
@@ -104,6 +104,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       '1.0.5': 'Adds Peru dataset and moves to new version of SSW annotations. '
                'Supervised segments with the "unknown" label are now dropped.',
       '1.0.6': 'Updates the dataset following Int16AsFloatTensor refactoring.',
+      '1.0.7': 'Fix some dropped annotations in the Hawaii dataset.',
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg

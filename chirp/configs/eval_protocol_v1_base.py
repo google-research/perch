@@ -35,15 +35,11 @@ def _melspec_if_baseline(config_string: str, **kwargs):
           if config_string == 'baseline' else [])
 
 
-def get_config(config_string: str = 'baseline') -> config_dict.ConfigDict:
+def get_config() -> config_dict.ConfigDict:
   """Creates a base configuration dictionary for the v1 evaluation protocol.
 
   The v1 protocol evaluates on artificially rare Sapsucker Woods (SSW) species
   and on held-out Colombia and Hawaii species.
-
-  Args:
-    config_string: A config string indicating the pipeline variant to use, in
-      {'baseline', 'hubert'}.
 
   Returns:
     The base configuration dictionary for the v1 evaluation protocol.
@@ -91,8 +87,6 @@ def get_config(config_string: str = 'baseline') -> config_dict.ConfigDict:
       },
   )
 
-  scaling_config = _callable_config('frontend.LogScalingConfig')
-
   dataset_configs = {}
   for dataset_description in required_datasets:
     dataset_config = config_dict.ConfigDict()
@@ -110,16 +104,9 @@ def get_config(config_string: str = 'baseline') -> config_dict.ConfigDict:
         window_size=xc_window_size_seconds,
         start=xc_slice_start) + [
             _callable_config(
-                'pipeline.NormalizeAudio', target_gain=target_gain)
-        ] + _melspec_if_baseline(
-            config_string,
-            features=160,
-            stride=320,
-            kernel_size=2_048,  # ~0.08 * 32,000
-            sample_rate=32_000,
-            freq_range=(60, 10_000),
-            scaling_config=scaling_config,
-        ) + [_callable_config('pipeline.LabelsToString')]
+                'pipeline.NormalizeAudio', target_gain=target_gain),
+            _callable_config('pipeline.LabelsToString'),
+        ]
 
     dataset_config.pipeline = _callable_config('pipeline.Pipeline', ops=ops)
     dataset_config.split = 'train'
@@ -165,5 +152,16 @@ def get_config(config_string: str = 'baseline') -> config_dict.ConfigDict:
   # (i.e. metrics will be computed with respect to a previous model callback's
   # embeddings).
   config.debug.embedded_dataset_cache_path = ''
+
+  # The two below fields should be populated by the user in an eval config.
+  # Each should point to a local function or callable or one of the provided
+
+  # functions in google-research/chirp/eval/eval_lib.py.
+  config.create_species_query = None
+
+  # Determines the ordering of search results for use in average-precision based
+  # metrics. For similarity-based metrics, set sort_descending to True. For
+  # distance-based metrics, set this to False (for ascending ordering).
+  config.sort_descending = None
 
   return config

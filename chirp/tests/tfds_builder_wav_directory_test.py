@@ -29,6 +29,9 @@ def _manual_data_dir() -> str:
 
 class FakeWavDirectory(tfds_builder.WavDirectoryBuilder):
   """Test-only concrete subclass of the abstract base class under test."""
+  # A workaround for the following error in importlib_resources:
+  # 'NoneType' object has no attribute 'submodule_search_locations'
+  __module__ = tfds_builder.__name__
 
   VERSION = tfds.core.Version('1.2.3')
   RELEASE_NOTES = {

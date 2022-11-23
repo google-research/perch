@@ -23,31 +23,46 @@ _c = config_utils.callable_config
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
+  batch_size = config_dict.FieldReference(128)
   target_class_list = config_dict.FieldReference("xenocanto")
   add_taxonomic_labels = config_dict.FieldReference(True)
 
   config = config_dict.ConfigDict()
   config.sample_rate_hz = sample_rate_hz
-  window_size_s = config_dict.FieldReference(5)
-
+  config.batch_size = batch_size
   # Configure the data
-  config.train_pipeline = _c(
+  train_window_size = config_dict.FieldReference(5)
+  eval_window_size = config_dict.FieldReference(5)
+  frame_rate_hz = config_dict.FieldReference(100)
+  num_channels = config_dict.FieldReference(160)
+
+  config.train_window_size = train_window_size
+  config.eval_window_size = eval_window_size
+  config.frame_rate_hz = frame_rate_hz
+  config.num_channels = num_channels
+
+  train_dataset_config = config_dict.ConfigDict()
+  train_dataset_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
-          _c("pipeline.Shuffle", shuffle_buffer_size=512),
+          _c("pipeline.Shuffle", shuffle_buffer_size=128),
           _c("pipeline.OnlyJaxTypes"),
           _c("pipeline.ConvertBirdTaxonomyLabels",
              source_namespace="ebird2021",
              target_class_list=target_class_list,
              add_taxonomic_labels=add_taxonomic_labels),
-          _c("pipeline.MixAudio", mixin_prob=0.25),
-          _c("pipeline.Batch", batch_size=64),
-          _c("pipeline.RandomSlice", window_size=window_size_s),
+          _c("pipeline.RandomSlice", window_size=train_window_size),
+          _c("pipeline.MixAudio", mixin_prob=0.75),
+          _c("pipeline.Batch", batch_size=batch_size,
+             split_across_devices=True),
           _c("pipeline.RandomNormalizeAudio", min_gain=0.15, max_gain=0.25),
           _c("pipeline.Repeat")
       ])
+  train_dataset_config.split = "train"
+  config.train_dataset_config = train_dataset_config
 
-  config.eval_pipeline = _c(
+  eval_dataset_config = config_dict.ConfigDict()
+  eval_dataset_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
           _c("pipeline.OnlyJaxTypes"),
@@ -55,54 +70,44 @@ def get_config() -> config_dict.ConfigDict:
              source_namespace="ebird2021",
              target_class_list=target_class_list,
              add_taxonomic_labels=add_taxonomic_labels),
-          _c("pipeline.Batch", batch_size=64),
-          _c("pipeline.Slice",
-             window_size=window_size_s,
-             start=0.0,
-             names=("audio",)),
-          _c("pipeline.NormalizeAudio", target_gain=0.2, names=("audio",)),
+          _c("pipeline.Slice", window_size=eval_window_size, start=0.0),
+          _c("pipeline.Batch", batch_size=batch_size,
+             split_across_devices=True),
+          _c("pipeline.NormalizeAudio", target_gain=0.2),
       ])
+  eval_dataset_config.split = "train"
+  config.eval_dataset_config = eval_dataset_config
 
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
-  init_config.learning_rate = 0.01
-  init_config.input_size = window_size_s * sample_rate_hz
+  init_config.learning_rate = 0.0001
+  init_config.input_shape = (train_window_size * sample_rate_hz,)
   init_config.rng_seed = 0
+  init_config.target_class_list = target_class_list
   config.init_config = init_config
 
-  conformer_config = config_dict.ConfigDict()
-  conformer_config.model_dims = 512
-  conformer_config.kernel_size = 32
-  conformer_config.ff_activation = config_utils.object_config("nn.swish")
-  conformer_config.ff_residual_weight = 0.5
-  conformer_config.ffn_dim_multiplier = 4
-  conformer_config.atten_num_heads = 8
-  conformer_config.layer_order = "mhsa_before_conv"
-  conformer_config.dropout_prob = 0.
-  conformer_config.conv_residual_dropout = None
-  conformer_config.atten_residual_dropout = None
-  conformer_config.ffn_residual_dropout = None
-  conformer_config.atten_dropout = None
-  conformer_config.ffn_relu_dropout = None
-  conformer_config.fflayer_weight_sharing = False
-
   model_config = config_dict.ConfigDict()
-  model_config.encoder = config_utils.callable_config("conformer.Conformer",
-                                                      conformer_config)
-  model_config.taxonomy_loss_weight = 0.25
-  init_config.model_config = model_config
-
   model_config.frontend = config_utils.callable_config(
       "frontend.MelSpectrogram",
-      features=160,
-      stride=sample_rate_hz // 100,
+      features=num_channels,
+      stride=sample_rate_hz // frame_rate_hz,
       kernel_size=2_560,  # 0.08 * 32,000
       sample_rate=sample_rate_hz,
       freq_range=(60, 10_000),
       scaling_config=config_utils.callable_config("frontend.PCENScalingConfig"))
+  # Aim to have output targets of 256, starting at 144
+  s = (256 / 144)**(1 / 5)
+  model_config.encoder = _c(
+      "taxonomy_model.ConformerModel",
+      # Each downsample reduces time by a factor of 2.
+      # An additional downsample by 4 happens in the ConvolutionalSubsampling.
+      downsample=[(2, s), (5, s), (8, s), (11, s), (14, s)],
+      kernel_size=15)
+  model_config.taxonomy_loss_weight = 0.001
+  init_config.model_config = model_config
 
   # Configure the training loop
-  num_train_steps = config_dict.FieldReference(250_000)
+  num_train_steps = config_dict.FieldReference(1_000_000)
 
   train_config = config_dict.ConfigDict()
   train_config.num_train_steps = num_train_steps
@@ -112,6 +117,9 @@ def get_config() -> config_dict.ConfigDict:
 
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = num_train_steps
+  eval_config.eval_steps_per_checkpoint = 1000
+  eval_config.tflite_export = True
+  eval_config.input_shape = (eval_window_size * sample_rate_hz,)
   config.eval_config = eval_config
 
   return config

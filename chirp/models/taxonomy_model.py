@@ -47,11 +47,15 @@ class TaxonomyModel(nn.Module):
       spectrograms and returns feature vectors.
     taxonomy_loss_weight: Weight for taxonomic label losses.
     frontend: The frontend to use to generate features.
+    hubert_feature_extractor: Optionally, a pre-trained frozen feature extractor
+      trained in a self-supervised way. This option is mutually exclusive with
+      frontend and is used for evaluation of self-supervised representations.
   """
   num_classes: Dict[str, int]
   encoder: nn.Module
   taxonomy_loss_weight: float
   frontend: Optional[nn.Module] = None
+  hubert_feature_extractor: Optional[nn.Module] = None
 
   @nn.compact
   def __call__(self,
@@ -70,34 +74,45 @@ class TaxonomyModel(nn.Module):
         (train mode). If not specified (or specified to None), default to 'not
         train'.
       mask: An optional mask of the inputs.
+    Raises: ValueError if both `frontend` and `hubert_feature_extractor` are not
+      None.
 
     Returns:
       Logits for each output head.
     """
+    if self.frontend is not None and self.hubert_feature_extractor is not None:
+      raise ValueError("`frontend` and `hubert_feature_extractor` are mutually "
+                       "exclusive.")
+
     if use_running_average is None:
       use_running_average = not train
     kwargs = {} if mask is None else {"mask": mask}
-    if self.frontend is not None:
-      x = self.frontend(inputs)
+
+    # Apply the frontend.
+    if isinstance(self.frontend, layers.EarlyFeatureExtractor):
+      # EarlyFeatureExtractor expects [B, T, C] inputs.
+      x = self.frontend(inputs[:, :, jnp.newaxis], train=train)  # pylint: disable=not-callable
+    elif self.frontend is not None:
+      x = self.frontend(inputs, train=train)  # pylint: disable=not-callable
       if mask is not None:
         # Go from time steps to frames
         mask = frontend.frames_mask(mask, self.frontend.stride)
         # Add axes for broadcasting over frequencies and channels
         kwargs = {"mask": mask[..., jnp.newaxis, jnp.newaxis]}
+    elif self.hubert_feature_extractor is not None:
+      x = self.hubert_feature_extractor(inputs)  # pylint: disable=not-callable
     else:
       x = inputs
-    if isinstance(self.encoder, conformer.Conformer):
-      x = self.encoder(x, train=train, use_running_average=use_running_average)
-      # Silly baseline: average over the time dimension.
-      x = jnp.mean(x, axis=1)
-    else:
-      # Treat the spectrogram as a gray-scale image
-      x = self.encoder(
-          x[..., jnp.newaxis],
-          train=train,
-          use_running_average=use_running_average,
-          **kwargs)
 
+    # Apply the encoder.
+    while len(x.shape) < 4:
+      # We may have shape (B, T), (B, T, D), or (B, W, H, D)
+      x = x[..., jnp.newaxis]
+    # Treat the spectrogram as a gray-scale image
+    x = self.encoder(
+        x, train=train, use_running_average=use_running_average, **kwargs)
+
+    # Classify the encoder outputs and assemble outputs.
     model_outputs = {}
     model_outputs["embedding"] = x
     for k, n in self.num_classes.items():
@@ -121,19 +136,9 @@ class ConformerModel(nn.Module):
                train: bool,
                use_running_average: Optional[bool] = None,
                mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
-    # Apply frontend
-    dim = 512
-    conv_layer_tuples = ((dim, 20, 10), (dim, 3, 2), (dim, 3, 2), (dim, 3, 2),
-                         (dim, 3, 2), (dim, 2, 2), (160, 2, 2))
-    x = layers.EarlyFeatureExtractor(conv_layer_tuples)(inputs, train=train)
-
-    # At this point, think of channels as frequencies and add single channel
-    x = x[..., jnp.newaxis]
-
     # Subsample from (x, 160) to (x // 4, 40)
     x = conformer.ConvolutionalSubsampling(features=self.features)(
-        x, train=train)
-
+        inputs, train=train)
     # Apply conformer blocks
     x = conformer.Conformer(
         model_dims=self.features,

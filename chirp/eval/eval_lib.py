@@ -22,10 +22,14 @@ from typing import (Callable, Dict, Generator, Mapping, Sequence, Tuple, Type,
                     TypeVar)
 
 from absl import logging
+from chirp import hubert_train
+from chirp import sep_train
 from chirp import train
 from chirp.data import pipeline
 from chirp.models import metrics
+from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
+from etils import epath
 import jax
 import ml_collections
 import numpy as np
@@ -177,6 +181,10 @@ class TaxonomyModelCallback:
       learned representation for species seen during training. If False, reverts
       to the default behavior of using all embedded upstream recordings for
       artificially rare species to form search queries.
+    learned_representation_blocklist: Species codes for learned representations
+      which should *not* appear in the `learned_representations` mapping. This is
+      analogous in result to having an allowlist for which species codes use the
+      `learned_representations`.
     model_callback: the fprop function used as part of the model callback,
       created automatically post-initialization.
     learned_representations: mapping from class name to its learned
@@ -188,6 +196,9 @@ class TaxonomyModelCallback:
   init_config: ConfigDict
   workdir: str
   use_learned_representations: bool = True
+  learned_representation_blocklist: Sequence[str] = dataclasses.field(
+      default_factory=list)
+  # The following are populated during init.
   model_callback: Callable[[np.ndarray],
                            np.ndarray] = dataclasses.field(init=False)
   learned_representations: Dict[str, np.ndarray] = dataclasses.field(
@@ -196,6 +207,7 @@ class TaxonomyModelCallback:
   def __post_init__(self):
     model_bundle, train_state = train.initialize_model(
         workdir=self.workdir, **self.init_config)
+    train_state = model_bundle.ckpt.restore(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
 
     @jax.jit
@@ -204,13 +216,167 @@ class TaxonomyModelCallback:
 
     self.model_callback = fprop
 
-    class_list = namespace_db.load_db().class_lists[
-        self.init_config['target_class_list']].classes
-    head_index = list(model_bundle.model.num_classes.keys()).index('label')
-    output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
-
     if self.use_learned_representations:
-      self.learned_representations.update(dict(zip(class_list, output_weights)))
+      class_list = namespace_db.load_db().class_lists[
+          self.init_config.target_class_list].classes
+      head_index = list(model_bundle.model.num_classes.keys()).index('label')
+      output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
+      self.learned_representations.update({
+          n: w
+          for n, w in zip(class_list, output_weights)
+          if n not in self.learned_representation_blocklist
+      })
+
+  def __call__(self, inputs: np.ndarray) -> np.ndarray:
+    return np.asarray(self.model_callback(inputs))
+
+
+@dataclasses.dataclass
+class SeparatorTFCallback:
+  """An eval model callback the embedding from an audio separator."""
+  model_path: str
+  use_learned_representations: bool = False
+  learned_representation_blocklist: Sequence[str] = dataclasses.field(
+      default_factory=list)
+  frame_size: int = 32000
+  # The following are populated during init.
+  model_callback: Callable[[np.ndarray],
+                           np.ndarray] = dataclasses.field(init=False)
+  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+      init=False, default_factory=dict)
+
+  def _load_learned_representations(self):
+    """Loads classifier output weights from the separator."""
+    label_csv_path = epath.Path(self.model_path) / 'label.csv'
+    with label_csv_path.open('r') as f:
+      class_list = namespace.ClassList.from_csv('label', f)
+    # Load the output layer weights.
+    variables_path = (epath.Path(self.model_path) /
+                      'savedmodel/variables/variables').as_posix()
+    variables = tf.train.list_variables(variables_path)
+    candidates = []
+    for v, v_shape in variables:
+      # The classifier output layer is a 1D convolution with kernel size
+      # (1, embedding_dim, num_classes).
+      if (len(v_shape) == 3 and v_shape[0] == 1 and
+          v_shape[-1] == class_list.size):
+        candidates.append(v)
+    if not candidates:
+      raise ValueError('Could not locate output weights layer.')
+    elif len(candidates) > 1:
+      raise ValueError('Found multiple layers which could be the output '
+                       'weights layer (%s).' % candidates)
+    else:
+      output_weights = tf.train.load_variable(variables_path, candidates[0])
+      output_weights = np.squeeze(output_weights)
+    self.learned_representations.update({
+        n: w
+        for n, w in zip(class_list.classes, output_weights)
+        if n not in self.learned_representation_blocklist
+    })
+
+  def __post_init__(self):
+    logging.info('Loading separation model...')
+    separation_model = tf.saved_model.load(
+        epath.Path(self.model_path) / 'savedmodel')
+
+    def fprop(inputs):
+      framed_inputs = np.reshape(inputs, [
+          inputs.shape[0], inputs.shape[1] // self.frame_size, self.frame_size
+      ])
+      # Outputs are separated audio, logits, and embeddings.
+      _, _, embeddings = separation_model.infer_tf(framed_inputs)
+      # Embeddings have shape [B, T, D]; we need to aggregate over time.
+      # For separation models, the mid-point embedding is usually best.
+      midpt = embeddings.shape[1] // 2
+      embeddings = embeddings[:, midpt, :]
+      return embeddings
+
+    self.model_callback = fprop
+    if self.use_learned_representations:
+      logging.info('Loading learned representations...')
+      self._load_learned_representations()
+    logging.info('Model loaded.')
+
+  def __call__(self, inputs: np.ndarray) -> np.ndarray:
+    return np.asarray(self.model_callback(inputs))
+
+
+@dataclasses.dataclass
+class HuBERTModelCallback:
+  """A model callback implementation for HuBERTModel checkpoints.
+
+  Attributes:
+    init_config: TaxonomyModel configuration.
+    workdir: path to the model checkpoint.
+    embedding_index: index of the embedding vector to retrieve in the list of
+      embeddings output by the model.
+    model_callback: the fprop function used as part of the model callback,
+      created automatically post-initialization.
+    learned_representations: mapping from class name to its learned
+      representation, created automatically post-initialization and left empty
+      (because HuBERT is self-supervised).
+  """
+  init_config: ConfigDict
+  workdir: str
+  embedding_index: int
+  model_callback: Callable[[np.ndarray],
+                           np.ndarray] = dataclasses.field(init=False)
+  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+      init=False, default_factory=dict)
+
+  def __post_init__(self):
+    model_bundle, train_state = hubert_train.initialize_model(
+        workdir=self.workdir, num_train_steps=1, **self.init_config)
+    train_state = model_bundle.ckpt.restore(train_state)
+    variables = {'params': train_state.params, **train_state.model_state}
+
+    @jax.jit
+    def fprop(inputs):
+      model_outputs = model_bundle.model.apply(
+          variables, inputs, train=False, mask_key=None)
+      return model_outputs.embedding[self.embedding_index].mean(axis=-2)
+
+    self.model_callback = fprop
+
+  def __call__(self, inputs: np.ndarray) -> np.ndarray:
+    return np.asarray(self.model_callback(inputs))
+
+
+@dataclasses.dataclass
+class SeparationModelCallback:
+  """A model callback implementation for SeparationModel checkpoints.
+
+  Attributes:
+    init_config: SeparationModel configuration.
+    workdir: path to the model checkpoint.
+    model_callback: the fprop function used as part of the model callback,
+      created automatically post-initialization.
+    learned_representations: mapping from class name to its learned
+      representation, created automatically post-initialization. If
+      `use_learned_representations` is False, it is left empty, which results in
+      the evaluation protocol relying instead on embedded upstream recordings to
+      form search queries.
+  """
+  init_config: ConfigDict
+  workdir: str
+  model_callback: Callable[[np.ndarray],
+                           np.ndarray] = dataclasses.field(init=False)
+  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+      init=False, default_factory=dict)
+
+  def __post_init__(self):
+    model_bundle, train_state = sep_train.initialize_model(
+        workdir=self.workdir, **self.init_config)
+    train_state = model_bundle.ckpt.restore_or_initialize(train_state)
+    variables = {'params': train_state.params, **train_state.model_state}
+
+    @jax.jit
+    def fprop(inputs):
+      return model_bundle.model.apply(
+          variables, inputs, train=False).embedding.mean(axis=-2)
+
+    self.model_callback = fprop
 
   def __call__(self, inputs: np.ndarray) -> np.ndarray:
     return np.asarray(self.model_callback(inputs))
@@ -518,9 +684,6 @@ def prepare_eval_sets(
         rng_key=eval_set_key)
 
 
-# TODO(hamer): add function to rank the produced search results.
-# TODO(hamer): add flag to indicate whether search_score prefers high or low
-# values.
 def search(
     eval_and_search_corpus: ClasswiseEvalSetGenerator,
     learned_representations: Mapping[str, np.ndarray],
@@ -605,37 +768,53 @@ def query_search(
   return search_species_scores
 
 
-def compute_metrics(eval_set_name: str, eval_set_results: Mapping[str,
-                                                                  pd.DataFrame],
-                    write_results_dir: str):
+def compute_metrics(eval_set_name: str,
+                    eval_set_results: Mapping[str, pd.DataFrame],
+                    sort_descending: bool = True):
   """Operates over a DataFrame of eval results and produces average precision.
 
   Args:
     eval_set_name: The name of the evaluation set.
     eval_set_results: A mapping from species ID to a DataFrame of the search
       results for that species (with columns 'score' and 'species_match').
-    write_results_dir: The path to write the computed metrics to file.
+    sort_descending: An indicator if the search result ordering is in descending
+      order to be used post-search by average-precision based metrics. Sorts in
+      descending order by default.
 
   Returns:
     Produces the specified metrics computed for each species in the given eval
     set and writes these to a csv for each eval set.
   """
 
-  species_to_metric = dict()
+  species_metric_eval_set = list()
   for eval_species, eval_results in eval_set_results.items():
     eval_scores = eval_results['score'].values
     species_label_match = eval_results['species_match'].values
-    average_precision = metrics.average_precision(eval_scores,
-                                                  species_label_match)
-    species_to_metric[eval_species] = average_precision
 
-  write_results_path = os.path.join(write_results_dir,
-                                    eval_set_name) + '_average_precision'
-  species_to_metric = {
-      'eval_species': species_to_metric.keys(),
-      'average_precision': species_to_metric.values()
-  }
-  results_df = pd.DataFrame.from_dict(species_to_metric)
+    average_precision = metrics.average_precision(
+        eval_scores, species_label_match, sort_descending=sort_descending)
+    species_metric_eval_set.append(
+        (eval_species, average_precision, eval_set_name))
+
+  return species_metric_eval_set
+
+
+def write_results_to_csv(metric_results: Sequence[Tuple[str, float, str]],
+                         write_results_dir: str):
+  """Writew evaluation metric results to csv.
+
+    Writes a csv file where each row corresponds to a particular evaluation
+    example's search task performance.
+
+  Args:
+    metric_results: A sequence of tuples of (eval species name, eval metric,
+      evaluation set name) to write to csv. The first row encodes the column
+      header or column names.
+    write_results_dir: The path to write the computed metrics to file.
+  """
+
+  write_results_path = os.path.join(write_results_dir, 'evaluation_results.csv')
+  results_df = pd.DataFrame(metric_results[1:], columns=metric_results[0])
   results_df.to_csv(write_results_path)
 
 

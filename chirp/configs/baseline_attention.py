@@ -90,6 +90,11 @@ def get_config() -> config_dict.ConfigDict:
   config.init_config = init_config
 
   model_config = config_dict.ConfigDict()
+  dim = 512
+  model_config.frontend = _c(
+      "layers.EarlyFeatureExtractor",
+      conv_layer_tuples=((dim, 20, 10), (dim, 3, 2), (dim, 3, 2), (dim, 3, 2),
+                         (dim, 3, 2), (dim, 2, 2), (160, 2, 2)))
   # Aim to have output targets of 256, starting at 144
   s = (256 / 144)**(1 / 5)
   model_config.encoder = _c(

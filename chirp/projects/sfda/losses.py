@@ -16,10 +16,59 @@
 """A set of common losses used by several SFDA methods."""
 
 from typing import Optional
-
+import enum
 import flax
 import jax
 import jax.numpy as jnp
+
+
+class ReduceStrategy(enum.Enum):
+  """Strategies to reduce an axis.
+
+  Attributes:
+      NONE: No reduction
+      AVERAGE: Average reduction
+  """
+  NONE = "none"
+  AVERAGE = "average"
+
+
+def label_kl(probabilities: jnp.ndarray,
+             label: jnp.ndarray,
+             eps: float = 1e-10,
+             **_) -> jnp.ndarray:
+  """Kulback-Leibler divergence for single-class classification settings.
+
+  Args:
+    probabilities: Model's probabilities, expected shape [*, num_classes].
+    label: One-hot labels, expected shape [*, num_classes].
+    eps: For numerical stability
+
+  Returns:
+    Single-class Kulback-Leibler divergence between probabilities and label.
+    Shape [*,].
+  """
+  return label_xent(probabilities, label) - label_ent(probabilities)
+
+
+def label_binary_kl(probabilities: jnp.ndarray,
+                    label: jnp.ndarray,
+                    eps: float = 1e-10,
+                    **_) -> jnp.ndarray:
+  """Kulback-Leibler divergence for multi-class classification settings.
+
+  Args:
+    probabilities: Model's probabilities, expected shape [*, num_classes].
+    label: One-hot labels, expected shape [*, num_classes].
+    eps: For numerical stability
+
+  Returns:
+    Multi-class Kulback-Leibler divergence between probabilities and label.
+    Shape [*, num_classes].
+  """
+  return (label_binary_xent(
+      probabilities, label, class_reduce=ReduceStrategy.NONE) -
+          label_binary_ent(probabilities, class_reduce=ReduceStrategy.NONE))
 
 
 def label_xent(probabilities: jnp.ndarray,
@@ -63,6 +112,7 @@ def label_ent(probabilities: jnp.ndarray,
 def label_binary_ent(probabilities: jnp.ndarray,
                      label_mask: Optional[jnp.ndarray] = None,
                      eps: float = 1e-10,
+                     class_reduce: ReduceStrategy = ReduceStrategy.AVERAGE,
                      **_) -> jnp.ndarray:
   """Computes averaged classwise binary entropy.
 
@@ -75,6 +125,9 @@ def label_binary_ent(probabilities: jnp.ndarray,
 
   Returns:
     The binary entropies, averaged across classes shape [*,]
+
+  Raises:
+    ValueError: In case class_reduce is not a known ReduceStrategy.
   """
   if label_mask is None:
     label_mask = jnp.ones_like(probabilities)
@@ -83,14 +136,20 @@ def label_binary_ent(probabilities: jnp.ndarray,
   binary_entropies = -(probabilities * jnp.log(probabilities + eps) +
                        (1 - probabilities) * jnp.log((1 - probabilities) + eps)
                       )  # [..., num_classes]
-  return (label_mask * binary_entropies).sum(axis=-1) / (
-      label_mask.sum(axis=-1) + eps)
+  if class_reduce == ReduceStrategy.AVERAGE:
+    return (label_mask * binary_entropies).sum(axis=-1) / (
+        label_mask.sum(axis=-1) + eps)
+  elif class_reduce == ReduceStrategy.NONE:
+    return (label_mask * binary_entropies)
+  else:
+    raise ValueError(f"Unknown reduce strategy {class_reduce} used.")
 
 
 def label_binary_xent(probabilities: jnp.ndarray,
                       label: jnp.ndarray,
                       label_mask: Optional[jnp.ndarray] = None,
                       eps: float = 1e-10,
+                      class_reduce: ReduceStrategy = ReduceStrategy.AVERAGE,
                       **_) -> jnp.ndarray:
   """Computes averaged classwise binary cross-entropy.
 
@@ -102,6 +161,9 @@ def label_binary_xent(probabilities: jnp.ndarray,
 
   Returns:
     Average of per-class binary xent. Shape [*]
+
+  Raises:
+    ValueError: In case class_reduce is not a known ReduceStrategy.
   """
   if label_mask is None:
     label_mask = jnp.ones_like(probabilities)
@@ -110,8 +172,13 @@ def label_binary_xent(probabilities: jnp.ndarray,
   binary_entropies = -(label * jnp.log(probabilities + eps) +
                        (1 - label) * jnp.log((1 - probabilities) + eps)
                       )  # [..., num_classes]
-  return (label_mask * binary_entropies).sum(axis=-1) / (
-      label_mask.sum(axis=-1) + eps)
+  if class_reduce == ReduceStrategy.AVERAGE:
+    return (label_mask * binary_entropies).sum(axis=-1) / (
+        label_mask.sum(axis=-1) + eps)
+  elif class_reduce == ReduceStrategy.NONE:
+    return (label_mask * binary_entropies)
+  else:
+    raise ValueError(f"Unknown reduce strategy {class_reduce} used.")
 
 
 def l2_loss(params: flax.core.scope.VariableDict):

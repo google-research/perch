@@ -16,13 +16,14 @@
 """Utilities to prepare models for SFDA methods."""
 
 import enum
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple, Union
 
 from absl import logging
 from chirp import train
-from chirp.models import taxonomy_model
 from chirp.projects.sfda import data_utils
 from chirp.projects.sfda import models
+from chirp.projects.sfda.models import image_model
+from chirp.projects.sfda.models import taxonomy_model
 from chirp.taxonomy import class_utils
 import flax
 from flax.core import scope
@@ -48,12 +49,16 @@ class TrainableParams(enum.Enum):
 
 
 def mask_parameters(params: flax.core.scope.VariableDict,
-                    strategy: TrainableParams):
+                    strategy: TrainableParams,
+                    model: Union[image_model.ImageModel,
+                                 taxonomy_model.TaxonomyModel]):
   """Creates the mask of parameters to which zero_grad() will be applied.
 
   Args:
     params: The Pytree representing all of the model's parameters.
     strategy: The strategy to use for masking.
+    model: The model considered. Used to determine whether some parameter
+      belongs a BatchNorm layer or not.
 
   Returns:
     unflattened_mask: A mask with the same Tree structure as Pytree, but
@@ -62,13 +67,7 @@ def mask_parameters(params: flax.core.scope.VariableDict,
   """
   flat_tree = flax.traverse_util.flatten_dict(params)
   if strategy == TrainableParams.BN:
-
-    def contains_bn(key: List[str]) -> bool:
-      return any(["norm" in x.lower() for x in key
-                 ]) and (any(["bias" in x.lower() for x in key]) or
-                         any(["scale" in x.lower() for x in key]))
-
-    mask = {k: not contains_bn(k) for k in flat_tree}
+    mask = {k: not model.is_bn_parameter(k) for k in flat_tree}
   elif strategy == TrainableParams.ALL:
     mask = {k: False for k in flat_tree}
   else:
@@ -156,6 +155,7 @@ def prepare_audio_model(
         learning_rate=0.,
         workdir=ckpt_dir,
         target_class_list=target_class_list)
+    train_state = model_bundle.ckpt.restore(train_state)
     params = train_state.params
     model_state = train_state.model_state
   else:
@@ -195,8 +195,8 @@ def prepare_audio_model(
             train.mask_by_name("gabor_std", params)),
         optax.masked(
             zero_grads(),
-            mask_parameters(params,
-                            optimizer_config.trainable_params_strategy)),
+            mask_parameters(params, optimizer_config.trainable_params_strategy,
+                            model)),
     )
     opt_state = optimizer.init(params)
   model_bundle = ModelBundle(model, optimizer)
@@ -260,10 +260,8 @@ def prepare_image_model(
         opt(learning_rate=learning_rate, **optimizer_config.opt_kwargs),
         optax.masked(
             zero_grads(),
-            mask_parameters(
-                params,
-                optimizer_config.trainable_params_strategy,
-            )))
+            mask_parameters(params, optimizer_config.trainable_params_strategy,
+                            model)))
     opt_state = optimizer.init(params)
   model_bundle = ModelBundle(model, optimizer)
   return model_bundle, params, model_state, opt_state

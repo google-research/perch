@@ -15,7 +15,7 @@
 
 """A template for any image model."""
 
-from typing import Optional
+from typing import Optional, List
 
 from chirp.models import taxonomy_model
 from etils import epath
@@ -81,6 +81,19 @@ class ImageModel(nn.Module):
 
     Returns:
       variables: The path to load the checkpoint.
+    """
+    raise NotImplementedError
+
+  @staticmethod
+  def is_bn_parameter(parameter_name: List[str]) -> bool:
+    """Verifies whether some parameter belong to a BatchNorm layer.
+
+    Args:
+      parameter_name: The name of the parameter, as a list in which each member
+      describes the name of a layer. E.g. ('Block1', 'batch_norm_1', 'bias').
+
+    Returns:
+      True if this parameter belongs to a BatchNorm layer.
     """
     raise NotImplementedError
 

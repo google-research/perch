@@ -21,8 +21,8 @@ import itertools
 from chirp.projects.sfda.methods import notela
 import flax.linen as nn
 import jax
-from jax.experimental import sparse
 import jax.numpy as jnp
+from scipy import sparse
 
 from absl.testing import absltest
 
@@ -84,13 +84,14 @@ class NOTELATest(absltest.TestCase):
     dataset_proba = nn.sigmoid(jax.random.normal(key, (n_points_dataset,)))
     nn_matrix = jax.random.randint(key, (n_points_batch, n_points_dataset), 0,
                                    2)
-    sparse_nn_matrix = sparse.BCOO.fromdense(nn_matrix)
+    sparse_nn_matrix = sparse.csr_matrix(nn_matrix)
     pseudo_labels = notela.NOTELA.teacher_step(
         batch_proba=one_hot(batch_proba),
         dataset_proba=one_hot(dataset_proba),
         nn_matrix=nn_matrix,
         lambda_=lambda_,
         alpha=alpha,
+        normalize_pseudo_labels=True,
     )
     pseudo_labels_from_sparse = notela.NOTELA.teacher_step(
         batch_proba=one_hot(batch_proba),
@@ -98,6 +99,7 @@ class NOTELATest(absltest.TestCase):
         nn_matrix=sparse_nn_matrix,
         lambda_=lambda_,
         alpha=alpha,
+        normalize_pseudo_labels=True,
     )
     self.assertTrue(
         jnp.allclose(

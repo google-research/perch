@@ -29,8 +29,7 @@ following modifications to the orignal model:
 """
 import functools
 import re
-from typing import Dict, Tuple
-
+from typing import Dict, Tuple, List
 from chirp.models import taxonomy_model
 from chirp.projects.sfda.models import image_model
 from etils import epath
@@ -147,11 +146,10 @@ class WideResnet(image_model.ImageModel):
     x = jax.nn.relu(
         nn.BatchNorm(
             use_running_average=use_running_average, name='pre-pool-norm')(x))
-    x = nn.avg_pool(x, x.shape[1:3])
-    x = x.reshape((x.shape[0], -1))
-
     # The following Dropout was added to inject noise during foward pass.
     x = nn.Dropout(0.1, deterministic=not train)(x)
+    x = nn.avg_pool(x, x.shape[1:3])
+    x = x.reshape((x.shape[0], -1))
 
     model_outputs = {}
     model_outputs['embedding'] = x
@@ -181,10 +179,26 @@ class WideResnet(image_model.ImageModel):
       # np.savez(output_path, **torch.load(torch_checkpoint_path,
       # map_location=torch.device('cpu'))['state_dict'])
       # Finally, replace the '' below by the `output_path` above.
-      return ''
+      return epath.Path('')
     else:
       raise NotImplementedError('No pretrained checkpoint available for '
                                 f'dataset {dataset_name}.')
+
+  @staticmethod
+  def is_bn_parameter(parameter_name: List[str]) -> bool:
+    """Verifies whether some parameter belong to a BatchNorm layer.
+
+    Only WideResnetGroup's BatchNorm parameters will be captured; the
+    pre-pool-norm won't be included.
+
+    Args:
+      parameter_name: The name of the parameter, as a list in which each member
+        describes the name of a layer. E.g. ('Block1', 'batch_norm_1', 'bias').
+
+    Returns:
+      True if this parameter belongs to a BatchNorm layer.
+    """
+    return any(['norm_' in x for x in parameter_name])
 
 
 def _to_variables(

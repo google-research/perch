@@ -29,8 +29,7 @@ Taken from https://github.com/google/flax/blob/main/examples/imagenet/models.py.
 """
 
 import functools
-from typing import Any, Callable, Sequence, Tuple
-
+from typing import Any, Callable, Sequence, Tuple, List
 from chirp.models import taxonomy_model
 from chirp.projects.sfda.models import image_model
 from etils import epath
@@ -143,10 +142,9 @@ class ResNet(image_model.ImageModel):
             norm=norm,
             act=self.act)(
                 x)
-    x = jnp.mean(x, axis=(1, 2))
-
     # The following Dropout was added to inject noise during foward pass.
     x = nn.Dropout(0.1, deterministic=not train)(x)
+    x = jnp.mean(x, axis=(1, 2))
 
     model_outputs = {}
     model_outputs['embedding'] = x
@@ -154,6 +152,21 @@ class ResNet(image_model.ImageModel):
     x = jnp.asarray(x, self.dtype)
     model_outputs['label'] = x.astype(jnp.float32)
     return taxonomy_model.ModelOutputs(**model_outputs)
+
+  @staticmethod
+  def is_bn_parameter(parameter_name: List[str]) -> bool:
+    """Verifies whether some parameter belong to a BatchNorm layer.
+
+    Captures all BatchNorm parameters, except those from the residual layers
+    (`norm_proj_*` in the code).
+    Args:
+      parameter_name: The name of the parameter, as a list in which each member
+        describes the name of a layer. E.g. ('Block1', 'BatchNorm_1', 'bias').
+
+    Returns:
+      True if this parameter belongs to a BatchNorm layer.
+    """
+    return any(['BatchNorm' in x for x in parameter_name])
 
   @staticmethod
   def load_ckpt(dataset_name: str) -> flax.core.frozen_dict.FrozenDict:

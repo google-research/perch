@@ -23,7 +23,7 @@ _c = config_utils.callable_config
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   sample_rate_hz = config_dict.FieldReference(32_000)
-  batch_size = config_dict.FieldReference(64)
+  batch_size = config_dict.FieldReference(128)
   target_class_list = config_dict.FieldReference("xenocanto")
   add_taxonomic_labels = config_dict.FieldReference(True)
 
@@ -73,8 +73,8 @@ def get_config() -> config_dict.ConfigDict:
 
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
-  init_config.learning_rate = 5e-4  # This is the peak. Should linearly increase
-  init_config.start_learning_rate = 5e-8  # This is the start of the increase.
+  init_config.learning_rate = 0.0001
+  init_config.start_learning_rate = 0.000001
   init_config.quant_start_learning_rate = 1e-5
   init_config.input_size = window_size_s * sample_rate_hz
   init_config.rng_seed = 0
@@ -88,7 +88,7 @@ def get_config() -> config_dict.ConfigDict:
   conformer_config.ff_activation = config_utils.object_config("nn.swish")
   conformer_config.ff_residual_weight = 0.5
   conformer_config.ffn_dim_multiplier = 4
-  conformer_config.atten_num_heads = 8
+  conformer_config.atten_num_heads = 12
   conformer_config.layer_order = "mhsa_before_conv"
   conformer_config.dropout_prob = 0.
   conformer_config.conv_residual_dropout = None
@@ -97,7 +97,8 @@ def get_config() -> config_dict.ConfigDict:
   conformer_config.atten_dropout = None
   conformer_config.ffn_relu_dropout = None
   conformer_config.fflayer_weight_sharing = False
-  conformer_config.num_blocks = 12
+  conformer_config.num_blocks = 16
+  conformer_config.skip_layer_norm = True
   model_config = config_dict.ConfigDict()
   model_config.late_feature_extractor = config_utils.callable_config(
       "conformer.Conformer", conformer_config)
@@ -106,35 +107,40 @@ def get_config() -> config_dict.ConfigDict:
   early_fs_config.omit_earlyfs = False
   early_fs_config.dropout_prob = 0.
   early_fs_config.activation = config_utils.object_config("nn.gelu")
-  early_fs_config.num_frames = 125
+  early_fs_config.num_frames = 500
+  early_fs_config.deprecated_group_conv = False
   init_config.early_fs_config = early_fs_config
 
   # Configure the masking parameters.
   mask_config = config_dict.ConfigDict()
-  mask_config.mask_prob = 0.08
-  mask_config.mask_length = 5
+  mask_config.mask_prob = 0.16
+  mask_config.mask_length = 10
   mask_config.min_masks = 1
   model_config.mask_config = mask_config
 
   # Configure the classifier parameters.
   classifier_config = config_dict.ConfigDict()
   classifier_config.classify_from_all = True
-  classifier_config.per_frame_predictions = False
-  classifier_config.classify_pool_width = 50
-  classifier_config.classify_stride = 50
+  classifier_config.per_frame_predictions = True
+  classifier_config.classify_pool_width = 3
+  classifier_config.classify_stride = 3
   classifier_config.classify_features = 512
   classifier_config.reduction_type = "AVG"
   model_config.classifier_config = classifier_config
 
   # Configure the quantizer parameters.
   base_quantizer_config = config_dict.ConfigDict()
-  base_quantizer_config.num_centroids = 128
-  base_quantizer_config.gamma = 1e-5
+  base_quantizer_config.num_centroids = 64
+  base_quantizer_config.gamma = 2
+  base_quantizer_config.init_scale = 0.1
   quantizer_config = config_dict.ConfigDict()
-  quantizer_config.num_sections = 8
+  quantizer_config.num_sections = 16
+  quantizer_config.strategy = "product_quantization"
+  quantizer_config.use_entropy_quantizer = True
   init_config.quantizer_config = quantizer_config
   init_config.base_quantizer_config = base_quantizer_config
   init_config.reload_quantizer_from = ""
+  init_config.reload_hubert_from = ""
 
   # Configure the frontend parameters.
   frontend_config = config_dict.ConfigDict()
@@ -145,17 +151,18 @@ def get_config() -> config_dict.ConfigDict:
   frontend_config.freq_range = (60, 10_000)
   frontend_config.scaling_config = config_utils.callable_config(
       "frontend.PCENScalingConfig")
-  frontend_config.omit_frontend = True
+  frontend_config.omit_frontend = False
   init_config.frontend_config = frontend_config
 
   # Configure HuBERT.
   model_config.final_dim = 64  # the dim to project *each feature section* (PQ)
   model_config.logit_temp = 0.1
-  model_config.alpha = 0.75
+  model_config.alpha = 1.0
   model_config.taxonomy_loss_weight = 0.
-  model_config.readout_points = [0, 2, 4, 6, 8, 10, 11]
-  model_config.quantizer_points = [-1]
-  model_config.stop_gradient_earlyfs = True
+  model_config.readout_points = [0, 4, 8, 12, 15]
+  model_config.quantizer_points = (-2,)
+  model_config.stop_gradient_earlyfs = False
+  model_config.use_raw_audio = True
   init_config.model_config = model_config
 
   # Configure the training loop.

@@ -15,7 +15,7 @@
 
 """HuBERT model."""
 import enum
-from typing import Any, Dict, Tuple, List, Optional, Union
+from typing import Any, Dict, Tuple, List, Sequence, Optional, Union
 
 from chirp.models import conformer
 from chirp.models import layers
@@ -129,6 +129,78 @@ class QuantizerBundle:
   projected_feature_codes: jnp.ndarray
 
 
+class HuBERTEval(nn.Module):
+  """HuBERT model for evaluation.
+
+  Attributes:
+    early_feature_extractor: A network (e.g., a 2D convolutional network) that
+      takes spectrograms and returns feature vectors. Quantization is performed
+      on the features produced by this feature extractor.
+    late_feature_extractor: A network (e.g., a stack of Conformer blocks) that
+      takes "early" features and returns a sequence of Jax ndarrays that contain
+      increasingly higher-level features.
+    frontend: The frontend to use to generate features.
+    use_raw_audio: Whether to feed raw audio into the feature extractor to get
+      HuBERT's predictions (as opposed to audio processed with a frontend). The
+      current best configuration sets this option to True but performs
+      quantization after the frontend to obtain targets for HuBERT.
+    add_positional_embeddings: Whether to add positional embeddings to the late
+      feature extractor.
+  """
+  early_feature_extractor: Union[nn.Module, None]
+  late_feature_extractor: nn.Module
+  frontend: Optional[nn.Module] = None
+  use_raw_audio: bool = True
+  add_positional_embeddings: bool = False
+
+  @nn.compact
+  def __call__(self, inputs: jnp.ndarray, block_to_readout=6):
+    """Forward pass through the HuBERT model for evaluation.
+
+    bsz: batch size.
+    sz: number of frames (timesteps).
+    csz: number of channels.
+
+    Args:
+      inputs: Audio of shape `(bsz, sz)`.
+      block_to_readout: The integer representing the block of the late feature
+        extractor from which to return embeddings.
+
+    Returns:
+      The late feature extractor embeddings of after block `block_to_readout`.
+    """
+    if self.use_raw_audio:
+      # Raw audio (no frontend) is fed through the early feature extractor.
+      early_fs_inputs = jnp.expand_dims(inputs, -1)  # (bsz, sz, 1)
+      x_earlyfs = self.early_feature_extractor(early_fs_inputs, train=False)
+      x = x_earlyfs
+    else:
+      # Process audio with a frontend before the early feature extractor.
+      x_frontend = self.frontend(inputs)  # (bsz, sz, csz)
+      if self.early_feature_extractor is not None:
+        x_earlyfs = self.early_feature_extractor(x_frontend, train=False)
+      x = x_earlyfs
+
+    _, sz, csz = x.shape
+    if self.add_positional_embeddings:
+      x = x + conformer.PositionalEmbedding(embedding_dims=csz)(seq_length=sz)
+
+    # Pass x through the "late" feature extractor. Returns a list of x's for the
+    # different "readout points".
+    x_list = self.late_feature_extractor(
+        x, train=False, return_intermediate_list=True)
+    if block_to_readout < 0 or block_to_readout >= len(x_list):
+      raise ValueError("The `block_to_readout` should be in the range "
+                       "[0, len(x_list)) where x_list is the list that the "
+                       "late feature extractor returns. But got {} and "
+                       "len(x_list) is {}".format(block_to_readout,
+                                                  len(x_list)))
+
+    # Stop gradient so that a classifier is trained on frozen features for
+    # evaluation purposes.
+    return jax.lax.stop_gradient(x_list[block_to_readout])
+
+
 class HuBERTModel(nn.Module):
   """HuBERT model.
 
@@ -188,7 +260,7 @@ class HuBERTModel(nn.Module):
   classifier_config: Dict[str, Any]
   taxonomy_loss_weight: float
   readout_points: List[int]
-  quantizer_points: List[int]
+  quantizer_points: Sequence[int]
   final_dim: int = 512
   logit_temp: float = 0.1
   alpha: float = 1.0

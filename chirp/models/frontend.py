@@ -151,7 +151,7 @@ class STFT(Frontend):
   scaling_config: Optional[ScalingConfig] = None
 
   @nn.compact
-  def __call__(self, inputs):
+  def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
     if self.power is None and self.scaling_config is not None:
       raise ValueError("magnitude scaling requires a magnitude spectrogram")
     # For a real-valued signal the number of frequencies returned is n // 2 + 1
@@ -186,7 +186,7 @@ class ISTFT(InverseFrontend):
   """
 
   @nn.compact
-  def __call__(self, inputs):
+  def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
     nfft = nperseg = (inputs.shape[-1] - 1) * 2
     # The STFT transformation threw away the last time step to match our output
     # shape expectations. We'll just pad it with zeros to get it back.
@@ -232,7 +232,7 @@ class MelSpectrogram(Frontend):
   scaling_config: Optional[ScalingConfig] = None
 
   @nn.compact
-  def __call__(self, inputs):
+  def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
     # Calculate power spectrogram
     _, _, stfts = jsp.signal.stft(
         inputs,
@@ -271,7 +271,7 @@ class LearnedFrontend(Frontend):
   scaling_config: Optional[ScalingConfig] = None
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+  def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
     output = nn.Conv(
         features=self.features,
         kernel_size=(self.kernel_size,),
@@ -294,7 +294,7 @@ class InverseLearnedFrontend(InverseFrontend):
   kernel_size: int
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+  def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
     output = nn.ConvTranspose(
         features=1, kernel_size=(self.kernel_size,), strides=(self.stride,))(
             jnp.reshape(inputs, (-1,) + inputs.shape[-2:]))
@@ -332,7 +332,7 @@ class MorletWaveletTransform(Frontend):
   scaling_config: Optional[ScalingConfig] = None
 
   @nn.compact
-  def __call__(self, inputs):
+  def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
     input_signal = jnp.reshape(inputs, (-1,) + inputs.shape[-1:] + (1,))
 
     params = cwt.melspec_params(self.features, self.sample_rate,
