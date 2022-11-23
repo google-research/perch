@@ -34,7 +34,7 @@ class InferenceOutputs:
     separated_audio: Separated audio channels with shape [Batch, Channels,
       Samples].
   """
-  embeddings: np.ndarray
+  embeddings: Optional[np.ndarray] = None
   logits: Optional[LogitType] = None
   separated_audio: Optional[np.ndarray] = None
 

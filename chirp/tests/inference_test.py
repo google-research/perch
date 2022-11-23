@@ -30,7 +30,13 @@ class InferenceTest(absltest.TestCase):
         'window_size_s': 5,
         'embedding_size': 128,
     }
-    embed_fn = embed_lib.EmbedFn(2.5, 'dummy_model', model_kwargs)
+    embed_fn = embed_lib.EmbedFn(
+        hop_size_s=2.5,
+        write_embeddings=True,
+        write_logits=True,
+        write_separated_audio=True,
+        model_key='dummy_model',
+        model_config=model_kwargs)
     embed_fn.setup()
     self.assertIsNotNone(embed_fn.embedding_model)
 
