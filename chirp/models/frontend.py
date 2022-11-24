@@ -49,7 +49,7 @@ class PCENScalingConfig:
   root: float = 2.0
   eps: float = 1e-6
   spcen: bool = False
-  conv_width: int = 0
+  conv_width: int = 256
 
 
 ScalingConfig = Union[LogScalingConfig, PCENScalingConfig]
