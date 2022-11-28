@@ -262,9 +262,12 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
     with jax.profiler.StepTraceAnnotation('train', step_num=step):
       batch = next(train_iterator)
       train_metrics, train_state = train_step(batch, train_state)
-      train_metrics = flax_utils.unreplicate(train_metrics)
 
       if step % log_every_steps == 0:
+        train_metrics = flax_utils.unreplicate(train_metrics)
+        train_metrics = {
+            k.replace('___', '/'): v for k, v in train_metrics.items()
+        }
         writer.write_scalars(step, train_metrics)
       reporter(step)
     if step % checkpoint_every_steps == 0:
@@ -278,9 +281,8 @@ def evaluate(model_bundle: ModelBundle,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
              reporter: periodic_actions.ReportProgress,
-             max_eval_steps: int = -1):
+             eval_steps_per_checkpoint: int = -1):
   """Run evaluation."""
-  step = train_state.step
   valid_metrics = make_metrics_collection('valid___')
 
   @functools.partial(jax.pmap, axis_name='batch')
@@ -315,22 +317,22 @@ def evaluate(model_bundle: ModelBundle,
     cmap_metrics = cmap.make_cmap_metrics_dict(
         ('label', 'genus', 'family', 'order'))
     for valid_step, batch in enumerate(valid_dataset.as_numpy_iterator()):
-      if max_eval_steps > 0 and valid_step >= max_eval_steps:
-        break
       model_outputs, valid_metrics = evaluate_step(
           valid_metrics, batch, flax_utils.replicate(train_state))
       cmap_metrics = cmap.update_cmap_metrics_dict(cmap_metrics, model_outputs,
                                                    batch)
+      if (eval_steps_per_checkpoint > 0 and
+          valid_step >= eval_steps_per_checkpoint):
+        break
 
     # Log validation loss
-    valid_metrics = flax_utils.unreplicate(valid_metrics)
-    valid_metrics = valid_metrics.compute()
+    valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
 
   valid_metrics = {k.replace('___', '/'): v for k, v in valid_metrics.items()}
   cmap_metrics = flax_utils.unreplicate(cmap_metrics)
   for key in cmap_metrics:
     valid_metrics[f'valid/{key}_cmap'] = cmap_metrics[key].compute()
-  writer.write_scalars(int(step), valid_metrics)
+  writer.write_scalars(int(train_state.step), valid_metrics)
   writer.flush()
 
 
