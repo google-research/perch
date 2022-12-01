@@ -36,14 +36,15 @@ def get_config() -> config_dict.ConfigDict:
 
   config.num_shards_per_file = 1
   config.embed_fn_config = {
-      'hop_size_s': 2.5,
       'write_embeddings': True,
       'write_logits': True,
       'write_separated_audio': False,
+      'write_raw_audio': True,
       'model_key': 'birdnet',
       'model_config': {
           'model_path': model_path,
-          'window_size_s': 3,
+          'window_size_s': 3.0,
+          'hop_size_s': 3.0,
           'sample_rate': 48000,
       }
   }

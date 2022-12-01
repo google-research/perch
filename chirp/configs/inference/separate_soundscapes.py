@@ -35,14 +35,13 @@ def get_config() -> config_dict.ConfigDict:
   config.embed_fn_config = {
       'write_embeddings': True,
       'write_logits': True,
-      'write_separated_audio': False,
+      'write_separated_audio': True,
       'write_raw_audio': True,
-      'model_key': 'taxonomy_model_tf',
+      'model_key': 'separator_model_tf',
       'model_config': {
           'model_path': model_checkpoint_path,
-          'window_size_s': 5.0,
-          'hop_size_s': 3.0,
           'sample_rate': 32000,
+          'frame_size': 32000,
       },
   }
   return config

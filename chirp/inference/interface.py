@@ -18,6 +18,7 @@
 import dataclasses
 from typing import Dict, Optional
 
+import librosa
 import numpy as np
 
 LogitType = Dict[str, np.ndarray]
@@ -25,14 +26,13 @@ LogitType = Dict[str, np.ndarray]
 
 @dataclasses.dataclass
 class InferenceOutputs:
-  """Wrapper calss for outputs from an inference model.
+  """Wrapper class for outputs from an inference model.
 
   Attributes:
-    embeddings: Embeddings array with shape [Batch, Time, Features].
+    embeddings: Embeddings array with shape [Time, Channels, Features].
     logits: Dictionary mapping a class list L's name to an array of logits. The
-      logits array has shape [Batch, Time, L.size].
-    separated_audio: Separated audio channels with shape [Batch, Channels,
-      Samples].
+      logits array has shape [Time, L.size].
+    separated_audio: Separated audio channels with shape [Channels, Samples].
   """
   embeddings: Optional[np.ndarray] = None
   logits: Optional[LogitType] = None
@@ -45,19 +45,27 @@ class EmbeddingModel:
 
   Attributes:
     sample_rate: Sample rate in hz.
-    window_size_s: Allowed window size of the model, or -1 if polymorphic.
   """
   sample_rate: int
-  window_size_s: float
 
   def embed(self, audio_array: np.ndarray) -> InferenceOutputs:
     """Create evenly-spaced embeddings for an audio array.
 
     Args:
-      audio_array: An array of shape [Batch, Time] containing unit-scaled audio.
-        We assume that all batch elements are from the same source audio.
+      audio_array: An array with shape [Time] containing unit-scaled audio.
 
     Returns:
       An InferenceOutputs object.
     """
     raise NotImplementedError
+
+  def frame_audio(self, audio_array: np.ndarray, window_size_s: Optional[float],
+                  hop_size_s: float) -> np.ndarray:
+    """Helper function for framing audio for inference."""
+    if window_size_s is None or window_size_s < 0:
+      return audio_array[np.newaxis, :]
+    frame_length = int(window_size_s * self.sample_rate)
+    hop_length = int(hop_size_s * self.sample_rate)
+    # Librosa frames as [frame_length, batch], so need a transpose.
+    framed_audio = librosa.util.frame(audio_array, frame_length, hop_length).T
+    return framed_audio
