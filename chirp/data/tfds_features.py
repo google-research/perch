@@ -36,7 +36,7 @@ class Int16AsFloatTensor(tfds.features.Audio):
       *,
       file_format: Optional[str] = None,
       shape: tfds.typing.Shape,
-      dtype: tf.dtypes.DType = tf.float32,
+      dtype: tf.dtypes.DType = np.float32,
       sample_rate: tfds.typing.Dim,
       encoding: Union[str,
                       tfds.features.Encoding] = tfds.features.Encoding.NONE,
@@ -45,12 +45,12 @@ class Int16AsFloatTensor(tfds.features.Audio):
     del dtype
 
     self._int16_tensor_feature = tfds.features.Tensor(
-        shape=shape, dtype=tf.int16, encoding=encoding)
+        shape=shape, dtype=np.int16, encoding=encoding)
 
     super().__init__(
         file_format=None,
         shape=shape,
-        dtype=tf.float32,
+        dtype=np.float32,
         sample_rate=sample_rate,
         encoding=encoding,
         doc=doc)

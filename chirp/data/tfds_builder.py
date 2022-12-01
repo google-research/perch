@@ -24,7 +24,6 @@ from chirp import audio_utils
 from chirp.data import tfds_features
 from etils import epath
 import numpy as np
-import tensorflow as tf
 import tensorflow_datasets as tfds
 
 
@@ -155,9 +154,9 @@ class WavDirectoryBuilder(tfds.core.GeneratorBasedBuilder):
                     encoding=tfds.features.Encoding.ZLIB,
                 ),
             'segment_start':
-                tfds.features.Scalar(dtype=tf.uint64),
+                tfds.features.Scalar(dtype=np.uint64),
             'segment_end':
-                tfds.features.Scalar(dtype=tf.uint64),
+                tfds.features.Scalar(dtype=np.uint64),
             'filename':
                 tfds.features.Text(),
         }),

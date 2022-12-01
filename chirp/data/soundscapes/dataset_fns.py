@@ -23,8 +23,8 @@ from chirp.data.soundscapes import soundscapes_lib
 from chirp.taxonomy import annotations
 from chirp.taxonomy import namespace_db
 from etils import epath
+import numpy as np
 import pandas as pd
-import tensorflow as tf
 import tensorflow_datasets as tfds
 import tqdm
 
@@ -73,15 +73,15 @@ def birdclef_metadata_features() -> Dict[str, soundscapes_lib.MetadataFeature]:
       'longitude':
           soundscapes_lib.MetadataFeature(
               'Longitude', 'longitude', float,
-              tfds.features.Scalar(dtype=tf.float32)),
+              tfds.features.Scalar(dtype=np.float32)),
       'latitude':
           soundscapes_lib.MetadataFeature(
               'Latitude', 'latitude', float,
-              tfds.features.Scalar(dtype=tf.float32)),
+              tfds.features.Scalar(dtype=np.float32)),
       'elevation':
           soundscapes_lib.MetadataFeature(
               'Elevation', 'elevation', float,
-              tfds.features.Scalar(dtype=tf.float32)),
+              tfds.features.Scalar(dtype=np.float32)),
       'recordist':
           soundscapes_lib.MetadataFeature('AuthorID', 'recordist', str,
                                           tfds.features.Text()),

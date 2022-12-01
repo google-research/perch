@@ -29,7 +29,6 @@ from chirp.data.soundscapes import soundscapes_lib
 from etils import epath
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 import tensorflow_datasets as tfds
 
 _DESCRIPTION = """
@@ -292,20 +291,20 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         'filename':
             tfds.features.Text(),
         'recording_id':
-            tfds.features.Scalar(dtype=tf.uint64),
+            tfds.features.Scalar(dtype=np.uint64),
         'segment_id':
-            tfds.features.Scalar(dtype=tf.int64),
+            tfds.features.Scalar(dtype=np.int64),
         'segment_start':
-            tfds.features.Scalar(dtype=tf.uint64),
+            tfds.features.Scalar(dtype=np.uint64),
         'segment_end':
-            tfds.features.Scalar(dtype=tf.uint64),
+            tfds.features.Scalar(dtype=np.uint64),
     }
     if full_length:
       common_features.update({
           'annotation_start':
-              tfds.features.Sequence(tfds.features.Scalar(dtype=tf.uint64)),
+              tfds.features.Sequence(tfds.features.Scalar(dtype=np.uint64)),
           'annotation_end':
-              tfds.features.Sequence(tfds.features.Scalar(dtype=tf.uint64)),
+              tfds.features.Sequence(tfds.features.Scalar(dtype=np.uint64)),
       })
     if self.builder_config.metadata_load_fn is not None:
       if self.builder_config.metadata_fields is None:

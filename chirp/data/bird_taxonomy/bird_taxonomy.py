@@ -29,7 +29,6 @@ from chirp.taxonomy import namespace_db
 from etils import epath
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 import tensorflow_datasets as tfds
 
 _DESCRIPTION = """
@@ -231,13 +230,13 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                     encoding=tfds.features.Encoding.ZLIB,
                 ),
             'recording_id':
-                tfds.features.Scalar(dtype=tf.uint64),
+                tfds.features.Scalar(dtype=np.uint64),
             'segment_id':
-                tfds.features.Scalar(dtype=tf.int64),
+                tfds.features.Scalar(dtype=np.int64),
             'segment_start':
-                tfds.features.Scalar(dtype=tf.uint64),
+                tfds.features.Scalar(dtype=np.uint64),
             'segment_end':
-                tfds.features.Scalar(dtype=tf.uint64),
+                tfds.features.Scalar(dtype=np.uint64),
             'label':
                 tfds.features.Sequence(
                     tfds.features.ClassLabel(names=class_names)),
