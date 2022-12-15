@@ -18,7 +18,7 @@
 import abc
 import enum
 import functools
-from typing import Any, Dict, Tuple, Type
+from typing import Any, Dict, Tuple, Type, Callable
 
 from chirp import train
 from chirp.models import cmap
@@ -98,7 +98,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       adaptation_iterations: int,
       optimizer_config: config_dict.ConfigDict,
       pretrained: bool,
-  ) -> Tuple[model_utils.ModelBundle, AdaptationState, jax.random.PRNGKeyArray]:
+  ) -> Tuple[model_utils.ModelBundle, AdaptationState, jax.random.PRNGKeyArray,
+             Callable[[Any, Any, str], Any], Callable[[Any], Any]]:
     """Loads model's params and state, and instantiates the adaptation state.
 
     Args:
@@ -118,7 +119,9 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
     Returns:
       The model_bundle to use, the initial adaptation_state, and the jax
-        random key to use for adaptation.
+        random key to use for adaptation and the functions for renaming and
+        reversing the renaming of parameters, needed in the case where different
+        learning rates are used for different subsets of parameters.
 
     Raises:
       ValueError: In case the chosen modality is neither Modality.AUDIO
@@ -133,15 +136,16 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     else:
       raise ValueError(f"Modality {modality} not supported.")
 
-    (model_bundle, params, model_state, opt_state) = prepare_fn(
-        model_config=model_config,
-        optimizer_config=optimizer_config,
-        pretrained=pretrained,
-        rng_seed=rng_seed,
-        input_shape=input_shape,
-        target_class_list=target_class_list,
-        total_steps=adaptation_iterations,
-    )
+    (model_bundle, params, model_state, opt_state, rename_fn,
+     inverse_rename_fn) = prepare_fn(
+         model_config=model_config,
+         optimizer_config=optimizer_config,
+         pretrained=pretrained,
+         rng_seed=rng_seed,
+         input_shape=input_shape,
+         target_class_list=target_class_list,
+         total_steps=adaptation_iterations,
+     )
 
     # Package model, parameters and states in structures.
     # TODO(mboudiaf): Add support for restoring previous adaptation state.
@@ -153,7 +157,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         method_state={},
         model_state=model_state)
 
-    return model_bundle, adaptation_state, key
+    return model_bundle, adaptation_state, key, rename_fn, inverse_rename_fn
 
   @abc.abstractmethod
   def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
@@ -254,6 +258,9 @@ class SFDAMethod(metaclass=abc.ABCMeta):
   def do_epoch(self, key: jax.random.PRNGKeyArray,
                model_bundle: model_utils.ModelBundle,
                adaptation_state: AdaptationState,
+               rename_fn: Callable[[Any, Any, str],
+                                   Any], inverse_rename_fn: Callable[[Any],
+                                                                     Any],
                adaptation_dataset: tf.data.Dataset, modality: Modality,
                multi_label: bool,
                batchwise_metrics: Type[clu_metrics.Collection],
@@ -268,6 +275,10 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       model_bundle: The model_utils.ModelBundle to use for adaptation.
       adaptation_state: The current AdaptationState. Once the epoch is over, an
         update version of it is returned.
+      rename_fn: The function to use to rename the parameter keys. This is
+        needed if using `optax.multi_transform`, which can be used to define
+        different learning rates for different parameters.
+      inverse_rename_fn: A callable that reverses the changes of `rename_fn`.
       adaptation_dataset: The dataset used for adaptation.
       modality: The current modality.
       multi_label: Whether the current classification dataset is single-label or
@@ -374,9 +385,14 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         grads = jax.lax.pmean(grads, axis_name="batch")
 
         # Update model's parameters from gradient transformations.
+        # Rename params and gradients as the optimizer expects.
+        grads = rename_fn(grads, {}, "")
+        renamed_params = rename_fn(params, {}, "")
         updates, opt_state = model_bundle.optimizer.update(
-            grads, opt_state, params)
-        params = optax.apply_updates(params, updates)
+            grads, opt_state, renamed_params)
+        params = optax.apply_updates(renamed_params, updates)
+        # Undo the renaming, else the next forward pass will fail.
+        params = inverse_rename_fn(params)
       else:
         # Otherwise, we simply forward the data through the model.
         _, (batch_metrics, model_state) = forward(
@@ -503,6 +519,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
 def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
                        adaptation_state: AdaptationState,
+                       rename_fn: Callable[[Any, Any, str], Any],
+                       inverse_rename_fn: Callable[[Any], Any],
                        adaptation_dataset: tf.data.Dataset,
                        use_supervised_metrics: bool,
                        validation_dataset: tf.data.Dataset,
@@ -516,6 +534,10 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
     sfda_method: The Source-Free Domain Adaptation method to use.
     adaptation_state: The initial AdaptationState to adapt. Once adaptation is
       over, its updated version is returned.
+    rename_fn: The function to use to rename the parameter keys. This is
+      needed if using `optax.multi_transform`, which can be used to define
+      different learning rates for different parameters.
+    inverse_rename_fn: A callable that reverses the changes of `rename_fn`.
     adaptation_dataset: The dataset used for adaptation.
     use_supervised_metrics: Whether the current adaptation dataset is supervised
       or not.
@@ -582,6 +604,8 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
         key=key,
         model_bundle=model_bundle,
         adaptation_state=adaptation_state,
+        rename_fn=rename_fn,
+        inverse_rename_fn=inverse_rename_fn,
         multi_label=multi_label,
         modality=modality,
         adaptation_dataset=adaptation_dataset,

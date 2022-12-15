@@ -16,9 +16,10 @@
 """Utilities to prepare models for SFDA methods."""
 
 import enum
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Callable, Any
 
 from absl import logging
+import chex
 from chirp import train
 from chirp.projects.sfda import data_utils
 from chirp.projects.sfda import models
@@ -26,6 +27,7 @@ from chirp.projects.sfda.models import image_model
 from chirp.projects.sfda.models import taxonomy_model
 from chirp.taxonomy import class_utils
 import flax
+from flax.core import FrozenDict
 from flax.core import scope
 import flax.linen as nn
 import jax
@@ -95,6 +97,11 @@ class ModelBundle:
   optimizer: Optional[optax.GradientTransformation]
 
 
+def identity_rename(params, *unused_args):
+  del unused_args
+  return params
+
+
 def prepare_audio_model(
     model_config: config_dict.ConfigDict,
     optimizer_config: Optional[config_dict.ConfigDict],
@@ -104,7 +111,8 @@ def prepare_audio_model(
     input_shape: Tuple[int, ...],
     target_class_list: str,
 ) -> Tuple[ModelBundle, scope.VariableDict, scope.FrozenVariableDict,
-           Optional[scope.FrozenVariableDict]]:
+           Optional[scope.FrozenVariableDict], Callable[
+               [Any, Any, str], Any], Callable[[Any], Any]]:
   """Loads the taxonomic classifier's and optimizer's params and states.
 
   Args:
@@ -200,7 +208,42 @@ def prepare_audio_model(
     )
     opt_state = optimizer.init(params)
   model_bundle = ModelBundle(model, optimizer)
-  return model_bundle, params, model_state, opt_state
+  return (model_bundle, params, model_state, opt_state, identity_rename,
+          identity_rename)
+
+
+def nrc_schedule(init_value: chex.Scalar, power: chex.Scalar,
+                 transition_steps: chex.Scalar) -> optax.Schedule:
+  """Constructs a schedule identical to that of NRC.
+
+  Args:
+    init_value: initial value for the scalar to be annealed.
+    power: the power of the polynomial used to transition from init to end.
+    transition_steps: number of steps over which annealing takes place.
+
+  Returns:
+    schedule: A function that maps step counts to values.
+  """
+
+  def schedule(count):
+    count = jnp.clip(count, 0, transition_steps)
+    frac = count / transition_steps
+    return init_value / ((1 + 10 * frac)**power)
+
+  return schedule
+
+
+def map_nested_fn(fn):
+  """Recursively apply `fn` to the key-value pairs of a nested dict."""
+
+  def map_fn(nested_dict):
+    return {
+        k: (map_fn(v)
+            if isinstance(v, dict) or isinstance(v, FrozenDict) else fn(k, v))
+        for k, v in nested_dict.items()
+    }
+
+  return map_fn
 
 
 def prepare_image_model(
@@ -208,7 +251,8 @@ def prepare_image_model(
     optimizer_config: Optional[config_dict.ConfigDict], total_steps: int,
     rng_seed: int, pretrained: bool, target_class_list: str, **_
 ) -> Tuple[ModelBundle, scope.VariableDict, scope.FrozenVariableDict,
-           Optional[scope.FrozenVariableDict]]:
+           Optional[scope.FrozenVariableDict], Callable[
+               [Any, Any, str], Any], Callable[[Any], Any]]:
   """Prepare an image model for source-free domain adaptation.
 
   Args:
@@ -245,26 +289,123 @@ def prepare_image_model(
         False)
   model_state, params = variables.pop("params")
   params = params.unfreeze()
+
   if optimizer_config is None:
     optimizer = None
     opt_state = None
+    rename_params = identity_rename
+    inverse_rename_params = identity_rename
   else:
+    mult_lr_base = optimizer_config.mult_learning_rate_resnet_base
     if optimizer_config.use_cosine_decay:
       learning_rate = optax.cosine_decay_schedule(
           optimizer_config.learning_rate, decay_steps=total_steps)
+    elif optimizer_config.use_nrc_schedule:
+      # This configuration is the one used by NRC for Vis-DA when performing the
+      # adaptation on all of Vis-DA's validation. Some may need to be updated
+      # (e.g. the `transition_steps`) accordingly for other scenarios.
+      if mult_lr_base != 1:
+        learning_rate_base_resnet = nrc_schedule(
+            init_value=optimizer_config.learning_rate * mult_lr_base,
+            power=0.75,
+            transition_steps=12990)
+        learning_rate_top = nrc_schedule(
+            init_value=optimizer_config.learning_rate,
+            power=0.75,
+            transition_steps=12990)
+      else:
+        learning_rate = nrc_schedule(
+            init_value=optimizer_config.learning_rate,
+            power=0.75,
+            transition_steps=12990)
     else:
       learning_rate = optimizer_config.learning_rate
     opt = getattr(optax, optimizer_config.optimizer)
 
-    optimizer = optax.chain(
-        opt(learning_rate=learning_rate, **optimizer_config.opt_kwargs),
-        optax.masked(
-            zero_grads(),
-            mask_parameters(params, optimizer_config.trainable_params_strategy,
-                            model)))
-    opt_state = optimizer.init(params)
+    if mult_lr_base != 1:
+      # Use different optimizers for base resnet than for bottleneck/classifier.
+      optimizer_base_resnet = opt(
+          learning_rate=learning_rate_base_resnet,
+          **optimizer_config.opt_kwargs)
+      optimizer_top = opt(
+          learning_rate=learning_rate_top, **optimizer_config.opt_kwargs)
+      label_fn = map_nested_fn(lambda k, _: k)
+
+      def rename_params(params, renamed_params, prefix):
+        """Rename the keys of the `params` dictionary."""
+        renamed_params = {}
+        for k, v in params.items():
+          if not isinstance(v, dict) and not isinstance(v, FrozenDict):
+            renamed_params[prefix + k] = v
+          else:
+            renamed_params[prefix + k] = rename_params(v, renamed_params,
+                                                       prefix + "{}/".format(k))
+        return renamed_params
+
+      def inverse_rename_params(renamed_params):
+        """Reverse the renaming of the parameter keys."""
+        params = {}
+        for k, v in renamed_params.items():
+          if not isinstance(v, dict) and not isinstance(v, FrozenDict):
+            # Remove prefix
+            if k.rfind("/") == -1:
+              params[k] = v
+            else:
+              k_base = k[k.rfind("/") + 1:]
+              params[k_base] = v
+          else:
+            if k.rfind("/") == -1:
+              k_base = k
+            else:
+              k_base = k[k.rfind("/") + 1:]
+            params[k_base] = inverse_rename_params(v)
+        return params
+
+      renamed_params = rename_params(params, {}, "")
+
+      def get_all_leaves(params):
+        leaves = []
+        if not isinstance(params, dict):
+          leaves.append(params)
+        else:
+          for v in params.values():
+            leaves.extend(get_all_leaves(v))
+        return leaves
+
+      leaves = get_all_leaves(label_fn(renamed_params))
+      params_to_opt = {}
+      for leaf in leaves:
+        if ("BottleneckResNetBlock" in leaf or "conv_init" in leaf or
+            "bn_init" in leaf):
+          params_to_opt[leaf] = optimizer_base_resnet
+        else:
+          params_to_opt[leaf] = optimizer_top
+
+      optimizer_multi = optax.multi_transform(params_to_opt,
+                                              label_fn(renamed_params))
+      optimizer = optax.chain(
+          optimizer_multi,
+          optax.masked(
+              zero_grads(),
+              mask_parameters(renamed_params,
+                              optimizer_config.trainable_params_strategy,
+                              model)))
+      opt_state = optimizer.init(renamed_params)
+    else:
+      rename_params = identity_rename
+      inverse_rename_params = identity_rename
+
+      optimizer = optax.chain(
+          opt(learning_rate=learning_rate, **optimizer_config.opt_kwargs),
+          optax.masked(
+              zero_grads(),
+              mask_parameters(params,
+                              optimizer_config.trainable_params_strategy,
+                              model)))
+      opt_state = optimizer.init(params)
   model_bundle = ModelBundle(model, optimizer)
-  return model_bundle, params, model_state, opt_state
+  return (model_bundle, params, model_state, opt_state, rename_params,
+          inverse_rename_params)
 
 
 def zero_grads() -> optax.GradientTransformation:

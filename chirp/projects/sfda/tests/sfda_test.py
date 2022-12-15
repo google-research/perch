@@ -29,13 +29,13 @@ from chirp.projects.sfda.configs import ada_bn as ada_bn_config
 from chirp.projects.sfda.configs import audio_baseline
 from chirp.projects.sfda.configs import config_globals
 from chirp.projects.sfda.configs import dropout_student as ds_config
+from chirp.projects.sfda.configs import dust as dust_config
 from chirp.projects.sfda.configs import image_baseline
 from chirp.projects.sfda.configs import notela as notela_config
-from chirp.projects.sfda.configs import pseudo_label as pseudo_label_config
 from chirp.projects.sfda.configs import nrc as nrc_config
+from chirp.projects.sfda.configs import pseudo_label as pseudo_label_config
 from chirp.projects.sfda.configs import shot as shot_config
 from chirp.projects.sfda.configs import tent as tent_config
-from chirp.projects.sfda.configs import dust as dust_config
 from chirp.projects.sfda.tests import fake_image_dataset
 from chirp.tests import fake_dataset
 from flax import traverse_util
@@ -176,7 +176,7 @@ class AdaptationTest(parameterized.TestCase):
     adaptation_dataset, val_dataset = self._get_datasets(config, modality)
 
     # Initialize state and parameters
-    model_bundle, adaptation_state, key = sfda_method.initialize(
+    model_bundle, adaptation_state, key, rename_fn, inverse_rename_fn = sfda_method.initialize(
         model_config=config.model_config,
         rng_seed=config.init_config.rng_seed,
         pretrained=False,
@@ -191,6 +191,8 @@ class AdaptationTest(parameterized.TestCase):
     new_adaptation_state = adapt.perform_adaptation(
         key=key,
         adaptation_state=adaptation_state,
+        rename_fn=rename_fn,
+        inverse_rename_fn=inverse_rename_fn,
         adaptation_dataset=adaptation_dataset,
         validation_dataset=val_dataset,
         model_bundle=model_bundle,
@@ -208,7 +210,7 @@ class AdaptationTest(parameterized.TestCase):
     """Testing parameter masking used to restrict trainable parameters."""
     config, _ = self._get_configs(
         adapt.Modality.AUDIO, "tent", use_constant_encoder=False)
-    model_bundle, params, _, _ = model_utils.prepare_audio_model(
+    model_bundle, params, _, _, _, _ = model_utils.prepare_audio_model(
         model_config=config.model_config,
         optimizer_config=None,
         total_steps=0,
@@ -227,7 +229,7 @@ class AdaptationTest(parameterized.TestCase):
 
     config, _ = self._get_configs(adapt.Modality.IMAGE, "tent")
     config.model_config.encoder = model
-    model_bundle, params, _, _ = model_utils.prepare_image_model(
+    model_bundle, params, _, _, _, _ = model_utils.prepare_image_model(
         model_config=config.model_config,
         optimizer_config=None,
         total_steps=1,

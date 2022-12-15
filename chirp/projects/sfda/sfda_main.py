@@ -87,7 +87,7 @@ def main(argv: Sequence[str]) -> None:
         builder_kwargs=builder_kwargs)
 
   # Initialize state and bundles
-  model_bundle, adaptation_state, key = sfda_method.initialize(
+  model_bundle, adaptation_state, key, rename_fn, inverse_rename_fn = sfda_method.initialize(
       model_config=config.model_config,
       pretrained=config.init_config.pretrained_model,
       rng_seed=config.init_config.rng_seed,
@@ -102,6 +102,8 @@ def main(argv: Sequence[str]) -> None:
   adaptation_state = adapt.perform_adaptation(
       key=key,
       adaptation_state=adaptation_state,
+      rename_fn=rename_fn,
+      inverse_rename_fn=inverse_rename_fn,
       adaptation_dataset=adaptation_dataset,
       validation_dataset=val_dataset,
       model_bundle=model_bundle,
