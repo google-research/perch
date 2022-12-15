@@ -15,7 +15,7 @@
 
 """Data pipeline functions."""
 import dataclasses
-from typing import Any, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Sequence, Tuple, Union
 
 # Import bird_taxonomy and soundscapes to register the datasets with TFDS.
 from absl import logging
@@ -390,6 +390,17 @@ class MergeBackgroundLabels(FeaturesPreprocessOp):
 
 
 @dataclasses.dataclass
+class AddChannel(FeaturesPreprocessOp):
+  name: str = 'audio'
+
+  def __call__(self, features: Features,
+               dataset_info: tfds.core.DatasetInfo) -> Features:
+    features = features.copy()
+    features[self.name] = tf.expand_dims(features[self.name], axis=-1)
+    return features
+
+
+@dataclasses.dataclass
 class MelSpectrogram(FeaturesPreprocessOp):
   """Convert audio to a spectrogram.
 
@@ -660,7 +671,7 @@ class OnlyKeep(FeaturesPreprocessOp):
   Attributes:
     names: The names of features to keep.
   """
-  names: str
+  names: Iterable[str]
 
   def __call__(self, features: Features,
                dataset_info: tfds.core.DatasetInfo) -> Features:
