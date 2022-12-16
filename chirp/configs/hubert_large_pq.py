@@ -73,6 +73,7 @@ def get_config() -> config_dict.ConfigDict:
 
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
+  init_config.learning_rate_schedule = "piecewise_linear"
   init_config.learning_rate = 0.0001
   init_config.start_learning_rate = 0.000001
   init_config.quant_start_learning_rate = 1e-5
@@ -141,6 +142,7 @@ def get_config() -> config_dict.ConfigDict:
   init_config.base_quantizer_config = base_quantizer_config
   init_config.reload_quantizer_from = ""
   init_config.reload_hubert_from = ""
+  init_config.reload_hubert_omit_quantizers = False
 
   # Configure the frontend parameters.
   frontend_config = config_dict.ConfigDict()
@@ -174,6 +176,7 @@ def get_config() -> config_dict.ConfigDict:
   train_config.log_every_steps = 250
   train_config.checkpoint_every_steps = 5_000
   train_config.readout_loss_mult = 1
+  train_config.supervised_only = False
   config.train_config = train_config
 
   eval_config = config_dict.ConfigDict()

@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """Training loop."""
+import enum
 import functools
 import os
 import time
@@ -174,15 +175,18 @@ def keyed_map(key: str,
 
 def final_loss(outputs: hubert.ModelOutputs, alpha: float,
                quant_loss_mult: float, readout_loss_mult: float,
+               supervised_only: bool,
                **kwargs_for_supervised) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
+  # [bsz, sz].
+  readout_loss = supervised_loss(
+      outputs, readout_loss_mult=readout_loss_mult, **kwargs_for_supervised)
+  if supervised_only:
+    return readout_loss
   # [bsz, sz].
   quant_loss = quantizer_loss(outputs, quant_loss_mult)
   # [nq, ns, bsz, sz].
   hubert_loss = hubert_loss_from_outputs(outputs, alpha)
-  # [bsz, sz].
-  readout_loss = supervised_loss(
-      outputs, readout_loss_mult=readout_loss_mult, **kwargs_for_supervised)
 
   # Make the shapes match so that these losses can be added elementwise.
   nq, ns, _, _ = hubert_loss.shape
@@ -224,7 +228,7 @@ def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
 
 def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
                             readout_loss_mult: float, readout_points: List[int],
-                            quantizer_points: List[int]):
+                            quantizer_points: List[int], supervised_only: bool):
   """Create metrics collection."""
   metrics_dict = {
       "hubert_loss":
@@ -244,7 +248,8 @@ def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
                   final_loss,
                   alpha=alpha,
                   quant_loss_mult=quant_loss_mult,
-                  readout_loss_mult=readout_loss_mult)),
+                  readout_loss_mult=readout_loss_mult,
+                  supervised_only=supervised_only)),
   }
 
   metrics_dict.update({
@@ -330,6 +335,12 @@ class ModelBundle:
   ckpt: checkpoint.Checkpoint
 
 
+class LearningRateSchedule(enum.Enum):
+  """A point in the architecture to add a quantizer."""
+  PIECEWISE_LINEAR = "piecewise_linear"
+  COSINE_DECAY = "cosine_decay"
+
+
 # Projected gradient descent utilities
 def mask_by_name(name, pytree):
   """Create a mask which is only true for leaves with the given name."""
@@ -351,11 +362,13 @@ def project(min_value: float, max_value: float) -> optax.GradientTransformation:
 def initialize_model(
     model_config: config_dict.ConfigDict, rng_seed: int, input_size: int,
     learning_rate: float, start_learning_rate: float, workdir: str,
-    num_train_steps: int, quantizer_config: config_dict.ConfigDict,
+    learning_rate_schedule: LearningRateSchedule, num_train_steps: int,
+    quantizer_config: config_dict.ConfigDict,
     base_quantizer_config: config_dict.ConfigDict,
     frontend_config: config_dict.ConfigDict,
     early_fs_config: config_dict.ConfigDict, reload_quantizer_from: str,
-    reload_hubert_from: str, target_class_list: str, **unused_kwargs):
+    reload_hubert_from: str, reload_hubert_omit_quantizers: bool,
+    target_class_list: str, **unused_kwargs):
   """Creates model for training, eval, or inference."""
   del unused_kwargs
   # Initialize random number generator
@@ -488,16 +501,24 @@ def initialize_model(
   params = params.unfreeze()
 
   # Define the learning rate schedule for HuBERT.
-  # peak_scaling factor is such that if we multiply the initial learning rate
-  # with it, we get the intended peak learning rate.
-  peak_scaling_factor = learning_rate / start_learning_rate
-  learning_rate = optax.piecewise_interpolate_schedule(
-      "linear",
-      init_value=start_learning_rate,
-      boundaries_and_scales={
-          int(0.08 * num_train_steps): peak_scaling_factor,
-          num_train_steps: start_learning_rate
-      })
+  learning_rate_schedule = LearningRateSchedule(learning_rate_schedule)
+  if learning_rate_schedule is LearningRateSchedule.PIECEWISE_LINEAR:
+    # peak_scaling factor is such that if we multiply the initial learning rate
+    # with it, we get the intended peak learning rate.
+    peak_scaling_factor = learning_rate / start_learning_rate
+    learning_rate = optax.piecewise_interpolate_schedule(
+        "linear",
+        init_value=start_learning_rate,
+        boundaries_and_scales={
+            int(0.08 * num_train_steps): peak_scaling_factor,
+            num_train_steps: start_learning_rate
+        })
+  elif learning_rate_schedule is LearningRateSchedule.COSINE_DECAY:
+    # only `start_learning_rate` and `num_train_steps` are used in this case.
+    learning_rate = optax.cosine_decay_schedule(
+        init_value=start_learning_rate,
+        decay_steps=num_train_steps,
+    )
 
   # Initialize optimizer and handle constraints
   std_to_fwhm = jnp.sqrt(2 * jnp.log(2)) / jnp.pi
@@ -575,8 +596,9 @@ def initialize_model(
       # Since this reloading is done for continuing to train HuBERT with a new
       # quantizer (in a different space), we assume it's best to re-initialize
       # the projections between the features and these new codes.
-      if k.startswith("codes_proj") or k.startswith(
-          "final_proj") or k.startswith("quantizer"):
+      if reload_hubert_omit_quantizers and (k.startswith("codes_proj") or
+                                            k.startswith("final_proj") or
+                                            k.startswith("quantizer")):
         logging.info("Ignoring HuBERT parameters for key %s.", k)
         continue
       train_state.params[k] = v  # pytype: disable=unsupported-operands  # py310-upgrade
@@ -595,6 +617,7 @@ def train(model_bundle,
           num_quantizer_pretrain_steps: int,
           quant_loss_mult: float,
           readout_loss_mult: float,
+          supervised_only=False,
           reload_quantizer=False) -> None:
   """Train a model.
 
@@ -612,6 +635,8 @@ def train(model_bundle,
       used for training.
     readout_loss_mult: The multiplier for the readout loss in the combined loss
       used for training.
+    supervised_only: Whether to only train with the supervised loss. This is
+      used when reloading a pretrained HuBERT model for supervised finetuning.
     reload_quantizer: Whether to reload a pre-trained quantizer. If this is the
       case, it is kept frozen.
   """
@@ -622,7 +647,8 @@ def train(model_bundle,
   train_iterator = train_dataset.as_numpy_iterator()
   train_metrics_collection = make_metrics_collection(
       "train___", model_bundle.model.alpha, quant_loss_mult, readout_loss_mult,
-      model_bundle.model.readout_points, model_bundle.model.quantizer_points)
+      model_bundle.model.readout_points, model_bundle.model.quantizer_points,
+      supervised_only)
 
   def get_update_step(loss_key="train___loss"):
 
@@ -727,13 +753,18 @@ def evaluate(model_bundle: ModelBundle,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
              reporter: periodic_actions.ReportProgress,
-             eval_steps_per_checkpoint: Optional[int] = None):
+             eval_steps_per_checkpoint: Optional[int] = None,
+             supervised_only: bool = False):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult = 1, 1
-  valid_metrics = make_metrics_collection("valid___", model_bundle.model.alpha,
-                                          quant_loss_mult, readout_loss_mult,
-                                          model_bundle.model.readout_points,
-                                          model_bundle.model.quantizer_points)
+  valid_metrics = make_metrics_collection(
+      "valid___",
+      model_bundle.model.alpha,
+      quant_loss_mult,
+      readout_loss_mult,
+      model_bundle.model.readout_points,
+      model_bundle.model.quantizer_points,
+      supervised_only=supervised_only)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def update_metrics(valid_metrics, batch, train_state):
@@ -783,6 +814,7 @@ def evaluate_loop(model_bundle: ModelBundle,
                   workdir: str,
                   logdir: str,
                   num_train_steps: int,
+                  supervised_only: bool,
                   eval_steps_per_checkpoint: Optional[int] = None,
                   tflite_export: bool = False,
                   input_size: Optional[int] = None,
@@ -810,7 +842,7 @@ def evaluate_loop(model_bundle: ModelBundle,
       continue
 
     evaluate(model_bundle, flax_utils.replicate(train_state), valid_dataset,
-             writer, reporter, eval_steps_per_checkpoint)
+             writer, reporter, eval_steps_per_checkpoint, supervised_only)
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_size)
     last_step = int(train_state.step)

@@ -247,6 +247,15 @@ class HuBERTModel(nn.Module):
       unmasked losses for HuBERT. By default it's 1, considering only masked.
     stop_gradient_earlyfs: Whether to stop gradient after the early feature
       extractor.
+    omit_classifier_stop_grads: Optionally, a list of integers indicating which
+      of the readout points to omit the stop-gradient for. Specifically, a 
+      classifier is added to each readout point, and typically a stop-gradient
+      is used to prevent the classifier from modifying the representations (this
+      happens by default, if this argument isn't provided, or if it's None). If 
+      provided, specifies the index (or indices) of readout locations where 
+      that stop-gradient operation will be omitted. This allows, for instance,
+      supervised finetuning of HuBERT representations, and semi-supervised
+      learning.
     add_positional_embeddings: Whether to add positional embeddings to the
       late feature extractor.
   """
@@ -265,16 +274,19 @@ class HuBERTModel(nn.Module):
   logit_temp: float = 0.1
   alpha: float = 1.0
   stop_gradient_earlyfs: bool = True
+  omit_classifier_stop_grads: Optional[Sequence[int]] = None
   add_positional_embeddings: bool = False
 
   def classify(self, x_list, mask_idc, per_frame_predictions,
                classify_pool_width, classify_stride, classify_features,
                reduction_type, classify_from_all):
     # The gradients of this loss will not propagate to train the representation
-    # (the representation is trained purely self-supervised).
-    # TODO(etriantafillou): check if the supervised loss "accidentally" modifies
-    # other parameters, like the mask embedding.
-    x_list = jax.lax.stop_gradient(x_list)
+    # (the representation is trained purely self-supervised), unless it is
+    # requested to omit placing a stop-gradient on the classifier.
+    for i in range(len(x_list)):
+      if (self.omit_classifier_stop_grads is None or
+          i not in self.omit_classifier_stop_grads):
+        x_list[i] = jax.lax.stop_gradient(x_list[i])
     outputs = {}
     midpt = x_list[-1].shape[-2] // 2  # The middle frame.
     for k, n in self.num_classes.items():
@@ -477,6 +489,14 @@ class HuBERTModel(nn.Module):
       raise ValueError("The lengths of `quantizer` and `quantizer_points` "
                        "should match, but are {} and {}.".format(
                            len(self.quantizer), len(self.quantizer_points)))
+
+    if self.omit_classifier_stop_grads is not None:
+      for i in self.omit_classifier_stop_grads:
+        if i < 0 or i >= len(self.readout_points):
+          raise ValueError(
+              "Requested to omit the stop-grad from classifier "
+              f"with index {i} but there are only {len(self.readout_points)} "
+              "readout points / classifiers.")
 
     model_outputs = {}
     quantizers = []

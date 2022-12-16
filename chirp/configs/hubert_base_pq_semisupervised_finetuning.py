@@ -75,7 +75,7 @@ def get_config() -> config_dict.ConfigDict:
   init_config = config_dict.ConfigDict()
   init_config.learning_rate_schedule = "cosine_decay"
   init_config.learning_rate = 0.0001
-  init_config.start_learning_rate = 0.000001
+  init_config.start_learning_rate = 0.0001
   init_config.quant_start_learning_rate = 1e-5
   init_config.input_size = window_size_s * sample_rate_hz
   init_config.rng_seed = 0
@@ -142,7 +142,7 @@ def get_config() -> config_dict.ConfigDict:
   init_config.base_quantizer_config = base_quantizer_config
   init_config.reload_quantizer_from = ""
   init_config.reload_hubert_from = ""
-  init_config.reload_hubert_omit_quantizers = True
+  init_config.reload_hubert_omit_quantizers = False
 
   # Configure the frontend parameters.
   frontend_config = config_dict.ConfigDict()
@@ -162,9 +162,10 @@ def get_config() -> config_dict.ConfigDict:
   model_config.alpha = 1.0
   model_config.taxonomy_loss_weight = 0.
   model_config.readout_points = [0, 2, 4, 6, 8, 10, 11]
-  model_config.quantizer_points = (6,)
+  model_config.quantizer_points = (-2,)
   model_config.stop_gradient_earlyfs = False
   model_config.use_raw_audio = True
+  model_config.omit_classifier_stop_grads = (6,)  # this is the last layer!
   init_config.model_config = model_config
 
   # Configure the training loop.

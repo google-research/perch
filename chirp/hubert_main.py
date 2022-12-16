@@ -96,6 +96,7 @@ def main(argv: Sequence[str]) -> None:
         valid_dataset,
         workdir=_WORKDIR.value,
         logdir=_LOGDIR.value,
+        supervised_only=config.train_config.supervised_only,
         **config.eval_config)
 
 
