@@ -17,7 +17,10 @@
 import functools
 from typing import Tuple
 
+from chirp import train as classifier_train
 from chirp.models import mae
+from chirp.models import taxonomy_model
+from chirp.taxonomy import class_utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import periodic_actions
@@ -83,6 +86,52 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
   train_state = TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
   return ModelBundle(model, optimizer, key, ckpt), train_state
+
+
+def initialize_finetune_model(
+    model_config: config_dict.ConfigDict, rng_seed: int,
+    input_shape: Tuple[int, ...], learning_rate: float, workdir: str,
+    target_class_list: str
+) -> Tuple[classifier_train.ModelBundle, classifier_train.TrainState]:
+  """Creates model for training, eval, or inference."""
+  # Initialize random number generator
+  key = random.PRNGKey(rng_seed)
+
+  # Handle lazy computation
+  input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
+  class_lists = class_utils.get_class_lists(target_class_list, True)
+
+  # Load model
+  model_init_key, key = random.split(key)
+  model = taxonomy_model.TaxonomyModel(
+      num_classes={k: v.size for (k, v) in class_lists.items()},
+      encoder=mae.Embedder(encoder=mae.Encoder(mask_rate=0.75)),
+      taxonomy_loss_weight=0.0)
+  variables = model.init(
+      model_init_key, jnp.zeros((1,) + input_shape), train=False)
+  model_state, params = variables.pop("params")
+  # NOTE: https://github.com/deepmind/optax/issues/160
+  params = params.unfreeze()
+
+  # Load checkpoint
+  mae_model_bundle, mae_train_state = initialize_model(
+      **model_config.mae_init_config)
+  mae_train_state = mae_model_bundle.ckpt.restore(mae_train_state)
+  params["encoder"]["encoder"] = mae_train_state.params["encoder"]
+  if mae_train_state.model_state:
+    raise ValueError("currently only models without model state "
+                     "(such as batch statistics) are handled")
+
+  # Initialize optimizer and handle constraints
+  optimizer = optax.adam(learning_rate=learning_rate)
+  opt_state = optimizer.init(params)
+
+  # Load checkpoint
+  ckpt = checkpoint.MultihostCheckpoint(workdir)
+  train_state = classifier_train.TrainState(
+      step=0, params=params, opt_state=opt_state, model_state=model_state)
+  return classifier_train.ModelBundle(model, optimizer, key, ckpt,
+                                      class_lists), train_state
 
 
 def train(model_bundle, train_state, train_dataset, num_train_steps: int,

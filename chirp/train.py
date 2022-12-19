@@ -208,7 +208,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
 
   # Forward pass and metrics
   def forward(params, key, batch, model_state):
-    dropout_key, low_pass_key = random.split(key)
+    dropout_key, low_pass_key, patch_mask_key = random.split(key, num=3)
     variables = {"params": params, **model_state}
     kwargs = {"mask": batch["audio_mask"]} if "audio_mask" in batch else {}
     model_outputs, model_state = model_bundle.model.apply(
@@ -218,7 +218,8 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
         mutable=list(model_state.keys()),
         rngs={
             "dropout": dropout_key,
-            "low_pass": low_pass_key
+            "low_pass": low_pass_key,
+            "patch_mask": patch_mask_key,
         },
         **kwargs)
     taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight

@@ -14,11 +14,12 @@
 # limitations under the License.
 
 """Masked autoencoder for spectrograms."""
-from typing import Tuple
+from typing import Optional, Tuple
 
 import flax.linen as nn
 from jax import numpy as jnp
 from jax import random
+import optax
 from scenic.model_lib.layers import attention_layers
 from scenic.projects.baselines import vit
 
@@ -161,6 +162,21 @@ class Encoder(nn.Module):
             x, train=train)
 
     return x, unmasked, masked
+
+
+class Embedder(nn.Module):
+  encoder: Encoder = Encoder()
+  taxonomy_loss_weight: float = 0.0
+
+  @nn.compact
+  def __call__(self,
+               x: jnp.ndarray,
+               *,
+               train: bool,
+               use_running_average: Optional[bool] = None):
+    encoded_patches, _, _ = self.encoder(x, train=train)
+    embedding = jnp.mean(encoded_patches, axis=-2)
+    return optax.scale_gradient(embedding, 0.01)
 
 
 class Decoder(nn.Module):
