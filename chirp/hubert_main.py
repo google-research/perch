@@ -71,11 +71,12 @@ def main(argv: Sequence[str]) -> None:
   if config.init_config.reload_quantizer_from:
     reload_quantizer = True
 
-  # Set the multiplier of the quantizer loss such that the quantizer gets the
+  # Adjust the multiplier of the quantizer loss such that the quantizer gets the
   # intended starting learning rate.
   quant_start_lr = config.init_config.quant_start_learning_rate
   start_lr = config.init_config.start_learning_rate
   quant_loss_mult = quant_start_lr / start_lr
+  quant_loss_mult *= config.train_config.quant_loss_mult
 
   # Initialize.
   model = hubert_train.initialize_model(
@@ -87,16 +88,22 @@ def main(argv: Sequence[str]) -> None:
         *model,
         train_dataset,
         reload_quantizer=reload_quantizer,
-        quant_loss_mult=quant_loss_mult,
         logdir=_LOGDIR.value,
-        **config.train_config)
+        num_train_steps=config.train_config.num_train_steps,
+        log_every_steps=config.train_config.log_every_steps,
+        checkpoint_every_steps=config.train_config.checkpoint_every_steps,
+        num_quantizer_pretrain_steps=config.train_config
+        .num_quantizer_pretrain_steps,
+        quant_loss_mult=quant_loss_mult,
+        readout_loss_mult=config.train_config.readout_loss_mult,
+        hubert_loss_mult=config.train_config.hubert_loss_mult)
+
   elif _MODE.value == EVAL:
     hubert_train.evaluate_loop(
         *model,
         valid_dataset,
         workdir=_WORKDIR.value,
         logdir=_LOGDIR.value,
-        supervised_only=config.train_config.supervised_only,
         **config.eval_config)
 
 

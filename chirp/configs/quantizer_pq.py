@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration to run HuBERT with Product Quantizers."""
+"""Configuration to run Product Quantizers."""
 from chirp import config_utils
 from ml_collections import config_dict
 
@@ -73,7 +73,7 @@ def get_config() -> config_dict.ConfigDict:
 
   # Configure the experiment setup
   init_config = config_dict.ConfigDict()
-  init_config.learning_rate_schedule = "piecewise_linear"
+  init_config.learning_rate_schedule = "cosine_decay"
   init_config.learning_rate = 0.0001
   init_config.start_learning_rate = 0.000001
   init_config.quant_start_learning_rate = 1e-5
@@ -161,8 +161,8 @@ def get_config() -> config_dict.ConfigDict:
   model_config.logit_temp = 0.1
   model_config.alpha = 1.0
   model_config.taxonomy_loss_weight = 0.
-  model_config.readout_points = [0, 2, 4, 6, 8, 10, 11]
-  model_config.quantizer_points = (-2, 6)
+  model_config.readout_points = [0]
+  model_config.quantizer_points = (-2,)
   model_config.stop_gradient_earlyfs = False
   model_config.use_raw_audio = True
   init_config.model_config = model_config
@@ -175,8 +175,8 @@ def get_config() -> config_dict.ConfigDict:
   train_config.num_quantizer_pretrain_steps = num_quantizer_pretrain_steps
   train_config.log_every_steps = 250
   train_config.checkpoint_every_steps = 5_000
-  train_config.readout_loss_mult = 1
-  train_config.hubert_loss_mult = 1
+  train_config.readout_loss_mult = 0
+  train_config.hubert_loss_mult = 0
   train_config.quant_loss_mult = 1
   config.train_config = train_config
 

@@ -177,7 +177,8 @@ def get_config() -> config_dict.ConfigDict:
   train_config.log_every_steps = 250
   train_config.checkpoint_every_steps = 5_000
   train_config.readout_loss_mult = 1
-  train_config.supervised_only = True
+  train_config.hubert_loss_mult = 0
+  train_config.quant_loss_mult = 0
   config.train_config = train_config
 
   eval_config = config_dict.ConfigDict()

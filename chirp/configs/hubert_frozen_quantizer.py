@@ -162,7 +162,7 @@ def get_config() -> config_dict.ConfigDict:
   model_config.alpha = 1.0
   model_config.taxonomy_loss_weight = 0.
   model_config.readout_points = [0, 2, 4, 6, 8, 10, 11]
-  model_config.quantizer_points = (-2, 6)
+  model_config.quantizer_points = (-2,)
   model_config.stop_gradient_earlyfs = False
   model_config.use_raw_audio = True
   init_config.model_config = model_config
@@ -175,9 +175,9 @@ def get_config() -> config_dict.ConfigDict:
   train_config.num_quantizer_pretrain_steps = num_quantizer_pretrain_steps
   train_config.log_every_steps = 250
   train_config.checkpoint_every_steps = 5_000
-  train_config.readout_loss_mult = 1
+  train_config.readout_loss_mult = 100
   train_config.hubert_loss_mult = 1
-  train_config.quant_loss_mult = 1
+  train_config.quant_loss_mult = 0
   config.train_config = train_config
 
   eval_config = config_dict.ConfigDict()

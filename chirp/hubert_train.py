@@ -175,16 +175,18 @@ def keyed_map(key: str,
 
 def final_loss(outputs: hubert.ModelOutputs, alpha: float,
                quant_loss_mult: float, readout_loss_mult: float,
-               supervised_only: bool,
+               hubert_loss_mult: float,
                **kwargs_for_supervised) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
   # [bsz, sz].
+  quant_loss = quantizer_loss(outputs, quant_loss_mult)
+  if not hubert_loss_mult and not readout_loss_mult:
+    return quant_loss
+
+  # [bsz, sz].
   readout_loss = supervised_loss(
       outputs, readout_loss_mult=readout_loss_mult, **kwargs_for_supervised)
-  if supervised_only:
-    return readout_loss
-  # [bsz, sz].
-  quant_loss = quantizer_loss(outputs, quant_loss_mult)
+
   # [nq, ns, bsz, sz].
   hubert_loss = hubert_loss_from_outputs(outputs, alpha)
 
@@ -227,10 +229,15 @@ def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
 
 
 def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
-                            readout_loss_mult: float, readout_points: List[int],
-                            quantizer_points: List[int], supervised_only: bool):
+                            readout_loss_mult: float, hubert_loss_mult: float,
+                            readout_points: List[int],
+                            quantizer_points: List[int],
+                            learning_rate_schedule: optax.Schedule):
   """Create metrics collection."""
   metrics_dict = {
+      "learning_rate":
+          clu_metrics.Average.from_fun(
+              (lambda step, **kwargs: learning_rate_schedule(step))),
       "hubert_loss":
           clu_metrics.Average.from_fun(
               functools.partial(hubert_loss_from_outputs, alpha=alpha)),
@@ -249,7 +256,7 @@ def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
                   alpha=alpha,
                   quant_loss_mult=quant_loss_mult,
                   readout_loss_mult=readout_loss_mult,
-                  supervised_only=supervised_only)),
+                  hubert_loss_mult=hubert_loss_mult)),
   }
 
   metrics_dict.update({
@@ -338,6 +345,7 @@ class ModelBundle:
 class LearningRateSchedule(enum.Enum):
   """A point in the architecture to add a quantizer."""
   PIECEWISE_LINEAR = "piecewise_linear"
+  PIECEWISE_COSINE = "piecewise_cosine"
   COSINE_DECAY = "cosine_decay"
 
 
@@ -573,7 +581,17 @@ def initialize_model(
             reload_quantizer_from)
         time.sleep(5)
       num_attempts += 1
-    train_state.params["quantizer"] = reloaded_quantizer["params"]["quantizer"]  # pytype: disable=unsupported-operands  # py310-upgrade
+    if "quantizer" in reloaded_quantizer["params"].keys():
+      quantizer_key = "quantizer"
+    elif "quantizer_0" in reloaded_quantizer["params"].keys():
+      quantizer_key = "quantizer_0"
+    else:
+      raise RuntimeError(
+          "Unsure which parameters correspond to the quantizer, "
+          "so unable to reload it. The reloaded params do not contain a key "
+          "'quantizer' nor 'quantizer_0'.")
+    train_state.params[quantizer_key] = reloaded_quantizer["params"][
+        quantizer_key]
 
   if reload_hubert_from:
     ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_hubert_from)
@@ -604,11 +622,12 @@ def initialize_model(
       train_state.params[k] = v  # pytype: disable=unsupported-operands  # py310-upgrade
       logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
 
-  return ModelBundle(model, optimizer, key, ckpt), train_state
+  return ModelBundle(model, optimizer, key, ckpt), train_state, learning_rate
 
 
 def train(model_bundle,
           train_state,
+          learning_rate_schedule,
           train_dataset,
           num_train_steps: int,
           logdir: str,
@@ -617,13 +636,14 @@ def train(model_bundle,
           num_quantizer_pretrain_steps: int,
           quant_loss_mult: float,
           readout_loss_mult: float,
-          supervised_only=False,
+          hubert_loss_mult: float,
           reload_quantizer=False) -> None:
   """Train a model.
 
   Args:
     model_bundle: Static objects for conducting the experiment.
     train_state: Initial TrainState.
+    learning_rate_schedule: The schedule for the learning rate.
     train_dataset: Training dataset.
     num_train_steps: The number of training steps.
     logdir: Directory to use for logging.
@@ -635,8 +655,8 @@ def train(model_bundle,
       used for training.
     readout_loss_mult: The multiplier for the readout loss in the combined loss
       used for training.
-    supervised_only: Whether to only train with the supervised loss. This is
-      used when reloading a pretrained HuBERT model for supervised finetuning.
+    hubert_loss_mult: The multiplier for the HuBERT loss in the combined loss
+      used for training.
     reload_quantizer: Whether to reload a pre-trained quantizer. If this is the
       case, it is kept frozen.
   """
@@ -646,9 +666,14 @@ def train(model_bundle,
 
   train_iterator = train_dataset.as_numpy_iterator()
   train_metrics_collection = make_metrics_collection(
-      "train___", model_bundle.model.alpha, quant_loss_mult, readout_loss_mult,
-      model_bundle.model.readout_points, model_bundle.model.quantizer_points,
-      supervised_only)
+      "train___",
+      model_bundle.model.alpha,
+      quant_loss_mult,
+      readout_loss_mult,
+      hubert_loss_mult,
+      model_bundle.model.readout_points,
+      model_bundle.model.quantizer_points,
+      learning_rate_schedule=learning_rate_schedule)
 
   def get_update_step(loss_key="train___loss"):
 
@@ -676,8 +701,8 @@ def train(model_bundle,
             genus=batch["genus"],
             family=batch["family"],
             order=batch["order"],
-            taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight
-        ).compute()
+            taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
+            step=train_state.step).compute()
         loss = train_metrics[loss_key]
         return loss, (train_metrics, model_state)
 
@@ -750,21 +775,22 @@ def train(model_bundle,
 
 def evaluate(model_bundle: ModelBundle,
              train_state: TrainState,
+             learning_rate_schedule: optax.Schedule,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
              reporter: periodic_actions.ReportProgress,
-             eval_steps_per_checkpoint: Optional[int] = None,
-             supervised_only: bool = False):
+             eval_steps_per_checkpoint: Optional[int] = None):
   """Run evaluation."""
-  quant_loss_mult, readout_loss_mult = 1, 1
+  quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
   valid_metrics = make_metrics_collection(
       "valid___",
       model_bundle.model.alpha,
       quant_loss_mult,
       readout_loss_mult,
+      hubert_loss_mult,
       model_bundle.model.readout_points,
       model_bundle.model.quantizer_points,
-      supervised_only=supervised_only)
+      learning_rate_schedule=learning_rate_schedule)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def update_metrics(valid_metrics, batch, train_state):
@@ -779,6 +805,7 @@ def evaluate(model_bundle: ModelBundle,
             family=batch["family"],
             order=batch["order"],
             taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
+            step=train_state.step,
             axis_name="batch"))
 
   step = int(flax_utils.unreplicate(train_state.step))
@@ -810,11 +837,11 @@ def evaluate(model_bundle: ModelBundle,
 
 def evaluate_loop(model_bundle: ModelBundle,
                   train_state: TrainState,
+                  learning_rate_schedule: optax.Schedule,
                   valid_dataset: tf.data.Dataset,
                   workdir: str,
                   logdir: str,
                   num_train_steps: int,
-                  supervised_only: bool,
                   eval_steps_per_checkpoint: Optional[int] = None,
                   tflite_export: bool = False,
                   input_size: Optional[int] = None,
@@ -841,8 +868,9 @@ def evaluate_loop(model_bundle: ModelBundle,
       time.sleep(eval_sleep_s)
       continue
 
-    evaluate(model_bundle, flax_utils.replicate(train_state), valid_dataset,
-             writer, reporter, eval_steps_per_checkpoint, supervised_only)
+    evaluate(model_bundle, flax_utils.replicate(train_state),
+             learning_rate_schedule, valid_dataset, writer, reporter,
+             eval_steps_per_checkpoint)
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_size)
     last_step = int(train_state.step)
