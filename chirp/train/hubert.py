@@ -18,7 +18,7 @@ import enum
 import functools
 import os
 import time
-from typing import Optional, List
+from typing import Optional, List, Callable
 from absl import logging
 from chirp.data import pipeline
 from chirp.models import cmap
@@ -352,15 +352,24 @@ def project(min_value: float, max_value: float) -> optax.GradientTransformation:
 
 
 def initialize_model(
-    model_config: config_dict.ConfigDict, rng_seed: int, input_size: int,
-    learning_rate: float, start_learning_rate: float, workdir: str,
-    learning_rate_schedule: LearningRateSchedule, num_train_steps: int,
+    model_config: config_dict.ConfigDict,
+    rng_seed: int,
+    input_size: int,
+    learning_rate: float,
+    start_learning_rate: float,
+    workdir: str,
+    learning_rate_schedule: LearningRateSchedule,
+    num_train_steps: int,
     quantizer_config: config_dict.ConfigDict,
     base_quantizer_config: config_dict.ConfigDict,
     frontend_config: config_dict.ConfigDict,
-    early_fs_config: config_dict.ConfigDict, reload_quantizer_from: str,
-    reload_hubert_from: str, reload_hubert_omit_quantizers: bool,
-    target_class_list: str, **unused_kwargs):
+    early_fs_config: config_dict.ConfigDict,
+    reload_quantizer_from: str,
+    reload_hubert_from: str,
+    reload_hubert_omit_quantizers: bool,
+    target_class_list: str,
+    early_fs_class: Optional[Callable] = layers.EarlyFeatureExtractor,
+    **unused_kwargs):
   """Creates model for training, eval, or inference."""
   del unused_kwargs
   # Initialize random number generator
@@ -428,7 +437,7 @@ def initialize_model(
     conv_layer_tuples = tuple([(512, 10, 5), (512, 3, 2), (512, 3, 2),
                                (512, 3, 2), (512, 3, 2), (512, 2, 2),
                                (512, 2, 2)])
-    early_fs = layers.EarlyFeatureExtractor(
+    early_fs = early_fs_class(
         dropout_prob=early_fs_config.dropout_prob,
         activation=early_fs_config.activation,
         conv_layer_tuples=conv_layer_tuples,
@@ -470,7 +479,7 @@ def initialize_model(
           conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
                                      (nf, 3, 2), (nf, 3, 2), (nf, 2, 1),
                                      (nf, 2, 1)])
-      early_fs = layers.EarlyFeatureExtractor(
+      early_fs = early_fs_class(
           dropout_prob=early_fs_config.dropout_prob,
           activation=early_fs_config.activation,
           conv_layer_tuples=conv_layer_tuples)
