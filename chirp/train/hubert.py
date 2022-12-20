@@ -28,12 +28,11 @@ from chirp.models import layers
 from chirp.models import metrics
 from chirp.models import quantizers
 from chirp.taxonomy import class_utils
+from chirp.train import utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
-import flax
-from flax import linen as nn
 from flax import traverse_util
 import flax.jax_utils as flax_utils
 import jax
@@ -327,22 +326,6 @@ def update_cmap_metrics_dict(label_names, cmap_metrics, model_outputs, batch,
   return cmap_metrics
 
 
-@flax.struct.dataclass
-class TrainState:
-  step: int
-  params: flax.core.scope.VariableDict
-  opt_state: optax.OptState
-  model_state: flax.core.scope.FrozenVariableDict
-
-
-@flax.struct.dataclass
-class ModelBundle:
-  model: nn.Module
-  optimizer: optax.GradientTransformation
-  key: jnp.ndarray
-  ckpt: checkpoint.Checkpoint
-
-
 class LearningRateSchedule(enum.Enum):
   """A point in the architecture to add a quantizer."""
   PIECEWISE_LINEAR = "piecewise_linear"
@@ -546,7 +529,7 @@ def initialize_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = TrainState(
+  train_state = utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
 
   did_reload = False
@@ -623,7 +606,8 @@ def initialize_model(
       train_state.params[k] = v  # pytype: disable=unsupported-operands  # py310-upgrade
       logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
 
-  return ModelBundle(model, optimizer, key, ckpt), train_state, learning_rate
+  return utils.ModelBundle(model, optimizer, key,
+                           ckpt), train_state, learning_rate
 
 
 def train(model_bundle,
@@ -643,7 +627,7 @@ def train(model_bundle,
 
   Args:
     model_bundle: Static objects for conducting the experiment.
-    train_state: Initial TrainState.
+    train_state: Initial utils.TrainState.
     learning_rate_schedule: The schedule for the learning rate.
     train_dataset: Training dataset.
     num_train_steps: The number of training steps.
@@ -717,7 +701,7 @@ def train(model_bundle,
 
       params_after_update = optax.apply_updates(train_state.params, updates)
 
-      train_state = TrainState(
+      train_state = utils.TrainState(
           step=train_state.step + 1,
           params=params_after_update,
           opt_state=opt_state,
@@ -774,8 +758,8 @@ def train(model_bundle,
   writer.close()
 
 
-def evaluate(model_bundle: ModelBundle,
-             train_state: TrainState,
+def evaluate(model_bundle: utils.ModelBundle,
+             train_state: utils.TrainState,
              learning_rate_schedule: optax.Schedule,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
@@ -836,8 +820,8 @@ def evaluate(model_bundle: ModelBundle,
   writer.flush()
 
 
-def evaluate_loop(model_bundle: ModelBundle,
-                  train_state: TrainState,
+def evaluate_loop(model_bundle: utils.ModelBundle,
+                  train_state: utils.TrainState,
                   learning_rate_schedule: optax.Schedule,
                   valid_dataset: tf.data.Dataset,
                   workdir: str,
@@ -878,8 +862,9 @@ def evaluate_loop(model_bundle: ModelBundle,
     last_ckpt = next_ckpt
 
 
-def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,
-                   workdir: str, input_size: int):
+def export_tf_lite(model_bundle: utils.ModelBundle,
+                   train_state: utils.TrainState, workdir: str,
+                   input_size: int):
   """Write a TFLite flatbuffer."""
   variables = {"params": train_state.params, **train_state.model_state}
 

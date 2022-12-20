@@ -21,11 +21,10 @@ from chirp.models import mae
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
 from chirp.train import classifier
+from chirp.train import utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import periodic_actions
-import flax
-from flax import linen as nn
 import flax.jax_utils as flax_utils
 import jax
 from jax import numpy as jnp
@@ -34,25 +33,10 @@ from ml_collections import config_dict
 import optax
 
 
-@flax.struct.dataclass
-class TrainState:
-  step: int
-  params: flax.core.scope.VariableDict
-  opt_state: optax.OptState
-  model_state: flax.core.scope.FrozenVariableDict
-
-
-@flax.struct.dataclass
-class ModelBundle:
-  model: nn.Module
-  optimizer: optax.GradientTransformation
-  key: jnp.ndarray
-  ckpt: checkpoint.Checkpoint
-
-
-def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
-                     input_shape: Tuple[int, ...], learning_rate: float,
-                     workdir: str) -> Tuple[ModelBundle, TrainState]:
+def initialize_model(
+    model_config: config_dict.ConfigDict, rng_seed: int,
+    input_shape: Tuple[int, ...], learning_rate: float,
+    workdir: str) -> Tuple[utils.ModelBundle, utils.TrainState]:
   """Creates model for training, eval, or inference."""
   del model_config
   # Initialize random number generator
@@ -83,16 +67,16 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = TrainState(
+  train_state = utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
-  return ModelBundle(model, optimizer, key, ckpt), train_state
+  return utils.ModelBundle(model, optimizer, key, ckpt), train_state
 
 
 def initialize_finetune_model(
     model_config: config_dict.ConfigDict, rng_seed: int,
     input_shape: Tuple[int, ...], learning_rate: float, workdir: str,
     target_class_list: str
-) -> Tuple[classifier.ModelBundle, classifier.TrainState]:
+) -> Tuple[classifier.utils.ModelBundle, classifier.utils.TrainState]:
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
@@ -128,10 +112,10 @@ def initialize_finetune_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = classifier.TrainState(
+  train_state = classifier.utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
-  return classifier.ModelBundle(model, optimizer, key, ckpt,
-                                class_lists), train_state
+  return classifier.utils.ModelBundle(model, optimizer, key, ckpt,
+                                      class_lists), train_state
 
 
 def train(model_bundle, train_state, train_dataset, num_train_steps: int,
@@ -141,7 +125,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
 
   Args:
     model_bundle: Static objects for conducting the experiment.
-    train_state: Initial TrainState.
+    train_state: Initial utils.TrainState.
     train_dataset: Training dataset.
     num_train_steps: The number of training steps.
     logdir: Directory to use for logging.
@@ -195,7 +179,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
                                                        train_state.opt_state,
                                                        train_state.params)
     params = optax.apply_updates(train_state.params, updates)
-    train_state = TrainState(
+    train_state = utils.TrainState(
         step=train_state.step + 1,
         params=params,
         opt_state=opt_state,

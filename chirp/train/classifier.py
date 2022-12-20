@@ -16,7 +16,7 @@
 """Training loop."""
 import functools
 import time
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 from absl import logging
 from chirp import export_utils
@@ -26,13 +26,11 @@ from chirp.models import frontend
 from chirp.models import metrics
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
-from chirp.taxonomy import namespace
+from chirp.train import utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
-import flax
-from flax import linen as nn
 from flax import traverse_util
 import flax.jax_utils as flax_utils
 import jax
@@ -128,27 +126,10 @@ def project(min_value: float, max_value: float) -> optax.GradientTransformation:
   return optax.stateless(clip_value)
 
 
-@flax.struct.dataclass
-class TrainState:
-  step: int
-  params: flax.core.scope.VariableDict
-  opt_state: optax.OptState
-  model_state: flax.core.scope.FrozenVariableDict
-
-
-@flax.struct.dataclass
-class ModelBundle:
-  model: nn.Module
-  optimizer: optax.GradientTransformation
-  key: jnp.ndarray
-  ckpt: checkpoint.Checkpoint
-  class_lists: Dict[str, namespace.ClassList]
-
-
-def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
-                     input_shape: Tuple[int, ...], learning_rate: float,
-                     workdir: str,
-                     target_class_list: str) -> Tuple[ModelBundle, TrainState]:
+def initialize_model(
+    model_config: config_dict.ConfigDict, rng_seed: int,
+    input_shape: Tuple[int, ...], learning_rate: float, workdir: str,
+    target_class_list: str) -> Tuple[utils.ModelBundle, utils.TrainState]:
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
@@ -184,9 +165,10 @@ def initialize_model(model_config: config_dict.ConfigDict, rng_seed: int,
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = TrainState(
+  train_state = utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
-  return ModelBundle(model, optimizer, key, ckpt, class_lists), train_state
+  return utils.ModelBundle(model, optimizer, key, ckpt,
+                           class_lists), train_state
 
 
 def train(model_bundle, train_state, train_dataset, num_train_steps: int,
@@ -196,7 +178,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
 
   Args:
     model_bundle: Static objects for conducting the experiment.
-    train_state: Initial TrainState.
+    train_state: Initial utils.TrainState.
     train_dataset: Training dataset.
     num_train_steps: The number of training steps.
     logdir: Directory to use for logging.
@@ -241,7 +223,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
                                                        train_state.opt_state,
                                                        train_state.params)
     params = optax.apply_updates(train_state.params, updates)
-    train_state = TrainState(
+    train_state = utils.TrainState(
         step=train_state.step + 1,
         params=params,
         opt_state=opt_state,
@@ -280,8 +262,8 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
   writer.close()
 
 
-def evaluate(model_bundle: ModelBundle,
-             train_state: TrainState,
+def evaluate(model_bundle: utils.ModelBundle,
+             train_state: utils.TrainState,
              valid_dataset: tf.data.Dataset,
              writer: metric_writers.MetricWriter,
              reporter: periodic_actions.ReportProgress,
@@ -331,8 +313,8 @@ def evaluate(model_bundle: ModelBundle,
   writer.flush()
 
 
-def evaluate_loop(model_bundle: ModelBundle,
-                  train_state: TrainState,
+def evaluate_loop(model_bundle: utils.ModelBundle,
+                  train_state: utils.TrainState,
                   valid_dataset: tf.data.Dataset,
                   workdir: str,
                   logdir: str,
@@ -374,8 +356,8 @@ def evaluate_loop(model_bundle: ModelBundle,
     last_ckpt = next_ckpt
 
 
-def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
-              input_shape: Tuple[int, ...]):
+def export_tf(model_bundle: utils.ModelBundle, train_state: utils.TrainState,
+              workdir: str, input_shape: Tuple[int, ...]):
   """Export SavedModel and TFLite."""
   variables = {"params": train_state.params, **train_state.model_state}
 
