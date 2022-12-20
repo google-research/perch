@@ -21,10 +21,10 @@ from absl import app
 from absl import flags
 from absl import logging
 from chirp import config_utils
-from chirp import hubert_train
-from chirp import mae_train
-from chirp import sep_train
-from chirp import train
+from chirp.train import hubert
+from chirp.train import mae
+from chirp.train import separator
+from chirp.train import classifier
 from chirp.configs import config_globals
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
@@ -32,10 +32,10 @@ import tensorflow as tf
 from xmanager import xm  # pylint: disable=unused-import
 
 TARGETS = {
-    "classifier": train,
-    "mae": mae_train,
-    "hubert": hubert_train,
-    "separator": sep_train,
+    "classifier": classifier,
+    "mae": mae,
+    "hubert": hubert,
+    "separator": separator,
 }
 
 _CONFIG = config_flags.DEFINE_config_file("config")

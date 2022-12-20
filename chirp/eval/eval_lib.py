@@ -22,13 +22,13 @@ from typing import (Callable, Dict, Generator, Mapping, Sequence, Tuple, Type,
                     TypeVar)
 
 from absl import logging
-from chirp import hubert_train
-from chirp import sep_train
-from chirp import train
 from chirp.data import pipeline
 from chirp.models import metrics
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
+from chirp.train import classifier
+from chirp.train import hubert
+from chirp.train import separator
 from etils import epath
 import jax
 import ml_collections
@@ -205,7 +205,7 @@ class TaxonomyModelCallback:
       init=False, default_factory=dict)
 
   def __post_init__(self):
-    model_bundle, train_state = train.initialize_model(
+    model_bundle, train_state = classifier.initialize_model(
         workdir=self.workdir, **self.init_config)
     train_state = model_bundle.ckpt.restore(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
@@ -326,7 +326,7 @@ class HuBERTModelCallback:
       init=False, default_factory=dict)
 
   def __post_init__(self):
-    model_bundle, train_state, _ = hubert_train.initialize_model(
+    model_bundle, train_state, _ = hubert.initialize_model(
         workdir=self.workdir, num_train_steps=1, **self.init_config)
     train_state = model_bundle.ckpt.restore(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
@@ -366,7 +366,7 @@ class SeparationModelCallback:
       init=False, default_factory=dict)
 
   def __post_init__(self):
-    model_bundle, train_state = sep_train.initialize_model(
+    model_bundle, train_state = separator.initialize_model(
         workdir=self.workdir, **self.init_config)
     train_state = model_bundle.ckpt.restore_or_initialize(train_state)
     variables = {'params': train_state.params, **train_state.model_state}

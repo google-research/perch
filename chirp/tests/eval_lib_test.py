@@ -22,13 +22,13 @@ import tempfile
 from typing import Any, Sequence, Tuple
 
 from chirp import config_utils
-from chirp import train
 from chirp.configs import baseline_mel_conformer
 from chirp.configs import config_globals
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.eval import eval_lib
 from chirp.taxonomy import namespace_db
 from chirp.tests import fake_dataset
+from chirp.train import classifier
 import ml_collections
 import numpy as np
 import pandas as pd
@@ -336,7 +336,7 @@ class TaxonomyModelCallbackTest(absltest.TestCase):
     init_config = config_utils.parse_config(
         baseline_mel_conformer.get_config(),
         config_globals.get_globals()).init_config
-    model_bundle, train_state = train.initialize_model(
+    model_bundle, train_state = classifier.initialize_model(
         workdir=workdir, **init_config)
     _ = model_bundle.ckpt.restore_or_initialize(train_state)
 

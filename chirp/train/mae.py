@@ -16,12 +16,11 @@
 """Training loop for MAE."""
 import functools
 from typing import Tuple
-
-from chirp import train as classifier_train
 from chirp.data import pipeline
 from chirp.models import mae
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
+from chirp.train import classifier
 from clu import checkpoint
 from clu import metric_writers
 from clu import periodic_actions
@@ -93,7 +92,7 @@ def initialize_finetune_model(
     model_config: config_dict.ConfigDict, rng_seed: int,
     input_shape: Tuple[int, ...], learning_rate: float, workdir: str,
     target_class_list: str
-) -> Tuple[classifier_train.ModelBundle, classifier_train.TrainState]:
+) -> Tuple[classifier.ModelBundle, classifier.TrainState]:
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
@@ -129,10 +128,10 @@ def initialize_finetune_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = classifier_train.TrainState(
+  train_state = classifier.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state)
-  return classifier_train.ModelBundle(model, optimizer, key, ckpt,
-                                      class_lists), train_state
+  return classifier.ModelBundle(model, optimizer, key, ckpt,
+                                class_lists), train_state
 
 
 def train(model_bundle, train_state, train_dataset, num_train_steps: int,
@@ -267,14 +266,14 @@ def run(mode: str, config: config_dict.ConfigDict, workdir: str,
         **config.train_config)
   if mode == "finetune":
     train_state = model_bundle.ckpt.restore_or_initialize(train_state)
-    classifier_train.train(
+    classifier.train(
         model_bundle,
         train_state,
         train_dataset,
         logdir=workdir,
         **config.train_config)
   elif mode == "eval":
-    classifier_train.evaluate_loop(
+    classifier.evaluate_loop(
         model_bundle,
         train_state,
         valid_dataset,

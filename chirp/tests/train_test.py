@@ -19,7 +19,6 @@ import os
 import tempfile
 
 from chirp import config_utils
-from chirp import train
 from chirp.configs import baseline
 from chirp.configs import baseline_attention
 from chirp.configs import baseline_mel_conformer
@@ -28,6 +27,7 @@ from chirp.data import pipeline
 from chirp.models import efficientnet
 from chirp.models import frontend
 from chirp.tests import fake_dataset
+from chirp.train import classifier
 from clu import checkpoint
 from flax import linen as nn
 import jax
@@ -152,11 +152,11 @@ class TrainTest(parameterized.TestCase):
     config = self._add_const_model_config(config)
     config = self._add_pcen_melspec_frontend(config)
 
-    model_bundle, train_state = train.initialize_model(
+    model_bundle, train_state = classifier.initialize_model(
         workdir=self.train_dir, **config.init_config)
 
-    train.export_tf(model_bundle, train_state, self.train_dir,
-                    config.init_config.input_shape)
+    classifier.export_tf(model_bundle, train_state, self.train_dir,
+                         config.init_config.input_shape)
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))
     self.assertTrue(
@@ -185,7 +185,7 @@ class TrainTest(parameterized.TestCase):
     self.assertEqual(config.train_config.num_train_steps,
                      config.eval_config.num_train_steps)
 
-    model_bundle, train_state = train.initialize_model(
+    model_bundle, train_state = classifier.initialize_model(
         workdir=self.train_dir, **config.init_config)
     self.assertIsNotNone(model_bundle)
     self.assertIsNotNone(train_state)
@@ -195,10 +195,10 @@ class TrainTest(parameterized.TestCase):
     config = self._add_const_model_config(config)
     config = self._add_pcen_melspec_frontend(config)
     ds, _ = self._get_test_dataset(config)
-    model_bundle, train_state = train.initialize_model(
+    model_bundle, train_state = classifier.initialize_model(
         workdir=self.train_dir, **config.init_config)
 
-    train.train(
+    classifier.train(
         model_bundle=model_bundle,
         train_state=train_state,
         train_dataset=ds,
@@ -212,13 +212,13 @@ class TrainTest(parameterized.TestCase):
     config = self._add_const_model_config(config)
     config = self._add_pcen_melspec_frontend(config)
     ds, _ = self._get_test_dataset(config)
-    model_bundle, train_state = train.initialize_model(
+    model_bundle, train_state = classifier.initialize_model(
         workdir=self.train_dir, **config.init_config)
     # Write a checkpoint, or else the eval will hang.
     model_bundle.ckpt.save(train_state)
 
     config.eval_config.num_train_steps = 0
-    train.evaluate_loop(
+    classifier.evaluate_loop(
         model_bundle=model_bundle,
         train_state=train_state,
         valid_dataset=ds,

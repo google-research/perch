@@ -15,18 +15,17 @@
 
 """Tests for train."""
 
-from absl import logging
 import os
 import tempfile
-
+from absl import logging
 from chirp import audio_utils
 from chirp import config_utils
-from chirp import sep_train
 from chirp.configs import config_globals
-from chirp.configs import separator
+from chirp.configs import separator as separator_config
 from chirp.data import pipeline
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.tests import fake_dataset
+from chirp.train import separator
 from clu import checkpoint
 import jax
 from ml_collections import config_dict
@@ -77,7 +76,7 @@ class TrainSeparationTest(absltest.TestCase):
 
   def _get_test_config(self, use_small_encoder=True) -> config_dict.ConfigDict:
     """Create configuration dictionary for training."""
-    config = separator.get_config()
+    config = separator_config.get_config()
     config.init_config.target_class_list = 'tiny_species'
 
     window_size_s = config_dict.FieldReference(1)
@@ -137,7 +136,7 @@ class TrainSeparationTest(absltest.TestCase):
 
   def test_config_structure(self):
     # Check that the test config and model config have similar structure.
-    raw_config = separator.get_config()
+    raw_config = separator_config.get_config()
     parsed_config = config_utils.parse_config(raw_config,
                                               config_globals.get_globals())
     test_config = self._get_test_config()
@@ -147,9 +146,9 @@ class TrainSeparationTest(absltest.TestCase):
 
   def test_init_baseline(self):
     # Ensure that we can initialize the model with the baseline config.
-    config = separator.get_config()
+    config = separator_config.get_config()
     config = config_utils.parse_config(config, config_globals.get_globals())
-    model_bundle, train_state = sep_train.initialize_model(
+    model_bundle, train_state = separator.initialize_model(
         workdir=self.train_dir, **config.init_config)
     self.assertIsNotNone(model_bundle)
     self.assertIsNotNone(train_state)
@@ -160,10 +159,10 @@ class TrainSeparationTest(absltest.TestCase):
         'train',
         config,
     )
-    model = sep_train.initialize_model(
+    model = separator.initialize_model(
         workdir=self.train_dir, **config.init_config)
 
-    sep_train.train(
+    separator.train(
         *model, train_dataset=ds, logdir=self.train_dir, **config.train_config)
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)
     self.assertIsNotNone(ckpt.latest_checkpoint)
@@ -174,12 +173,12 @@ class TrainSeparationTest(absltest.TestCase):
     config.eval_config.num_train_steps = 0
 
     ds, _ = self._get_test_dataset('test', config)
-    model_bundle, train_state = sep_train.initialize_model(
+    model_bundle, train_state = separator.initialize_model(
         workdir=self.train_dir, **config.init_config)
     # Write a chekcpoint, or else the eval will hang.
     model_bundle.ckpt.save(train_state)
 
-    sep_train.evaluate_loop(
+    separator.evaluate_loop(
         model_bundle=model_bundle,
         train_state=train_state,
         valid_dataset=ds,
@@ -194,12 +193,12 @@ class TrainSeparationTest(absltest.TestCase):
     logging.info('Export Test: Initializing JAX model.')
     config = self._get_test_config(use_small_encoder=True)
     config.init_config.model_config.mask_generator.groups = (1, 1)
-    model_bundle, train_state = sep_train.initialize_model(
+    model_bundle, train_state = separator.initialize_model(
         workdir=self.train_dir, **config.init_config)
 
     logging.info('Export Test: Exporting model.')
     frame_size = 32 * 2 * 2 * 250
-    sep_train.export_tf(model_bundle, train_state, self.train_dir, frame_size)
+    separator.export_tf(model_bundle, train_state, self.train_dir, frame_size)
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, 'model.tflite')))
     self.assertTrue(

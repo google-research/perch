@@ -16,16 +16,16 @@
 """Utilities to prepare models for SFDA methods."""
 
 import enum
-from typing import Optional, Tuple, Union, Callable, Any
+from typing import Any, Callable, Optional, Tuple, Union
 
 from absl import logging
 import chex
-from chirp import train
 from chirp.projects.sfda import data_utils
 from chirp.projects.sfda import models
 from chirp.projects.sfda.models import image_model
 from chirp.projects.sfda.models import taxonomy_model
 from chirp.taxonomy import class_utils
+from chirp.train import classifier
 import flax
 from flax.core import FrozenDict
 from flax.core import scope
@@ -156,7 +156,7 @@ def prepare_audio_model(
     # creation of a TaxonomyModel does not expect this argument. Therefore,
     # we delete it here to ensure compatibility.
     delattr(model_config, "pretrained_ckpt_dir")
-    model_bundle, train_state = train.initialize_model(
+    model_bundle, train_state = classifier.initialize_model(
         model_config=model_config,
         rng_seed=rng_seed,
         input_shape=input_shape,
@@ -189,18 +189,18 @@ def prepare_audio_model(
     optimizer = optax.chain(
         opt(learning_rate=learning_rate, **optimizer_config.opt_kwargs),
         optax.masked(
-            train.project(0.0, 1.0),
-            train.mask_by_name("spcen_smoothing_coef", params)),
+            classifier.project(0.0, 1.0),
+            classifier.mask_by_name("spcen_smoothing_coef", params)),
         optax.masked(
-            train.project(0.0, jnp.pi),
-            train.mask_by_name("gabor_mean", params)),
+            classifier.project(0.0, jnp.pi),
+            classifier.mask_by_name("gabor_mean", params)),
         optax.masked(
-            train.project(0.0, jnp.pi),
-            train.mask_by_name("gabor_mean", params)),
+            classifier.project(0.0, jnp.pi),
+            classifier.mask_by_name("gabor_mean", params)),
         optax.masked(
-            train.project(4 * std_to_fwhm,
-                          model.frontend.kernel_size * std_to_fwhm),
-            train.mask_by_name("gabor_std", params)),
+            classifier.project(4 * std_to_fwhm,
+                               model.frontend.kernel_size * std_to_fwhm),
+            classifier.mask_by_name("gabor_std", params)),
         optax.masked(
             zero_grads(),
             mask_parameters(params, optimizer_config.trainable_params_strategy,

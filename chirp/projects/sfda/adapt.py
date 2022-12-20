@@ -18,13 +18,12 @@
 import abc
 import enum
 import functools
-from typing import Any, Dict, Tuple, Type, Callable
-
-from chirp import train
+from typing import Any, Callable, Dict, Tuple, Type
 from chirp.models import cmap
 from chirp.projects.sfda import losses
 from chirp.projects.sfda import metrics
 from chirp.projects.sfda import model_utils
+from chirp.train import classifier
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
@@ -650,7 +649,7 @@ def get_common_metrics(supervised: bool,
   if supervised:
     if multi_label:
       metrics_dict["label_map"] = clu_metrics.Average.from_fun(
-          functools.partial(train.keyed_map, key="label"))
+          functools.partial(classifier.keyed_map, key="label"))
       metrics_dict["supervised_loss"] = clu_metrics.Average.from_fun(
           losses.label_binary_xent)
       metrics_dict["entropy_loss"] = clu_metrics.Average.from_fun(
