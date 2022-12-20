@@ -34,7 +34,6 @@ FINETUNE = "finetune"
 EVAL = "eval"
 
 _CONFIG = config_flags.DEFINE_config_file("config")
-_LOGDIR = flags.DEFINE_string("logdir", None, "Work unit logging directory.")
 _WORKDIR = flags.DEFINE_string("workdir", None,
                                "Work unit checkpointing directory.")
 _MODE = flags.DEFINE_enum("mode", TRAIN, [TRAIN, FINETUNE, EVAL], "Mode.")
@@ -43,7 +42,7 @@ _TF_DATA_SERVICE_ADDRESS = flags.DEFINE_string(
     "",
     "The dispatcher's address.",
     allow_override_cpp=True)
-flags.mark_flags_as_required(["config", "workdir", "logdir"])
+flags.mark_flags_as_required(["config", "workdir"])
 
 
 def main(argv: Sequence[str]) -> None:
@@ -80,7 +79,7 @@ def main(argv: Sequence[str]) -> None:
         model_bundle,
         train_state,
         train_dataset,
-        logdir=_LOGDIR.value,
+        logdir=_WORKDIR.value,
         **config.train_config)
   if _MODE.value == FINETUNE:
     train_state = model_bundle.ckpt.restore_or_initialize(train_state)
@@ -88,7 +87,7 @@ def main(argv: Sequence[str]) -> None:
         model_bundle,
         train_state,
         train_dataset,
-        logdir=_LOGDIR.value,
+        logdir=_WORKDIR.value,
         **config.train_config)
   elif _MODE.value == EVAL:
     finetune.evaluate_loop(
@@ -96,7 +95,7 @@ def main(argv: Sequence[str]) -> None:
         train_state,
         valid_dataset,
         workdir=_WORKDIR.value,
-        logdir=_LOGDIR.value,
+        logdir=_WORKDIR.value,
         **config.eval_config)
 
 

@@ -33,7 +33,6 @@ TRAIN = "train"
 EVAL = "eval"
 
 _CONFIG = config_flags.DEFINE_config_file("config")
-_LOGDIR = flags.DEFINE_string("logdir", None, "Work unit logging directory.")
 _WORKDIR = flags.DEFINE_string("workdir", None,
                                "Work unit checkpointing directory.")
 _MODE = flags.DEFINE_enum("mode", TRAIN, [TRAIN, EVAL], "Mode.")
@@ -42,7 +41,7 @@ _TF_DATA_SERVICE_ADDRESS = flags.DEFINE_string(
     "",
     "The dispatcher's address.",
     allow_override_cpp=True)
-flags.mark_flags_as_required(["config", "workdir", "logdir"])
+flags.mark_flags_as_required(["config", "workdir"])
 
 
 def main(argv: Sequence[str]) -> None:
@@ -69,13 +68,13 @@ def main(argv: Sequence[str]) -> None:
       workdir=_WORKDIR.value, **config.init_config)
   if _MODE.value == TRAIN:
     sep_train.train(
-        *model, train_dataset, logdir=_LOGDIR.value, **config.train_config)
+        *model, train_dataset, logdir=_WORKDIR.value, **config.train_config)
   elif _MODE.value == EVAL:
     sep_train.evaluate_loop(
         *model,
         valid_dataset,
         workdir=_WORKDIR.value,
-        logdir=_LOGDIR.value,
+        logdir=_WORKDIR.value,
         **config.eval_config)
 
 
