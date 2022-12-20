@@ -21,6 +21,7 @@ from typing import Dict, Optional
 
 from absl import logging
 from chirp import export_utils
+from chirp.data import pipeline
 from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import separation_model
@@ -407,3 +408,40 @@ def export_tf(model_bundle: ModelBundle, train_state: TrainState, workdir: str,
                                                     False)
   converted_model.export_converted_model(workdir, train_state.step,
                                          model_bundle.class_lists)
+
+
+def run(mode: str, config: config_dict.ConfigDict, workdir: str,
+        tf_data_service_address: str) -> None:
+  """Run the experiment."""
+  if mode == 'train':
+    train_dataset, dataset_info = pipeline.get_dataset(
+        is_train=True,
+        tf_data_service_address=tf_data_service_address,
+        **config.train_dataset_config)
+  elif mode == 'eval':
+    valid_dataset, dataset_info = pipeline.get_dataset(
+        **config.eval_dataset_config)
+  if dataset_info.features['audio'].sample_rate != config.sample_rate_hz:
+    raise ValueError(
+        'Dataset sample rate must match config sample rate. To address this, '
+        'need to set the sample rate in the config to {}.'.format(
+            dataset_info.features['audio'].sample_rate))
+
+  model_bundle, train_state = initialize_model(
+      workdir=workdir, **config.init_config)
+  if mode == 'train':
+    train_state = model_bundle.ckpt.restore_or_initialize(train_state)
+    train(
+        model_bundle,
+        train_state,
+        train_dataset,
+        logdir=workdir,
+        **config.train_config)
+  elif mode == 'eval':
+    evaluate_loop(
+        model_bundle,
+        train_state,
+        valid_dataset,
+        workdir=workdir,
+        logdir=workdir,
+        **config.eval_config)

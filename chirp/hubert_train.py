@@ -20,6 +20,7 @@ import os
 import time
 from typing import Optional, List
 from absl import logging
+from chirp.data import pipeline
 from chirp.models import cmap
 from chirp.models import frontend as frontend_models
 from chirp.models import hubert
@@ -907,3 +908,64 @@ def export_tf_lite(model_bundle: ModelBundle, train_state: TrainState,
     tf.io.gfile.makedirs(workdir)
   with tf.io.gfile.GFile(os.path.join(workdir, "model.tflite"), "wb") as f:
     f.write(tflite_float_model)
+
+
+def run(mode: str, config: config_dict.ConfigDict, workdir: str,
+        tf_data_service_address: str) -> None:
+  """Run the experiment."""
+  if mode == "train":
+    train_dataset, dataset_info = pipeline.get_dataset(
+        is_train=True,
+        tf_data_service_address=tf_data_service_address,
+        **config.train_dataset_config)
+  elif mode == "eval":
+    valid_dataset, dataset_info = pipeline.get_dataset(
+        **config.eval_dataset_config)
+  if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
+    raise ValueError(
+        "Dataset sample rate must match config sample rate. To address this, "
+        "need to set the sample rate in the config to {}.".format(
+            dataset_info.features["audio"].sample_rate))
+
+  reload_quantizer = False
+  if config.init_config.reload_quantizer_from:
+    reload_quantizer = True
+
+  # Adjust the multiplier of the quantizer loss such that the quantizer gets the
+  # intended starting learning rate.
+  quant_start_lr = config.init_config.quant_start_learning_rate
+  start_lr = config.init_config.start_learning_rate
+  quant_loss_mult = quant_start_lr / start_lr
+  quant_loss_mult *= config.train_config.quant_loss_mult
+
+  # Initialize.
+  model_bundle, train_state, learning_rate_schedule = initialize_model(
+      workdir=workdir,
+      num_train_steps=config.train_config.num_train_steps,
+      **config.init_config)
+  if mode == "train":
+    train(
+        model_bundle,
+        train_state,
+        learning_rate_schedule,
+        train_dataset,
+        reload_quantizer=reload_quantizer,
+        logdir=workdir,
+        num_train_steps=config.train_config.num_train_steps,
+        log_every_steps=config.train_config.log_every_steps,
+        checkpoint_every_steps=config.train_config.checkpoint_every_steps,
+        num_quantizer_pretrain_steps=config.train_config
+        .num_quantizer_pretrain_steps,
+        quant_loss_mult=quant_loss_mult,
+        readout_loss_mult=config.train_config.readout_loss_mult,
+        hubert_loss_mult=config.train_config.hubert_loss_mult)
+
+  elif mode == "eval":
+    evaluate_loop(
+        model_bundle,
+        train_state,
+        learning_rate_schedule,
+        valid_dataset,
+        workdir=workdir,
+        logdir=workdir,
+        **config.eval_config)
