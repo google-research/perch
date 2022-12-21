@@ -296,6 +296,65 @@ class PipelineTest(parameterized.TestCase):
 
     np.testing.assert_allclose(melspec, melspec_tf.numpy(), atol=1e-5)
 
+  @parameterized.named_parameters(('pad_end', True), ('no_pad_end', False))
+  def test_extract_strided_slices(self, pad_end):
+    sample_rate = self._builder.info.features['audio'].sample_rate
+    length_sec = 5
+    stride_sec = 2.5
+    length = int(length_sec * sample_rate)
+    stride = int(stride_sec * sample_rate)
+
+    original_dataset = self._builder.as_dataset('train')
+    original_examples = next(
+        original_dataset.batch(len(original_dataset)).as_numpy_iterator())
+    dataset = pipeline.ExtractStridedWindows(
+        window_length_sec=length_sec,
+        window_stride_sec=stride_sec,
+        pad_end=pad_end,
+    )(original_dataset, self._builder.info)
+    examples = next(dataset.batch(len(dataset)).as_numpy_iterator())
+
+    # The fake_dataset builder creates 6s recordings. This results in one full
+    # slice and two zero-padded slices when using a 5s window with stride 2.5s.
+    # We expect one slice per example if padding='VALID' and three slices per
+    # example otherwise.
+    self.assertLen(
+        dataset,
+        len(original_dataset) * 3 if pad_end else len(original_dataset))
+
+    # Verify slices have the expected length.
+    self.assertEqual(examples['audio'].shape[1], length)
+
+    # The segment start and end indices should reflect the window sliding over
+    # the audio.
+    np.testing.assert_equal(examples['segment_start'], [0, stride, 2 * stride] *
+                            len(original_dataset) if pad_end else 0)
+    np.testing.assert_equal(examples['segment_end'],
+                            [length, length + stride, length + 2 * stride] *
+                            len(original_dataset) if pad_end else length)
+    # The segment IDs should reflect the sliding window's position.
+    np.testing.assert_equal(examples['segment_id'],
+                            [0, 1, 2] * len(original_dataset) if pad_end else 0)
+    # The other features should be replicated across slices.
+    other_feature_names = [
+        k for k in original_examples
+        if k not in ('audio', 'segment_start', 'segment_end', 'segment_id')
+    ]
+    for key in other_feature_names:
+      np.testing.assert_equal(
+          examples[key],
+          np.repeat(original_examples[key], 3, axis=0)
+          if pad_end else original_examples[key])
+    # With a recording length of 6s, a window size of 5s a window stride of
+    # 2.5s, and with end-padding , we expect the slices to cycle between a full
+    # slice, a slice with 1.5s of zero padding, and a slice with 4s of zero
+    # padding.
+    if pad_end:
+      np.testing.assert_equal(examples['audio'][1::3, -int(1.5 * sample_rate):],
+                              0)
+      np.testing.assert_equal(examples['audio'][2::3, -int(4.0 * sample_rate):],
+                              0)
+
 
 if __name__ == '__main__':
   absltest.main()

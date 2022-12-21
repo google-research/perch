@@ -746,6 +746,57 @@ class Batch(DatasetPreprocessOp):
       return dataset.batch(self.batch_size, drop_remainder=True)
 
 
+@dataclasses.dataclass
+class ExtractStridedWindows(DatasetPreprocessOp):
+  """Extracts strided windows from examples.
+
+  Attributes:
+    window_length_sec: The window interval length to use, in seconds.
+    window_stride_sec: The stride over which to slide the window.
+    pad_end: Whether to pad the end of the recording. If True, window positions
+      that are past the end of the recording are padded with zeros until the
+      window moves fully past the end of the recording. Otherwise, only window
+      positions that fully overlap the recording are considered.
+  """
+  window_length_sec: float
+  window_stride_sec: float
+  pad_end: bool = True
+
+  def __call__(self, dataset: tf.data.Dataset,
+               dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
+    sample_rate = dataset_info.features['audio'].sample_rate
+    window_length = int(sample_rate * self.window_length_sec)
+    window_stride = int(sample_rate * self.window_stride_sec)
+
+    def map_fn(example):
+      example['audio'] = tf.signal.frame(
+          signal=example['audio'],
+          frame_length=window_length,
+          frame_step=window_stride,
+          pad_end=self.pad_end)
+      # At this point, example['audio'] has shape [num_windows, window_length].
+      # We assign a unique sequential ID in [0, num_windows - 1] to each window.
+      example['segment_id'] = tf.range(
+          tf.shape(example['audio'])[0], dtype=tf.int64)
+      example['segment_start'] = example['segment_id'] * window_stride
+      example['segment_end'] = example['segment_start'] + window_length
+
+      # Other features are shared across slices, so we repeat them across the
+      # first axis.
+      feature_names = ('audio', 'segment_id', 'segment_start', 'segment_end')
+      for key, value in ((key, value)
+                         for key, value in example.items()
+                         if key not in feature_names):
+        value = tf.expand_dims(value, 0)
+        value = tf.tile(value, [tf.shape(example['audio'])[0]] + [1] *
+                        (value.shape.ndims - 1))
+        example[key] = value
+      return example
+
+    # Unbatching yields slices one by one.
+    return dataset.map(map_fn).unbatch()
+
+
 def get_dataset(
     split: str,
     is_train: bool = False,
