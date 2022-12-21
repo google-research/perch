@@ -48,6 +48,9 @@ class NamespaceDatabase:
   mappings: Dict[str, namespace.Mapping]
   class_lists: Dict[str, namespace.ClassList]
 
+  def __repr__(self):
+    return 'NamespaceDatabase'
+
   @classmethod
   def load_csvs(cls) -> 'NamespaceDatabase':
     """Load the database from CSVs."""
