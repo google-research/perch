@@ -114,7 +114,7 @@ def parse_config(config: config_dict.ConfigDict,
   with config.ignore_type():
     for key, value in config.items():
       if isinstance(value, (list, tuple)):
-        config[key] = [_parse_value(v) for v in value]
+        config[key] = type(value)(_parse_value(v) for v in value)
       else:
         config[key] = _parse_value(value)
     return config
