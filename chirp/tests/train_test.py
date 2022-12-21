@@ -77,9 +77,14 @@ class TrainTest(parameterized.TestCase):
   def _get_test_config(self, config_module=baseline) -> config_dict.ConfigDict:
     """Reduces test config sizes to avoid memory blowouts."""
     config = config_module.get_config()
-    config = config_utils.parse_config(config, config_globals.get_globals())
-
     config.sample_rate_hz = 11_025
+    config.num_train_steps = 1
+    config.train_window_size_s = TEST_WINDOW_S
+    config.eval_window_size_s = TEST_WINDOW_S
+    config.train_config.log_every_steps = 1
+    config.train_config.checkpoint_every_steps = 1
+    config.eval_config.eval_steps_per_checkpoint = 1
+    config = config_utils.parse_config(config, config_globals.get_globals())
 
     config.train_dataset_config.pipeline = pipeline.Pipeline(ops=[
         pipeline.OnlyJaxTypes(),
@@ -101,12 +106,6 @@ class TrainTest(parameterized.TestCase):
         pipeline.NormalizeAudio(target_gain=0.2, names=("audio",)),
     ])
 
-    config.train_config.num_train_steps = 1
-    config.train_config.log_every_steps = 1
-    config.train_config.checkpoint_every_steps = 1
-    config.eval_config.eval_steps_per_checkpoint = 1
-    config.init_config.input_shape = (TEST_WINDOW_S * config.sample_rate_hz,)
-    config.eval_config.input_shape = (TEST_WINDOW_S * config.sample_rate_hz,)
     return config
 
   def _add_const_model_config(self, config):

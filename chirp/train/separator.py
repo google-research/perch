@@ -17,7 +17,7 @@
 
 import functools
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 from absl import logging
 from chirp import export_utils
@@ -148,8 +148,9 @@ def make_metrics_collection(prefix: str):
   return clu_metrics.Collection.create(**metrics_dict)
 
 
-def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
-                     workdir: str, model_config: config_dict.ConfigDict,
+def initialize_model(input_shape: Tuple[int, ...], rng_seed: int,
+                     learning_rate: float, workdir: str,
+                     model_config: config_dict.ConfigDict,
                      target_class_list: str):
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
@@ -161,7 +162,7 @@ def initialize_model(input_size: int, rng_seed: int, learning_rate: float,
   model = separation_model.SeparationModel(
       num_classes={k: v.size for (k, v) in class_lists.items()}, **model_config)
   variables = model.init(
-      model_init_key, jnp.zeros((1, input_size)), train=False)
+      model_init_key, jnp.zeros((1,) + input_shape), train=False)
   model_state, params = variables.pop('params')
 
   # Initialize optimizer

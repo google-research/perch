@@ -134,9 +134,6 @@ def initialize_model(
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
 
-  # Handle lazy computation
-  input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
-
   # Load model
   model_init_key, key = random.split(key)
   class_lists = class_utils.get_class_lists(target_class_list, True)
