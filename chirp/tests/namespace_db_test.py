@@ -82,7 +82,7 @@ class NamespaceDbTest(absltest.TestCase):
       missing_classes = set()
       namespace = db.namespaces[class_list.namespace]
       for cl in class_list.classes:
-        if cl not in namespace.classes:
+        if cl not in namespace:
           missing_classes.add(cl)
       if missing_classes:
         logging.warning(
@@ -101,9 +101,9 @@ class NamespaceDbTest(absltest.TestCase):
       source_namespace = db.namespaces[mapping.source_namespace]
       target_namespace = db.namespaces[mapping.target_namespace]
       for source_cl, target_cl in mapping.to_dict().items():
-        if source_cl not in source_namespace.classes:
+        if source_cl not in source_namespace:
           missing_source_classes.add(source_cl)
-        if target_cl not in target_namespace.classes:
+        if target_cl not in target_namespace:
           missing_target_classes.add(target_cl)
       if missing_source_classes:
         logging.warning(

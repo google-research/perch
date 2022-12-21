@@ -22,12 +22,17 @@ from typing import Dict, Iterable, Optional, Sequence, Set, Tuple
 from jax import numpy as jnp
 import tensorflow as tf
 
+UNKNOWN_LABEL = 'unknown'
+
 
 @dataclasses.dataclass
 class Namespace:
   """An unordered collection of classes."""
   name: str
   classes: Set[str]
+
+  def __contains__(self, other) -> bool:
+    return other == UNKNOWN_LABEL or other in self.classes
 
   @property
   def size(self) -> int:
@@ -73,7 +78,7 @@ class Mapping:
     values = [m[1] for m in self.mapped_pairs]
     table = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(keys, values),
-        default_value='unknown',
+        default_value=UNKNOWN_LABEL,
     )
     return table
 
@@ -84,6 +89,9 @@ class ClassList:
   name: str
   namespace: str
   classes: Sequence[str]
+
+  def __contains__(self, other) -> bool:
+    return other == UNKNOWN_LABEL or other in self.classes
 
   @classmethod
   def from_csv(cls, name: str, csv_data: Iterable[str]) -> 'ClassList':

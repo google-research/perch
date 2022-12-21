@@ -31,7 +31,7 @@ import tqdm
 _AUDIO_EXTENSIONS = ['.flac', '.wav']
 LocalizationFn = Callable[[Any, int, float, int], Sequence[Tuple[int, int]]]
 MAX_INTERVALS_PER_FILE = 200
-UNKNOWN_LABEL = 'unknown'
+UNKNOWN_LABEL = namespace.UNKNOWN_LABEL
 
 
 @dataclasses.dataclass
@@ -374,7 +374,7 @@ def get_labeled_intervals(
         continue
       # found an overlap!
       for label in seg['label']:
-        if label == UNKNOWN_LABEL or label in class_list.classes:
+        if label in class_list:
           interval_labels.add(label)
         else:
           logging.info('dropping label not in class list: %s', str(label))
