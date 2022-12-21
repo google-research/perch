@@ -89,5 +89,5 @@ def update_cmap_metrics_dict(cmap_metrics, model_outputs, batch):
   """Update a dict of cmap_metrics from model_outputs and a batch."""
   for label_name in cmap_metrics:
     cmap_metrics[label_name] = cmap_metrics[label_name].merge(
-        CMAP(getattr(model_outputs, label_name), batch[label_name]))
+        CMAP(model_outputs[label_name], batch[label_name]))
   return cmap_metrics

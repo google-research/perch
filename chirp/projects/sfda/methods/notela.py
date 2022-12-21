@@ -334,17 +334,17 @@ class NOTELA(adapt.SFDAMethod):
         # We restrict the model's logits to the classes that appear in the
         # current dataset to ensure compatibility with
         # method_state["dataset_proba"].
-        model_outputs = model_outputs.replace(
-            label=model_outputs.label[...,
-                                      reference_label_mask.astype(bool)])
+        model_outputs = model_outputs.copy()
+        model_outputs["label"] = model_outputs["label"][
+            ..., reference_label_mask.astype(bool)]
       logit2proba = nn.sigmoid if multi_label else nn.softmax
       previous_nn_matrix = self.indices_to_sparse_matrix(
           method_state["nn_matrix"], (method_state["dataset_feature"].shape[0],
                                       method_state["dataset_feature"].shape[0]))
       batch_nn_matrix, pseudo_label = self.compute_pseudo_label(
-          batch_feature=model_outputs.embedding,
+          batch_feature=model_outputs["embedding"],
           dataset_feature=method_state["dataset_feature"],
-          batch_proba=logit2proba(model_outputs.label),
+          batch_proba=logit2proba(model_outputs["label"]),
           dataset_proba=method_state["dataset_proba"],
           multi_label=multi_label,
           knn=method_kwargs["knn"],
@@ -357,9 +357,9 @@ class NOTELA(adapt.SFDAMethod):
       # Update global information
       previous_nn_matrix[batch_indices] = batch_nn_matrix
       method_state["dataset_feature"] = method_state["dataset_feature"].at[
-          batch_indices].set(model_outputs.embedding)
+          batch_indices].set(model_outputs["embedding"])
       method_state["dataset_proba"] = method_state["dataset_proba"].at[
-          batch_indices].set(logit2proba(model_outputs.label))
+          batch_indices].set(logit2proba(model_outputs["label"]))
       method_state["nn_matrix"] = jnp.stack(previous_nn_matrix.nonzero(), 1)
       adaptation_state = adaptation_state.replace(
           method_state=flax_utils.replicate(method_state))

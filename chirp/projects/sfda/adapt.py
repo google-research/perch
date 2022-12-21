@@ -333,9 +333,9 @@ class SFDAMethod(metaclass=abc.ABCMeta):
           "outputs":
               model_outputs,
           "probabilities":
-              logits2probas(model_outputs.label),
+              logits2probas(model_outputs["label"]),
           "label_mask":
-              jnp.ones_like(model_outputs.label)
+              jnp.ones_like(model_outputs["label"])
               if "label_mask" not in batch else batch["label_mask"],
       }
       gather_args.update(method_gather_args)
@@ -489,8 +489,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
           metric_collection.gather_from_model_output(
               multi_label=multi_label,
               outputs=model_outputs,
-              probabilities=logits2probas(model_outputs.label),
-              label_mask=jnp.ones_like(model_outputs.label)
+              probabilities=logits2probas(model_outputs["label"]),
+              label_mask=jnp.ones_like(model_outputs["label"])
               if "label_mask" not in batch else batch["label_mask"],
               label=batch["label"].astype(np.int32)))
 
@@ -533,9 +533,9 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
     sfda_method: The Source-Free Domain Adaptation method to use.
     adaptation_state: The initial AdaptationState to adapt. Once adaptation is
       over, its updated version is returned.
-    rename_fn: The function to use to rename the parameter keys. This is
-      needed if using `optax.multi_transform`, which can be used to define
-      different learning rates for different parameters.
+    rename_fn: The function to use to rename the parameter keys. This is needed
+      if using `optax.multi_transform`, which can be used to define different
+      learning rates for different parameters.
     inverse_rename_fn: A callable that reverses the changes of `rename_fn`.
     adaptation_dataset: The dataset used for adaptation.
     use_supervised_metrics: Whether the current adaptation dataset is supervised

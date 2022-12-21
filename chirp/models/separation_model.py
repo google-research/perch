@@ -15,10 +15,9 @@
 
 """Separation model."""
 
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from chirp.models import layers
-import flax
 from flax import linen as nn
 import jax
 from jax import numpy as jnp
@@ -26,43 +25,30 @@ from jax import numpy as jnp
 SOUNDSTREAM_UNET = 'soundstream_unet'
 
 
-@flax.struct.dataclass
-class ModelOutputs:
-  """Separation model outputs."""
-  separated_audio: jnp.ndarray
-  bottleneck: Optional[jnp.ndarray] = None
-  embedding: Optional[jnp.ndarray] = None
-  label: Optional[jnp.ndarray] = None
-  genus: Optional[jnp.ndarray] = None
-  family: Optional[jnp.ndarray] = None
-  order: Optional[jnp.ndarray] = None
+def time_reduce_logits(model_outputs: Dict[str, Any],
+                       reduction: str = 'AVG') -> Dict[str, Any]:
+  """Returns new model outputs with scores reduced over the time axis.
 
-  def time_reduce_logits(self, reduction: str = 'AVG') -> 'ModelOutputs':
-    """Returns a new ModelOutputs with scores reduced over the time axis.
-
-    Args:
-      reduction: Type of reduction to use. One of AVG (promotes precision), MAX
-        (promotes recall), or MIDPOINT (unbiased, but probably useless for very
-        long sequences).
-    """
-    if reduction == 'AVG':
-      reduce_fn = lambda x: jnp.mean(x, axis=1)
-    elif reduction == 'MAX':
-      reduce_fn = lambda x: jnp.max(x, axis=1)
-    elif reduction == 'MIDPOINT':
-      midpt = self.label.shape[1] // 2
-      reduce_fn = lambda x: x[:, midpt, :]
-    else:
-      raise ValueError(f'Reduction {reduction} not recognized.')
-    return ModelOutputs(
-        self.separated_audio,
-        self.bottleneck,
-        self.embedding,
-        reduce_fn(self.label) if self.label is not None else None,
-        reduce_fn(self.genus) if self.genus is not None else None,
-        reduce_fn(self.family) if self.family is not None else None,
-        reduce_fn(self.order) if self.order is not None else None,
-    )
+  Args:
+    model_outputs: A dictionary of model outputs.
+    reduction: Type of reduction to use. One of AVG (promotes precision), MAX
+      (promotes recall), or MIDPOINT (unbiased, but probably useless for very
+      long sequences).
+  """
+  if reduction == 'AVG':
+    reduce_fn = lambda x: jnp.mean(x, axis=1)
+  elif reduction == 'MAX':
+    reduce_fn = lambda x: jnp.max(x, axis=1)
+  elif reduction == 'MIDPOINT':
+    midpt = model_outputs['label'].shape[1] // 2
+    reduce_fn = lambda x: x[:, midpt, :]
+  else:
+    raise ValueError(f'Reduction {reduction} not recognized.')
+  model_outputs = model_outputs.copy()
+  for feature in ('label', 'genus', 'family', 'order'):
+    if feature in model_outputs:
+      model_outputs[feature] = reduce_fn(model_outputs[feature])
+  return model_outputs
 
 
 def enforce_mixture_consistency_time_domain(mixture_waveforms,
@@ -172,7 +158,7 @@ class SeparationModel(nn.Module):
     return classify_outputs
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> ModelOutputs:
+  def __call__(self, inputs: jnp.ndarray, train: bool) -> Dict[str, Any]:
     """Apply the separation model."""
     banked_inputs = self.bank_transform(inputs)
     num_banked_filters = banked_inputs.shape[-1]
@@ -210,4 +196,4 @@ class SeparationModel(nn.Module):
     }
     if self.classify_bottleneck:
       model_outputs.update(self.bottleneck_classifier(bottleneck, train=train))
-    return ModelOutputs(**model_outputs)
+    return model_outputs

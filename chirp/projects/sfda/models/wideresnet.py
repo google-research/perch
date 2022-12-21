@@ -19,7 +19,7 @@ Translated from PyTorch version at https://github.com/RobustBench/robustbench/
 blob/master/robustbench/model_zoo/architectures/wide_resnet.py. We make the
 following modifications to the orignal model:
   - Use of 'use_running_average' to explicitly control BatchNorm's behavior.
-  - Packaging the forward's output as a taxonomy_model.ModelOutputs for
+  - Packaging the forward's output as a outputs.ModelOutputs for
     compatibility with the rest of the pipeline.
   - Added a Dropout layer after average pooling, and before the classfication
     head. This was done to inject noise during the forward pass for Dropout
@@ -30,7 +30,6 @@ following modifications to the orignal model:
 import functools
 import re
 from typing import Dict, Tuple, List
-from chirp.models import taxonomy_model
 from chirp.projects.sfda.models import image_model
 from etils import epath
 import flax
@@ -157,7 +156,7 @@ class WideResnet(image_model.ImageModel):
     outputs = nn.Dense(self.num_classes)(x)
 
     model_outputs['label'] = outputs.astype(jnp.float32)
-    return taxonomy_model.ModelOutputs(**model_outputs)
+    return model_outputs
 
   @staticmethod
   def load_ckpt(dataset_name: str) -> flax.core.frozen_dict.FrozenDict:

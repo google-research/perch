@@ -73,7 +73,7 @@ class PseudoLabel(adapt.SFDAMethod):
         method_kwargs["update_bn_statistics"])
     logit2proba = nn.sigmoid if multi_label else nn.softmax
     probabilities = logit2proba(
-        model_output.label)  # [1, batch_size, num_classes]
+        model_output["label"])  # [1, batch_size, num_classes]
     if multi_label:
       # In the multi-label case, given that each class is treated indepently,
       # we perform masking at a "class level", meaning that within one sample,

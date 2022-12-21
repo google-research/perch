@@ -15,6 +15,7 @@
 
 """Initialializing the registry of image models."""
 import enum
+from typing import Optional
 
 from chirp.projects.sfda.models.constant_model import ConstantEncoderModel
 from chirp.projects.sfda.models.nrc_resnet import NRCResNet101

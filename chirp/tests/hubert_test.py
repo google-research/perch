@@ -173,14 +173,15 @@ class HuBERTTest(absltest.TestCase):
     # Ensure that the number of logits matches that of targets. There will be
     # as many "sets" of these as there are quantizers. In this case it should
     # be just one, since `quantizer_points` has a single element.
-    self.assertEqual(len(model_outputs.logits), len(model_outputs.targets))
-    self.assertLen(model_outputs.logits, 1)
+    self.assertEqual(
+        len(model_outputs["logits"]), len(model_outputs["targets"]))
+    self.assertLen(model_outputs["logits"], 1)
 
     # Ensure the shapes of embeddings and logits are as expected.
-    self.assertSequenceEqual(model_outputs.embedding[-1].shape,
+    self.assertSequenceEqual(model_outputs["embedding"][-1].shape,
                              (batch_size, num_frames, self.model_dims))
     self.assertSequenceEqual(
-        model_outputs.logits[-1].shape,
+        model_outputs["logits"][-1].shape,
         (self.num_sections, batch_size, num_frames, self.num_centroids))
 
   def test_gradients(self):

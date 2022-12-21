@@ -16,7 +16,7 @@
 """Training loop."""
 import functools
 import time
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from absl import logging
 from chirp import export_utils
@@ -46,40 +46,38 @@ EVAL_LOOP_SLEEP_S = 30
 
 
 # Metric and logging utilities
-def taxonomy_cross_entropy(outputs: taxonomy_model.ModelOutputs,
-                           label: jnp.ndarray, genus: jnp.ndarray,
-                           family: jnp.ndarray, order: jnp.ndarray,
-                           taxonomy_loss_weight: float,
+def taxonomy_cross_entropy(outputs: Dict[str, Any], label: jnp.ndarray,
+                           genus: jnp.ndarray, family: jnp.ndarray,
+                           order: jnp.ndarray, taxonomy_loss_weight: float,
                            **unused_kwargs) -> jnp.ndarray:
   """Computes mean cross entropy across taxonomic labels."""
   mean = jnp.mean(
-      optax.sigmoid_binary_cross_entropy(outputs.label, label), axis=-1)
+      optax.sigmoid_binary_cross_entropy(outputs["label"], label), axis=-1)
   if taxonomy_loss_weight != 0:
     mean += taxonomy_loss_weight * jnp.mean(
-        optax.sigmoid_binary_cross_entropy(outputs.genus, genus), axis=-1)
+        optax.sigmoid_binary_cross_entropy(outputs["genus"], genus), axis=-1)
     mean += taxonomy_loss_weight * jnp.mean(
-        optax.sigmoid_binary_cross_entropy(outputs.family, family), axis=-1)
+        optax.sigmoid_binary_cross_entropy(outputs["family"], family), axis=-1)
     mean += taxonomy_loss_weight * jnp.mean(
-        optax.sigmoid_binary_cross_entropy(outputs.order, order), axis=-1)
+        optax.sigmoid_binary_cross_entropy(outputs["order"], order), axis=-1)
   return mean
 
 
-def keyed_cross_entropy(key: str, outputs: taxonomy_model.ModelOutputs,
+def keyed_cross_entropy(key: str, outputs: Dict[str, Any],
                         **kwargs) -> Optional[jnp.ndarray]:
   """Cross entropy for the specified taxonomic label set."""
-  cross_entropy = optax.sigmoid_binary_cross_entropy(
-      getattr(outputs, key), kwargs[key])
+  cross_entropy = optax.sigmoid_binary_cross_entropy(outputs[key], kwargs[key])
   label_mask = kwargs.get(key + "_mask", 1)
   cross_entropy = label_mask * cross_entropy
   mean = jnp.mean(cross_entropy, axis=-1)
   return mean
 
 
-def keyed_map(key: str, outputs: taxonomy_model.ModelOutputs,
+def keyed_map(key: str, outputs: Dict[str, Any],
               **kwargs) -> Optional[jnp.ndarray]:
   label_mask = kwargs.get(key + "_mask", None)
   return metrics.average_precision(
-      scores=getattr(outputs, key), labels=kwargs[key], label_mask=label_mask)
+      scores=outputs[key], labels=kwargs[key], label_mask=label_mask)
 
 
 def make_metrics_collection(prefix: str, taxonomy_loss_weight: float):
@@ -361,7 +359,7 @@ def export_tf(model_bundle: utils.ModelBundle, train_state: utils.TrainState,
   def infer_fn(audio_batch, variables):
     model_outputs = model_bundle.model.apply(
         variables, audio_batch, train=False)
-    return model_outputs.label, model_outputs.embedding
+    return model_outputs["label"], model_outputs["embedding"]
 
   # Note: Polymorphic batch size currently isn't working with the STFT op,
   # so we provide a static batch size.

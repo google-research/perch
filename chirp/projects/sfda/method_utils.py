@@ -15,10 +15,9 @@
 
 """Some utils functions shared across methods."""
 
-from typing import Dict, Union, Optional
+from typing import Any, Dict, Union, Optional
 
 from absl import logging
-from chirp.models import taxonomy_model
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import model_utils
 import flax
@@ -73,8 +72,7 @@ def batch_forward(
     modality: adapt.Modality,
     use_batch_statistics: bool,
     train: bool = False,
-    key: Optional[jax.random.PRNGKeyArray] = None
-) -> taxonomy_model.ModelOutputs:
+    key: Optional[jax.random.PRNGKeyArray] = None) -> Dict[str, Any]:
   """Collects the model's output on the current batch of data.
 
   Args:
@@ -100,6 +98,7 @@ def batch_forward(
   if train and key is None:
     raise ValueError("Please specifify a random key when using train=True.")
   rngs = {"dropout": key} if key is not None else None
+
   @jax.pmap
   def forward(batch, model_state, params, rngs):
     if use_batch_statistics:
@@ -203,8 +202,9 @@ def forward_dataset(
                          "'only_keep_unmasked_classes' option to work"
                          "adequately.")
       # We only keep unmasked classes.
-      model_outputs = model_outputs.replace(
-          label=model_outputs.label[..., reference_mask.astype(bool)])
+      model_outputs.copy()
+      model_outputs["label"] = model_outputs["label"][
+          ..., reference_mask.astype(bool)]
     all_ouputs.append(flax_utils.unreplicate(model_outputs))
     all_ids += list(batch["tfds_id"].reshape(-1))
 
@@ -212,10 +212,11 @@ def forward_dataset(
   # arrays in the result dictionary.
   logits2proba = nn.sigmoid if multi_label else nn.softmax
   result = {}
-  result["embedding"] = jnp.concatenate([x.embedding for x in all_ouputs],
+  result["embedding"] = jnp.concatenate([x["embedding"] for x in all_ouputs],
                                         axis=0)  # [dataset_size, n_dimensions]
-  result["proba"] = jnp.concatenate([logits2proba(x.label) for x in all_ouputs],
-                                    axis=0)  # [dataset_size, num_classes]
+  result["proba"] = jnp.concatenate(
+      [logits2proba(x["label"]) for x in all_ouputs],
+      axis=0)  # [dataset_size, num_classes]
   ids = np.array(all_ids)  # [dataset_size,]
 
   # Make some verifications.

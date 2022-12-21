@@ -17,7 +17,7 @@
 
 import functools
 import time
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from absl import logging
 from chirp import export_utils
@@ -85,7 +85,7 @@ class TrainingMetrics(clu_metrics.Collection):
   train_mixit_neg_snr: clu_metrics.LastValue.from_fun(p_log_snr_loss)
 
 
-def taxonomy_cross_entropy(outputs: separation_model.ModelOutputs,
+def taxonomy_cross_entropy(outputs: Dict[str, Any],
                            label: jnp.ndarray,
                            genus: jnp.ndarray,
                            family: jnp.ndarray,
@@ -95,35 +95,35 @@ def taxonomy_cross_entropy(outputs: separation_model.ModelOutputs,
   """Computes mean cross entropy across taxonomic labels."""
   # Note that the classification outputs are reduced to shape [B, D] from
   # [B, T, D] prior to the loss computation.
-  if outputs.label is None:
+  if 'label' not in outputs:
     return 0
   mean = jnp.mean(
-      optax.sigmoid_binary_cross_entropy(outputs.label, label), axis=-1)
+      optax.sigmoid_binary_cross_entropy(outputs['label'], label), axis=-1)
   mean += taxonomy_labels_weight * jnp.mean(
-      optax.sigmoid_binary_cross_entropy(outputs.genus, genus), axis=-1)
+      optax.sigmoid_binary_cross_entropy(outputs['genus'], genus), axis=-1)
   mean += taxonomy_labels_weight * jnp.mean(
-      optax.sigmoid_binary_cross_entropy(outputs.family, family), axis=-1)
+      optax.sigmoid_binary_cross_entropy(outputs['family'], family), axis=-1)
   mean += taxonomy_labels_weight * jnp.mean(
-      optax.sigmoid_binary_cross_entropy(outputs.order, order), axis=-1)
+      optax.sigmoid_binary_cross_entropy(outputs['order'], order), axis=-1)
   return mean
 
 
-def keyed_cross_entropy(key: str, outputs: separation_model.ModelOutputs,
+def keyed_cross_entropy(key: str, outputs: Dict[str, Any],
                         **kwargs) -> Optional[jnp.ndarray]:
   """Cross entropy for the specified taxonomic label set."""
-  if getattr(outputs, key) is None:
+  if key not in outputs:
     return 0
-  scores = getattr(outputs, key)
+  scores = outputs[key]
   mean = jnp.mean(
       optax.sigmoid_binary_cross_entropy(scores, kwargs[key]), axis=-1)
   return mean
 
 
-def keyed_map(key: str, outputs: separation_model.ModelOutputs,
+def keyed_map(key: str, outputs: Dict[str, Any],
               **kwargs) -> Optional[jnp.ndarray]:
-  if getattr(outputs, key) is None:
+  if key not in outputs:
     return 0
-  scores = getattr(outputs, key)
+  scores = outputs[key]
   return metrics.average_precision(scores=scores, labels=kwargs[key])
 
 
@@ -205,7 +205,7 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
           mutable=list(model_state.keys()))
       estimate, mixit_matrix = metrics.least_squares_mixit(
           reference=batch['source_audio'],
-          estimate=model_outputs.separated_audio)
+          estimate=model_outputs['separated_audio'])
       if 'label' in batch:
         labels = {
             'label': batch['label'],
@@ -215,10 +215,11 @@ def train(model_bundle, train_state, train_dataset, num_train_steps: int,
         }
       else:
         labels = {}
-      model_outputs = model_outputs.time_reduce_logits('MIDPOINT')
+      model_outputs = separation_model.time_reduce_logits(
+          model_outputs, 'MIDPOINT')
       train_metrics = train_metrics_collection.gather_from_model_output(
           outputs=model_outputs,
-          separated=model_outputs.separated_audio,
+          separated=model_outputs['separated_audio'],
           source=batch['source_audio'],
           estimate=estimate,
           mixit_matrix=mixit_matrix,
@@ -276,7 +277,8 @@ def evaluate(model_bundle: utils.ModelBundle,
     model_outputs = model_bundle.model.apply(
         variables, batch['audio'], train=False)
     estimate, mixit_matrix = metrics.least_squares_mixit(
-        reference=batch['source_audio'], estimate=model_outputs.separated_audio)
+        reference=batch['source_audio'],
+        estimate=model_outputs['separated_audio'])
     if 'label' in batch:
       labels = {
           'label': batch['label'],
@@ -286,11 +288,12 @@ def evaluate(model_bundle: utils.ModelBundle,
       }
     else:
       labels = {}
-    model_outputs = model_outputs.time_reduce_logits('MIDPOINT')
+    model_outputs = separation_model.time_reduce_logits(model_outputs,
+                                                        'MIDPOINT')
     return model_outputs, valid_metrics.merge(
         ValidationMetrics.gather_from_model_output(
             outputs=model_outputs,
-            separated=model_outputs.separated_audio,
+            separated=model_outputs['separated_audio'],
             source=batch['source_audio'],
             estimate=estimate,
             mixit_matrix=mixit_matrix,
@@ -384,8 +387,8 @@ def export_tf(model_bundle: utils.ModelBundle, train_state: utils.TrainState,
                               [framed_audio_batch.shape[0], -1])
     model_outputs = model_bundle.model.apply(
         variables, flat_inputs, train=False)
-    return (model_outputs.separated_audio, model_outputs.label,
-            model_outputs.embedding)
+    return (model_outputs['separated_audio'], model_outputs['label'],
+            model_outputs['embedding'])
 
   converted_model = export_utils.Jax2TfModelWrapper(infer_fn, variables,
                                                     [None, None, frame_size],

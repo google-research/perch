@@ -15,9 +15,8 @@
 
 """A template for any image model."""
 
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 
-from chirp.models import taxonomy_model
 from etils import epath
 import flax
 import flax.linen as nn
@@ -29,16 +28,15 @@ class ImageModel(nn.Module):
   """A template for any image model."""
 
   @nn.compact
-  def __call__(
-      self, x, train: bool,
-      use_running_average: Optional[bool]) -> taxonomy_model.ModelOutputs:
+  def __call__(self, x, train: bool,
+               use_running_average: Optional[bool]) -> Dict[str, Any]:
     """Just like any standard nn.Module, defines the foward pass of the model.
 
     We formulate two non-standard requirements for the forward pass. First, it
     must disentangle the train/test behavior of BatchNorm layers and those of
     other noisy layers (e.g. Dropout). This is achieved through the use of
     'train' and 'use_running_average' options. Second, we require that the
-    outputs are packaged into a taxonomy_model.ModelOutputs, thereby including
+    outputs are packaged into a outputs.ModelOutputs, thereby including
     both the encoder's features, as well as the head's output. See
     chirp/projects/sfda/models/resnet.py for an example.
 
@@ -53,7 +51,7 @@ class ImageModel(nn.Module):
         train'.
 
     Returns:
-      The model's outputs, packaged as a taxonomy_model.ModelOutputs.
+      The model's outputs, packaged as a outputs.ModelOutputs.
     """
     raise NotImplementedError
 
@@ -90,7 +88,7 @@ class ImageModel(nn.Module):
 
     Args:
       parameter_name: The name of the parameter, as a list in which each member
-      describes the name of a layer. E.g. ('Block1', 'batch_norm_1', 'bias').
+        describes the name of a layer. E.g. ('Block1', 'batch_norm_1', 'bias').
 
     Returns:
       True if this parameter belongs to a BatchNorm layer.

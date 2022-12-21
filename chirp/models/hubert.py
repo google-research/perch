@@ -25,19 +25,6 @@ import jax
 from jax import numpy as jnp
 
 
-@flax.struct.dataclass
-class ModelOutputs:
-  embedding: List[jnp.ndarray]
-  logits: List[jnp.ndarray]
-  targets: List[jnp.ndarray]
-  mask_idc: jnp.ndarray
-  quantization_loss: List[jnp.ndarray]
-  label: List[jnp.ndarray]
-  genus: Optional[List[jnp.ndarray]] = None
-  family: Optional[List[jnp.ndarray]] = None
-  order: Optional[List[jnp.ndarray]] = None
-
-
 class QuantizerPoints(enum.Enum):
   """A point in the architecture to add a quantizer."""
   FRONTEND = -2
@@ -220,8 +207,8 @@ class HuBERTModel(nn.Module):
       different feature spaces.
     frontend: The frontend to use to generate features.
     use_raw_audio: Whether to feed raw audio into the feature extractor to get
-      HuBERT's predictions (as opposed to audio processed with a frontend).
-      The current best configuration sets this option to True but performs
+      HuBERT's predictions (as opposed to audio processed with a frontend). The
+      current best configuration sets this option to True but performs
       quantization after the frontend to obtain targets for HuBERT.
     mask_config: The config for generating masks.
     classifier_config: The config for the classifier.
@@ -248,16 +235,16 @@ class HuBERTModel(nn.Module):
     stop_gradient_earlyfs: Whether to stop gradient after the early feature
       extractor.
     omit_classifier_stop_grads: Optionally, a list of integers indicating which
-      of the readout points to omit the stop-gradient for. Specifically, a 
+      of the readout points to omit the stop-gradient for. Specifically, a
       classifier is added to each readout point, and typically a stop-gradient
       is used to prevent the classifier from modifying the representations (this
-      happens by default, if this argument isn't provided, or if it's None). If 
-      provided, specifies the index (or indices) of readout locations where 
-      that stop-gradient operation will be omitted. This allows, for instance,
+      happens by default, if this argument isn't provided, or if it's None). If
+      provided, specifies the index (or indices) of readout locations where that
+      stop-gradient operation will be omitted. This allows, for instance,
       supervised finetuning of HuBERT representations, and semi-supervised
       learning.
-    add_positional_embeddings: Whether to add positional embeddings to the
-      late feature extractor.
+    add_positional_embeddings: Whether to add positional embeddings to the late
+      feature extractor.
   """
   num_classes: Dict[str, int]
   early_feature_extractor: Union[nn.Module, None]
@@ -456,7 +443,7 @@ class HuBERTModel(nn.Module):
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool,
-               mask_key: Union[jnp.ndarray, None]) -> ModelOutputs:
+               mask_key: Union[jnp.ndarray, None]) -> Dict[str, Any]:
     """Apply the HuBERT model.
 
     The quantizer used may either be Product Quantizer (PQ) or a base quantizer.
@@ -619,4 +606,4 @@ class HuBERTModel(nn.Module):
     model_outputs["quantization_loss"] = jnp.mean(
         jnp.stack(quant_losses, axis=0), axis=0)
 
-    return ModelOutputs(**model_outputs)
+    return model_outputs

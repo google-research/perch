@@ -66,8 +66,8 @@ class TaxonomyModelTest(absltest.TestCase):
         use_running_average=True,
         rngs={"dropout": rng})
     self.assertNotEqual(
-        jnp.squeeze(output1.label).tolist(),
-        jnp.squeeze(output2.label).tolist())
+        jnp.squeeze(output1["label"]).tolist(),
+        jnp.squeeze(output2["label"]).tolist())
 
   def test_batch_norm(self):
     """Ensure that the state is updated by BN layers."""

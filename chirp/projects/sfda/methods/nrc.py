@@ -320,7 +320,7 @@ class NRC(adapt.SFDAMethod):
 
     # Compute nearest-neighbors and extended nearest-neighbors indices.
     nn_indices = self.compute_nearest_neighbors(
-        batch_feature=model_outputs.embedding,
+        batch_feature=model_outputs["embedding"],
         dataset_feature=method_state["dataset_feature"],
         nn=method_kwargs["nn"],
     )  # [batch_size, nn]
@@ -356,10 +356,10 @@ class NRC(adapt.SFDAMethod):
     # Update banks
     method_state["dataset_feature"] = (
         method_state["dataset_feature"].at[batch_indices].set(
-            model_outputs.embedding))
+            model_outputs["embedding"]))
     method_state["dataset_probability"] = (
         method_state["dataset_probability"].at[batch_indices].set(
-            logit2proba(model_outputs.label)))
+            logit2proba(model_outputs["label"])))
     return adaptation_state, {
         "nn_weight":
             flax_utils.replicate(nn_weight),

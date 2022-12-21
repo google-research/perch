@@ -18,7 +18,7 @@ import enum
 import functools
 import os
 import time
-from typing import Optional, List, Callable
+from typing import Any, Dict, Optional, List, Callable
 from absl import logging
 from chirp.data import pipeline
 from chirp.models import cmap
@@ -69,12 +69,12 @@ def filter_loss(loss, keep_inds):
   return loss_filtered
 
 
-def filtered_hubert_loss_from_outputs(outputs: hubert.ModelOutputs,
+def filtered_hubert_loss_from_outputs(outputs: Dict[str, Any],
                                       keep_inds: jnp.ndarray,
                                       **unused_kwargs) -> jnp.ndarray:
   """Cross entropy from model outputs for the given subset of `keep_inds`."""
-  logits = outputs.logits
-  targets = outputs.targets
+  logits = outputs["logits"]
+  targets = outputs["targets"]
 
   # `logits` and `targets` are lists whose length will be the number of
   # quantizers `nq`.
@@ -92,10 +92,10 @@ def filtered_hubert_loss_from_outputs(outputs: hubert.ModelOutputs,
   return losses
 
 
-def hubert_loss_from_outputs(outputs: hubert.ModelOutputs, alpha: float,
+def hubert_loss_from_outputs(outputs: Dict[str, Any], alpha: float,
                              **unused_kwargs) -> jnp.ndarray:
   """Cross entropy computed from model outputs."""
-  mask_idc = outputs.mask_idc
+  mask_idc = outputs["mask_idc"]
   # Compute the loss on the unmasked and masked frames separately.
   loss_u = filtered_hubert_loss_from_outputs(outputs,
                                              jnp.where(mask_idc, False, True))
@@ -104,18 +104,18 @@ def hubert_loss_from_outputs(outputs: hubert.ModelOutputs, alpha: float,
   return alpha * loss_m + (1 - alpha) * loss_u
 
 
-def quantizer_loss(outputs: hubert.ModelOutputs, quant_loss_mult: float,
+def quantizer_loss(outputs: Dict[str, Any], quant_loss_mult: float,
                    **unused_kwargs) -> jnp.ndarray:
   """Get quantization loss from model outputs."""
   del unused_kwargs
   # [bsz, sz, csz] or [bsz, sz, 1] (depending on the quantizer).
-  quant_loss = outputs.quantization_loss
+  quant_loss = outputs["quantization_loss"]
   quant_loss = jnp.squeeze(jnp.mean(quant_loss, -1))
   # [bsz, sz].
   return quant_loss * quant_loss_mult
 
 
-def taxonomy_cross_entropy(outputs: hubert.ModelOutputs, label: jnp.ndarray,
+def taxonomy_cross_entropy(outputs: Dict[str, Any], label: jnp.ndarray,
                            genus: jnp.ndarray, family: jnp.ndarray,
                            order: jnp.ndarray, taxonomy_loss_weight: float,
                            **unused_kwargs) -> jnp.ndarray:
@@ -129,16 +129,16 @@ def taxonomy_cross_entropy(outputs: hubert.ModelOutputs, label: jnp.ndarray,
           jnp.mean(optax.sigmoid_binary_cross_entropy(l, target), axis=-1))
     return jnp.sum(jnp.stack(losses, axis=0), axis=0)
 
-  mean = aggregate_losses(outputs.label, label)
+  mean = aggregate_losses(outputs["label"], label)
 
   if taxonomy_loss_weight != 0:
-    mean += taxonomy_loss_weight * aggregate_losses(outputs.genus, genus)
-    mean += taxonomy_loss_weight * aggregate_losses(outputs.family, family)
-    mean += taxonomy_loss_weight * aggregate_losses(outputs.order, order)
+    mean += taxonomy_loss_weight * aggregate_losses(outputs["genus"], genus)
+    mean += taxonomy_loss_weight * aggregate_losses(outputs["family"], family)
+    mean += taxonomy_loss_weight * aggregate_losses(outputs["order"], order)
   return mean
 
 
-def supervised_loss(outputs: hubert.ModelOutputs, label: jnp.ndarray,
+def supervised_loss(outputs: Dict[str, Any], label: jnp.ndarray,
                     genus: jnp.ndarray, family: jnp.ndarray, order: jnp.ndarray,
                     taxonomy_loss_weight: float, readout_loss_mult: float,
                     **unused_kwargs) -> jnp.ndarray:
@@ -147,17 +147,17 @@ def supervised_loss(outputs: hubert.ModelOutputs, label: jnp.ndarray,
   loss = taxonomy_cross_entropy(outputs, label, genus, family, order,
                                 taxonomy_loss_weight)  # [bsz].
   # Make it [bsz, sz] so that it can be element-wise added to other losses.
-  sz = outputs.logits[0].shape[-2]
+  sz = outputs["logits"][0].shape[-2]
   loss = jnp.repeat(jnp.expand_dims(loss, axis=-1), axis=-1, repeats=sz)
   return loss * readout_loss_mult
 
 
 def keyed_cross_entropy(key: str,
-                        outputs: hubert.ModelOutputs,
+                        outputs: Dict[str, Any],
                         readout_index: int = 0,
                         **kwargs) -> Optional[jnp.ndarray]:
   """Cross entropy for the specified taxonomic label set."""
-  outputs = getattr(outputs, key)
+  outputs = outputs[key]
   outputs = outputs[readout_index]
   mean = jnp.mean(
       optax.sigmoid_binary_cross_entropy(outputs, kwargs[key]), axis=-1)
@@ -165,17 +165,16 @@ def keyed_cross_entropy(key: str,
 
 
 def keyed_map(key: str,
-              outputs: hubert.ModelOutputs,
+              outputs: Dict[str, Any],
               readout_index: int = 0,
               **kwargs) -> Optional[jnp.ndarray]:
-  outputs = getattr(outputs, key)
+  outputs = outputs[key]
   outputs = outputs[readout_index]
   return metrics.average_precision(scores=outputs, labels=kwargs[key])
 
 
-def final_loss(outputs: hubert.ModelOutputs, alpha: float,
-               quant_loss_mult: float, readout_loss_mult: float,
-               hubert_loss_mult: float,
+def final_loss(outputs: Dict[str, Any], alpha: float, quant_loss_mult: float,
+               readout_loss_mult: float, hubert_loss_mult: float,
                **kwargs_for_supervised) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
   # [bsz, sz].
@@ -200,15 +199,15 @@ def final_loss(outputs: hubert.ModelOutputs, alpha: float,
   return quant_loss + hubert_loss + readout_loss
 
 
-def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
+def cluster_targets_metrics(outputs: Dict[str, Any], key: str,
                             **unused_kwargs) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
   del unused_kwargs
   assert key.startswith(("n_masked_per_sample", "n_per_cluster",
                          "max_per_cluster", "min_per_cluster", "h_diversity"))
   # A list of [ns, bsz, sz, nc].
-  all_targets = outputs.targets
-  mask_idc = outputs.mask_idc
+  all_targets = outputs["targets"]
+  mask_idc = outputs["mask_idc"]
   n_masked_per_sample = jnp.sum(mask_idc, axis=1)  # [bsz].
   ret = {"n_masked_per_sample": n_masked_per_sample}
   for i, targets in enumerate(all_targets):
@@ -322,7 +321,7 @@ def update_cmap_metrics_dict(label_names, cmap_metrics, model_outputs, batch,
     for i, block_ind in enumerate(readout_points):
       label_name_i = label_name + "_{}".format(block_ind)
       cmap_metrics[label_name_i] = cmap_metrics[label_name_i].merge(
-          cmap.CMAP(getattr(model_outputs, label_name)[i], batch[label_name]))
+          cmap.CMAP(model_outputs[label_name][i], batch[label_name]))
   return cmap_metrics
 
 
@@ -880,7 +879,7 @@ def export_tf_lite(model_bundle: utils.ModelBundle,
   def infer_fn(audio_batch):
     model_outputs = model_bundle.model.apply(
         variables, audio_batch, train=False)
-    return model_outputs.label
+    return model_outputs["label"]
 
   tf_predict = tf.function(
       jax2tf.convert(infer_fn, enable_xla=False),

@@ -15,23 +15,13 @@
 
 """Taxonomy model."""
 import dataclasses
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from chirp.models import conformer
 from chirp.models import frontend
 from chirp.models import layers
-import flax
 from flax import linen as nn
 from jax import numpy as jnp
-
-
-@flax.struct.dataclass
-class ModelOutputs:
-  embedding: jnp.ndarray
-  label: jnp.ndarray
-  genus: Optional[jnp.ndarray] = None
-  family: Optional[jnp.ndarray] = None
-  order: Optional[jnp.ndarray] = None
 
 
 class TaxonomyModel(nn.Module):
@@ -62,7 +52,7 @@ class TaxonomyModel(nn.Module):
                inputs: jnp.ndarray,
                train: bool,
                use_running_average: Optional[bool] = None,
-               mask: Optional[jnp.ndarray] = None) -> ModelOutputs:
+               mask: Optional[jnp.ndarray] = None) -> Dict[str, Any]:
     """Apply the taxonomy model.
 
     Args:
@@ -119,7 +109,7 @@ class TaxonomyModel(nn.Module):
       if self.taxonomy_loss_weight == 0.0 and k != "label":
         continue
       model_outputs[k] = nn.Dense(n)(x)
-    return ModelOutputs(**model_outputs)
+    return model_outputs
 
 
 class ConformerModel(nn.Module):
