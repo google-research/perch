@@ -63,6 +63,7 @@ def LoadWavAudio(path, sample_rate, bitdepth=16):
     path: Location to load.
     sample_rate: Target sample rate. Set to 0 to avoid resampling.
     bitdepth: Scaling term.
+
   Returns:
     sample_rate: numpy array of samples.
     array: ?

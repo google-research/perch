@@ -241,7 +241,6 @@ def FindPeaks(summed_spectral_magnitudes, stft_fps):
 
   Returns:
     List of filtered peak indices in the array of summed spectral magnitudes.
-
   """
   threshold = np.mean(summed_spectral_magnitudes) * 1.5
   min_width = int(round(0.5 * stft_fps))

@@ -48,8 +48,7 @@ SPECIES_INFO_PATH = os.path.join(DATA_PATH, 'species_info.csv')
 
 ENSEMBLE_SIZE = 3
 
-flags.DEFINE_list('source_files', [],
-                  'Source audio files (wav or mp3).')
+flags.DEFINE_list('source_files', [], 'Source audio files (wav or mp3).')
 flags.DEFINE_string('model_path', '',
                     'Where to find the model params and inference.pb')
 flags.DEFINE_string('separation_model_path', '',

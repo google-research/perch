@@ -99,6 +99,7 @@ def batch_forward(
   if train and key is None:
     raise ValueError("Please specifify a random key when using train=True.")
   rngs = {"dropout": key} if key is not None else None
+
   @jax.pmap
   def forward(batch, model_state, params, rngs):
     if use_batch_statistics:

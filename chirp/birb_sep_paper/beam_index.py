@@ -46,8 +46,7 @@ DATA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 SPECIES_INFO_PATH = os.path.join(DATA_PATH, 'species_info.csv')
 ENSEMBLE_SIZE = 3
 
-flags.DEFINE_list('source_files', [],
-                  'Source audio files (wav or mp3).')
+flags.DEFINE_list('source_files', [], 'Source audio files (wav or mp3).')
 flags.DEFINE_string('model_path', '',
                     'Where to find the model params and inference.pb')
 flags.DEFINE_string('separation_model_path', '',
@@ -59,7 +58,6 @@ flags.DEFINE_integer('file_shards', 48,
                      'Number of sub-jobs to divide each input file into.')
 flags.DEFINE_string('hints_tag', '', 'Species set tag for hints.')
 flags.DEFINE_boolean('dry_run', False, 'Whether to exit after dry-run.')
-
 
 PredictionTuple = collections.namedtuple(
     'PredictionTuple', ['file_id', 'start_time', 'end_time', 'logits'])
@@ -231,8 +229,8 @@ def main(unused_argv):
       # returns None. In this case the lambda below returns false, which then
       # filters it out.
       | beam.Filter(lambda x: x)
-      | beam.io.WriteToTFRecord(output_prefix,
-                                coder=beam.coders.ProtoCoder(tf.train.Example)))
+      | beam.io.WriteToTFRecord(
+          output_prefix, coder=beam.coders.ProtoCoder(tf.train.Example)))
   pipeline.run()
 
 

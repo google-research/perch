@@ -89,7 +89,7 @@ class ImageModel(nn.Module):
 
     Args:
       parameter_name: The name of the parameter, as a list in which each member
-      describes the name of a layer. E.g. ('Block1', 'batch_norm_1', 'bias').
+        describes the name of a layer. E.g. ('Block1', 'batch_norm_1', 'bias').
 
     Returns:
       True if this parameter belongs to a BatchNorm layer.

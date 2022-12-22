@@ -181,9 +181,9 @@ class TaxonomyModelCallback:
       to the default behavior of using all embedded upstream recordings for
       artificially rare species to form search queries.
     learned_representation_blocklist: Species codes for learned representations
-      which should *not* appear in the `learned_representations` mapping. This is
-      analogous in result to having an allowlist for which species codes use the
-      `learned_representations`.
+      which should *not* appear in the `learned_representations` mapping. This
+      is analogous in result to having an allowlist for which species codes use
+      the `learned_representations`.
     model_callback: the fprop function used as part of the model callback,
       created automatically post-initialization.
     learned_representations: mapping from class name to its learned

@@ -66,8 +66,8 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
       metadata_fields.
     metadata_fields: Maps the fields of the metadata DataFrame to tfds.features
       datatypes.
-    annotation_filename: Filename for the annotations file. Defaults to None,
-      in which case the filename is derived from the config name.
+    annotation_filename: Filename for the annotations file. Defaults to None, in
+      which case the filename is derived from the config name.
     annotation_load_fn: Because the annotations don't always appear in the same
       format, we specify a function to load the annotations.
     keep_unknown_annotation: An "unknown" annotations appears in some datasets.

@@ -220,8 +220,8 @@ class HuBERTModel(nn.Module):
       different feature spaces.
     frontend: The frontend to use to generate features.
     use_raw_audio: Whether to feed raw audio into the feature extractor to get
-      HuBERT's predictions (as opposed to audio processed with a frontend).
-      The current best configuration sets this option to True but performs
+      HuBERT's predictions (as opposed to audio processed with a frontend). The
+      current best configuration sets this option to True but performs
       quantization after the frontend to obtain targets for HuBERT.
     mask_config: The config for generating masks.
     classifier_config: The config for the classifier.
@@ -248,16 +248,16 @@ class HuBERTModel(nn.Module):
     stop_gradient_earlyfs: Whether to stop gradient after the early feature
       extractor.
     omit_classifier_stop_grads: Optionally, a list of integers indicating which
-      of the readout points to omit the stop-gradient for. Specifically, a 
+      of the readout points to omit the stop-gradient for. Specifically, a
       classifier is added to each readout point, and typically a stop-gradient
       is used to prevent the classifier from modifying the representations (this
-      happens by default, if this argument isn't provided, or if it's None). If 
-      provided, specifies the index (or indices) of readout locations where 
-      that stop-gradient operation will be omitted. This allows, for instance,
+      happens by default, if this argument isn't provided, or if it's None). If
+      provided, specifies the index (or indices) of readout locations where that
+      stop-gradient operation will be omitted. This allows, for instance,
       supervised finetuning of HuBERT representations, and semi-supervised
       learning.
-    add_positional_embeddings: Whether to add positional embeddings to the
-      late feature extractor.
+    add_positional_embeddings: Whether to add positional embeddings to the late
+      feature extractor.
   """
   num_classes: dict[str, int]
   early_feature_extractor: Union[nn.Module, None]

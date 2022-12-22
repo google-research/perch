@@ -49,8 +49,9 @@ class WNDense(nn.Dense):
       param_shape, param_dtype = init_args
       param_shape = (1, param_shape[1])
       kernel_g = super().param('kernel_g', init_fn, *(param_shape, param_dtype))
-      scale = jnp.sqrt(jnp.square(kernel_v).sum(tuple(range(kernel_v.ndim-1)),
-                                                keepdims=True))
+      scale = jnp.sqrt(
+          jnp.square(kernel_v).sum(
+              tuple(range(kernel_v.ndim - 1)), keepdims=True))
       return kernel_g * kernel_v / scale
     else:
       return super().param(name, init_fn, *init_args)
@@ -170,11 +171,7 @@ class NRCResNet(resnet.ResNet):
       label = tf.one_hot(example['label'],
                          data_builder.info.features['label'].num_classes)
 
-      return {
-          'image': image,
-          'label': label,
-          'tfds_id': example['tfds_id']
-      }
+      return {'image': image, 'label': label, 'tfds_id': example['tfds_id']}
 
     dataset = data_builder.as_dataset(split=split, read_config=read_config)
     options = tf.data.Options()
@@ -246,11 +243,9 @@ def _to_variables(state_dict: dict[str, np.ndarray],
           re.compile(r'BatchNorm_(\d)\.weight').sub,
           repl=r'BatchNorm_\1.scale'),
       functools.partial(
-          re.compile(r'bn_init\.weight').sub,
-          repl=r'bn_init.scale'),
+          re.compile(r'bn_init\.weight').sub, repl=r'bn_init.scale'),
       functools.partial(
-          re.compile(r'norm_proj\.weight').sub,
-          repl=r'norm_proj.scale'),
+          re.compile(r'norm_proj\.weight').sub, repl=r'norm_proj.scale'),
       functools.partial(
           re.compile(r'bottleneck_bn\.weight').sub,
           repl=r'bottleneck_bn.scale'),

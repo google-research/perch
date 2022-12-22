@@ -159,5 +159,6 @@ class QuantizersTest(absltest.TestCase):
     self.assertSequenceEqual(quantizer_outputs.nn_idx.shape,
                              [num_sections, 2, 4])
 
+
 if __name__ == '__main__':
   absltest.main()

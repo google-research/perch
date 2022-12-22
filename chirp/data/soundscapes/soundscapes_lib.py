@@ -97,7 +97,6 @@ def create_segments_df(
 
   Returns:
     DataFrame of dataset annotations with metadata.
-
   """
   if supervised:
     # Combine segments with additional metadata (e.g Country).
