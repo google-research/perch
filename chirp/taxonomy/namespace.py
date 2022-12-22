@@ -17,7 +17,7 @@
 
 import csv
 import dataclasses
-from typing import Iterable, Optional, Sequence, Set
+from typing import Dict, Iterable, Optional, Sequence, Set
 
 from jax import numpy as jnp
 import tensorflow as tf
@@ -34,9 +34,17 @@ class Namespace:
   def __contains__(self, other) -> bool:
     return other == UNKNOWN_LABEL or other in self.classes
 
+  def __repr__(self) -> str:
+    return f'Namespace_{self.name}'
+
   @property
   def size(self) -> int:
     return len(self.classes)
+
+  def __eq__(self, other) -> bool:
+    if not isinstance(other, Namespace):
+      return False
+    return sorted(self.classes) == sorted(other.classes)
 
   @classmethod
   def from_csv(cls, csv_data: Iterable[str]) -> 'Namespace':
@@ -58,6 +66,33 @@ class Mapping:
   source_namespace: str
   target_namespace: str
   mapped_pairs: Sequence[tuple[str, str]]
+
+  def __repr__(self) -> str:
+    return (f'Mapping {self.name} from {self.source_namespace} '
+            f'to {self.target_namespace}')
+
+  def __eq__(self, other) -> bool:
+    if not isinstance(other, Mapping):
+      return False
+    elif self.source_namespace != other.source_namespace:
+      return False
+    elif self.target_namespace != other.target_namespace:
+      return False
+    elif sorted(self.mapped_pairs) != sorted(other.mapped_pairs):
+      return False
+    if len(self.mapped_pairs) != len(other.mapped_pairs):
+      return False
+    for pair_self, pair_other in zip(
+        sorted(self.mapped_pairs), sorted(other.mapped_pairs)):
+      if pair_self[0] != pair_other[0] or pair_self[1] != pair_other[1]:
+        return False
+    return True
+
+  @classmethod
+  def from_dict(cls, name: str, source_namespace: str, target_namespace: str,
+                mapped_pairs: Dict[str, str]) -> 'Mapping':
+    pairs = tuple((k, v) for (k, v) in mapped_pairs.items())
+    return Mapping(name, source_namespace, target_namespace, pairs)
 
   @classmethod
   def from_csv(cls, name: str, csv_data: Iterable[str]) -> 'Mapping':
@@ -92,6 +127,14 @@ class ClassList:
 
   def __contains__(self, other) -> bool:
     return other == UNKNOWN_LABEL or other in self.classes
+
+  def __repr__(self) -> str:
+    return f'ClassList {self.name} in {self.namespace}'
+
+  def __eq__(self, other):
+    if not isinstance(other, ClassList):
+      return False
+    return sorted(self.classes) == sorted(other.classes)
 
   @classmethod
   def from_csv(cls, name: str, csv_data: Iterable[str]) -> 'ClassList':

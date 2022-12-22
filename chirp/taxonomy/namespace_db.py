@@ -20,6 +20,7 @@ import functools
 import os
 
 from chirp import path_utils
+from chirp.taxonomy import generators
 from chirp.taxonomy import namespace
 
 NAMESPACES_PATH = 'taxonomy/data/namespaces'
@@ -53,9 +54,22 @@ class NamespaceDatabase:
   @classmethod
   def load_csvs(cls) -> 'NamespaceDatabase':
     """Load the database from CSVs."""
+    namespaces = {}
+    mappings = {}
+    class_lists = {}
+
+    # Load generated ebird data.
+    generated_data = generators.generate_ebird2021()
+    for ns in generated_data.namespaces:
+      namespaces[ns.name] = ns
+    for mapping in generated_data.mappings:
+      mappings[mapping.name] = mapping
+    for class_list in generated_data.class_lists:
+      class_lists[class_list.name] = class_list
+
+    # Load CSV data.
     namespace_csvs = path_utils.listdir(NAMESPACES_PATH)
     namespace_csvs = [p for p in namespace_csvs if p.endswith('.csv')]
-    namespaces = {}
     for c in namespace_csvs:
       filepath = path_utils.get_absolute_epath(os.path.join(NAMESPACES_PATH, c))
       with open(filepath, 'r') as f:
@@ -64,43 +78,47 @@ class NamespaceDatabase:
 
     mappings_csvs = path_utils.listdir(MAPPINGS_PATH)
     mappings_csvs = [p for p in mappings_csvs if p.endswith('.csv')]
-    mappings = {}
     for c in mappings_csvs:
       filepath = path_utils.get_absolute_epath(os.path.join(MAPPINGS_PATH, c))
       with open(filepath, 'r') as f:
         mapping = namespace.Mapping.from_csv(c[:-4], f)
-        if mapping.source_namespace not in namespaces:
-          raise ValueError(f'Mapping {c} has an unknown source namespace '
-                           '{mapping.source_namespace}.')
-        if mapping.target_namespace not in namespaces:
-          raise ValueError(f'Mapping {c} has an unknown target namespace '
-                           '{mapping.target_namespace}.')
-
         mappings[mapping.name] = mapping
 
     class_list_csvs = path_utils.listdir(CLASS_LISTS_PATH)
     class_list_csvs = [p for p in class_list_csvs if p.endswith('.csv')]
-    class_lists = {}
     for c in class_list_csvs:
       filepath = path_utils.get_absolute_epath(
           os.path.join(CLASS_LISTS_PATH, c))
       with open(filepath, 'r') as f:
         class_list = namespace.ClassList.from_csv(c[:-4], f)
-        if class_list.namespace not in namespaces:
-          raise ValueError(
-              f'ClassList {c} has an unknown namespace {class_list.namespace}.')
         class_lists[class_list.name] = class_list
 
-    db = NamespaceDatabase(namespaces, mappings, class_lists)
-    db._populate_natural_class_lists()
-    return db
+    # Create a ClassList for each namespace.
+    for space in namespaces.values():
+      class_lists[space.name] = space.to_class_list()
 
-  def _populate_natural_class_lists(self):
-    """Create ClassLists corresponding to each namespace."""
-    for d in self.namespaces.values():
-      if d.name not in self.class_lists:
-        self.class_lists[d.name] = d.to_class_list()
-      else:
-        raise ValueError(
-            f'Tried to add the natural class set for domain {d.name}, '
-            'but found a class set with the same name.')
+    # Add the IOC->ebird2021 mapping.
+    ioc_map = generators.generate_ioc_12_2_to_ebird2021(
+        mappings['ioc_12_2_to_clements'],
+        mappings['clements_to_ebird2021'],
+    )
+    mappings[ioc_map.name] = ioc_map
+
+    # Check consistency.
+    for space in namespaces.values():
+      if space.name in namespaces and space != namespaces[space.name]:
+        raise ValueError(f'Multiple definitions for namespace {space.name}')
+    for mapping in mappings.values():
+      if mapping.source_namespace not in namespaces:
+        raise ValueError(f'Mapping {mapping.name} has an unknown source '
+                         f'namespace {mapping.source_namespace}.')
+      if mapping.target_namespace not in namespaces:
+        raise ValueError(f'Mapping {mapping.name} has an unknown target '
+                         f'namespace {mapping.target_namespace}.')
+    for class_list in class_lists.values():
+      if class_list.namespace not in namespaces:
+        raise ValueError(f'ClassList {class_list.name} has an unknown '
+                         f'namespace {class_list.namespace}.')
+
+    db = NamespaceDatabase(namespaces, mappings, class_lists)
+    return db

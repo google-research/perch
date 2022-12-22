@@ -78,23 +78,26 @@ class NamespaceDbTest(absltest.TestCase):
     # Ensure that all classes in class lists appear in their namespace.
     db = namespace_db.NamespaceDatabase.load_csvs()
 
+    all_missing_classes = set()
     for list_name, class_list in db.class_lists.items():
       missing_classes = set()
       namespace = db.namespaces[class_list.namespace]
       for cl in class_list.classes:
         if cl not in namespace:
           missing_classes.add(cl)
+          all_missing_classes.add(cl)
       if missing_classes:
         logging.warning(
             'The classes %s in class list %s did not appear in'
             ' namespace %s.', missing_classes, list_name, namespace.name)
       missing_classes.discard('unknown')
-      self.assertEmpty(missing_classes)
+    self.assertEmpty(all_missing_classes)
 
   def test_namespace_mapping_closure(self):
     # Ensure that all classes in mappings appear in their namespace.
     db = namespace_db.NamespaceDatabase.load_csvs()
 
+    all_missing_classes = set()
     for mapping_name, mapping in db.mappings.items():
       missing_source_classes = set()
       missing_target_classes = set()
@@ -103,8 +106,10 @@ class NamespaceDbTest(absltest.TestCase):
       for source_cl, target_cl in mapping.to_dict().items():
         if source_cl not in source_namespace:
           missing_source_classes.add(source_cl)
+          all_missing_classes.add(source_cl)
         if target_cl not in target_namespace:
           missing_target_classes.add(target_cl)
+          all_missing_classes.add(target_cl)
       if missing_source_classes:
         logging.warning(
             'The classes %s in mapping %s did not appear in'
@@ -116,8 +121,7 @@ class NamespaceDbTest(absltest.TestCase):
             ' namespace %s.', missing_target_classes, mapping_name,
             target_namespace.name)
       missing_target_classes.discard('unknown')
-      self.assertEmpty(missing_source_classes)
-      self.assertEmpty(missing_target_classes)
+    self.assertEmpty(all_missing_classes)
 
   def test_taxonomic_mappings(self):
     # Ensure that all ebird2021 species appear in taxonomic mappings.
