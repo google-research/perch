@@ -85,7 +85,7 @@ class TrainingMetrics(clu_metrics.Collection):
   train_mixit_neg_snr: clu_metrics.LastValue.from_fun(p_log_snr_loss)
 
 
-def taxonomy_cross_entropy(outputs: separation_model.ModelOutputs,
+def taxonomy_cross_entropy(outputs: separation_model.SeparatorOutput,
                            label: jnp.ndarray,
                            genus: jnp.ndarray,
                            family: jnp.ndarray,
@@ -108,7 +108,7 @@ def taxonomy_cross_entropy(outputs: separation_model.ModelOutputs,
   return mean
 
 
-def keyed_cross_entropy(key: str, outputs: separation_model.ModelOutputs,
+def keyed_cross_entropy(key: str, outputs: separation_model.SeparatorOutput,
                         **kwargs) -> Optional[jnp.ndarray]:
   """Cross entropy for the specified taxonomic label set."""
   if getattr(outputs, key) is None:
@@ -119,7 +119,7 @@ def keyed_cross_entropy(key: str, outputs: separation_model.ModelOutputs,
   return mean
 
 
-def keyed_map(key: str, outputs: separation_model.ModelOutputs,
+def keyed_map(key: str, outputs: separation_model.SeparatorOutput,
               **kwargs) -> Optional[jnp.ndarray]:
   if getattr(outputs, key) is None:
     return 0

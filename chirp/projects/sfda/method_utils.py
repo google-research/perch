@@ -18,7 +18,7 @@
 from typing import Dict, Union, Optional
 
 from absl import logging
-from chirp.models import taxonomy_model
+from chirp.models import output
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import model_utils
 import flax
@@ -73,8 +73,7 @@ def batch_forward(
     modality: adapt.Modality,
     use_batch_statistics: bool,
     train: bool = False,
-    key: Optional[jax.random.PRNGKeyArray] = None
-) -> taxonomy_model.ModelOutputs:
+    key: Optional[jax.random.PRNGKeyArray] = None) -> output.ClassifierOutput:
   """Collects the model's output on the current batch of data.
 
   Args:

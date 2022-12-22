@@ -69,7 +69,7 @@ def filter_loss(loss, keep_inds):
   return loss_filtered
 
 
-def filtered_hubert_loss_from_outputs(outputs: hubert.ModelOutputs,
+def filtered_hubert_loss_from_outputs(outputs: hubert.HubertOutput,
                                       keep_inds: jnp.ndarray,
                                       **unused_kwargs) -> jnp.ndarray:
   """Cross entropy from model outputs for the given subset of `keep_inds`."""
@@ -92,7 +92,7 @@ def filtered_hubert_loss_from_outputs(outputs: hubert.ModelOutputs,
   return losses
 
 
-def hubert_loss_from_outputs(outputs: hubert.ModelOutputs, alpha: float,
+def hubert_loss_from_outputs(outputs: hubert.HubertOutput, alpha: float,
                              **unused_kwargs) -> jnp.ndarray:
   """Cross entropy computed from model outputs."""
   mask_idc = outputs.mask_idc
@@ -104,7 +104,7 @@ def hubert_loss_from_outputs(outputs: hubert.ModelOutputs, alpha: float,
   return alpha * loss_m + (1 - alpha) * loss_u
 
 
-def quantizer_loss(outputs: hubert.ModelOutputs, quant_loss_mult: float,
+def quantizer_loss(outputs: hubert.HubertOutput, quant_loss_mult: float,
                    **unused_kwargs) -> jnp.ndarray:
   """Get quantization loss from model outputs."""
   del unused_kwargs
@@ -115,7 +115,7 @@ def quantizer_loss(outputs: hubert.ModelOutputs, quant_loss_mult: float,
   return quant_loss * quant_loss_mult
 
 
-def taxonomy_cross_entropy(outputs: hubert.ModelOutputs, label: jnp.ndarray,
+def taxonomy_cross_entropy(outputs: hubert.HubertOutput, label: jnp.ndarray,
                            genus: jnp.ndarray, family: jnp.ndarray,
                            order: jnp.ndarray, taxonomy_loss_weight: float,
                            **unused_kwargs) -> jnp.ndarray:
@@ -138,7 +138,7 @@ def taxonomy_cross_entropy(outputs: hubert.ModelOutputs, label: jnp.ndarray,
   return mean
 
 
-def supervised_loss(outputs: hubert.ModelOutputs, label: jnp.ndarray,
+def supervised_loss(outputs: hubert.HubertOutput, label: jnp.ndarray,
                     genus: jnp.ndarray, family: jnp.ndarray, order: jnp.ndarray,
                     taxonomy_loss_weight: float, readout_loss_mult: float,
                     **unused_kwargs) -> jnp.ndarray:
@@ -153,7 +153,7 @@ def supervised_loss(outputs: hubert.ModelOutputs, label: jnp.ndarray,
 
 
 def keyed_cross_entropy(key: str,
-                        outputs: hubert.ModelOutputs,
+                        outputs: hubert.HubertOutput,
                         readout_index: int = 0,
                         **kwargs) -> Optional[jnp.ndarray]:
   """Cross entropy for the specified taxonomic label set."""
@@ -165,7 +165,7 @@ def keyed_cross_entropy(key: str,
 
 
 def keyed_map(key: str,
-              outputs: hubert.ModelOutputs,
+              outputs: hubert.HubertOutput,
               readout_index: int = 0,
               **kwargs) -> Optional[jnp.ndarray]:
   outputs = getattr(outputs, key)
@@ -173,7 +173,7 @@ def keyed_map(key: str,
   return metrics.average_precision(scores=outputs, labels=kwargs[key])
 
 
-def final_loss(outputs: hubert.ModelOutputs, alpha: float,
+def final_loss(outputs: hubert.HubertOutput, alpha: float,
                quant_loss_mult: float, readout_loss_mult: float,
                hubert_loss_mult: float,
                **kwargs_for_supervised) -> Optional[jnp.ndarray]:
@@ -200,7 +200,7 @@ def final_loss(outputs: hubert.ModelOutputs, alpha: float,
   return quant_loss + hubert_loss + readout_loss
 
 
-def cluster_targets_metrics(outputs: hubert.ModelOutputs, key: str,
+def cluster_targets_metrics(outputs: hubert.HubertOutput, key: str,
                             **unused_kwargs) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
   del unused_kwargs

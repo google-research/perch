@@ -24,6 +24,7 @@ from chirp.data import pipeline
 from chirp.models import cmap
 from chirp.models import frontend
 from chirp.models import metrics
+from chirp.models import output
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
 from chirp.train import utils
@@ -46,10 +47,9 @@ EVAL_LOOP_SLEEP_S = 30
 
 
 # Metric and logging utilities
-def taxonomy_cross_entropy(outputs: taxonomy_model.ModelOutputs,
-                           label: jnp.ndarray, genus: jnp.ndarray,
-                           family: jnp.ndarray, order: jnp.ndarray,
-                           taxonomy_loss_weight: float,
+def taxonomy_cross_entropy(outputs: output.TaxonomicOutput, label: jnp.ndarray,
+                           genus: jnp.ndarray, family: jnp.ndarray,
+                           order: jnp.ndarray, taxonomy_loss_weight: float,
                            **unused_kwargs) -> jnp.ndarray:
   """Computes mean cross entropy across taxonomic labels."""
   mean = jnp.mean(
@@ -64,7 +64,7 @@ def taxonomy_cross_entropy(outputs: taxonomy_model.ModelOutputs,
   return mean
 
 
-def keyed_cross_entropy(key: str, outputs: taxonomy_model.ModelOutputs,
+def keyed_cross_entropy(key: str, outputs: output.AnyOutput,
                         **kwargs) -> Optional[jnp.ndarray]:
   """Cross entropy for the specified taxonomic label set."""
   cross_entropy = optax.sigmoid_binary_cross_entropy(
@@ -75,7 +75,7 @@ def keyed_cross_entropy(key: str, outputs: taxonomy_model.ModelOutputs,
   return mean
 
 
-def keyed_map(key: str, outputs: taxonomy_model.ModelOutputs,
+def keyed_map(key: str, outputs: output.AnyOutput,
               **kwargs) -> Optional[jnp.ndarray]:
   label_mask = kwargs.get(key + "_mask", None)
   return metrics.average_precision(

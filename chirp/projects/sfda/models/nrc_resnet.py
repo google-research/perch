@@ -30,7 +30,7 @@ import functools
 import re
 from typing import Dict
 
-from chirp.models import taxonomy_model
+from chirp.models import output
 from chirp.projects.sfda.models import resnet
 from etils import epath
 import flax
@@ -112,7 +112,7 @@ class NRCResNet(resnet.ResNet):
     x = WNDense(self.num_classes, dtype=self.dtype)(x)
     x = jnp.asarray(x, self.dtype)
     model_outputs['label'] = x.astype(jnp.float32)
-    return taxonomy_model.ModelOutputs(**model_outputs)
+    return output.ClassifierOutput(**model_outputs)
 
   @staticmethod
   def load_ckpt(dataset_name: str) -> flax.core.frozen_dict.FrozenDict:

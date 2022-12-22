@@ -18,7 +18,7 @@
 Taken from https://github.com/google/flax/blob/main/examples/imagenet/models.py.
  We make the following modifications to the orignal model:
   - Use of 'use_running_average' to explicitly control BatchNorm's behavior.
-  - Packaging the forward's output as a taxonomy_model.ModelOutputs for
+  - Packaging the forward's output as a output.ClassifierOutput for
     compatibility with the rest of the pipeline.
   - Added a Dropout layer after average pooling, and before the classfication
     head. This was done to inject noise during the forward pass for Dropout
@@ -30,7 +30,7 @@ Taken from https://github.com/google/flax/blob/main/examples/imagenet/models.py.
 
 import functools
 from typing import Any, Callable, Sequence, Tuple, List
-from chirp.models import taxonomy_model
+from chirp.models import output
 from chirp.projects.sfda.models import image_model
 from etils import epath
 import flax
@@ -151,7 +151,7 @@ class ResNet(image_model.ImageModel):
     x = nn.Dense(self.num_classes, dtype=self.dtype)(x)
     x = jnp.asarray(x, self.dtype)
     model_outputs['label'] = x.astype(jnp.float32)
-    return taxonomy_model.ModelOutputs(**model_outputs)
+    return output.ClassifierOutput(**model_outputs)
 
   @staticmethod
   def is_bn_parameter(parameter_name: List[str]) -> bool:

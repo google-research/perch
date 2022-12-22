@@ -16,7 +16,7 @@
 """A toy model, used for testing/debugging purposes only."""
 
 from typing import List
-from chirp.models import taxonomy_model
+from chirp.models import output
 from chirp.projects.sfda.models import image_model
 from flax import linen as nn
 import jax.numpy as jnp
@@ -38,7 +38,7 @@ class ConstantEncoderModel(image_model.ImageModel):
     model_outputs['embedding'] = x
     x = nn.Dense(self.num_classes, dtype=jnp.float32)(x)
     model_outputs['label'] = x
-    return taxonomy_model.ModelOutputs(**model_outputs)
+    return output.ClassifierOutput(**model_outputs)
 
   @staticmethod
   def is_bn_parameter(parameter_name: List[str]) -> bool:

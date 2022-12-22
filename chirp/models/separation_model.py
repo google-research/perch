@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Separation model."""
-
+import dataclasses
 from typing import Callable, Dict, Optional
 
 from chirp.models import layers
@@ -27,7 +27,7 @@ SOUNDSTREAM_UNET = 'soundstream_unet'
 
 
 @flax.struct.dataclass
-class ModelOutputs:
+class SeparatorOutput:
   """Separation model outputs."""
   separated_audio: jnp.ndarray
   bottleneck: Optional[jnp.ndarray] = None
@@ -37,8 +37,8 @@ class ModelOutputs:
   family: Optional[jnp.ndarray] = None
   order: Optional[jnp.ndarray] = None
 
-  def time_reduce_logits(self, reduction: str = 'AVG') -> 'ModelOutputs':
-    """Returns a new ModelOutputs with scores reduced over the time axis.
+  def time_reduce_logits(self, reduction: str = 'AVG') -> 'SeparatorOutput':
+    """Returns a new ModelOutput with scores reduced over the time axis.
 
     Args:
       reduction: Type of reduction to use. One of AVG (promotes precision), MAX
@@ -54,7 +54,7 @@ class ModelOutputs:
       reduce_fn = lambda x: x[:, midpt, :]
     else:
       raise ValueError(f'Reduction {reduction} not recognized.')
-    return ModelOutputs(
+    return SeparatorOutput(
         self.separated_audio,
         self.bottleneck,
         self.embedding,
@@ -172,7 +172,7 @@ class SeparationModel(nn.Module):
     return classify_outputs
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool) -> ModelOutputs:
+  def __call__(self, inputs: jnp.ndarray, train: bool) -> SeparatorOutput:
     """Apply the separation model."""
     banked_inputs = self.bank_transform(inputs)
     num_banked_filters = banked_inputs.shape[-1]
@@ -210,4 +210,4 @@ class SeparationModel(nn.Module):
     }
     if self.classify_bottleneck:
       model_outputs.update(self.bottleneck_classifier(bottleneck, train=train))
-    return ModelOutputs(**model_outputs)
+    return SeparatorOutput(**model_outputs)

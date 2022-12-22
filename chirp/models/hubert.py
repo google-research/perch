@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """HuBERT model."""
+import dataclasses
 import enum
 from typing import Any, Dict, Tuple, List, Sequence, Optional, Union
 
@@ -26,7 +27,7 @@ from jax import numpy as jnp
 
 
 @flax.struct.dataclass
-class ModelOutputs:
+class HubertOutput:
   embedding: List[jnp.ndarray]
   logits: List[jnp.ndarray]
   targets: List[jnp.ndarray]
@@ -456,7 +457,7 @@ class HuBERTModel(nn.Module):
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool,
-               mask_key: Union[jnp.ndarray, None]) -> ModelOutputs:
+               mask_key: Union[jnp.ndarray, None]) -> HubertOutput:
     """Apply the HuBERT model.
 
     The quantizer used may either be Product Quantizer (PQ) or a base quantizer.
@@ -619,4 +620,4 @@ class HuBERTModel(nn.Module):
     model_outputs["quantization_loss"] = jnp.mean(
         jnp.stack(quant_losses, axis=0), axis=0)
 
-    return ModelOutputs(**model_outputs)
+    return HubertOutput(**model_outputs)
