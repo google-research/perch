@@ -583,7 +583,7 @@ def initialize_model(
           "Unsure which parameters correspond to the quantizer, "
           "so unable to reload it. The reloaded params do not contain a key "
           "'quantizer' nor 'quantizer_0'.")
-    train_state.params[quantizer_key] = reloaded_quantizer["params"][
+    train_state.params[quantizer_key] = reloaded_quantizer["params"][  # pytype: disable=unsupported-operands  # py310-upgrade
         quantizer_key]
 
   if reload_hubert_from:
