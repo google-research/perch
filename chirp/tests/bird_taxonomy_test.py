@@ -85,6 +85,11 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
       patcher.stop()
     shutil.rmtree(cls.tempdir)
 
+  # TODO(bartvm): Remove when tensorflow-datasets PyPI package is fixed
+  @absltest.skip
+  def test_tags_are_valid(self):
+    pass
+
 
 class Int16AsFloatTensorTest(absltest.TestCase):
   """Tests for the Int16AsFloatTensor feature."""

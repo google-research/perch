@@ -103,6 +103,11 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     cls.url_patcher.stop()
     shutil.rmtree(cls.tempdir)
 
+  # TODO(bartvm): Remove when tensorflow-datasets PyPI package is fixed
+  @absltest.skip
+  def test_tags_are_valid(self):
+    pass
+
 
 if __name__ == '__main__':
   absltest.main()

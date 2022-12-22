@@ -18,6 +18,8 @@ import os
 from chirp.data import tfds_builder
 import tensorflow_datasets as tfds
 
+from absl.testing import absltest
+
 
 def _manual_data_dir() -> str:
   return os.path.join(
@@ -57,6 +59,11 @@ class WavDirectoryDatasetUnfilteredTest(tfds.testing.DatasetBuilderTestCase):
   def setUpClass(cls):
     super().setUpClass()
 
+  # TODO(bartvm): Remove when tensorflow-datasets PyPI package is fixed
+  @absltest.skip
+  def test_tags_are_valid(self):
+    pass
+
 
 class WavDirectoryDatasetSlicePeakedTest(tfds.testing.DatasetBuilderTestCase):
   """Tests WavDirectoryDataset with "slice_peaked" configuration."""
@@ -69,6 +76,11 @@ class WavDirectoryDatasetSlicePeakedTest(tfds.testing.DatasetBuilderTestCase):
   @classmethod
   def setUpClass(cls):
     super().setUpClass()
+
+  # TODO(bartvm): Remove when tensorflow-datasets PyPI package is fixed
+  @absltest.skip
+  def test_tags_are_valid(self):
+    pass
 
 
 if __name__ == '__main__':
