@@ -15,7 +15,7 @@
 
 """Quantizers."""
 import enum
-from typing import List, Optional, Sequence, Tuple
+from typing import Optional, Sequence
 import flax
 from flax import linen as nn
 import jax
@@ -28,7 +28,7 @@ class QuantizerOutputs:
   quantization_loss: jnp.ndarray
   nn_idx: jnp.ndarray
   codebook: jnp.ndarray
-  cluster_counts: List[jnp.ndarray]
+  cluster_counts: list[jnp.ndarray]
 
 
 class QuantizationStrategy(enum.Enum):
@@ -43,7 +43,7 @@ def refresh_codebooks(
     rng: jnp.ndarray,
     utilization_thresh: float,
     init_scalar: float = 0.1
-) -> Tuple[flax.core.FrozenDict, flax.core.FrozenDict]:
+) -> tuple[flax.core.FrozenDict, flax.core.FrozenDict]:
   """Restart dead codebook vectors.
 
   When usage falls below the target utilization_thresh, codebook entries are

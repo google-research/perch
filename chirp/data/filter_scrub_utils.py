@@ -16,7 +16,7 @@
 """Utilities to filter/scrub data."""
 import enum
 import functools
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Union
+from typing import Any, Dict, NamedTuple, Optional, Sequence, Union
 
 from chirp.data import sampling_utils as su
 from chirp.taxonomy import namespace_db
@@ -55,7 +55,7 @@ class TransformOp(enum.Enum):
   APPEND = 'append'
 
 
-SerializableType = Union[List[Union[int, str, bytes]], MaskOp, TransformOp,
+SerializableType = Union[list[Union[int, str, bytes]], MaskOp, TransformOp,
                          Dict]
 
 
@@ -71,7 +71,7 @@ class Query(NamedTuple):
   partition data for training and evaluation.
   """
   op: Union[MaskOp, TransformOp]
-  kwargs: Dict[str, SerializableType]
+  kwargs: dict[str, SerializableType]
 
 
 class QuerySequence(NamedTuple):
@@ -218,7 +218,7 @@ def apply_parallel(
 
 
 def is_in(df: pd.DataFrame, key: str,
-          values: List[SerializableType]) -> pd.Series:
+          values: list[SerializableType]) -> pd.Series:
   """Builds a binary mask of whether `df[key]` is in `values`.
 
   Useful for filtering.
@@ -245,7 +245,7 @@ def is_in(df: pd.DataFrame, key: str,
   return df[key].isin(values)
 
 
-def contains_any(df: pd.DataFrame, key: str, values: List[str]) -> pd.Series:
+def contains_any(df: pd.DataFrame, key: str, values: list[str]) -> pd.Series:
   """Builds a binary mask of whether `df[key]` contains any of `values`.
 
   Args:
@@ -272,7 +272,7 @@ def contains_any(df: pd.DataFrame, key: str, values: List[str]) -> pd.Series:
   return df[key].map(' '.join).str.contains('|'.join(values))
 
 
-def contains_no(df: pd.DataFrame, key: str, values: List[str]) -> pd.Series:
+def contains_no(df: pd.DataFrame, key: str, values: list[str]) -> pd.Series:
   """Builds a binary mask of whether `df[key]` contains none of `values`.
 
   Args:
@@ -291,22 +291,22 @@ def contains_no(df: pd.DataFrame, key: str, values: List[str]) -> pd.Series:
 
 
 def is_not_in(df: pd.DataFrame, key: str,
-              values: List[SerializableType]) -> pd.Series:
+              values: list[SerializableType]) -> pd.Series:
   return ~is_in(df, key, values)
 
 
-def append(df: pd.DataFrame, row: Dict[str, Any]):
+def append(df: pd.DataFrame, row: dict[str, Any]):
   if set(row.keys()) != set(df.columns):
     raise ValueError
   new_df = df.append(row, ignore_index=True)
   return new_df
 
 
-def scrub(feature_dict: Dict[str, Any],
+def scrub(feature_dict: dict[str, Any],
           key: str,
           values: Sequence[SerializableType],
           all_but: bool = False,
-          replace_value: Optional[SerializableType] = None) -> Dict[str, Any]:
+          replace_value: Optional[SerializableType] = None) -> dict[str, Any]:
   """Removes any occurence of any value in values from feature_dict[key].
 
   Args:
@@ -368,7 +368,7 @@ def scrub(feature_dict: Dict[str, Any],
 
 
 def filter_df(df: pd.DataFrame, mask_op: MaskOp,
-              op_kwargs: Dict[str, SerializableType]):
+              op_kwargs: dict[str, SerializableType]):
   """Filters a dataframe based on the output of the mask_op.
 
   Args:
@@ -383,7 +383,7 @@ def filter_df(df: pd.DataFrame, mask_op: MaskOp,
   return df[APPLY_FN[type(mask_query)](df, mask_query)]
 
 
-def or_series(series_list: List[pd.Series]) -> pd.Series:
+def or_series(series_list: list[pd.Series]) -> pd.Series:
   """Performs an OR operation on a list of boolean pd.Series.
 
   Args:
@@ -406,7 +406,7 @@ def or_series(series_list: List[pd.Series]) -> pd.Series:
   return functools.reduce(lambda s1, s2: s1.add(s2), series_list)
 
 
-def and_series(series_list: List[pd.Series]) -> pd.Series:
+def and_series(series_list: list[pd.Series]) -> pd.Series:
   """Performs an AND operation on a list of boolean pd.Series.
 
   Args:
@@ -429,7 +429,7 @@ def and_series(series_list: List[pd.Series]) -> pd.Series:
   return functools.reduce(lambda s1, s2: s1 * s2, series_list)
 
 
-def concat_no_duplicates(df_list: List[pd.DataFrame]) -> pd.DataFrame:
+def concat_no_duplicates(df_list: list[pd.DataFrame]) -> pd.DataFrame:
   """Concatenates dataframes in df_list, then removes duplicates examples.
 
   Args:

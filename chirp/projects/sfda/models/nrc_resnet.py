@@ -28,7 +28,6 @@ Systems 34 (2021): 29393-29405.
 
 import functools
 import re
-from typing import Dict
 
 from chirp.models import output
 from chirp.projects.sfda.models import resnet
@@ -188,9 +187,8 @@ class NRCResNet(resnet.ResNet):
     return dataset
 
 
-def _to_variables(
-    state_dict: Dict[str, np.ndarray],
-    dataset_name: str) -> flax.core.scope.FrozenVariableDict:
+def _to_variables(state_dict: dict[str, np.ndarray],
+                  dataset_name: str) -> flax.core.scope.FrozenVariableDict:
   """Translates a PyTorch-style state dictionnary into a FrozenVariableDict.
 
   Args:

@@ -16,6 +16,7 @@
 """Implementations of inference interfaces for applying trained models."""
 
 import dataclasses
+import tempfile
 from typing import Any, Optional
 
 from absl import logging
@@ -23,7 +24,6 @@ from chirp.inference import interface
 from chirp.taxonomy import namespace
 from etils import epath
 import numpy as np
-import tempfile
 import tensorflow as tf
 
 

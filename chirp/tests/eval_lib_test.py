@@ -19,7 +19,7 @@ import functools
 import os
 import shutil
 import tempfile
-from typing import Any, Sequence, Tuple
+from typing import Any, Sequence
 
 from chirp import config_utils
 from chirp.configs import baseline_mel_conformer
@@ -42,7 +42,7 @@ _c = config_utils.callable_config
 def _stub_localization_fn(audio: Any,
                           sample_rate_hz: int,
                           interval_length_s: float = 6.0,
-                          max_intervals: int = 5) -> Sequence[Tuple[int, int]]:
+                          max_intervals: int = 5) -> Sequence[tuple[int, int]]:
   # The only purpose of this stub function is to avoid a default
   # `localization_fn` value of None in `BirdTaxonomyConfig` so that the audio
   # feature shape gets computed properly.

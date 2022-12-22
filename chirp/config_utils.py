@@ -38,7 +38,7 @@ overridden on the command line. The objects can be constructed by calling
     'foo': my_module.Foo(bar=4)
   })
 """
-from typing import Any, Dict
+from typing import Any
 from ml_collections import config_dict
 
 _CALLABLE = "__constructor"
@@ -81,7 +81,7 @@ def object_config(object_: str) -> config_dict.ConfigDict:
 
 
 def parse_config(config: config_dict.ConfigDict,
-                 globals_: Dict[str, Any]) -> config_dict.ConfigDict:
+                 globals_: dict[str, Any]) -> config_dict.ConfigDict:
   """Parse a configuration.
 
   This handles nested configurations, as long as the values are callables

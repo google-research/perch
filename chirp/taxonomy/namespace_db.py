@@ -18,7 +18,6 @@
 import dataclasses
 import functools
 import os
-from typing import Dict
 
 from chirp import path_utils
 from chirp.taxonomy import namespace
@@ -44,9 +43,9 @@ def load_db() -> 'NamespaceDatabase':
 @dataclasses.dataclass
 class NamespaceDatabase:
   """A database of Namespaces, Mappings, and ClassLists."""
-  namespaces: Dict[str, namespace.Namespace]
-  mappings: Dict[str, namespace.Mapping]
-  class_lists: Dict[str, namespace.ClassList]
+  namespaces: dict[str, namespace.Namespace]
+  mappings: dict[str, namespace.Mapping]
+  class_lists: dict[str, namespace.ClassList]
 
   def __repr__(self):
     return 'NamespaceDatabase'

@@ -15,8 +15,6 @@
 
 """A pseudo-labelling baseline with confidence thresholding."""
 
-from typing import Dict, Tuple, Type
-
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import losses
 from chirp.projects.sfda import method_utils
@@ -41,11 +39,11 @@ class PseudoLabel(adapt.SFDAMethod):
       "representation learning, ICML. Vol. 3. No. 2. 2013.")
 
   def before_iter(
-      self, key: jax.random.PRNGKeyArray, batch: Dict[str, np.ndarray],
+      self, key: jax.random.PRNGKeyArray, batch: dict[str, np.ndarray],
       adaptation_state: adapt.AdaptationState,
       model_bundle: model_utils.ModelBundle, modality: adapt.Modality,
       multi_label: bool,
-      **method_kwargs) -> Tuple[adapt.AdaptationState, Dict[str, jnp.ndarray]]:
+      **method_kwargs) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
     """Compute the pseudo-labels for the current batch.
 
     Low-confidence samples are masked out when computing the loss. We hereby
@@ -100,7 +98,7 @@ class PseudoLabel(adapt.SFDAMethod):
     }
 
   def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> Type[clu_metrics.Collection]:
+                             **method_kwargs) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation."""
     metrics_dict = vars(
         adapt.get_common_metrics(

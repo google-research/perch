@@ -14,7 +14,6 @@
 # limitations under the License.
 
 """An extension of chirp's original taxonomy_model."""
-from typing import List
 from chirp.models import taxonomy_model
 
 
@@ -22,7 +21,7 @@ class TaxonomyModel(taxonomy_model.TaxonomyModel):
   """Adding parameters masking utility to chirp's original taxonomy_model."""
 
   @staticmethod
-  def is_bn_parameter(parameter_name: List[str]) -> bool:
+  def is_bn_parameter(parameter_name: list[str]) -> bool:
     """Verifies whether some parameter belong to a BatchNorm layer.
 
     Args:

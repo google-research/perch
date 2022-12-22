@@ -14,6 +14,6 @@
 # limitations under the License.
 
 """Bird taxonomy dataset."""
-
+# pylint: disable=unused-import
 from .bird_taxonomy import BirdTaxonomy
 from .bird_taxonomy import BirdTaxonomyConfig

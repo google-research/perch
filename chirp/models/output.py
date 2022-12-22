@@ -15,7 +15,7 @@
 
 """Model outputs."""
 import dataclasses
-from typing import Dict, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import flax
 from jax import numpy as jnp
@@ -41,7 +41,7 @@ class TaxonomyOutput(ClassifierOutput):
 @runtime_checkable
 class AnyOutput(Protocol):
   """Any output must be a dataclass."""
-  __dataclass_fields__: Dict[str, dataclasses.Field]  # pylint: disable=g-bare-generic
+  __dataclass_fields__: dict[str, dataclasses.Field]  # pylint: disable=g-bare-generic
 
 
 @runtime_checkable

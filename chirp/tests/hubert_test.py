@@ -15,7 +15,7 @@
 
 """Tests for HuBERT."""
 import tempfile
-from typing import Callable, Tuple
+from typing import Callable
 from chirp import config_utils
 from chirp.configs import config_globals
 from chirp.configs import hubert_base_pq
@@ -34,7 +34,7 @@ from absl.testing import absltest
 class ConstantEarlyFeatureExtractor(nn.Module):
   """A no-op encoder for quickly testing train+test loops."""
 
-  conv_layer_tuples: Tuple[Tuple[int, int, int], ...]
+  conv_layer_tuples: tuple[tuple[int, int, int], ...]
   dropout_prob: float = 0.
   activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu
   deprecated_group_conv: bool = False

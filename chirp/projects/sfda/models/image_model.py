@@ -15,7 +15,7 @@
 
 """A template for any image model."""
 
-from typing import Optional, List
+from typing import Optional
 
 from chirp.models import output
 from etils import epath
@@ -84,7 +84,7 @@ class ImageModel(nn.Module):
     raise NotImplementedError
 
   @staticmethod
-  def is_bn_parameter(parameter_name: List[str]) -> bool:
+  def is_bn_parameter(parameter_name: list[str]) -> bool:
     """Verifies whether some parameter belong to a BatchNorm layer.
 
     Args:

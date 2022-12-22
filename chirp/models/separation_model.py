@@ -14,8 +14,7 @@
 # limitations under the License.
 
 """Separation model."""
-import dataclasses
-from typing import Callable, Dict, Optional
+from typing import Callable, Optional
 
 from chirp.models import layers
 import flax
@@ -138,7 +137,7 @@ class SeparationModel(nn.Module):
   num_mask_channels: int = 4
   mask_kernel_size: int = 3
   bank_is_real: bool = False
-  num_classes: Optional[Dict[str, int]] = None
+  num_classes: Optional[dict[str, int]] = None
   classify_bottleneck: bool = False
   classify_pool_width: int = 250
   classify_stride: int = 50

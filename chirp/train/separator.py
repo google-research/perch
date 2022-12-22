@@ -17,7 +17,7 @@
 
 import functools
 import time
-from typing import Optional, Tuple
+from typing import Optional
 
 from absl import logging
 from chirp import export_utils
@@ -148,7 +148,7 @@ def make_metrics_collection(prefix: str):
   return clu_metrics.Collection.create(**metrics_dict)
 
 
-def initialize_model(input_shape: Tuple[int, ...], rng_seed: int,
+def initialize_model(input_shape: tuple[int, ...], rng_seed: int,
                      learning_rate: float, workdir: str,
                      model_config: config_dict.ConfigDict,
                      target_class_list: str):

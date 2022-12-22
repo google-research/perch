@@ -19,8 +19,6 @@ Dynamically generates the list of ebird2021 labels that are considered
 'seabirds' by extracting ebird2021 labels that belong to specific taxonomic
 categories, which are specified in various seabird_<namespace> class lists.
 """
-
-import csv
 from typing import Sequence
 from absl import app
 

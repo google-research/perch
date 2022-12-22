@@ -18,7 +18,6 @@
 import dataclasses
 import json
 import os
-import typing
 import tensorflow as tf
 
 
@@ -28,10 +27,10 @@ class DatasetInfo:
   sample_rate_hz: int = 22050
   example_size_s: float = 6.0
   comment: str = ''
-  label_set: typing.Tuple[str] = tuple()
-  genus_set: typing.Tuple[str] = tuple()
-  family_set: typing.Tuple[str] = tuple()
-  order_set: typing.Tuple[str] = tuple()
+  label_set: tuple[str, ...] = ()
+  genus_set: tuple[str, ...] = ()
+  family_set: tuple[str, ...] = ()
+  order_set: tuple[str, ...] = ()
   train_sstables: str = 'train_xc/tf.sstable-*'
   noise_sstables: str = 'noise/tf.sstable-*'
   eval_sstables: str = 'eval_xc/tf.sstable-*'

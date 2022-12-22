@@ -16,12 +16,12 @@
 """Interface for models producing embeddings."""
 
 import dataclasses
-from typing import Dict, Optional
+from typing import Optional
 
 import librosa
 import numpy as np
 
-LogitType = Dict[str, np.ndarray]
+LogitType = dict[str, np.ndarray]
 
 
 @dataclasses.dataclass

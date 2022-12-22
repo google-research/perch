@@ -15,7 +15,6 @@
 
 """Training loop for MAE."""
 import functools
-from typing import Tuple
 from chirp.data import pipeline
 from chirp.models import mae
 from chirp.models import taxonomy_model
@@ -35,8 +34,8 @@ import optax
 
 def initialize_model(
     model_config: config_dict.ConfigDict, rng_seed: int,
-    input_shape: Tuple[int, ...], learning_rate: float,
-    workdir: str) -> Tuple[utils.ModelBundle, utils.TrainState]:
+    input_shape: tuple[int, ...], learning_rate: float,
+    workdir: str) -> tuple[utils.ModelBundle, utils.TrainState]:
   """Creates model for training, eval, or inference."""
   del model_config
   # Initialize random number generator
@@ -74,9 +73,9 @@ def initialize_model(
 
 def initialize_finetune_model(
     model_config: config_dict.ConfigDict, rng_seed: int,
-    input_shape: Tuple[int, ...], learning_rate: float, workdir: str,
+    input_shape: tuple[int, ...], learning_rate: float, workdir: str,
     target_class_list: str
-) -> Tuple[classifier.utils.ModelBundle, classifier.utils.TrainState]:
+) -> tuple[classifier.utils.ModelBundle, classifier.utils.TrainState]:
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)

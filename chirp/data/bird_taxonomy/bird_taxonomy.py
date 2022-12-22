@@ -18,7 +18,7 @@
 import dataclasses
 import functools
 import tempfile
-from typing import Any, Callable, Optional, Sequence, Tuple
+from typing import Any, Callable, Optional, Sequence
 import warnings
 
 from chirp import audio_utils
@@ -49,7 +49,7 @@ https://xeno-canto.org/{xeno_canto_id}, and a given example's Xeno-Canto ID can
 be retrieved from the 'filename' feature: 'XC{xeno_canto_id}.mp3'.
 """
 
-LocalizationFn = Callable[[Any, int, float], Sequence[Tuple[int, int]]]
+LocalizationFn = Callable[[Any, int, float], Sequence[tuple[int, int]]]
 
 
 @dataclasses.dataclass

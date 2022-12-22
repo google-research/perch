@@ -18,7 +18,7 @@ import enum
 import functools
 import os
 import time
-from typing import Optional, List, Callable
+from typing import Callable, Optional
 from absl import logging
 from chirp.data import pipeline
 from chirp.models import cmap
@@ -230,8 +230,8 @@ def cluster_targets_metrics(outputs: hubert.HubertOutput, key: str,
 
 def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
                             readout_loss_mult: float, hubert_loss_mult: float,
-                            readout_points: List[int],
-                            quantizer_points: List[int],
+                            readout_points: list[int],
+                            quantizer_points: list[int],
                             learning_rate_schedule: optax.Schedule):
   """Create metrics collection."""
   metrics_dict = {

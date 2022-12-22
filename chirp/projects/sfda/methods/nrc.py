@@ -15,8 +15,6 @@
 
 """Exploiting the Intrinsic Neighborhood Structure for SFDA."""
 
-from typing import Dict, Tuple, Type
-
 from absl import logging
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import losses
@@ -274,13 +272,13 @@ class NRC(adapt.SFDAMethod):
   def before_iter(
       self,
       key: jax.random.PRNGKeyArray,
-      batch: Dict[str, np.ndarray],
+      batch: dict[str, np.ndarray],
       adaptation_state: adapt.AdaptationState,
       model_bundle: model_utils.ModelBundle,
       modality: adapt.Modality,
       multi_label: bool,
       **method_kwargs,
-  ) -> Tuple[adapt.AdaptationState, Dict[str, jnp.ndarray]]:
+  ) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
     """Compute the (extended-)nearest-neighbors probability and weights.
 
     NRC relies on aligning model's probabilities with 'pseudo-labels'
@@ -372,7 +370,7 @@ class NRC(adapt.SFDAMethod):
     }
 
   def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> Type[clu_metrics.Collection]:
+                             **method_kwargs) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation.
 
     Args:

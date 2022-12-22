@@ -16,7 +16,7 @@
 """NOisy TEacher-student with Laplacian Adjustment (NOTELA), our method."""
 
 import functools
-from typing import Dict, Tuple, Type, Optional, Union
+from typing import Optional, Union
 
 from absl import logging
 from chirp.projects.sfda import adapt
@@ -285,11 +285,11 @@ class NOTELA(adapt.SFDAMethod):
     return adaptation_state
 
   def before_iter(
-      self, key: jax.random.PRNGKeyArray, batch: Dict[str, np.ndarray],
+      self, key: jax.random.PRNGKeyArray, batch: dict[str, np.ndarray],
       adaptation_state: adapt.AdaptationState,
       model_bundle: model_utils.ModelBundle, modality: adapt.Modality,
       multi_label: bool,
-      **method_kwargs) -> Tuple[adapt.AdaptationState, Dict[str, jnp.ndarray]]:
+      **method_kwargs) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
     """Grab or compute the pseudo-labels for the current batch.
 
     In 'offline mode', we only grab pre-computed pseudo-labels from the
@@ -412,7 +412,7 @@ class NOTELA(adapt.SFDAMethod):
 
   @staticmethod
   def indices_to_sparse_matrix(indices: jnp.ndarray,
-                               shape: Tuple[int, int]) -> sparse.csr_matrix:
+                               shape: tuple[int, int]) -> sparse.csr_matrix:
     """Converts non-zero indices to a sparse.csr_matrix.
 
     Args:
@@ -441,7 +441,7 @@ class NOTELA(adapt.SFDAMethod):
       use_mutual_nn: bool,
       normalize_pseudo_labels: bool,
       transpose_nn_matrix: Optional[sparse.csr_matrix] = None,
-  ) -> Tuple[sparse.csr_matrix, jnp.ndarray]:
+  ) -> tuple[sparse.csr_matrix, jnp.ndarray]:
     """The pipeline for computing NOTELA's pseudo labels.
 
     First, we compute the nearest neighbors of each point in batch_feature
@@ -533,7 +533,7 @@ class NOTELA(adapt.SFDAMethod):
     return nn_matrix, jax.lax.stop_gradient(pseudo_label)
 
   def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> Type[clu_metrics.Collection]:
+                             **method_kwargs) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation.
 
     In NOTELA, the loss minimized w.r.t. the network is a simple cross-entropy

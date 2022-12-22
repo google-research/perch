@@ -14,8 +14,6 @@
 # limitations under the License.
 
 """Test-Time Entropy Minimization (TENT) method."""
-
-from typing import Type
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import losses
 from clu import metrics as clu_metrics
@@ -28,7 +26,7 @@ class Tent(adapt.SFDAMethod):
                'entropy minimization." ICLR (2021).')
 
   def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> Type[clu_metrics.Collection]:
+                             **method_kwargs) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation."""
 
     metrics_dict = vars(

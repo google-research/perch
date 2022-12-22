@@ -16,7 +16,7 @@
 """Utilities to prepare models for SFDA methods."""
 
 import enum
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 from absl import logging
 import chex
@@ -108,9 +108,9 @@ def prepare_audio_model(
     pretrained: bool,
     total_steps: int,
     rng_seed: int,
-    input_shape: Tuple[int, ...],
+    input_shape: tuple[int, ...],
     target_class_list: str,
-) -> Tuple[ModelBundle, scope.VariableDict, scope.FrozenVariableDict,
+) -> tuple[ModelBundle, scope.VariableDict, scope.FrozenVariableDict,
            Optional[scope.FrozenVariableDict], Callable[
                [Any, Any, str], Any], Callable[[Any], Any]]:
   """Loads the taxonomic classifier's and optimizer's params and states.
@@ -250,7 +250,7 @@ def prepare_image_model(
     model_config: config_dict.ConfigDict,
     optimizer_config: Optional[config_dict.ConfigDict], total_steps: int,
     rng_seed: int, pretrained: bool, target_class_list: str, **_
-) -> Tuple[ModelBundle, scope.VariableDict, scope.FrozenVariableDict,
+) -> tuple[ModelBundle, scope.VariableDict, scope.FrozenVariableDict,
            Optional[scope.FrozenVariableDict], Callable[
                [Any, Any, str], Any], Callable[[Any], Any]]:
   """Prepare an image model for source-free domain adaptation.

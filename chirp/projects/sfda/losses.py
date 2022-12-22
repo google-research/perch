@@ -15,8 +15,9 @@
 
 """A set of common losses used by several SFDA methods."""
 
-from typing import Optional
 import enum
+from typing import Optional
+
 import flax
 import jax
 import jax.numpy as jnp

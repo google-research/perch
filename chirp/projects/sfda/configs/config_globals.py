@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Define the globals that can be used in configuration files."""
-from typing import Any, Dict
+from typing import Any
 
 from chirp import audio_utils
 from chirp.data import pipeline
@@ -38,7 +38,7 @@ from chirp.projects.sfda.methods import tent
 from flax import linen as nn
 
 
-def get_globals() -> Dict[str, Any]:
+def get_globals() -> dict[str, Any]:
   return {
       "audio_utils": audio_utils,
       "conformer": conformer,

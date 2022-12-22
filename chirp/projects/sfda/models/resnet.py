@@ -29,7 +29,7 @@ Taken from https://github.com/google/flax/blob/main/examples/imagenet/models.py.
 """
 
 import functools
-from typing import Any, Callable, Sequence, Tuple, List
+from typing import Any, Callable, Sequence
 from chirp.models import output
 from chirp.projects.sfda.models import image_model
 from etils import epath
@@ -52,7 +52,7 @@ class ResNetBlock(nn.Module):
   conv: ModuleDef
   norm: ModuleDef
   act: Callable[[jnp.ndarray], jnp.ndarray]
-  strides: Tuple[int, int] = (1, 1)
+  strides: tuple[int, int] = (1, 1)
 
   @nn.compact
   def __call__(
@@ -81,7 +81,7 @@ class BottleneckResNetBlock(nn.Module):
   conv: ModuleDef
   norm: ModuleDef
   act: Callable[[jnp.ndarray], jnp.ndarray]
-  strides: Tuple[int, int] = (1, 1)
+  strides: tuple[int, int] = (1, 1)
 
   @nn.compact
   def __call__(self, x):
@@ -154,7 +154,7 @@ class ResNet(image_model.ImageModel):
     return output.ClassifierOutput(**model_outputs)
 
   @staticmethod
-  def is_bn_parameter(parameter_name: List[str]) -> bool:
+  def is_bn_parameter(parameter_name: list[str]) -> bool:
     """Verifies whether some parameter belong to a BatchNorm layer.
 
     Captures all BatchNorm parameters, except those from the residual layers

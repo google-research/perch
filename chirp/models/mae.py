@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Masked autoencoder for spectrograms."""
-from typing import Optional, Tuple
+from typing import Optional
 
 import flax.linen as nn
 from jax import numpy as jnp
@@ -24,7 +24,7 @@ from scenic.model_lib.layers import attention_layers
 from scenic.projects.baselines import vit
 
 
-def get_patches(x: jnp.ndarray, patch_size: Tuple[int, int]) -> jnp.ndarray:
+def get_patches(x: jnp.ndarray, patch_size: tuple[int, int]) -> jnp.ndarray:
   """Split input into patches.
 
   Args:
@@ -86,7 +86,7 @@ class Encoder(nn.Module):
     class_token: Whether or not to prepend a zero-initialized learned class
       token to the patches.
   """
-  patch_size: Tuple[int, int] = (16, 16)
+  patch_size: tuple[int, int] = (16, 16)
   mlp_dim: int = 3072
   num_layers: int = 12
   num_heads: int = 12
@@ -202,8 +202,8 @@ class Decoder(nn.Module):
     attention_dropout_rate: Dropout for attention heads.
     stochastic_depth: The layer dropout probability.
   """
-  output_size: Tuple[int, int, int]
-  patch_size: Tuple[int, int] = (16, 16)
+  output_size: tuple[int, int, int]
+  patch_size: tuple[int, int] = (16, 16)
   mlp_dim: int = 1536
   num_layers: int = 4
   num_heads: int = 6

@@ -46,7 +46,7 @@ For reference implementations, see the Python package `ssqueezepy` and the
 MATLAB package jLab.
 """
 import enum
-from typing import Callable, Tuple
+from typing import Callable
 
 import chirp.signal
 from jax import lax
@@ -318,7 +318,7 @@ def convolve_filter(filter_: Callable[[jnp.ndarray], jnp.ndarray],
                     scale_factors: jnp.ndarray,
                     normalization: Normalization,
                     window_size_frames: int,
-                    stride: Tuple[int, ...] = (1,),
+                    stride: tuple[int, ...] = (1,),
                     padding: str = "SAME") -> jnp.ndarray:
   """Convolves a given set of filters with a signal in the time domain.
 

@@ -24,7 +24,7 @@ import math
 import re
 import subprocess
 import sys
-from typing import Dict, FrozenSet, Optional, Sequence, Tuple, Union, cast
+from typing import FrozenSet, Optional, Sequence, Union, cast
 
 from absl import flags
 from absl import logging
@@ -192,7 +192,7 @@ _SKIP_XC_IDS = ('104022', '727818', '731297', '737035', '738016', '737986',
 class SpeciesMappingConfig:
   """Configuration values for mapping Xeno-Canto species to eBird codes."""
   # Manual species code assignments.
-  scientific_name_to_species_code_overrides: Dict[str, str] = dataclasses.field(
+  scientific_name_to_species_code_overrides: dict[str, str] = dataclasses.field(
       default_factory=lambda: _SCIENTIFIC_NAME_TO_SPECIES_CODES_OVERRIDES)
   # Species for which a species code is not required (usually because they are
   # extinct).
@@ -201,7 +201,7 @@ class SpeciesMappingConfig:
                                          'Nycticorax olsoni')
   # Sets of species for which a species code collision is allowed (usually
   # because they are merged into one species in eBird's taxonomy).
-  allowed_species_code_collisions: Dict[
+  allowed_species_code_collisions: dict[
       FrozenSet[str], str] = dataclasses.field(
           default_factory=lambda: _ALLOWED_SPECIES_CODE_COLLISIONS)
   # Insect genera which should be ignored.
@@ -237,7 +237,7 @@ class RecordingInfo:
   sound_type: str  # What kind of vocalization (call, song, etc.).
 
   @classmethod
-  def from_info_dict(cls, info_dict: Dict[str, Union[str, Sequence[str]]]):
+  def from_info_dict(cls, info_dict: dict[str, Union[str, Sequence[str]]]):
     # Infer file format.
     file_name = cast(str, info_dict['file-name'])
     m = re.search('(mp3|wav|ogg|flac)$', file_name.lower()[-4:])
@@ -265,7 +265,7 @@ class RecordingInfo:
 
 def _infer_species_codes_from_wikidata(
     taxonomy_info: pd.DataFrame,
-    overrides: Dict[str, str],
+    overrides: dict[str, str],
     output_dir: Optional[str] = None) -> pd.Series:
   """Infers each species' code from data obtained through a Wikidata query.
 
@@ -403,7 +403,7 @@ def _clean_up_species_codes(taxonomy_info: pd.DataFrame,
 
 
 def _ensure_species_codes_uniqueness(
-    taxonomy_info: pd.DataFrame, allowed_collisions: Dict[FrozenSet[str],
+    taxonomy_info: pd.DataFrame, allowed_collisions: dict[FrozenSet[str],
                                                           str]) -> pd.DataFrame:
   """Ensures the species codes are unique.
 
@@ -493,7 +493,7 @@ def _break_down_taxonomy(taxonomy_info: pd.DataFrame,
 def _scrape_xeno_canto_recording_metadata(
     taxonomy_info: pd.DataFrame,
     include_nd_recordings: bool,
-    progress_bar: bool = True) -> Dict[str, Sequence[RecordingInfo]]:
+    progress_bar: bool = True) -> dict[str, Sequence[RecordingInfo]]:
   """Scrapes and returns Xeno-Canto recording metadata for all species.
 
   Args:

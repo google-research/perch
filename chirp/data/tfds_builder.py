@@ -18,7 +18,7 @@
 import abc
 import dataclasses
 import logging
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Iterable, Optional
 
 from chirp import audio_utils
 from chirp.data import tfds_features
@@ -41,7 +41,7 @@ class WavDirectoryBuilderConfig(tfds.core.BuilderConfig):
 
 def _generate_context_windows(
     wav_path: epath.Path,
-    config: WavDirectoryBuilderConfig) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    config: WavDirectoryBuilderConfig) -> Iterable[tuple[str, dict[str, Any]]]:
   """Generates audio context window feature dicts from a single mono WAV file.
 
   Args:

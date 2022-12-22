@@ -29,7 +29,6 @@ following modifications to the orignal model:
 """
 import functools
 import re
-from typing import Dict, Tuple, List
 from chirp.models import output
 from chirp.projects.sfda.models import image_model
 from etils import epath
@@ -48,7 +47,7 @@ class WideResnetBlock(nn.Module):
     strides: Strides for the pooling.
   """
   channels: int
-  strides: Tuple[int, int] = (1, 1)
+  strides: tuple[int, int] = (1, 1)
 
   @nn.compact
   def __call__(self, x: jnp.ndarray, train: bool,
@@ -101,7 +100,7 @@ class WideResnetGroup(nn.Module):
   """
   blocks_per_group: int
   channels: int
-  strides: Tuple[int, int] = (1, 1)
+  strides: tuple[int, int] = (1, 1)
 
   @nn.compact
   def __call__(self, x: jnp.ndarray, train: bool,
@@ -185,7 +184,7 @@ class WideResnet(image_model.ImageModel):
                                 f'dataset {dataset_name}.')
 
   @staticmethod
-  def is_bn_parameter(parameter_name: List[str]) -> bool:
+  def is_bn_parameter(parameter_name: list[str]) -> bool:
     """Verifies whether some parameter belong to a BatchNorm layer.
 
     Only WideResnetGroup's BatchNorm parameters will be captured; the
@@ -202,7 +201,7 @@ class WideResnet(image_model.ImageModel):
 
 
 def _to_variables(
-    state_dict: Dict[str, np.ndarray]) -> flax.core.scope.FrozenVariableDict:
+    state_dict: dict[str, np.ndarray]) -> flax.core.scope.FrozenVariableDict:
   """Translates a PyTorch-style state dictionnary into a flax FrozenVariableDict.
 
   Args:

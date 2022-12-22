@@ -18,8 +18,7 @@
 import dataclasses
 import functools
 import os
-from typing import (Callable, Dict, Generator, Mapping, Sequence, Tuple, Type,
-                    TypeVar)
+from typing import (Callable, Generator, Mapping, Sequence, TypeVar)
 
 from absl import logging
 from chirp.data import pipeline
@@ -43,9 +42,9 @@ ConfigDict = ml_collections.ConfigDict
 
 MaskFunction = Callable[[pd.DataFrame], pd.Series]
 ClasswiseMaskFunction = Callable[[pd.DataFrame, str], pd.Series]
-ClasswiseEvalSetGenerator = Generator[Tuple[str, pd.DataFrame, pd.DataFrame],
+ClasswiseEvalSetGenerator = Generator[tuple[str, pd.DataFrame, pd.DataFrame],
                                       None, None]
-EvalSetGenerator = Generator[Tuple[str, ClasswiseEvalSetGenerator], None, None]
+EvalSetGenerator = Generator[tuple[str, ClasswiseEvalSetGenerator], None, None]
 
 _T = TypeVar('_T', bound='EvalSetSpecification')
 
@@ -94,7 +93,7 @@ class EvalSetSpecification:
   num_representatives_per_class: int
 
   @classmethod
-  def v1_specification(cls: Type[_T], location: str, corpus_type: str,
+  def v1_specification(cls: type[_T], location: str, corpus_type: str,
                        num_representatives_per_class: int) -> _T:
     """Instantiates an eval protocol v1 EvalSetSpecification.
 
@@ -201,7 +200,7 @@ class TaxonomyModelCallback:
   # The following are populated during init.
   model_callback: Callable[[np.ndarray],
                            np.ndarray] = dataclasses.field(init=False)
-  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+  learned_representations: dict[str, np.ndarray] = dataclasses.field(
       init=False, default_factory=dict)
 
   def __post_init__(self):
@@ -242,7 +241,7 @@ class SeparatorTFCallback:
   # The following are populated during init.
   model_callback: Callable[[np.ndarray],
                            np.ndarray] = dataclasses.field(init=False)
-  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+  learned_representations: dict[str, np.ndarray] = dataclasses.field(
       init=False, default_factory=dict)
 
   def _load_learned_representations(self):
@@ -322,7 +321,7 @@ class HuBERTModelCallback:
   embedding_index: int
   model_callback: Callable[[np.ndarray],
                            np.ndarray] = dataclasses.field(init=False)
-  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+  learned_representations: dict[str, np.ndarray] = dataclasses.field(
       init=False, default_factory=dict)
 
   def __post_init__(self):
@@ -362,7 +361,7 @@ class SeparationModelCallback:
   workdir: str
   model_callback: Callable[[np.ndarray],
                            np.ndarray] = dataclasses.field(init=False)
-  learned_representations: Dict[str, np.ndarray] = dataclasses.field(
+  learned_representations: dict[str, np.ndarray] = dataclasses.field(
       init=False, default_factory=dict)
 
   def __post_init__(self):
@@ -394,7 +393,7 @@ def _load_eval_dataset(dataset_config: ConfigDict) -> tf.data.Dataset:
   )[0]
 
 
-def load_eval_datasets(config: ConfigDict) -> Dict[str, tf.data.Dataset]:
+def load_eval_datasets(config: ConfigDict) -> dict[str, tf.data.Dataset]:
   """Loads all evaluation datasets for a given evaluation configuration dict.
 
   Args:
@@ -575,8 +574,8 @@ def _eval_set_generator(
     yield (class_name, class_representatives_df, search_corpus_df)
 
 
-def _add_dataset_name(features: Dict[str, tf.Tensor],
-                      dataset_name: str) -> Dict[str, tf.Tensor]:
+def _add_dataset_name(features: dict[str, tf.Tensor],
+                      dataset_name: str) -> dict[str, tf.Tensor]:
   """Adds a 'dataset_name' feature to a features dict.
 
   Args:
@@ -602,7 +601,7 @@ def _numpy_iterator_with_progress_logging(embedded_dataset):
                         roughly_5_per_cent, 100 * (i + 1) / num_embeddings)
 
 
-def _create_embeddings_dataframe(embedded_datasets: Dict[str, tf.data.Dataset],
+def _create_embeddings_dataframe(embedded_datasets: dict[str, tf.data.Dataset],
                                  config: ConfigDict) -> pd.DataFrame:
   """Builds a dataframe out of all embedded datasets.
 
@@ -641,7 +640,7 @@ def _create_embeddings_dataframe(embedded_datasets: Dict[str, tf.data.Dataset],
 
 def prepare_eval_sets(
     config: ConfigDict,
-    embedded_datasets: Dict[str, tf.data.Dataset]) -> EvalSetGenerator:
+    embedded_datasets: dict[str, tf.data.Dataset]) -> EvalSetGenerator:
   """Constructs and yields eval sets.
 
   Args:
@@ -799,7 +798,7 @@ def compute_metrics(eval_set_name: str,
   return species_metric_eval_set
 
 
-def write_results_to_csv(metric_results: Sequence[Tuple[str, float, str]],
+def write_results_to_csv(metric_results: Sequence[tuple[str, float, str]],
                          write_results_dir: str):
   """Writew evaluation metric results to csv.
 

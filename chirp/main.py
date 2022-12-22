@@ -21,11 +21,11 @@ from absl import app
 from absl import flags
 from absl import logging
 from chirp import config_utils
+from chirp.configs import config_globals
+from chirp.train import classifier
 from chirp.train import hubert
 from chirp.train import mae
 from chirp.train import separator
-from chirp.train import classifier
-from chirp.configs import config_globals
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
 

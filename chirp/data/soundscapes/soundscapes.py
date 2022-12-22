@@ -17,7 +17,7 @@
 
 import dataclasses
 import tempfile
-from typing import Callable, Dict, Optional, Tuple, List, Any
+from typing import Any, Callable, Optional, Sequence
 import warnings
 
 from absl import logging
@@ -86,7 +86,7 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
   audio_glob: str = ''
   class_list_name: str = ''
   metadata_load_fn: Optional[soundscapes_lib.MetadataLoaderType] = None
-  metadata_fields: Optional[Dict[str, soundscapes_lib.MetadataFeature]] = None
+  metadata_fields: Optional[dict[str, soundscapes_lib.MetadataFeature]] = None
   annotation_filename: Optional[str] = None
   annotation_load_fn: Optional[Callable[[epath.Path], pd.DataFrame]] = None
   keep_unknown_annotation: bool = False
@@ -375,8 +375,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         segments = segments.drop(k, axis=1)
 
     def _process_group(
-        group: Tuple[int, Tuple[str, pd.DataFrame]]
-    ) -> List[Tuple[str, Dict[str, Any]]]:
+        group: tuple[int, tuple[str, pd.DataFrame]]
+    ) -> Sequence[tuple[str, dict[str, Any]]]:
       # Each filename gets a unique ID
       recording_id, (filename, segment_group) = group
 

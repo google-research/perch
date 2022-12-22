@@ -17,7 +17,7 @@
 
 General utilities for processing audio and spectrograms.
 """
-from typing import Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Union
 
 from chirp import signal
 from jax import lax
@@ -158,7 +158,7 @@ def pcen(filterbank_energy: jnp.ndarray,
          root: float = 2.0,
          eps: float = 1e-6,
          state: Optional[jnp.ndarray] = None,
-         conv_width: int = 0) -> Tuple[jnp.ndarray, Optional[jnp.ndarray]]:
+         conv_width: int = 0) -> tuple[jnp.ndarray, Optional[jnp.ndarray]]:
   """Per-Channel Energy Normalization (PCEN).
 
   See https://arxiv.org/abs/1607.05666 for details.
@@ -341,7 +341,7 @@ def pad_to_length_if_shorter(audio: jnp.ndarray, target_length: int):
 def slice_peaked_audio(audio: jnp.ndarray,
                        sample_rate_hz: int,
                        interval_length_s: float = 6.0,
-                       max_intervals: int = 5) -> Sequence[Tuple[int, int]]:
+                       max_intervals: int = 5) -> Sequence[tuple[int, int]]:
   """Extracts audio intervals from melspec peaks.
 
   Args:

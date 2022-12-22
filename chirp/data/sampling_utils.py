@@ -18,7 +18,7 @@
 import bisect
 import collections
 import copy
-from typing import Dict, List, Optional, Tuple, OrderedDict
+from typing import Optional
 
 from absl import logging
 import numpy as np
@@ -28,14 +28,14 @@ import pandas as pd
 # `sample_recordings_under_constraints`. First element is its foreground
 # species. Second element is its list of background species. Final element is
 # its index in the dataframe.
-_RECORDING = Tuple[str, List[str], int]
+_RECORDING = tuple[str, list[str], int]
 
 
 def sample_recordings_under_constraints(
     df: pd.DataFrame,
-    target_fg: Dict[str, int],
-    target_bg: Dict[str, int],
-    species_stats: Optional[Dict[str, Dict[str, int]]] = None):
+    target_fg: dict[str, int],
+    target_bg: dict[str, int],
+    species_stats: Optional[dict[str, dict[str, int]]] = None):
   """Subsamples recordings from df under foreground/background constraints.
 
   Args:
@@ -103,17 +103,17 @@ def sample_recordings_under_constraints(
   return df.loc[[x[2] for x in valid_subset]]
 
 
-def hit_target(count_dic: Dict[str, int]) -> bool:
+def hit_target(count_dic: dict[str, int]) -> bool:
   return np.all(np.array(list(count_dic.values())) == 0)
 
 
 def find_valid_subset(
-    remaining_fg: OrderedDict[str, int],
-    remaining_bg: OrderedDict[str, int],
-    chosen: List[_RECORDING],
-    seen: Dict[Tuple[_RECORDING], bool],
-    candidates: List[_RECORDING],
-) -> Optional[List[_RECORDING]]:
+    remaining_fg: collections.OrderedDict[str, int],
+    remaining_bg: collections.OrderedDict[str, int],
+    chosen: list[_RECORDING],
+    seen: dict[tuple[_RECORDING], bool],
+    candidates: list[_RECORDING],
+) -> Optional[list[_RECORDING]]:
   """Function that tries to find a valid solution to sampling under constraints.
 
   This function performs a DFS to find a subset of recordings that satisfies
@@ -179,8 +179,9 @@ def find_valid_subset(
   return None
 
 
-def valid_recording(recording: _RECORDING, remaining_fg: OrderedDict[str, int],
-                    remaining_bg: OrderedDict[str, int],
+def valid_recording(recording: _RECORDING,
+                    remaining_fg: collections.OrderedDict[str, int],
+                    remaining_bg: collections.OrderedDict[str, int],
                     current_species: str) -> bool:
   """Decides whether a child (=recording) should be explored next.
 

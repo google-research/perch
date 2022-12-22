@@ -17,7 +17,7 @@
 
 import dataclasses
 import os
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Optional, Sequence
 import warnings
 
 from absl import logging
@@ -39,7 +39,7 @@ RAW_AUDIO = 'raw_audio'
 RAW_AUDIO_SHAPE = 'raw_audio_shape'
 MIN_AUDIO_S = 5
 
-MODEL_CLASSES: Dict[str, Any] = {
+MODEL_CLASSES: dict[str, Any] = {
     'taxonomy_model_tf': models.TaxonomyModelTF,
     'separator_model_tf': models.SeparatorModelTF,
     'birdnet': models.BirdNet,

@@ -17,7 +17,7 @@
 
 Building blocks and layers to construct networks, implemented as Flax modules.
 """
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional
 
 from flax import linen as nn
 import jax
@@ -96,7 +96,7 @@ class MBConv(nn.Module):
   features: int
   strides: int
   expand_ratio: int
-  kernel_size: Tuple[int, int] = (3, 3)
+  kernel_size: tuple[int, int] = (3, 3)
   activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu6
   batch_norm: bool = False
   reduction_ratio: Optional[int] = None
@@ -134,7 +134,7 @@ class MBConv(nn.Module):
 
     if self.strides == 2:
 
-      def _pad_width(input_size: int, kernel_size: int) -> Tuple[int, int]:
+      def _pad_width(input_size: int, kernel_size: int) -> tuple[int, int]:
         """Calculate padding required to halve input with stride 2."""
         return (kernel_size // 2) - (1 - input_size % 2), kernel_size // 2
 
@@ -618,7 +618,7 @@ class EarlyFeatureExtractor(nn.Module):
         (which used grouped convolutions), for compatibility with old
         experiments. This option will be removed in the future.
   """
-  conv_layer_tuples: Tuple[Tuple[int, int, int], ...]
+  conv_layer_tuples: tuple[tuple[int, int, int], ...]
   dropout_prob: float = 0.
   activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu
   deprecated_group_conv: bool = False

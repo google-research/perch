@@ -22,7 +22,7 @@ interchangeably.
 For some frontends it also defines inverses (e.g., for separation models).
 """
 import dataclasses
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 from chirp import audio_utils
 from chirp import signal
@@ -227,7 +227,7 @@ class MelSpectrogram(Frontend):
   """
   kernel_size: int
   sample_rate: int
-  freq_range: Tuple[int, int]
+  freq_range: tuple[int, int]
   power: float = 2.0
   scaling_config: Optional[ScalingConfig] = None
 
@@ -327,7 +327,7 @@ class MorletWaveletTransform(Frontend):
   """
   kernel_size: int
   sample_rate: int
-  freq_range: Tuple[int, int]
+  freq_range: tuple[int, int]
   power: float = 2.0
   scaling_config: Optional[ScalingConfig] = None
 

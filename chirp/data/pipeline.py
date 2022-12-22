@@ -15,7 +15,7 @@
 
 """Data pipeline functions."""
 import dataclasses
-from typing import Any, Dict, Iterable, Optional, Sequence, Tuple, Union
+from typing import Any, Iterable, Optional, Sequence, Union
 
 # Import bird_taxonomy and soundscapes to register the datasets with TFDS.
 from absl import logging
@@ -33,7 +33,7 @@ import tensorflow_datasets as tfds
 _DEFAULT_DATASET_DIR = None
 _DEFAULT_TFDS_DATADIR = None
 
-Features = Dict[str, tf.Tensor]
+Features = dict[str, tf.Tensor]
 
 
 class FeaturesPreprocessOp:
@@ -118,7 +118,7 @@ class Pad(FeaturesPreprocessOp):
   pad_size: float
   random: bool = True
   add_mask: bool = True
-  names: Tuple[str, ...] = ('audio',)
+  names: tuple[str, ...] = ('audio',)
 
   def __call__(self, features: Features,
                dataset_info: tfds.core.DatasetInfo) -> Features:
@@ -162,7 +162,7 @@ class Slice(FeaturesPreprocessOp):
   """
   window_size: float
   start: float
-  names: Tuple[str, ...] = ('audio', 'source_audio', 'audio_mask')
+  names: tuple[str, ...] = ('audio', 'source_audio', 'audio_mask')
 
   def __call__(self, features: Features,
                dataset_info: tfds.core.DatasetInfo) -> Features:
@@ -189,7 +189,7 @@ class RandomSlice(FeaturesPreprocessOp):
     names: The name of the features to slice. Each will be sliced the same way.
   """
   window_size: float
-  names: Tuple[str, ...] = ('audio', 'source_audio', 'audio_mask')
+  names: tuple[str, ...] = ('audio', 'source_audio', 'audio_mask')
 
   def __call__(self, features: Features,
                dataset_info: tfds.core.DatasetInfo) -> Features:
@@ -215,7 +215,7 @@ class NormalizeAudio(FeaturesPreprocessOp):
     eps: An epsilon that is used to avoid division by zero.
   """
   target_gain: float
-  names: Tuple[str, ...] = ('audio', 'source_audio')
+  names: tuple[str, ...] = ('audio', 'source_audio')
   eps: float = 0.01
 
   def __call__(self, features: Features,
@@ -256,7 +256,7 @@ class RandomNormalizeAudio(FeaturesPreprocessOp):
   """
   min_gain: float
   max_gain: float
-  names: Tuple[str, ...] = ('audio', 'source_audio')
+  names: tuple[str, ...] = ('audio', 'source_audio')
   eps: float = 0.01
 
   def __call__(self, features: Features,
@@ -292,9 +292,9 @@ class MixAudio(DatasetPreprocessOp):
   mixin_prob: float
   name: str = 'audio'
   source_name: str = 'source_audio'
-  pad_names: Tuple[str, ...] = ('segment_start', 'segment_end', 'recording_id',
+  pad_names: tuple[str, ...] = ('segment_start', 'segment_end', 'recording_id',
                                 'segment_id')
-  label_names: Tuple[str,
+  label_names: tuple[str,
                      ...] = ('label', 'genus', 'family', 'order', 'bg_labels',
                              'label_mask', 'genus_mask', 'family_mask',
                              'order_mask', 'bg_labels_mask', 'audio_mask')
@@ -361,7 +361,7 @@ class MultiHot(FeaturesPreprocessOp):
   Attributes:
     names: The labels to convert to multi-hot representations.
   """
-  names: Tuple[str, ...] = ('label', 'genus', 'family', 'order', 'bg_labels')
+  names: tuple[str, ...] = ('label', 'genus', 'family', 'order', 'bg_labels')
 
   def __call__(self, features: Features,
                dataset_info: tfds.core.DatasetInfo) -> Features:
@@ -422,7 +422,7 @@ class MelSpectrogram(FeaturesPreprocessOp):
   kernel_size: int
   stride: int
   sample_rate: int
-  freq_range: Tuple[int, int]
+  freq_range: tuple[int, int]
   name: str = 'audio'
   power: float = 2.0
   scaling_config: Optional[frontend.ScalingConfig] = None
@@ -473,7 +473,7 @@ class LabelsToString(FeaturesPreprocessOp):
     names: The labels to convert to a string representation.
     separator: The separator character to use.
   """
-  names: Tuple[str, ...] = ('label', 'genus', 'family', 'order', 'bg_labels')
+  names: tuple[str, ...] = ('label', 'genus', 'family', 'order', 'bg_labels')
   separator: str = ' '
 
   def __call__(self, features: Features,
@@ -499,8 +499,8 @@ class LabelConversionConstants:
     tables: a mapping from feature name to StaticHashTable for label conversion.
     masks: a mapping from feature name to mask for the translated labels.
   """
-  tables: Dict[str, tf.lookup.StaticHashTable]
-  masks: Dict[str, tf.Tensor]
+  tables: dict[str, tf.lookup.StaticHashTable]
+  masks: dict[str, tf.Tensor]
 
 
 @dataclasses.dataclass
@@ -808,7 +808,7 @@ def get_dataset(
     tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
     tf_data_service_address: Optional[Any] = None,
     pipeline: Optional[Pipeline] = None
-) -> Tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
+) -> tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
   """Returns the placeholder dataset.
 
   Args:

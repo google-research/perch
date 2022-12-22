@@ -17,7 +17,7 @@
 
 import csv
 import dataclasses
-from typing import Dict, Iterable, Optional, Sequence, Set, Tuple
+from typing import Iterable, Optional, Sequence, Set
 
 from jax import numpy as jnp
 import tensorflow as tf
@@ -57,7 +57,7 @@ class Mapping:
   name: str
   source_namespace: str
   target_namespace: str
-  mapped_pairs: Sequence[Tuple[str, str]]
+  mapped_pairs: Sequence[tuple[str, str]]
 
   @classmethod
   def from_csv(cls, name: str, csv_data: Iterable[str]) -> 'Mapping':
@@ -70,7 +70,7 @@ class Mapping:
     return Mapping(name, source_namespace.strip(), target_namespace.strip(),
                    pairs)
 
-  def to_dict(self) -> Dict[str, str]:
+  def to_dict(self) -> dict[str, str]:
     return {m[0]: m[1] for m in self.mapped_pairs}
 
   def to_tf_lookup(self) -> tf.lookup.StaticHashTable:
@@ -114,12 +114,12 @@ class ClassList:
   def size(self) -> int:
     return len(self.classes)
 
-  def get_index_lookup(self) -> Dict[str, int]:
+  def get_index_lookup(self) -> dict[str, int]:
     return {self.classes[i]: i for i in range(self.size)}
 
   def get_class_map_tf_lookup(
       self, target_class_list: 'ClassList'
-  ) -> Tuple[tf.lookup.StaticHashTable, tf.Tensor]:
+  ) -> tuple[tf.lookup.StaticHashTable, tf.Tensor]:
     """Create a static hash map for class indices.
 
     Create a lookup table for use in TF Datasets, for, eg, converting between
@@ -153,7 +153,7 @@ class ClassList:
     return table, image_mask
 
   def get_namespace_map_tf_lookup(
-      self, mapping: Mapping) -> Tuple[tf.lookup.StaticHashTable, 'ClassList']:
+      self, mapping: Mapping) -> tuple[tf.lookup.StaticHashTable, 'ClassList']:
     """Create a tf.lookup.StaticHasTable for namespace mappings.
 
     Args:
@@ -207,7 +207,7 @@ class ClassList:
   def get_class_map_matrix(
       self,
       target_class_list: 'ClassList',
-      mapping: Optional[Mapping] = None) -> Tuple[jnp.ndarray, jnp.ndarray]:
+      mapping: Optional[Mapping] = None) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Construct a binary matrix for mapping to another ClassList.
 
     Args:

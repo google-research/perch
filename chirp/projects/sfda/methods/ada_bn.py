@@ -14,8 +14,6 @@
 # limitations under the License.
 
 """A baseline that simply updates BatchNorm's statistics."""
-
-from typing import Type
 from chirp.projects.sfda import adapt
 from clu import metrics as clu_metrics
 
@@ -32,7 +30,7 @@ class AdaBN(adapt.SFDAMethod):
       "domain adaptation.' arXiv preprint arXiv:1603.04779 (2016).")
 
   def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> Type[clu_metrics.Collection]:
+                             **method_kwargs) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation."""
     metrics_dict = vars(
         adapt.get_common_metrics(

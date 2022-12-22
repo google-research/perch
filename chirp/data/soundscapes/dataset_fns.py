@@ -17,7 +17,6 @@
 
 import csv
 import os
-from typing import Dict
 
 from chirp.data.soundscapes import soundscapes_lib
 from chirp.taxonomy import annotations
@@ -36,7 +35,7 @@ _DEPRECATED2NEW = {
 
 def load_birdclef_metadata(
     root: epath.Path,
-    metadata_feature_info: Dict[str, soundscapes_lib.MetadataFeature]
+    metadata_feature_info: dict[str, soundscapes_lib.MetadataFeature]
 ) -> pd.DataFrame:
   """The `metadata_load_fn` for Birdclef2019-based configs.
 
@@ -61,7 +60,7 @@ def load_birdclef_metadata(
   return df
 
 
-def birdclef_metadata_features() -> Dict[str, soundscapes_lib.MetadataFeature]:
+def birdclef_metadata_features() -> dict[str, soundscapes_lib.MetadataFeature]:
   """Metadata features to join with BirdClef data."""
   feature_types = {
       'filename':

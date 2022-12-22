@@ -14,9 +14,8 @@
 # limitations under the License.
 
 """HuBERT model."""
-import dataclasses
 import enum
-from typing import Any, Dict, Tuple, List, Sequence, Optional, Union
+from typing import Any, Optional, Sequence, Union
 
 from chirp.models import conformer
 from chirp.models import layers
@@ -28,15 +27,15 @@ from jax import numpy as jnp
 
 @flax.struct.dataclass
 class HubertOutput:
-  embedding: List[jnp.ndarray]
-  logits: List[jnp.ndarray]
-  targets: List[jnp.ndarray]
+  embedding: list[jnp.ndarray]
+  logits: list[jnp.ndarray]
+  targets: list[jnp.ndarray]
   mask_idc: jnp.ndarray
-  quantization_loss: List[jnp.ndarray]
-  label: List[jnp.ndarray]
-  genus: Optional[List[jnp.ndarray]] = None
-  family: Optional[List[jnp.ndarray]] = None
-  order: Optional[List[jnp.ndarray]] = None
+  quantization_loss: list[jnp.ndarray]
+  label: list[jnp.ndarray]
+  genus: Optional[list[jnp.ndarray]] = None
+  family: Optional[list[jnp.ndarray]] = None
+  order: Optional[list[jnp.ndarray]] = None
 
 
 class QuantizerPoints(enum.Enum):
@@ -46,7 +45,7 @@ class QuantizerPoints(enum.Enum):
 
 
 def compute_mask_indices(key: jnp.ndarray,
-                         shape: Tuple[int, int],
+                         shape: tuple[int, int],
                          mask_prob: float,
                          mask_length: int,
                          min_masks: int = 0) -> jnp.ndarray:
@@ -260,16 +259,16 @@ class HuBERTModel(nn.Module):
     add_positional_embeddings: Whether to add positional embeddings to the
       late feature extractor.
   """
-  num_classes: Dict[str, int]
+  num_classes: dict[str, int]
   early_feature_extractor: Union[nn.Module, None]
   late_feature_extractor: nn.Module
-  quantizer: List[nn.Module]
+  quantizer: list[nn.Module]
   frontend: nn.Module
   use_raw_audio: bool
-  mask_config: Dict[str, Any]
-  classifier_config: Dict[str, Any]
+  mask_config: dict[str, Any]
+  classifier_config: dict[str, Any]
   taxonomy_loss_weight: float
-  readout_points: List[int]
+  readout_points: list[int]
   quantizer_points: Sequence[int]
   final_dim: int = 512
   logit_temp: float = 0.1

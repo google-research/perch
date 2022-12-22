@@ -15,10 +15,10 @@
 
 """Common utilities for exporting SavedModels and TFLite models."""
 
-from absl import logging
 import os
-from typing import Dict, Optional, Sequence
+from typing import Optional, Sequence
 
+from absl import logging
 from chirp.taxonomy import namespace
 from jax.experimental import jax2tf
 import tensorflow as tf
@@ -94,7 +94,7 @@ class Jax2TfModelWrapper(tf.Module):
       self,
       workdir: str,
       train_step: int,
-      class_lists: Optional[Dict[str, namespace.ClassList]] = None,
+      class_lists: Optional[dict[str, namespace.ClassList]] = None,
       export_tf_lite: bool = True):
     """Export converted TF models."""
     fake_inputs = self.get_tf_zero_inputs()

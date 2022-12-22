@@ -17,7 +17,7 @@
 
 import dataclasses
 import os
-from typing import Any, Callable, Dict, Iterator, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Iterator, Optional, Sequence, Set
 
 from absl import logging
 from chirp.taxonomy import namespace
@@ -29,7 +29,7 @@ import tensorflow_datasets as tfds
 import tqdm
 
 _AUDIO_EXTENSIONS = ['.flac', '.wav']
-LocalizationFn = Callable[[Any, int, float, int], Sequence[Tuple[int, int]]]
+LocalizationFn = Callable[[Any, int, float, int], Sequence[tuple[int, int]]]
 MAX_INTERVALS_PER_FILE = 200
 UNKNOWN_LABEL = namespace.UNKNOWN_LABEL
 
@@ -51,7 +51,7 @@ class MetadataFeature:
   feature_type: tfds.features.tensor_feature.Tensor
 
 
-MetadataLoaderType = Callable[[epath.Path, Dict[str, MetadataFeature]],
+MetadataLoaderType = Callable[[epath.Path, dict[str, MetadataFeature]],
                               pd.DataFrame]
 
 
@@ -82,7 +82,7 @@ def load_class_list(class_list_name: str,
 def create_segments_df(
     all_audio_filepaths: Iterator[epath.Path],
     annotations_df: Optional[pd.DataFrame], supervised: bool,
-    metadata_dir: epath.Path, metadata_fields: Dict[str, MetadataFeature],
+    metadata_dir: epath.Path, metadata_fields: dict[str, MetadataFeature],
     metadata_load_fn: Optional[MetadataLoaderType]) -> pd.DataFrame:
   """Create the dataframe of segments with annotations and audio urls.
 
@@ -126,7 +126,7 @@ def create_segments_df(
 def combine_annotations_with_metadata(
     segments: pd.DataFrame,
     metadata_dir: epath.Path,
-    metadata_fields: Dict[str, MetadataFeature],
+    metadata_fields: dict[str, MetadataFeature],
     metadata_load_fn: Optional[MetadataLoaderType],
     metadata_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
   """Combine segments with whatever metadata is available for this dataset.
@@ -312,7 +312,7 @@ def get_labeled_intervals(
     interval_length_s: int,
     localization_fn: LocalizationFn,
     drop_unknown_segments: bool,
-) -> Dict[Tuple[int, int], Set[str]]:
+) -> dict[tuple[int, int], Set[str]]:
   """Slices the given audio, and produces labels intervals.
 
   `file_segments` corresponds to the segments annotated by recordists. The

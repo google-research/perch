@@ -16,7 +16,7 @@
 """Training loop."""
 import functools
 import time
-from typing import Optional, Tuple
+from typing import Optional
 
 from absl import logging
 from chirp import export_utils
@@ -128,8 +128,8 @@ def project(min_value: float, max_value: float) -> optax.GradientTransformation:
 
 def initialize_model(
     model_config: config_dict.ConfigDict, rng_seed: int,
-    input_shape: Tuple[int, ...], learning_rate: float, workdir: str,
-    target_class_list: str) -> Tuple[utils.ModelBundle, utils.TrainState]:
+    input_shape: tuple[int, ...], learning_rate: float, workdir: str,
+    target_class_list: str) -> tuple[utils.ModelBundle, utils.TrainState]:
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
@@ -318,7 +318,7 @@ def evaluate_loop(model_bundle: utils.ModelBundle,
                   num_train_steps: int,
                   eval_steps_per_checkpoint: Optional[int] = None,
                   tflite_export: bool = False,
-                  input_shape: Optional[Tuple[int, ...]] = None,
+                  input_shape: Optional[tuple[int, ...]] = None,
                   eval_sleep_s: int = EVAL_LOOP_SLEEP_S):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -354,7 +354,7 @@ def evaluate_loop(model_bundle: utils.ModelBundle,
 
 
 def export_tf(model_bundle: utils.ModelBundle, train_state: utils.TrainState,
-              workdir: str, input_shape: Tuple[int, ...]):
+              workdir: str, input_shape: tuple[int, ...]):
   """Export SavedModel and TFLite."""
   variables = {"params": train_state.params, **train_state.model_state}
 

@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Metric for Class Mean Average Precision (CMAP)."""
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 from chirp.models import metrics
 from clu import metrics as clu_metrics
@@ -50,7 +50,7 @@ class CMAP(clu_metrics.Metric):
     return cls(scores=None, labels=None)
 
   @classmethod
-  def from_model_output(cls, values: Tuple[jnp.array, jnp.array],
+  def from_model_output(cls, values: tuple[jnp.array, jnp.array],
                         **_) -> clu_metrics.Metric:
     scores, labels = values
     return cls(scores=scores, labels=labels)

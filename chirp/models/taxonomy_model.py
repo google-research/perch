@@ -15,7 +15,7 @@
 
 """Taxonomy model."""
 import dataclasses
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Optional, Union
 
 from chirp.models import conformer
 from chirp.models import frontend
@@ -42,7 +42,7 @@ class TaxonomyModel(nn.Module):
       trained in a self-supervised way. This option is mutually exclusive with
       frontend and is used for evaluation of self-supervised representations.
   """
-  num_classes: Dict[str, int]
+  num_classes: dict[str, int]
   encoder: nn.Module
   taxonomy_loss_weight: float
   frontend: Optional[nn.Module] = None
@@ -123,7 +123,7 @@ class ConformerModel(nn.Module):
   features: int = 144
   num_heads: int = 4
   kernel_size: int = 15
-  downsample: List[Tuple[int, float]] = dataclasses.field(default_factory=list)
+  downsample: list[tuple[int, float]] = dataclasses.field(default_factory=list)
 
   @nn.compact
   def __call__(self,

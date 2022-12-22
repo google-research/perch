@@ -16,7 +16,7 @@
 """Conformer layers."""
 import dataclasses
 import math
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Optional
 
 from chirp.models import layers
 from flax import linen as nn
@@ -42,7 +42,7 @@ class Conformer(nn.Module):
   fflayer_weight_sharing: bool = False
   num_blocks: int = 1
   # tuples of layer index and corresponding scaling of number of channels
-  downsample: List[Tuple[int, float]] = dataclasses.field(default_factory=list)
+  downsample: list[tuple[int, float]] = dataclasses.field(default_factory=list)
   skip_layer_norm: bool = True
 
   @nn.compact
@@ -189,8 +189,8 @@ class ConvolutionalSubsampling(nn.Module):
     speech recognition." arXiv preprint arXiv:2005.08100 (2020).
   """
   features: int
-  kernel_size: Tuple[int, int] = (3, 3)
-  strides: Tuple[int, int] = (2, 2)
+  kernel_size: tuple[int, int] = (3, 3)
+  strides: tuple[int, int] = (2, 2)
   num_layers: int = 2
   dropout_prob: float = 0.1
 

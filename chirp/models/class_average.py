@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """A CLU metric that averages values separately for each class."""
-from typing import Any, Tuple
+from typing import Any
 
 from clu import metrics
 import flax
@@ -37,7 +37,7 @@ class ClassAverage(metrics.Metric):
     return cls(total=jnp.zeros((1,), float), count=jnp.zeros((1,), int))
 
   @classmethod
-  def from_model_output(cls, values: Tuple[jnp.array, jnp.array],
+  def from_model_output(cls, values: tuple[jnp.array, jnp.array],
                         **_) -> metrics.Metric:
     return cls(total=values[0] @ values[1], count=jnp.sum(values[1], axis=0))
 

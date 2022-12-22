@@ -19,7 +19,7 @@ Implementation of the EfficientNet model in Flax.
 """
 import enum
 import math
-from typing import NamedTuple, Optional, Tuple
+from typing import NamedTuple, Optional
 
 from chirp.models import layers
 from flax import linen as nn
@@ -44,7 +44,7 @@ class EfficientNetStage(NamedTuple):
   """Definition of a single stage in EfficientNet."""
   num_blocks: int
   features: int
-  kernel_size: Tuple[int, int]
+  kernel_size: tuple[int, int]
   strides: int
   expand_ratio: int
 

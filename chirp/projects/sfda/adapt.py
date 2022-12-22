@@ -18,7 +18,7 @@
 import abc
 import enum
 import functools
-from typing import Any, Callable, Dict, Tuple, Type
+from typing import Any, Callable
 from chirp.models import cmap
 from chirp.projects.sfda import losses
 from chirp.projects.sfda import metrics
@@ -61,7 +61,7 @@ class AdaptationState:
   epoch: int
   model_params: flax.core.scope.VariableDict
   model_state: flax.core.scope.FrozenVariableDict
-  method_state: Dict[str, Any]
+  method_state: dict[str, Any]
   opt_state: optax.OptState
 
 
@@ -71,7 +71,7 @@ class Modality(enum.Enum):
   AUDIO = "audio"
 
 
-def keep_jax_types(batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+def keep_jax_types(batch: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
   """Remove non-numeric arrays from batch, to make it jit-compliant.
 
   Args:
@@ -92,12 +92,12 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       model_config: config_dict.ConfigDict,
       rng_seed: int,
       modality: Modality,
-      input_shape: Tuple[int, ...],
+      input_shape: tuple[int, ...],
       target_class_list: str,
       adaptation_iterations: int,
       optimizer_config: config_dict.ConfigDict,
       pretrained: bool,
-  ) -> Tuple[model_utils.ModelBundle, AdaptationState, jax.random.PRNGKeyArray,
+  ) -> tuple[model_utils.ModelBundle, AdaptationState, jax.random.PRNGKeyArray,
              Callable[[Any, Any, str], Any], Callable[[Any], Any]]:
     """Loads model's params and state, and instantiates the adaptation state.
 
@@ -160,7 +160,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
   @abc.abstractmethod
   def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **_) -> Type[clu_metrics.Collection]:
+                             **_) -> type[clu_metrics.Collection]:
     """Define metrics tracked during adaptation.
 
     On top of common metrics (accuracy/mAP ...), SFDA methods should
@@ -228,9 +228,9 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
   def before_iter(
       self, key: jax.random.PRNGKeyArray, model_bundle: model_utils.ModelBundle,
-      adaptation_state: AdaptationState, batch: Dict[str, np.ndarray],
+      adaptation_state: AdaptationState, batch: dict[str, np.ndarray],
       modality: Modality, multi_label: bool,
-      **method_kwargs) -> Tuple[AdaptationState, Dict[str, jnp.ndarray]]:
+      **method_kwargs) -> tuple[AdaptationState, dict[str, jnp.ndarray]]:
     """Any operation that a method needs to do before an adaptation iteration.
 
     An example of application is to compute the pseudo-labels needed for the
@@ -262,7 +262,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
                                                                      Any],
                adaptation_dataset: tf.data.Dataset, modality: Modality,
                multi_label: bool,
-               batchwise_metrics: Type[clu_metrics.Collection],
+               batchwise_metrics: type[clu_metrics.Collection],
                writer: metric_writers.MetricWriter,
                reporter: periodic_actions.ReportProgress,
                use_supervised_metrics: bool,
@@ -362,9 +362,9 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
     @functools.partial(jax.pmap, axis_name="batch")
     def update_step(
-        batch: Dict[str, jnp.ndarray], adaptation_state: AdaptationState,
+        batch: dict[str, jnp.ndarray], adaptation_state: AdaptationState,
         key: jax.random.PRNGKeyArray,
-        **method_gather_args) -> Tuple[Dict[str, jnp.ndarray], AdaptationState]:
+        **method_gather_args) -> tuple[dict[str, jnp.ndarray], AdaptationState]:
       """Updates the model's state and params using the given batch."""
 
       params = adaptation_state.model_params
@@ -473,7 +473,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
     @functools.partial(jax.pmap, axis_name="batch")
     def update_metrics(metric_collection: clu_metrics.Collection,
-                       batch: Dict[str, jnp.ndarray]):
+                       batch: dict[str, jnp.ndarray]):
 
       variables = {
           "params": adaptation_state.model_params,
@@ -634,7 +634,7 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
 
 
 def get_common_metrics(supervised: bool,
-                       multi_label: bool) -> Type[clu_metrics.Collection]:
+                       multi_label: bool) -> type[clu_metrics.Collection]:
   """Obtain a common set of metrics and losses.
 
   Args:
@@ -667,7 +667,7 @@ def get_common_metrics(supervised: bool,
   return clu_metrics.Collection.create(**metrics_dict)
 
 
-def verify_batch(batch: Dict[str, jnp.ndarray]) -> None:
+def verify_batch(batch: dict[str, jnp.ndarray]) -> None:
   """Performs non-jittable verifications on a batch of data.
 
   Args:

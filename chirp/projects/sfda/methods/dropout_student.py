@@ -15,8 +15,6 @@
 
 """Our adaptation of the Noisy Student method for SFDA."""
 
-from typing import Dict, Tuple, Type
-
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import losses
 from chirp.projects.sfda import method_utils
@@ -122,11 +120,11 @@ class DropoutStudent(adapt.SFDAMethod):
     return adaptation_state
 
   def before_iter(
-      self, key: jax.random.PRNGKeyArray, batch: Dict[str, np.ndarray],
+      self, key: jax.random.PRNGKeyArray, batch: dict[str, np.ndarray],
       adaptation_state: adapt.AdaptationState,
       model_bundle: model_utils.ModelBundle, modality: adapt.Modality,
       multi_label: bool,
-      **method_kwargs) -> Tuple[adapt.AdaptationState, Dict[str, jnp.ndarray]]:
+      **method_kwargs) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
     """Grab or compute the pseudo-labels for the current batch.
 
     In the offline mode, we only grab pre-computed pseudo-labels from the
@@ -175,7 +173,7 @@ class DropoutStudent(adapt.SFDAMethod):
     }
 
   def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> Type[clu_metrics.Collection]:
+                             **method_kwargs) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation."""
     metrics_dict = vars(
         adapt.get_common_metrics(

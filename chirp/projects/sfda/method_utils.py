@@ -15,7 +15,7 @@
 
 """Some utils functions shared across methods."""
 
-from typing import Dict, Union, Optional
+from typing import Optional, Union
 
 from absl import logging
 from chirp.models import output
@@ -66,7 +66,7 @@ def jax_cdist(features_a: jnp.array, features_b: jnp.array) -> jnp.array:
 
 
 def batch_forward(
-    batch: Dict[str, jnp.ndarray],
+    batch: dict[str, jnp.ndarray],
     model_state: flax.core.scope.FrozenVariableDict,
     params: flax.core.scope.VariableDict,
     model: nn.Module,
@@ -135,7 +135,7 @@ def forward_dataset(
     only_keep_unmasked_classes: bool = False,
     train: bool = False,
     key: Optional[jax.random.PRNGKeyArray] = None
-) -> Dict[str, Union[jnp.ndarray, np.ndarray]]:
+) -> dict[str, Union[jnp.ndarray, np.ndarray]]:
   """Fowards a dataset through a given model.
 
   Args:

@@ -15,7 +15,7 @@
 
 """Utilities to load data for Source-free Domain Adaptation."""
 import ast
-from typing import List, Tuple, Dict, Any
+from typing import Any
 from absl import logging
 from chirp.data import pipeline
 from chirp.projects.sfda import models
@@ -25,7 +25,7 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 
 
-def to_tf_compatible_split(split_tuple: List[Tuple[int, int]]) -> str:
+def to_tf_compatible_split(split_tuple: list[tuple[int, int]]) -> str:
   """Converts the splits specified in the config file into tf-readable format.
 
   TF dataset expects a split in the form 'train[x%:y%]'. The % sign
@@ -49,7 +49,7 @@ def to_tf_compatible_split(split_tuple: List[Tuple[int, int]]) -> str:
 def get_audio_datasets(
     adaptation_data_config: config_dict.ConfigDict,
     eval_data_config: config_dict.ConfigDict,
-    sample_rate_hz: float) -> Tuple[tf.data.Dataset, tf.data.Dataset]:
+    sample_rate_hz: float) -> tuple[tf.data.Dataset, tf.data.Dataset]:
   """Get audio datasets used for adaptation and evaluation.
 
   Args:
@@ -111,8 +111,8 @@ def get_image_datasets(
     batch_size_train: int,
     batch_size_eval: int,
     data_seed: int,
-    builder_kwargs: Dict[str, Any],
-) -> Tuple[tf.data.Dataset, tf.data.Dataset]:
+    builder_kwargs: dict[str, Any],
+) -> tuple[tf.data.Dataset, tf.data.Dataset]:
   """Get image dataset used for adaptation and evaluation.
 
   Args:
@@ -154,7 +154,7 @@ def get_image_datasets(
   return adaptation_dataset, val_dataset
 
 
-def get_metadata(dataset_name: str) -> Dict[str, Any]:
+def get_metadata(dataset_name: str) -> dict[str, Any]:
   """Maps image dataset names to metadata.
 
   Args:
