@@ -76,7 +76,7 @@ def get_config() -> config_dict.ConfigDict:
   init_config.learning_rate_schedule = "cosine_decay"
   init_config.learning_rate = 0.0001
   init_config.start_learning_rate = 0.000001
-  init_config.quant_start_learning_rate = 1e-5
+  init_config.quant_start_learning_rate = 0.1
   init_config.input_size = window_size_s * sample_rate_hz
   init_config.rng_seed = 0
   init_config.target_class_list = target_class_list
@@ -185,3 +185,8 @@ def get_config() -> config_dict.ConfigDict:
   config.eval_config = eval_config
 
   return config
+
+
+def get_hyper(hyper):
+  return hyper.sweep("config.init_config.quant_start_learning_rate",
+                     hyper.discrete([0.1]))

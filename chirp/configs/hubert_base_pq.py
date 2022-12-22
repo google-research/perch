@@ -185,3 +185,8 @@ def get_config() -> config_dict.ConfigDict:
   config.eval_config = eval_config
 
   return config
+
+
+def get_hyper(hyper):
+  return hyper.sweep("config.init_config.learning_rate",
+                     hyper.discrete([0.0001]))
