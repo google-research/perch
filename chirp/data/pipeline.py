@@ -111,10 +111,13 @@ class Pad(FeaturesPreprocessOp):
     pad_size: The minimum length to pad to.
     random: If true, pads a random amount left and right. If false, will pad the
       end only.
+    add_mask: Whether to add a new mask feature indicating where the padding
+      appears in the named features.
     names: The name of the features to pad.
   """
   pad_size: float
   random: bool = True
+  add_mask: bool = True
   names: Tuple[str, ...] = ('audio',)
 
   def __call__(self, features: Features,
@@ -139,7 +142,8 @@ class Pad(FeaturesPreprocessOp):
 
       mask = tf.ones_like(features[name])
       padded_mask = tf.pad(mask, paddings)
-      features[f'{name}_mask'] = padded_mask
+      if self.add_mask:
+        features[f'{name}_mask'] = padded_mask
 
       features[name] = tf.pad(features[name], paddings)
     return features

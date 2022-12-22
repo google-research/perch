@@ -49,6 +49,7 @@ def get_base_config(**kwargs):
   config.add_taxonomic_labels = True
   config.target_class_list = 'xenocanto'
   config.num_train_steps = 1_000_000
+  config.pad_mask = False
   config.tfds_data_dir = ''
   config.update(kwargs)
   return config
@@ -101,8 +102,9 @@ def get_pcen_melspec_config(
       scaling_config=_c('frontend.PCENScalingConfig', conv_width=256))
 
 
-def get_supervised_train_pipeline(config: config_dict.ConfigDict,
-                                  mixin_prob: float) -> config_dict.ConfigDict:
+def get_supervised_train_pipeline(
+    config: config_dict.ConfigDict, mixin_prob: float,
+    train_dataset_dir: str) -> config_dict.ConfigDict:
   """Create the supervised training data pipeline."""
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
@@ -115,7 +117,9 @@ def get_supervised_train_pipeline(config: config_dict.ConfigDict,
              target_class_list=config.get_ref('target_class_list'),
              add_taxonomic_labels=config.get_ref('add_taxonomic_labels')),
           _c('pipeline.MixAudio', mixin_prob=mixin_prob),
-          _c('pipeline.Pad', pad_size=config.get_ref('train_window_size_s')),
+          _c('pipeline.Pad',
+             pad_size=config.get_ref('train_window_size_s'),
+             add_mask=config.get_ref('pad_mask')),
           _c('pipeline.RandomSlice',
              window_size=config.get_ref('train_window_size_s')),
           _c('pipeline.Batch',
@@ -126,7 +130,7 @@ def get_supervised_train_pipeline(config: config_dict.ConfigDict,
       ])
   train_dataset_config.split = 'train'
   train_dataset_config.tfds_data_dir = config.get_ref('tfds_data_dir')
-  train_dataset_config.dataset_directory = 'bird_taxonomy/slice_peaked'
+  train_dataset_config.dataset_directory = train_dataset_dir
   return train_dataset_config
 
 
@@ -145,7 +149,8 @@ def get_supervised_eval_pipeline(
              add_taxonomic_labels=config.get_ref('add_taxonomic_labels')),
           _c('pipeline.Pad',
              pad_size=config.get_ref('eval_window_size_s'),
-             random=False),
+             random=False,
+             add_mask=config.get_ref('pad_mask')),
           _c('pipeline.Slice',
              window_size=config.get_ref('eval_window_size_s'),
              start=0.0),

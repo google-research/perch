@@ -24,17 +24,16 @@ _c = config_utils.callable_config
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
   config = presets.get_base_config()
-  input_shape = (config.get_ref('train_window_size_s') *
-                 config.get_ref('sample_rate_hz'),)
 
   # Configure the data
   config.train_dataset_config = presets.get_supervised_train_pipeline(
-      config, mixin_prob=0.75)
+      config,
+      mixin_prob=0.75,
+      train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0')
   config.eval_dataset_config = presets.get_supervised_eval_pipeline(
-      config, 'soundscapes/caples:1.0.5')
+      config, 'soundscapes/caples:1.1.0')
   # Configure the experiment setup
-  config.init_config = presets.get_base_init_config(
-      config, input_shape=input_shape)
+  config.init_config = presets.get_base_init_config(config)
   model_config = config_dict.ConfigDict()
   model_config.encoder = _c(
       'efficientnet.EfficientNet',
@@ -45,7 +44,9 @@ def get_config() -> config_dict.ConfigDict:
   # Configure the training loop
   config.train_config = presets.get_base_train_config(config)
   config.eval_config = presets.get_base_eval_config(
-      config, input_shape=input_shape)
+      config,
+      input_shape=(config.get_ref('eval_window_size_s') *
+                   config.get_ref('sample_rate_hz'),))
   return config
 
 

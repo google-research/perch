@@ -29,9 +29,11 @@ def get_config() -> config_dict.ConfigDict:
   )
 
   config.train_dataset_config = presets.get_supervised_train_pipeline(
-      config, mixin_prob=0.75)
+      config,
+      mixin_prob=0.75,
+      train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0')
   config.eval_dataset_config = presets.get_supervised_eval_pipeline(
-      config, 'soundscapes/caples:1.0.7')
+      config, 'soundscapes/caples:1.1.0')
 
   # Configure the experiment setup
   input_shape = (config.get_ref('train_window_size_s') *

@@ -27,7 +27,9 @@ def get_config() -> config_dict.ConfigDict:
   config = presets.get_base_config(batch_size=128, num_train_steps=5_000_000)
 
   config.train_dataset_config = presets.get_supervised_train_pipeline(
-      config, mixin_prob=1.0)
+      config,
+      mixin_prob=1.0,
+      train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0')
   config.train_dataset_config.split = 'train[:99%]'
 
   eval_dataset_config = config_dict.ConfigDict()
@@ -50,7 +52,7 @@ def get_config() -> config_dict.ConfigDict:
       ])
   eval_dataset_config.split = 'train[99%:]'
   eval_dataset_config.tfds_data_dir = config.tfds_data_dir
-  eval_dataset_config.dataset_directory = 'bird_taxonomy/slice_peaked'
+  eval_dataset_config.dataset_directory = 'bird_taxonomy/slice_peaked:1.4.0'
   config.eval_dataset_config = eval_dataset_config
 
   # Experiment configuration

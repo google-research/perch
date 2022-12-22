@@ -28,12 +28,15 @@ def get_config() -> config_dict.ConfigDict:
       eval_window_size_s=5,
       frame_rate_hz=100,
       num_channels=160,
+      pad_mask=True,
   )
 
   config.train_dataset_config = presets.get_supervised_train_pipeline(
-      config, mixin_prob=0.75)
+      config,
+      mixin_prob=0.75,
+      train_dataset_dir='bird_taxonomy/full_length:1.4.0')
   config.eval_dataset_config = presets.get_supervised_eval_pipeline(
-      config, 'soundscapes/caples:1.0.5')
+      config, 'soundscapes/caples:1.1.0')
 
   # Configure the experiment setup
   config.init_config = presets.get_base_init_config(config)
