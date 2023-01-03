@@ -28,8 +28,8 @@ import tensorflow_datasets as tfds
 import tqdm
 
 _DEPRECATED2NEW = {
-    'reevir1': 'reevir',
     'mallar': 'mallar3',
+    'rufant1': 'rufant7',
 }
 
 
@@ -120,7 +120,10 @@ def load_birdclef_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   start_time_fn = lambda row: float(row['start_time_s'])
   end_time_fn = lambda row: float(row['end_time_s'])
   filter_fn = lambda row: row['end_time_s'] <= row['start_time_s']
-  class_fn = lambda row: row['ebird_codes'].split(' ')
+  class_fn = lambda row: [  # pylint: disable=g-long-lambda
+      sp.strip().replace('rufant1', 'rufant7')
+      for sp in row['ebird_codes'].split(' ')
+  ]
   annos = annotations.read_dataset_annotations_csvs([annotations_path],
                                                     filename_fn=filename_fn,
                                                     namespace='ebird2021',
@@ -139,8 +142,7 @@ def load_ssw_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   filter_fn = lambda row: False
   # SSW data are already using ebird codes.
   class_fn = lambda row: [  # pylint: disable=g-long-lambda
-      row['Species eBird Code'].strip().replace('????', 'unknown').replace(
-          'reevir1', 'reevir')
+      row['Species eBird Code'].strip().replace('????', 'unknown')
   ]
   filename_fn = lambda filepath, row: row['Filename'].strip()
 

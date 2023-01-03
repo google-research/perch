@@ -104,9 +104,11 @@ class SoundscapesLibTest(parameterized.TestCase):
     annos_csv_path = path_utils.get_absolute_epath(
         'tests/testdata/birdclef2019_colombia.csv')
     annos = dataset_fns.load_birdclef_annotations(annos_csv_path)
-    self.assertLen(annos, 6)
+    self.assertLen(annos, 7)
+    # This includes an auto-conversion of rufant1 to rufant7.
     expected_labels = [
-        'kebtou1', 'stbwre2', 'stbwre2', 'yeofly1', 'bubwre1', 'fepowl'
+        'rufant7', 'kebtou1', 'stbwre2', 'stbwre2', 'yeofly1', 'bubwre1',
+        'fepowl'
     ]
     for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
       self.assertTrue(anno.filename.endswith('.wav'))
@@ -188,12 +190,12 @@ class SoundscapesLibTest(parameterized.TestCase):
     annos_csv_path = path_utils.get_absolute_epath(
         'tests/testdata/birdclef2019_colombia.csv')
     annos = dataset_fns.load_birdclef_annotations(annos_csv_path)
-    self.assertLen(annos, 6)
+    self.assertLen(annos, 7)
 
     combined_segments = soundscapes_lib.combine_annotations_with_metadata(
         annos, self.testdata_dir, md_features,
         dataset_fns.load_birdclef_metadata)
-    self.assertLen(combined_segments, 6)
+    self.assertLen(combined_segments, 7)
     for feature in md_features.values():
       self.assertIn(feature.target_key, combined_segments.columns.values)
       self.assertNotIn(feature.source_key, combined_segments.columns.values)

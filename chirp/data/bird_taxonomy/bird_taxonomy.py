@@ -100,7 +100,8 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                 '"upstream_ar_only_slice_peaked", and '
                 '"upstream_ar_only_full_length" variants. Removed '
                 '"slice_peaked_tiny_reference" variant.'),
-      '1.4.0': 'Added a seabird_sliced_peaked dataset.'
+      '1.4.0': 'Added a seabird_sliced_peaked dataset.',
+      '1.5.0': 'Updated ebird2021 taxonomy.',
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg

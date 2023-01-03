@@ -114,6 +114,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       '1.0.6': 'Updates the dataset following Int16AsFloatTensor refactoring.',
       '1.0.7': 'Fix some dropped annotations in the Hawaii dataset.',
       '1.1.0': 'Adds full-length variants.',
+      '1.2.0': 'Updated ebird2021 taxonomy.',
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
