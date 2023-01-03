@@ -804,7 +804,7 @@ class ExtractStridedWindows(DatasetPreprocessOp):
 def get_dataset(
     split: str,
     is_train: bool = False,
-    dataset_directory: str = _DEFAULT_DATASET_DIR,
+    dataset_directory: Union[str, Iterable[str]] = _DEFAULT_DATASET_DIR,
     tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
     tf_data_service_address: Optional[Any] = None,
     pipeline: Optional[Pipeline] = None
@@ -816,7 +816,9 @@ def get_dataset(
     is_train: If the dataset will be used for training. This only affects
       whether data will be distributed or not in case tf_data_service_address is
       provided.
-    dataset_directory: dataset directory.
+    dataset_directory: dataset directory. If multiple are passed, then samples
+      are uniformly taken from each dataset. When multiple datasets are loaded,
+      only the dataset info of the first dataset is returned.
     tfds_data_dir: If provided, uses tfds.add_data_dir, and then tfds.load,
       instead of using the tfds.builder_from_directory.
     tf_data_service_address: Address for TFDataService. Only used if is_train is
@@ -826,21 +828,8 @@ def get_dataset(
   Returns:
     The placeholder dataset.
   """
-  read_config = tfds.ReadConfig(add_tfds_id=True)
-  if tfds_data_dir:
-    tfds.core.add_data_dir(tfds_data_dir)
-    ds, dataset_info = tfds.load(
-        dataset_directory,
-        split=split,
-        data_dir=tfds_data_dir,
-        with_info=True,
-        read_config=read_config,
-        shuffle_files=True)
-  else:
-    builder = tfds.builder_from_directory(dataset_directory)
-    ds = builder.as_dataset(split=split, read_config=read_config)
-    dataset_info = builder.info
-
+  if isinstance(dataset_directory, str):
+    dataset_directory = [dataset_directory]
   if pipeline is None:
     pipeline = Pipeline([
         OnlyJaxTypes(),
@@ -850,7 +839,30 @@ def get_dataset(
         RandomSlice(window_size=5),
         RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
     ])
-  ds = pipeline(ds, dataset_info)
+  read_config = tfds.ReadConfig(add_tfds_id=True)
+
+  datasets = []
+  for dataset_dir in dataset_directory:
+    if tfds_data_dir:
+      tfds.core.add_data_dir(tfds_data_dir)
+      ds, dataset_info = tfds.load(
+          dataset_dir,
+          split=split,
+          data_dir=tfds_data_dir,
+          with_info=True,
+          read_config=read_config,
+          shuffle_files=True)
+    else:
+      builder = tfds.builder_from_directory(dataset_dir)
+      ds = builder.as_dataset(split=split, read_config=read_config)
+      dataset_info = builder.info
+
+    datasets.append(pipeline(ds, dataset_info))
+
+  if len(datasets) > 1:
+    ds = tf.data.Dataset.sample_from_datasets(datasets)
+  else:
+    ds = datasets[0]
 
   if is_train and tf_data_service_address:
     ds = ds.apply(
