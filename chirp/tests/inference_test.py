@@ -22,6 +22,9 @@ import apache_beam as beam
 from apache_beam.testing import test_pipeline
 from chirp import path_utils
 from chirp.inference import embed_lib
+from chirp.inference import models
+from chirp.taxonomy import namespace_db
+import numpy as np
 import tensorflow as tf
 
 from absl.testing import absltest
@@ -97,6 +100,39 @@ class InferenceTest(parameterized.TestCase):
       self.assertSequenceEqual(raw_audio.shape, got_example['raw_audio_shape'])
     else:
       self.assertEqual(got_example['raw_audio'], '')
+
+  def test_sep_embed_wrapper(self):
+    """Check that the joint-model wrapper works as intended."""
+    separator = models.PlaceholderModel(
+        sample_rate=22050,
+        make_embeddings=False,
+        make_logits=False,
+        make_separated_audio=True)
+    db = namespace_db.load_db()
+    target_class_list = db.class_lists['high_sierras']
+
+    embeddor = models.PlaceholderModel(
+        sample_rate=32000,
+        make_embeddings=True,
+        make_logits=True,
+        make_separated_audio=False,
+        target_class_list=target_class_list)
+    sep_embed = models.SeparateEmbedModel(22050, separator, embeddor)
+    audio = np.zeros(5 * 22050, np.float32)
+
+    sep_outputs = separator.embed(audio)
+    outputs = sep_embed.embed(audio)
+    self.assertSequenceEqual(sep_outputs.separated_audio.shape,
+                             outputs.separated_audio.shape)
+    # The PlaceholderModel produces one embedding per second, and we have
+    # five seconds of audio, with two separated channels.
+    # Note that this checks that the sample-rate conversion between the
+    # separation model and embedding model has worked correctly.
+    self.assertSequenceEqual(outputs.embeddings.shape,
+                             [5, 2, embeddor.embedding_size])
+    # The Sep+Embed model takes the max logits over the channel dimension.
+    self.assertSequenceEqual(outputs.logits['label'].shape,
+                             [5, target_class_list.size])
 
   def test_beam_pipeline(self):
     """Check that we can write embeddings to TFRecord file."""

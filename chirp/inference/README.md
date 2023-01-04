@@ -13,6 +13,12 @@ provided in `models.py`, including:
 * `SeparatorModelTF`: an exported Chirp separation model,
 * `BirdNet`: applies the BirdNet saved model, which can be obtained from the
   BirdNET-Analyzer git repository.
+* `BirbSepModelTF1`: Applies the separation model described in [the Bird MixIT
+  paper](https://arxiv.org/abs/2110.03209)
+* `SeparateEmbedModel`: Combines different separation and embedding/inference
+  models, by separating the target audio and then embedding each separate
+  channel. If the embedding model produces logits, the max logits are taken
+  over the separated channels.
 
 The primary function in the `EmbeddingModel` interface is
 `EmbeddingModel.embed(audio_array)` which runs model inference on the provided

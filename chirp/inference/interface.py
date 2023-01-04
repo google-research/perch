@@ -16,12 +16,15 @@
 """Interface for models producing embeddings."""
 
 import dataclasses
-from typing import Optional
+from typing import Dict, Optional
 
+from chirp.taxonomy import namespace
 import librosa
 import numpy as np
 
-LogitType = dict[str, np.ndarray]
+LogitType = Dict[str, np.ndarray]
+
+NULL_LOGIT = -20.0
 
 
 @dataclasses.dataclass
@@ -58,6 +61,49 @@ class EmbeddingModel:
       An InferenceOutputs object.
     """
     raise NotImplementedError
+
+  def batch_embed(self, audio_batch: np.ndarray) -> InferenceOutputs:
+    """Embed a batch of audio."""
+    outputs = []
+    for audio in audio_batch:
+      outputs.append(self.embed(audio))
+    if outputs[0].embeddings is not None:
+      embeddings = np.stack([x.embeddings for x in outputs], axis=0)
+    else:
+      embeddings = None
+
+    if outputs[0].logits is not None:
+      batched_logits = {}
+      for logit_key in outputs[0].logits:
+        batched_logits[logit_key] = np.stack(
+            [x.logits[logit_key] for x in outputs], axis=0)
+    else:
+      batched_logits = None
+
+    if outputs[0].separated_audio is not None:
+      separated_audio = np.stack([x.separated_audio for x in outputs], axis=0)
+    else:
+      separated_audio = None
+
+    return InferenceOutputs(
+        embeddings=embeddings,
+        logits=batched_logits,
+        separated_audio=separated_audio)
+
+  def convert_logits(
+      self, logits: np.ndarray, source_class_list: namespace.ClassList,
+      target_class_list: Optional[namespace.ClassList]) -> np.ndarray:
+    """Convert model logits to logits for a different class list."""
+    if target_class_list is None:
+      return logits
+    sp_matrix, sp_mask = source_class_list.get_class_map_matrix(
+        target_class_list)
+    # When we convert from ClassList A (used for training) to ClassList B
+    # (for inference output) there may be labels in B which don't appear in A.
+    # The `sp_mask` tells us which labels appear in both A and B. We set the
+    # logit for the new labels to NULL_LOGIT, which corresponds to a probability
+    # very close to zero.
+    return logits @ sp_matrix + NULL_LOGIT * (1 - sp_mask)
 
   def frame_audio(self, audio_array: np.ndarray, window_size_s: Optional[float],
                   hop_size_s: float) -> np.ndarray:
