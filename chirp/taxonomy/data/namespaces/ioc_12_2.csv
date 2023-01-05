@@ -131,7 +131,6 @@ pteronetta hartlaubii,Hartlaub's Duck
 aix sponsa,Wood Duck
 aix galericulata,Mandarin Duck
 chenonetta jubata,Maned Duck
-,
 nettapus auritus,African Pygmy Goose
 nettapus coromandelianus,Cotton Pygmy Goose
 nettapus pulchellus,Green Pygmy Goose
@@ -253,7 +252,6 @@ megapodius cumingii,Philippine Megapode
 megapodius bernsteinii,Sula Megapode
 megapodius tenimberensis,Tanimbar Megapode
 megapodius freycinet,Dusky Megapode
-,
 megapodius geelvinkianus,Biak Scrubfowl
 megapodius eremita,Melanesian Megapode
 megapodius layardi,Vanuatu Megapode
@@ -666,7 +664,6 @@ aegotheles tatei,Starry Owlet-nightjar
 aegotheles crinifrons,Moluccan Owlet-nightjar
 aegotheles wallacii,Wallace's Owlet-nightjar
 aegotheles albertisi,Mountain Owlet-nightjar
-,
 aegotheles savesi,New Caledonian Owlet-nightjar
 aegotheles bennettii,Barred Owlet-nightjar
 aegotheles affinis,Vogelkop Owlet-nightjar
@@ -1392,7 +1389,6 @@ columba pallidiceps,Yellow-legged Pigeon
 columba delegorguei,Eastern Bronze-naped Pigeon
 columba iriditorques,Western Bronze-naped Pigeon
 columba malherbii,Island Bronze-naped Pigeon
-,
 columba larvata,Lemon Dove
 patagioenas leucocephala,White-crowned Pigeon
 patagioenas squamosa,Scaly-naped Pigeon
@@ -1414,8 +1410,6 @@ patagioenas goodsoni,Dusky Pigeon
 nesoenas picturatus,Malagasy Turtle Dove
 nesoenas rodericanus,Rodrigues Pigeon
 nesoenas mayeri,Pink Pigeon
-,
-,
 streptopelia turtur,European Turtle Dove
 streptopelia lugens,Dusky Turtle Dove
 streptopelia hypopyrrha,Adamawa Turtle Dove
@@ -1660,7 +1654,6 @@ ptilinopus luteovirens,Golden Fruit Dove
 ptilinopus layardi,Whistling Fruit Dove
 drepanoptila holosericea,Cloven-feathered Dove
 alectroenas nitidissimus,Mauritius Blue Pigeon
-,
 alectroenas madagascariensis,Madagascar Blue Pigeon
 alectroenas sganzini,Comoros Blue Pigeon
 alectroenas pulcherrimus,Seychelles Blue Pigeon
@@ -1779,7 +1772,6 @@ gallirallus australis,Weka
 eulabeornis castaneoventris,Chestnut Rail
 cabalus lafresnayanus,New Caledonian Rail
 cabalus modestus,Chatham Rail
-,
 hypotaenidia okinawae,Okinawa Rail
 hypotaenidia torquata,Barred Rail
 hypotaenidia philippensis,Buff-banded Rail
@@ -1820,9 +1812,6 @@ fulica leucoptera,White-winged Coot
 porphyrio alleni,Allen's Gallinule
 porphyrio martinica,Purple Gallinule
 porphyrio flavirostris,Azure Gallinule
-,
-,
-,
 porphyrio porphyrio,Western Swamphen
 porphyrio madagascariensis,African Swamphen
 porphyrio poliocephalus,Grey-headed Swamphen
@@ -2964,7 +2953,7 @@ buteo oreophilus,Mountain Buzzard
 buteo auguralis,Red-necked Buzzard
 buteo brachypterus,Madagascar Buzzard
 buteo augur,Augur Buzzard
-,
+buteo archeri,buteo archeri
 buteo rufofuscus,Jackal Buzzard
 tyto tenebricosa,Greater Sooty Owl
 tyto multipunctata,Lesser Sooty Owl
@@ -2973,7 +2962,6 @@ tyto nigrobrunnea,Taliabu Masked Owl
 tyto sororcula,Moluccan Masked Owl
 tyto manusi,Manus Masked Owl
 tyto aurantia,Golden Masked Owl
-,
 tyto novaehollandiae,Australian Masked Owl
 tyto rosenbergii,Sulawesi Masked Owl
 tyto soumagnei,Red Owl
@@ -3054,7 +3042,6 @@ glaucidium castanopterum,Javan Owlet
 glaucidium radiatum,Jungle Owlet
 glaucidium castanotum,Chestnut-backed Owlet
 glaucidium capense,African Barred Owlet
-,
 glaucidium albertinum,Albertine Owlet
 glaucidium californicum,Northern Pygmy Owl
 glaucidium gnoma,Mountain Pygmy Owl
@@ -3157,7 +3144,6 @@ bubo milesi,Arabian Eagle-Owl
 bubo cinerascens,Greyish Eagle-Owl
 bubo africanus,Spotted Eagle-Owl
 bubo poensis,Fraser's Eagle-Owl
-,
 bubo lacteus,Verreaux's Eagle-Owl
 bubo shelleyi,Shelley's Eagle-Owl
 bubo sumatranus,Barred Eagle-Owl
@@ -3217,7 +3203,7 @@ strix hylophila,Rusty-barred Owl
 strix chacoensis,Chaco Owl
 strix rufipes,Rufous-legged Owl
 strix uralensis,Ural Owl
-,
+strix davidi,strix davidi
 strix nebulosa,Great Grey Owl
 strix woodfordii,African Wood Owl
 strix virgata,Mottled Owl
@@ -3452,11 +3438,9 @@ alcedo atthis,Common Kingfisher
 alcedo semitorquata,Half-collared Kingfisher
 alcedo hercules,Blyth's Kingfisher
 ceyx erithaca,Oriental Dwarf Kingfisher
-,
 ceyx melanurus,Philippine Dwarf Kingfisher
 ceyx fallax,Sulawesi Dwarf Kingfisher
 ceyx lepidus,Moluccan Dwarf Kingfisher
-,
 ceyx margarethae,Dimorphic Dwarf Kingfisher
 ceyx wallacii,Sula Dwarf Kingfisher
 ceyx cajeli,Buru Dwarf Kingfisher
@@ -3465,7 +3449,6 @@ ceyx dispar,Manus Dwarf Kingfisher
 ceyx mulcatus,New Ireland Dwarf Kingfisher
 ceyx sacerdotis,New Britain Dwarf Kingfisher
 ceyx meeki,North Solomons Dwarf Kingfisher
-,
 ceyx collectoris,New Georgia Dwarf Kingfisher
 ceyx malaitae,Malaita Dwarf Kingfisher
 ceyx nigromaxilla,Guadalcanal Dwarf Kingfisher
@@ -4155,8 +4138,6 @@ amazona dufresniana,Blue-cheeked Amazon
 amazona rhodocorytha,Red-browed Amazon
 amazona arausiaca,Red-necked Amazon
 amazona versicolor,St. Lucia Amazon
-,
-,
 amazona oratrix,Yellow-headed Amazon
 amazona tresmariae,Tres Marias Amazon
 amazona auropalliata,Yellow-naped Amazon
@@ -4259,7 +4240,6 @@ psittacara leucophthalmus,White-eyed Parakeet
 psittacara euops,Cuban Parakeet
 psittacara chloropterus,Hispaniolan Parakeet
 psittacara maugei,Puerto Rican Parakeet
-,
 psittrichas fulgidus,Pesquet's Parrot
 mascarinus mascarinus,Mascarene Parrot
 coracopsis vasa,Greater Vasa Parrot
@@ -4291,7 +4271,6 @@ prioniturus flavicans,Yellow-breasted Racket-tail
 prioniturus luconensis,Green Racket-tail
 prioniturus discurus,Blue-crowned Racket-tail
 eclectus roratus,Eclectus Parrot
-,
 geoffroyus geoffroyi,Red-cheeked Parrot
 geoffroyus simplex,Blue-collared Parrot
 geoffroyus heteroclitus,Song Parrot
@@ -4511,8 +4490,6 @@ erythropitta rubrinucha,South Moluccan Pitta
 erythropitta macklotii,Papuan Pitta
 erythropitta meeki,Louisiade Pitta
 erythropitta novaehibernicae,Bismarck Pitta
-,
-,
 erythropitta venusta,Graceful Pitta
 erythropitta granatina,Garnet Pitta
 erythropitta ussheri,Black-crowned Pitta
@@ -4905,7 +4882,6 @@ formicivora erythronotos,Black-hooded Antwren
 formicivora grisea,Southern White-fringed Antwren
 formicivora intermedia,Northern White-fringed Antwren
 formicivora serrana,Serra Antwren
-,
 formicivora melanogaster,Black-bellied Antwren
 formicivora rufa,Rusty-backed Antwren
 formicivora grantsaui,Sincora Antwren
@@ -5995,7 +5971,6 @@ myzomela wakoloensis,Wakolo Myzomela
 myzomela sanguinolenta,Scarlet Myzomela
 myzomela caledonica,New Caledonian Myzomela
 myzomela cardinalis,Cardinal Myzomela
-,
 myzomela chermesina,Rotuma Myzomela
 myzomela rubratra,Micronesian Myzomela
 myzomela sclateri,Sclater's Myzomela
@@ -6038,7 +6013,7 @@ phylidonyris pyrrhopterus,Crescent Honeyeater
 phylidonyris novaehollandiae,New Holland Honeyeater
 phylidonyris niger,White-cheeked Honeyeater
 lichmera argentauris,Olive Honeyeater
-,
+lichmera limbata,lichmera limbata
 lichmera indistincta,Brown Honeyeater
 lichmera incana,Grey-eared Honeyeater
 lichmera alboauricularis,Silver-eared Honeyeater
@@ -7434,10 +7409,6 @@ hypsipetes mindorensis,Mindoro Bulbul
 hypsipetes siquijorensis,Streak-breasted Bulbul
 hypsipetes affinis,Seram Golden Bulbul
 hypsipetes longirostris,Northern Golden Bulbul
-,
-,
-,
-,
 hypsipetes mysticalis,Buru Golden Bulbul
 hypsipetes guimarasensis,Visayan Bulbul
 hypsipetes everetti,Yellowish Bulbul
@@ -7593,7 +7564,7 @@ petrochelidon fluvicola,Streak-throated Swallow
 petrochelidon ariel,Fairy Martin
 petrochelidon nigricans,Tree Martin
 pnoepyga albiventer,Scaly-breasted Cupwing
-,
+pnoepyga mutica,Chinese Cupwing
 pnoepyga formosana,Taiwan Cupwing
 pnoepyga immaculata,Nepal Cupwing
 pnoepyga pusilla,Pygmy Cupwing
@@ -7684,7 +7655,7 @@ phylloscopus armandii,Yellow-streaked Warbler
 phylloscopus schwarzi,Radde's Warbler
 phylloscopus griseolus,Sulphur-bellied Warbler
 phylloscopus affinis,Tickell's Leaf Warbler
-,
+phylloscopus occisinensis,Alpine Leaf Warbler
 phylloscopus fuligiventer,Smoky Warbler
 phylloscopus fuscatus,Dusky Warbler
 phylloscopus neglectus,Plain Leaf Warbler
@@ -7796,7 +7767,7 @@ acrocephalus orinus,Large-billed Reed Warbler
 acrocephalus agricola,Paddyfield Warbler
 acrocephalus dumetorum,Blyth's Reed Warbler
 acrocephalus scirpaceus,Common Reed Warbler
-,
+acrocephalus baeticatus,African Reed Warbler
 acrocephalus palustris,Marsh Warbler
 arundinax aedon,Thick-billed Warbler
 iduna natalensis,African Yellow Warbler
@@ -8762,7 +8733,6 @@ aplonis dichroa,Makira Starling
 aplonis zelandica,Rusty-winged Starling
 aplonis striata,Striated Starling
 aplonis fusca,Tasman Starling
-,
 aplonis santovestris,Mountain Starling
 aplonis panayensis,Asian Glossy Starling
 aplonis mysolensis,Moluccan Starling
@@ -8890,7 +8860,6 @@ myadestes occidentalis,Brown-backed Solitaire
 myadestes unicolor,Slate-colored Solitaire
 myadestes townsendi,Townsend's Solitaire
 myadestes myadestinus,Kamao
-,
 myadestes palmeri,Puaiohi
 myadestes lanaiensis,Olomao
 myadestes obscurus,Omao
@@ -8944,7 +8913,6 @@ zoothera heinei,Russet-tailed Thrush
 zoothera machiki,Fawn-breasted Thrush
 zoothera lunulata,Bassian Thrush
 zoothera talaseae,Black-backed Thrush
-,
 geokichla sibirica,Siberian Thrush
 geokichla wardii,Pied Thrush
 geokichla princei,Grey Ground Thrush
@@ -9577,7 +9545,6 @@ cinnyris coquerellii,Mayotte Sunbird
 cinnyris lotenius,Loten's Sunbird
 aethopyga primigenia,Grey-hooded Sunbird
 aethopyga boltoni,Apo Sunbird
-,
 aethopyga linaraborae,Lina's Sunbird
 aethopyga flagrans,Flaming Sunbird
 aethopyga guimarasensis,Maroon-naped Sunbird
@@ -9752,7 +9719,6 @@ foudia madagascariensis,Red Fody
 foudia eminentissima,Comoros Fody
 foudia aldabrana,Aldabra Fody
 foudia omissa,Forest Fody
-,
 foudia rubra,Mauritius Fody
 foudia sechellarum,Seychelles Fody
 foudia flavicans,Rodrigues Fody
@@ -9824,7 +9790,6 @@ lonchura caniceps,Grey-headed Mannikin
 lonchura spectabilis,Hooded Mannikin
 lonchura forbesi,Forbes's Mannikin
 lonchura hunsteini,Hunstein's Mannikin
-,
 lonchura flaviprymna,Yellow-rumped Mannikin
 lonchura quinticolor,Five-colored Munia
 lonchura castaneothorax,Chestnut-breasted Mannikin
@@ -9945,7 +9910,7 @@ prunella strophiata,Rufous-breasted Accentor
 prunella montanella,Siberian Accentor
 prunella fulvescens,Brown Accentor
 prunella ocularis,Radde's Accentor
-,
+prunella fagani,Yemen Accentor
 prunella atrogularis,Black-throated Accentor
 prunella koslowi,Kozlov's Accentor
 prunella modularis,Dunnock
@@ -10887,7 +10852,7 @@ sporophila corvina,Variable Seedeater
 sporophila intermedia,Grey Seedeater
 sporophila americana,Wing-barred Seedeater
 sporophila fringilloides,White-naped Seedeater
-,
+sporophila murallae,Caqueta Seedeater
 sporophila luctuosa,Black-and-white Seedeater
 sporophila caerulescens,Double-collared Seedeater
 sporophila nigricollis,Yellow-bellied Seedeater
