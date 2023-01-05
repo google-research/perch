@@ -24,7 +24,6 @@ from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import bird_taxonomy
 from etils import epath
 import numpy as np
-import pandas as pd
 import tensorflow_datasets as tfds
 
 from absl.testing import absltest
@@ -54,11 +53,6 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
 
     _ = tfds.core.lazy_imports.librosa
 
-    cls.metadata_patcher = mock.patch.object(cls.DATASET_CLASS,
-                                             '_load_taxonomy_metadata')
-    mock_load_taxonomy_metadata = cls.metadata_patcher.start()
-    mock_load_taxonomy_metadata.return_value = pd.read_json(
-        cls.EXAMPLE_DIR / 'taxonomy_info.json')[['species_code']]
     cls.url_patcher = mock.patch.object(cls.DATASET_CLASS, 'GCS_URL',
                                         epath.Path(cls.tempdir))
     cls.query_patchers = []
@@ -69,7 +63,7 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
     cls.url_patcher.start()
     for patcher in cls.query_patchers:
       patcher.start()
-    subdir = epath.Path(cls.tempdir) / 'audio-data' / 'arcter'
+    subdir = epath.Path(cls.tempdir) / 'audio-data' / 'comter'
     subdir.mkdir(parents=True)
     for i in range(4):
       tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(
@@ -79,7 +73,6 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
   def tearDownClass(cls):
     super().tearDownClass()
 
-    cls.metadata_patcher.stop()
     cls.url_patcher.stop()
     for patcher in cls.query_patchers:
       patcher.stop()
