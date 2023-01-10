@@ -18,6 +18,7 @@
 import dataclasses
 import functools
 import os
+from typing import Sequence, Tuple
 
 from chirp import path_utils
 from chirp.taxonomy import generators
@@ -97,13 +98,6 @@ class NamespaceDatabase:
     for space in namespaces.values():
       class_lists[space.name] = space.to_class_list()
 
-    # Add the IOC->ebird2021 mapping.
-    ioc_map = generators.generate_ioc_12_2_to_ebird2021(
-        mappings['ioc_12_2_to_clements'],
-        mappings['clements_to_ebird2021'],
-    )
-    mappings[ioc_map.name] = ioc_map
-
     # Check consistency.
     for space in namespaces.values():
       if space.name in namespaces and space != namespaces[space.name]:
@@ -122,3 +116,54 @@ class NamespaceDatabase:
 
     db = NamespaceDatabase(namespaces, mappings, class_lists)
     return db
+
+  def generate_xenocanto_10_1_to_ebird2021(
+      self, xenocanto_species: Sequence[str]
+  ) -> Tuple[namespace.Mapping, Sequence[str]]:
+    r"""Generates a mapping from xenocanto scientific names to ebird2021.
+
+    As of January 2023, Xeno Canto is using the IOC 10.1 taxonomy. We don't have
+    access to a good mapping from this to ebird2021, so we have to roll one from
+    multiple sources. We have a good mapping from IOC 12.2->ebird2021.
+
+    There are two kinds of problems which arise: Updates between IOC 10.1
+    and 12.2 (described at worldbirdnames.com), and species in IOC which map to
+    subspecies in Clements/ebird.
+
+    To handle this, we first 'update' XenoCanto scientific names to IOC 12.2.
+    Where needed, we convert IOC to ebird issf's, then to species. Otherwise, we
+    convert directly to species. Here's a diagram:
+
+                          +------+
+                        ->| issf |-\   +-----------+
+    +----+  +------+   /  +------+  -->| ebird2021 |
+    | XC |->| 12.2 |-<             /   +-----------+
+    +----+  +------+  \-----------/
+
+    Args:
+      xenocanto_species: A sequence of species from Xeno-Canto.
+
+    Returns:
+      Mapping for provided XC Species to ebird2021 codes, and a list of species
+      which could not be mapped successfully.
+    """
+    xc_updates = self.mappings['xenocanto_to_ioc_12_2'].to_dict()
+    ioc_to_issf = self.mappings['ioc_12_2_to_ebird2021_issf'].to_dict()
+    issf_to_ebird2021 = self.mappings['issf_to_ebird2021'].to_dict()
+    ioc_to_ebird = self.mappings['ioc_12_2_to_ebird2021'].to_dict()
+    composite = {}
+    misses = []
+
+    for sp in xenocanto_species:
+      sp = sp.lower()
+      sp = xc_updates.get(sp, sp)
+      if sp in ioc_to_issf:
+        issf = ioc_to_issf[sp]
+        composite[sp] = issf_to_ebird2021[issf]
+      elif sp in ioc_to_ebird:
+        composite[sp] = ioc_to_ebird[sp]
+      else:
+        misses.append(sp)
+    composite = namespace.Mapping.from_dict('xc_to_ebird2021', 'xenocanto_10_1',
+                                            'ebird2021', composite)
+    return composite, misses
