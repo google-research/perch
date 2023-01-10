@@ -113,6 +113,7 @@ def main(argv: Sequence[str]) -> None:
       multi_label=config.multi_label,
       modality=config.modality,
       eval_every=config.eval_every,
+      eval_mca_every=config.eval_mca_every,
       sfda_method=sfda_method,
       **method_config,
   )

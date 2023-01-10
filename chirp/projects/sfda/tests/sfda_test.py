@@ -202,6 +202,7 @@ class AdaptationTest(parameterized.TestCase):
         multi_label=config.multi_label,
         modality=modality,
         eval_every=config.eval_every,
+        eval_mca_every=config.eval_mca_every,
         sfda_method=sfda_method,
         **method_config)
     self.assertIsNotNone(new_adaptation_state)

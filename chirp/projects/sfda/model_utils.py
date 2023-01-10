@@ -298,8 +298,15 @@ def prepare_image_model(
   else:
     mult_lr_base = optimizer_config.mult_learning_rate_resnet_base
     if optimizer_config.use_cosine_decay:
-      learning_rate = optax.cosine_decay_schedule(
-          optimizer_config.learning_rate, decay_steps=total_steps)
+      if mult_lr_base != 1:
+        learning_rate_base_resnet = optax.cosine_decay_schedule(
+            init_value=optimizer_config.learning_rate * mult_lr_base,
+            decay_steps=total_steps)
+        learning_rate_top = optax.cosine_decay_schedule(
+            init_value=optimizer_config.learning_rate, decay_steps=total_steps)
+      else:
+        learning_rate = optax.cosine_decay_schedule(
+            optimizer_config.learning_rate, decay_steps=total_steps)
     elif optimizer_config.use_nrc_schedule:
       # This configuration is the one used by NRC for Vis-DA when performing the
       # adaptation on all of Vis-DA's validation. Some may need to be updated
@@ -320,6 +327,7 @@ def prepare_image_model(
             transition_steps=12990)
     else:
       learning_rate = optimizer_config.learning_rate
+      learning_rate_base_resnet = learning_rate_top = learning_rate
     opt = getattr(optax, optimizer_config.optimizer)
 
     if mult_lr_base != 1:

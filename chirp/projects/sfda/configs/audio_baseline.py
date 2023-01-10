@@ -112,4 +112,5 @@ def get_config() -> config_dict.ConfigDict:
 
   config.model_config = model_config
   config.init_config = init_config
+  config.eval_mca_every = -1
   return config

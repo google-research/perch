@@ -40,27 +40,6 @@ class Accuracy(clu_metrics.Average):
 
 
 @flax.struct.dataclass
-class MeanClassAccuracy(clu_metrics.Average):
-  """Computes the mean per-class accuracy from `probabilities` and `labels`.
-
-  `label` is expected to be of dtype=int32 and to have 0 <= ndim <= 2, and
-  `probabilities` is expected to have ndim = labels.ndim + 1.
-
-  See also documentation of `Metric`.
-  """
-
-  @classmethod
-  def from_model_output(cls, probabilities: jnp.array, label: jnp.array,
-                        **kwargs) -> clu_metrics.Metric:
-    is_correct = (probabilities.argmax(axis=-1) == label.argmax(axis=-1))
-    is_correct = jnp.expand_dims(is_correct, 0)
-    per_class_correct_counts = jnp.matmul(is_correct, label)  # [num classes].
-    per_class_acc = per_class_correct_counts / jnp.sum(
-        label, axis=0).astype(jnp.float32)
-    return super().from_model_output(values=per_class_acc, **kwargs)
-
-
-@flax.struct.dataclass
 class MarginalEntropy(clu_metrics.Metric):
   """Computes the marginal entropy of a model's output distribution.
 

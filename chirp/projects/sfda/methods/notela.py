@@ -53,7 +53,7 @@ class NOTELA(adapt.SFDAMethod):
       dataset_feature: jnp.ndarray,
       knn: int,
       sparse_storage: bool,
-      memory_efficient_computation: bool = True
+      memory_efficient_computation: bool = False
   ) -> Union[jnp.ndarray, sparse.csr_matrix]:
     """Compute batch_feature's nearest-neighbors among dataset_feature.
 

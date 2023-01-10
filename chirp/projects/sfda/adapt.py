@@ -21,6 +21,7 @@ import functools
 from typing import Any, Callable
 from chirp.models import cmap
 from chirp.projects.sfda import losses
+from chirp.projects.sfda import mca
 from chirp.projects.sfda import metrics
 from chirp.projects.sfda import model_utils
 from chirp.train import classifier
@@ -447,7 +448,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
                eval_dataset: tf.data.Dataset,
                multi_label: bool,
                modality: Modality,
-               sample_threshold: int = 5) -> None:
+               sample_threshold: int = 5,
+               compute_mca: bool = False) -> None:
     """Evaluate the current adaptation state.
 
     The writer is in charge of logging all results.
@@ -463,6 +465,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       sample_threshold: Class that have fewer samples than this thresold are
         discarded when computing cmAP metric in order to reduce noise caused by
         sample size.
+      compute_mca: Whether to compute the mean class accuracy metric.
     """
 
     # Define validation metrics.
@@ -470,6 +473,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     valid_metrics = flax_utils.replicate(valid_metrics.empty())
     cmap_metrics = cmap.make_cmap_metrics_dict(
         ("label",)) if multi_label else {}
+    mca_metric = mca.make_mca_metric() if not multi_label else None
 
     @functools.partial(jax.pmap, axis_name="batch")
     def update_metrics(metric_collection: clu_metrics.Collection,
@@ -494,6 +498,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
               if "label_mask" not in batch else batch["label_mask"],
               label=batch["label"].astype(np.int32)))
 
+    current_epoch = int(adaptation_state.epoch)
+
     # Loop over validation dataset
     for batch in tqdm.tqdm(eval_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
@@ -502,11 +508,16 @@ class SFDAMethod(metaclass=abc.ABCMeta):
           metric_collection=valid_metrics, batch=keep_jax_types(batch))
       cmap_metrics = cmap.update_cmap_metrics_dict(cmap_metrics, model_outputs,
                                                    batch)
-
-    current_epoch = int(adaptation_state.epoch)
+      if compute_mca:
+        mca_metric = mca.update_mca_metric(mca_metric, model_outputs, batch)
 
     # Metrics computations and logging
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
+    if compute_mca and mca_metric is not None:
+      mca_metric_value, per_class_accs_value = mca_metric.compute()
+      valid_metrics["mean_class_accuracy"] = mca_metric_value
+      for i in range(len(per_class_accs_value)):
+        valid_metrics[f"{i}_class_accuracy"] = per_class_accs_value[i]
     valid_metrics = {k.replace("___", "/"): v for k, v in valid_metrics.items()}
     cmap_metrics = flax_utils.unreplicate(cmap_metrics)
     for key in cmap_metrics:
@@ -525,7 +536,7 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
                        validation_dataset: tf.data.Dataset,
                        model_bundle: model_utils.ModelBundle, logdir: str,
                        multi_label: bool, modality: Modality, eval_every: int,
-                       **method_kwargs) -> AdaptationState:
+                       eval_mca_every: int, **method_kwargs) -> AdaptationState:
   """Given the adaptation method and dataset, perform the full adaptation.
 
   Args:
@@ -546,6 +557,13 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
     multi_label: Whether the current problem is multi-label or single-label.
     modality: The current modality used.
     eval_every: Frequency (in epochs) to trigger evaluation.
+    eval_mca_every: The frequency (in epochs) to trigger computation of the
+      mean class accuracy (mca) metric during evaluation, as long as
+      `eval_every` is set to a multiple of this frequency. That is, each time
+      evaluation is triggered (based on the value of `eval_every`), the
+      computation of mca may also be triggered, if the epoch is also a multiple
+      of `eval_mca_every`. Note also that `eval_mca_every` is any negative
+      number, mca will never be computed.
     **method_kwargs: Method's additional keywargs.
 
   Returns:
@@ -580,13 +598,15 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
 
     # Before every epoch, perform a round of evaluation on the validation set.
     if epoch % eval_every == 0:
+      compute_mca = (epoch % eval_mca_every == 0) and eval_mca_every >= 0
       sfda_method.evaluate(
           model_bundle=model_bundle,
           adaptation_state=adaptation_state,
           eval_dataset=validation_dataset,
           writer=validation_writer,
           modality=modality,
-          multi_label=multi_label)
+          multi_label=multi_label,
+          compute_mca=compute_mca)
       validation_writer.flush()
 
     adaptation_state = sfda_method.before_epoch(
@@ -626,7 +646,8 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
       eval_dataset=validation_dataset,
       writer=validation_writer,
       modality=modality,
-      multi_label=multi_label)
+      multi_label=multi_label,
+      compute_mca=eval_mca_every >= 0)
 
   adaptation_writer.close()
   validation_writer.close()
@@ -662,7 +683,6 @@ def get_common_metrics(supervised: bool,
           losses.label_ent)
       metrics_dict["accuracy"] = metrics.Accuracy
       metrics_dict["marginal_entropy"] = metrics.MarginalEntropy
-      metrics_dict["mean_class_accuracy"] = metrics.MeanClassAccuracy
 
   return clu_metrics.Collection.create(**metrics_dict)
 

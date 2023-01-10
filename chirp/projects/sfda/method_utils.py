@@ -56,13 +56,16 @@ def jax_cdist(features_a: jnp.array, features_b: jnp.array) -> jnp.array:
     raise ValueError(
         "The feature dimension should be the same. Currently features_a: "
         f"{features_a.shape} and features_b: {features_b.shape}")
-  transpose_b = jnp.swapaxes(features_b, -2,
-                             -1)  # [*, feature_dim, batch_size_b]
-  return jnp.linalg.norm(
-      features_a, axis=-1,
-      keepdims=True)**2 - 2 * features_a @ transpose_b + jnp.linalg.norm(
-          transpose_b, axis=-2,
-          keepdims=True)**2  # [batch_size_a, batch_size_b]
+  feature_dim = features_a.shape[-1]
+
+  flat_features_a = jnp.reshape(features_a, [-1, feature_dim])
+  flat_features_b = jnp.reshape(features_b, [-1, feature_dim])
+  flat_transpose_b = flat_features_b.T
+  distances = (
+      jnp.sum(jnp.square(flat_features_a), 1, keepdims=True) -
+      2 * jnp.matmul(flat_features_a, flat_transpose_b) +
+      jnp.sum(jnp.square(flat_transpose_b), 0, keepdims=True))
+  return distances
 
 
 def batch_forward(

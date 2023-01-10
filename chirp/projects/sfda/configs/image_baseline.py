@@ -46,4 +46,6 @@ def get_config() -> config_dict.ConfigDict:
   model_config.encoder = models.ImageModelName.WIDERESNET
   config.model_config = model_config
 
+  config.eval_mca_every = -1
+
   return config

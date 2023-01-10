@@ -177,6 +177,7 @@ class NRC(adapt.SFDAMethod):
       batch_feature: jnp.ndarray,
       dataset_feature: jnp.ndarray,
       nn: int,
+      memory_efficient_computation: bool = False,
   ) -> jnp.ndarray:
     """Compute batch_feature's nearest-neighbors among dataset_feature.
 
@@ -207,19 +208,28 @@ class NRC(adapt.SFDAMethod):
 
     # Compute the nearest-neighbors
     neighbors = min(dataset_shape[0], nn + 1)
-    # We loop over samples in the current batch to avoid storing a
-    # batch_size x dataset_size float array. That slows down computation, but
-    # reduces memory footprint, which becomes the bottleneck for large
-    # datasets.
-    nn_indices = []
-    for sample_feature in batch_feature:
-      pairwise_distances = method_utils.jax_cdist(
-          jnp.expand_dims(sample_feature, 0),
-          dataset_feature)  # [1, dataset_size]
-      nn_indices.append(
-          jax.lax.top_k(-pairwise_distances,
-                        neighbors)[1][:, 1:])  # [1, neighbors]
-    return jnp.concatenate(nn_indices, axis=0)  # [batch_size, neighbors]
+    if memory_efficient_computation:
+      # We loop over samples in the current batch to avoid storing a
+      # batch_size x dataset_size float array. That slows down computation, but
+      # reduces memory footprint, which becomes the bottleneck for large
+      # datasets.
+      nn_indices = []
+      for sample_feature in batch_feature:
+        pairwise_distances = method_utils.jax_cdist(
+            jnp.expand_dims(sample_feature, 0),
+            dataset_feature)  # [1, dataset_size]
+        nn_indices.append(
+            jax.lax.top_k(-pairwise_distances,
+                          neighbors)[1][:, 1:])  # [1, neighbors]
+      nn_indices = jnp.concatenate(
+          nn_indices, axis=0)  # [batch_size, neighbors]
+    else:
+      pairwise_distances = method_utils.jax_cdist(batch_feature,
+                                                  dataset_feature)
+      nn_indices = jax.lax.top_k(-pairwise_distances,
+                                 neighbors)[1][:, 1:]  # [batch_size, neighbors]
+
+    return nn_indices
 
   def before_run(
       self,
