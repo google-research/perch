@@ -377,6 +377,7 @@ class PipelineTest(parameterized.TestCase):
         'segment_end': np.array(50, dtype=np.int64),
         'annotation_start': np.array([10, 30, 45], dtype=np.int64),
         'annotation_end': np.array([20, 60, 90], dtype=np.int64),
+        'annotation_id': np.array([0, 1, 2], dtype=np.int64),
         'label': np.array([0, 1, 2], dtype=np.int64),
     }
 
@@ -404,6 +405,7 @@ class PipelineTest(parameterized.TestCase):
         'segment_end': np.array(50, dtype=np.int64),
         'annotation_start': np.array([10, 30], dtype=np.int64),
         'annotation_end': np.array([20, 60], dtype=np.int64),
+        'annotation_id': np.array([0, 1], dtype=np.int64),
         'label': np.array([0, 1], dtype=np.int64),
     }
 

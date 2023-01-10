@@ -853,6 +853,9 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
                                               overlap_indices)
       example['annotation_end'] = tf.gather(example['annotation_end'],
                                             overlap_indices)
+      example['annotation_id'] = tf.range(
+          start=0, limit=tf.size(overlap_indices), delta=1, dtype=tf.int64
+      )
       return example
 
     return dataset.map(map_fn)
