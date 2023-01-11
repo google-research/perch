@@ -801,6 +801,63 @@ class ExtractStridedWindows(DatasetPreprocessOp):
     return dataset.map(map_fn).unbatch()
 
 
+@dataclasses.dataclass
+class DenselyAnnotateWindows(DatasetPreprocessOp):
+  """Densely annotates sliding windows of the dataset's 'audio'.
+
+  After extracting slided windows on the dataset's 'audio' feature, this
+  preprocessing distributes the labels corresponding to each annotated segment
+  to all windows that intersect in time within a given threshold. Each window is
+  assigned all labels that are included within each overlapping annotation and
+  the 'annotation_start' and 'annotation_end' features. In the case where a
+  given window overlaps with more than one annotation, that window is assigned
+  the labels of each annotation.
+
+  Process: compare each 'audio' window's 'segment_start' and 'segment_end' times
+  with the time delimiters in its 'annotation_start' and 'annotation_end'; if
+  there is an absolute overlap of at least `overlap_threshold_sec` with the
+  segment bounds, the window receives the segment labels.
+
+  Attributes:
+    overlap_threshold_sec: The minimum overlap, in seconds, between a window and
+      a labeled segment for the former to inherit its label. This overlap is
+      translated into a number of audio samples using the dataset's sampling
+      rate. If None, we set the threshold to one audio sample.
+  """
+  overlap_threshold_sec: Optional[float] = None
+
+  def __call__(self, dataset: tf.data.Dataset,
+               dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
+    sample_rate = dataset_info.features['audio'].sample_rate
+    overlap_threshold = 1 if self.overlap_threshold_sec is None else int(
+        sample_rate * self.overlap_threshold_sec)
+
+    def map_fn(example):
+      example = example.copy()
+
+      # A window and an annotated segment overlaps (by at least
+      # `overlap_threshold`) if the following is true:
+      #     max(segment_start, annotation_start)
+      #       <= min(segment_end, annotation_end) - overlap_threshold
+      # Note that `example['segment_{start|end}']` is integer-valued and
+      # `example['annotation_{start|end}']` is a variable-length sequence of
+      # integers and the operation is broadcasted across all segments.
+      overlap_comparison = tf.cast(
+          tf.maximum(example['segment_start'], example['annotation_start']) <=
+          tf.minimum(example['segment_end'], example['annotation_end']) -
+          overlap_threshold, tf.bool)
+      overlap_indices = tf.reshape(tf.where(overlap_comparison), [-1])
+
+      example['label'] = tf.gather(example['label'], overlap_indices)
+      example['annotation_start'] = tf.gather(example['annotation_start'],
+                                              overlap_indices)
+      example['annotation_end'] = tf.gather(example['annotation_end'],
+                                            overlap_indices)
+      return example
+
+    return dataset.map(map_fn)
+
+
 def get_dataset(
     split: str,
     is_train: bool = False,

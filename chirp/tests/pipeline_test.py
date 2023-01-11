@@ -16,6 +16,7 @@
 """Tests for pipeline."""
 import os
 import tempfile
+from unittest import mock
 
 from chirp.data import pipeline
 from chirp.models import frontend
@@ -354,6 +355,60 @@ class PipelineTest(parameterized.TestCase):
                               0)
       np.testing.assert_equal(examples['audio'][2::3, -int(4.0 * sample_rate):],
                               0)
+
+  def test_densely_annotate_windows_no_overlap_threshold(self):
+    # Sampling rate is 10, so divide the timestamps by 10 for seconds.
+    original_example = {
+        'segment_start': np.array(10, dtype=np.int64),
+        'segment_end': np.array(50, dtype=np.int64),
+        'annotation_start': np.array([10, 30, 45], dtype=np.int64),
+        'annotation_end': np.array([20, 60, 90], dtype=np.int64),
+        'label': np.array([0, 1, 2], dtype=np.int64),
+    }
+    fake_dataset_info = mock.MagicMock(
+        features={'audio': mock.MagicMock(sample_rate=10)})
+    original_dataset = tf.data.Dataset.from_tensors(original_example)
+    annotated_dataset = pipeline.DenselyAnnotateWindows(
+        overlap_threshold_sec=0)(original_dataset, fake_dataset_info)
+    annotated_dataset = next(annotated_dataset.as_numpy_iterator())
+
+    expected_dataset = {
+        'segment_start': np.array(10, dtype=np.int64),
+        'segment_end': np.array(50, dtype=np.int64),
+        'annotation_start': np.array([10, 30, 45], dtype=np.int64),
+        'annotation_end': np.array([20, 60, 90], dtype=np.int64),
+        'label': np.array([0, 1, 2], dtype=np.int64),
+    }
+
+    for key, expected_value in expected_dataset.items():
+      np.testing.assert_equal(expected_value, annotated_dataset[key])
+
+  def test_densely_annotate_windows_overlap_1sec(self):
+    # Sampling rate is 10, so divide the timestamps by 10 for seconds.
+    original_example = {
+        'segment_start': np.array(10, dtype=np.int64),
+        'segment_end': np.array(50, dtype=np.int64),
+        'annotation_start': np.array([10, 30, 45], dtype=np.int64),
+        'annotation_end': np.array([20, 60, 90], dtype=np.int64),
+        'label': np.array([0, 1, 2], dtype=np.int64),
+    }
+    fake_dataset_info = mock.MagicMock(
+        features={'audio': mock.MagicMock(sample_rate=10)})
+    original_dataset = tf.data.Dataset.from_tensors(original_example)
+    annotated_dataset = pipeline.DenselyAnnotateWindows(
+        overlap_threshold_sec=1)(original_dataset, fake_dataset_info)
+    annotated_dataset = next(annotated_dataset.as_numpy_iterator())
+
+    expected_dataset = {
+        'segment_start': np.array(10, dtype=np.int64),
+        'segment_end': np.array(50, dtype=np.int64),
+        'annotation_start': np.array([10, 30], dtype=np.int64),
+        'annotation_end': np.array([20, 60], dtype=np.int64),
+        'label': np.array([0, 1], dtype=np.int64),
+    }
+
+    for key, expected_value in expected_dataset.items():
+      np.testing.assert_equal(expected_value, annotated_dataset[key])
 
 
 if __name__ == '__main__':
