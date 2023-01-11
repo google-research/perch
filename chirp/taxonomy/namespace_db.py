@@ -134,11 +134,9 @@ class NamespaceDatabase:
     Where needed, we convert IOC to ebird issf's, then to species. Otherwise, we
     convert directly to species. Here's a diagram:
 
-                          +------+
-                        ->| issf |-\   +-----------+
-    +----+  +------+   /  +------+  -->| ebird2021 |
-    | XC |->| 12.2 |-<             /   +-----------+
-    +----+  +------+  \-----------/
+    +----+   +------+   +-----------+
+    | XC |-->| 12.2 |-->| ebird2021 |
+    +----+   +------+   +-----------+
 
     Args:
       xenocanto_species: A sequence of species from Xeno-Canto.
@@ -148,8 +146,6 @@ class NamespaceDatabase:
       which could not be mapped successfully.
     """
     xc_updates = self.mappings['xenocanto_to_ioc_12_2'].to_dict()
-    ioc_to_issf = self.mappings['ioc_12_2_to_ebird2021_issf'].to_dict()
-    issf_to_ebird2021 = self.mappings['issf_to_ebird2021'].to_dict()
     ioc_to_ebird = self.mappings['ioc_12_2_to_ebird2021'].to_dict()
     composite = {}
     misses = []
@@ -157,10 +153,7 @@ class NamespaceDatabase:
     for sp in xenocanto_species:
       sp = sp.lower()
       sp = xc_updates.get(sp, sp)
-      if sp in ioc_to_issf:
-        issf = ioc_to_issf[sp]
-        composite[sp] = issf_to_ebird2021[issf]
-      elif sp in ioc_to_ebird:
+      if sp in ioc_to_ebird:
         composite[sp] = ioc_to_ebird[sp]
       else:
         misses.append(sp)

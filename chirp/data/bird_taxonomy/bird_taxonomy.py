@@ -295,23 +295,6 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     # species.
     taxonomy_info = pd.read_json(paths['taxonomy_info'])
 
-    # TODO(tomdenton): Fix the labels in the taxonomy info file.
-    # The taxonomy info file may contain subspecies; remap these to species.
-    db = namespace_db.load_db()
-    species_codes = {sp: sp for sp in db.namespaces['ebird2021'].classes}
-    issf2ebird = db.mappings['issf_to_ebird2021'].to_dict()
-
-    def _fix_species_code(c):
-      c = issf2ebird.get(c, c)
-      c = species_codes.get(c, 'unknown')
-      return c
-
-    taxonomy_info['species_code'] = taxonomy_info['species_code'].map(
-        _fix_species_code)
-    bg_codes = taxonomy_info['bg_species_codes'].map(
-        lambda x: [[_fix_species_code(y) for y in z] for z in x])
-    taxonomy_info['bg_species_codes'] = bg_codes
-
     # Workaround for pandas<1.3.0's lack of multi-column explode. We set the
     # index to the non-exploding columns before applying pd.Series.explode
     # to the other columns and resetting the index.

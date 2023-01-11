@@ -175,7 +175,7 @@ class PipelineTest(parameterized.TestCase):
     source_class_set = db.class_lists['caples']
     target_class_set = db.class_lists['xenocanto']
     self.assertEqual(source_class_set.size, 79)
-    self.assertEqual(target_class_set.size, 10656)
+    self.assertEqual(target_class_set.size, 10932)
 
     # example labels include three 'good' labels and many out of range labels.
     # Good classes are 'amedip', 'comnig', 'macwar', and 'yerwar'.
@@ -186,14 +186,14 @@ class PipelineTest(parameterized.TestCase):
     # 40 macwar geothlypis parulidae     passeriformes
     # 78 yerwar setophaga  parulidae     passeriformes
     example = {
-        'label': tf.constant([0, 20, 40, 78, 79, 10655, 10656, -1], tf.int64),
+        'label': tf.constant([0, 20, 40, 78, 79, 10655, 10932, -1], tf.int64),
         'bg_labels': tf.constant([18, 1000], tf.int64),
     }
     converter = pipeline.ConvertBirdTaxonomyLabels(
         target_class_list='xenocanto')
     converted = converter.convert_features(example, source_class_set)
-    for name, shape, num in (('label', 10656, 4), ('bg_labels', 10656, 1),
-                             ('genus', 2331, 4), ('family', 249, 3), ('order',
+    for name, shape, num in (('label', 10932, 4), ('bg_labels', 10932, 1),
+                             ('genus', 2333, 4), ('family', 249, 3), ('order',
                                                                       41, 2)):
       print(name, shape, num, sum(converted[name].numpy()))
       self.assertIn(name, converted)
