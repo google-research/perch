@@ -13,17 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""CSV parsers for generating namespaces, mappings, etc."""
+"""CSV and json parsers for generating namespaces, mappings, etc."""
 
 import csv
 import dataclasses
 import functools
+import json
 from typing import List
 
 from chirp import path_utils
 from chirp.taxonomy import namespace
 
+
 EBIRD2021_DATA_PATH = 'taxonomy/data/source_data/eBird_Taxonomy_v2021.csv'
+AUDIOSET_DATA_PATH = 'taxonomy/data/source_data/AudioSet_ontology.json'
 
 
 @dataclasses.dataclass
@@ -181,3 +184,29 @@ def generate_ebird2021():
       ebird_all_to_family,
       ebird_all_to_order,
   ], [])
+
+
+def load_audioset_dict():
+  """Load Audioset data in a convenient dictionary form."""
+  audioset_fp = path_utils.get_absolute_epath(AUDIOSET_DATA_PATH)
+
+  audioset = {}
+  with open(audioset_fp, 'r') as f:
+    data = json.load(f)
+
+    for i in data:
+      name = i['name'].replace(',', '_and')
+      label = (name.strip()).replace(' ', '_')
+      audioset[i['id']] = label
+
+  return audioset
+
+
+def generate_audioset():
+  """Generate the Audioset namespace file."""
+  # load the datasetfile
+  audioset_dict = load_audioset_dict()
+
+  audio_namespace = namespace.Namespace('audioset', set(audioset_dict.keys()))
+
+  return GeneratorOutput([audio_namespace], [], [])
