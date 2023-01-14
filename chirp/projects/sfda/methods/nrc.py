@@ -74,7 +74,7 @@ class NRCLoss(clu_metrics.Metric):
                          (probabilities[:, None, None, :] *
                           extended_nn_probability).sum(axis=-1)).sum(
                               axis=1)  # [batch_size]
-    probabilities_sum = probabilities.sum(axis=0)  # [batch_size]
+    probabilities_sum = probabilities.sum(axis=0)  # [num classes]
 
     return cls(
         probabilities_sum=probabilities_sum,
@@ -122,6 +122,36 @@ class NRCMultiLoss(clu_metrics.Metric):
       **_,
   ) -> "NRCMultiLoss":
 
+    if label_mask is not None:
+      # probabilities have not been masked but nn_probability has been, so we
+      # pad the latter to bring it to the same dimensionality as the former.
+      reference_mask = label_mask[0]
+      _, num_nn, num_classes_used = nn_probability.shape
+      nn_probability_flatter = nn_probability.reshape((-1, num_classes_used))
+      batch_size = nn_probability_flatter.shape[0]
+      num_classes_total = reference_mask.shape[0]
+      padded_nn_prob = jnp.zeros((batch_size, num_classes_total))
+      col_index = jnp.tile(
+          jnp.nonzero(reference_mask, size=num_classes_used)[0], batch_size)
+      row_index = jnp.repeat(jnp.arange(batch_size), num_classes_used)
+      nn_probability_flatter = padded_nn_prob.at[(row_index, col_index)].set(
+          nn_probability_flatter.flatten())
+      nn_probability = nn_probability_flatter.reshape(
+          (-1, num_nn, num_classes_total))
+
+      _, num_nn, num_enn, num_classes_used = extended_nn_probability.shape
+      enn_probability_flatter = extended_nn_probability.reshape(
+          (-1, num_classes_used))
+      batch_size = enn_probability_flatter.shape[0]
+      padded_enn_prob = jnp.zeros((batch_size, num_classes_total))
+      col_index = jnp.tile(
+          jnp.nonzero(reference_mask, size=num_classes_used)[0], batch_size)
+      row_index = jnp.repeat(jnp.arange(batch_size), num_classes_used)
+      enn_probability_flatter = padded_enn_prob.at[(row_index, col_index)].set(
+          enn_probability_flatter.flatten())
+      extended_nn_probability = enn_probability_flatter.reshape(
+          (-1, num_nn, num_enn, num_classes_total))
+
     def dot_product(probability_a, probability_b):
       return probability_a * probability_b + (1 - probability_a) * (
           1 - probability_b)
@@ -129,13 +159,16 @@ class NRCMultiLoss(clu_metrics.Metric):
     nn_loss = -(
         label_mask * (
             nn_weight[..., None]  # [batch_size, nn, 1]
-            * (dot_product(probabilities[:, None, :], nn_probability)).sum(
-                axis=1))).sum(-1) / label_mask.sum(-1)  # [batch_size]
+            * (dot_product(probabilities[:, None, :], nn_probability))).sum(
+                axis=1)).sum(-1) / label_mask.sum(-1)  # [batch_size]
 
-    extended_nn_loss = -(label_mask * (extended_nn_weight * (dot_product(
-        probabilities[:, None, None, :], extended_nn_probability)).sum(axis=1))
-                        ).sum(-1) / label_mask.sum(-1)  # [batch_size]
-    probabilities_sum = probabilities.sum(axis=0)  # [batch_size]
+    extended_nn_loss = -(
+        label_mask *
+        (extended_nn_weight *
+         (dot_product(probabilities[:, None, None, :], extended_nn_probability))
+        ).sum(axis=[1, 2])).sum(-1) / label_mask.sum(-1)  # [batch_size]
+
+    probabilities_sum = probabilities.sum(axis=0)  # [num classes]
 
     return cls(
         probabilities_sum=probabilities_sum,
@@ -156,7 +189,6 @@ class NRCMultiLoss(clu_metrics.Metric):
     )
 
   def compute(self):
-
     probabilities_marginal = self.probabilities_sum / self.n_samples
     marginal_entropy = losses.label_binary_ent(
         probabilities=probabilities_marginal, label_mask=self.label_mask[0])
@@ -313,6 +345,14 @@ class NRC(adapt.SFDAMethod):
     id2index = method_state["id2index"]
     batch_indices = np.array(
         [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
+    if "label_mask" in batch:
+      label_mask = flax_utils.unreplicate(batch["label_mask"])
+      reference_label_mask = label_mask[0]  # [num_classes]
+      # Ensure that the label_mask is the same for all samples.
+      assert (jnp.tile(reference_label_mask,
+                       (label_mask.shape[0], 1)) == label_mask).all()
+    else:
+      label_mask = None
 
     # Obtain the model's output for the current batch.
     model_outputs = method_utils.batch_forward(
@@ -324,6 +364,12 @@ class NRC(adapt.SFDAMethod):
         method_kwargs["update_bn_statistics"],
     )
     model_outputs = flax_utils.unreplicate(model_outputs)
+    if label_mask is not None:
+      # We restrict the model's logits to the classes that appear in the
+      # current dataset.
+      model_outputs = model_outputs.replace(
+          label=model_outputs.label[..., reference_label_mask.astype(bool)])
+
     logit2proba = nn.sigmoid if multi_label else nn.softmax
 
     # Compute nearest-neighbors and extended nearest-neighbors indices.
