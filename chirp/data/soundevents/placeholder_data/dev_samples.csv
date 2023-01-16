@@ -1,0 +1,12 @@
+fname,labels,mids,split
+101909,"Drum,Drum_kit,Percussion,Musical_instrument,Music","/m/026t6,/m/02hnl,/m/0l14md,/m/04szw,/m/04rlf",train
+354257,"Bowed_string_instrument,Musical_instrument,Music","/m/0l14_3,/m/04szw,/m/04rlf",train
+415791,Engine,/m/02mk9,train
+119266,"Wind_instrument_and_woodwind_instrument,Musical_instrument,Music","/m/085jw,/m/04szw,/m/04rlf",train
+43945,"Train,Rail_transport,Vehicle","/m/07jdr,/m/06d_3,/m/07yv9",train
+248603,"Wind_instrument_and_woodwind_instrument,Musical_instrument,Music","/m/085jw,/m/04szw,/m/04rlf",train
+373579,"Marimba_and_xylophone,Mallet_percussion,Percussion,Musical_instrument,Music","/m/0dwsp,/m/0j45pbj,/m/0l14md,/m/04szw,/m/04rlf",train
+321825,"Drum_kit,Percussion,Musical_instrument,Music","/m/02hnl,/m/0l14md,/m/04szw,/m/04rlf",val
+40279,"Bass_guitar,Guitar,Plucked_string_instrument,Musical_instrument,Music","/m/018vs,/m/0342h,/m/0fx80y,/m/04szw,/m/04rlf",train
+208840,"Fixed-wing_aircraft_and_airplane,Aircraft,Vehicle","/m/0cmf2,/m/0k5j,/m/07yv9",train
+355287,"Wind_instrument_and_woodwind_instrument,Musical_instrument,Music","/m/085jw,/m/04szw,/m/04rlf",train
