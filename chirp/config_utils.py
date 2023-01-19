@@ -98,6 +98,8 @@ def parse_config(config: config_dict.ConfigDict,
   """
 
   def _parse_value(value: config_dict.ConfigDict) -> Any:
+    if isinstance(value, dict):
+      value = config_dict.ConfigDict(value)
     if isinstance(value, config_dict.ConfigDict):
       if set(value.keys()) == {_CALLABLE, _KWARGS}:
         return eval(value[_CALLABLE], globals_)(  # pylint: disable=eval-used
