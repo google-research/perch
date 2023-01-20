@@ -355,13 +355,14 @@ class NRC(adapt.SFDAMethod):
       label_mask = None
 
     # Obtain the model's output for the current batch.
-    model_outputs = method_utils.batch_forward(
+    forward_step = self.cache_get_forward_step(
+        model_bundle.model, modality, method_kwargs["update_bn_statistics"]
+    )
+    model_outputs = forward_step(
         adapt.keep_jax_types(batch),
         adaptation_state.model_state,
         adaptation_state.model_params,
-        model_bundle.model,
-        modality,
-        method_kwargs["update_bn_statistics"],
+        None,
     )
     model_outputs = flax_utils.unreplicate(model_outputs)
     if label_mask is not None:

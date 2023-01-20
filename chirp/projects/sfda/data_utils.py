@@ -102,7 +102,7 @@ def get_audio_datasets(
         'Dataset sample rate must match config sample rate. To address this, '
         'need to set the sample rate in the config to {}.'.format(
             val_dataset_info.features['audio'].sample_rate))
-  return adaptation_dataset, val_dataset
+  return adaptation_dataset.cache(), val_dataset.cache()
 
 
 def get_image_datasets(
