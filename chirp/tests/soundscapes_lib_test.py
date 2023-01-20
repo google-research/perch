@@ -23,7 +23,9 @@ from chirp import path_utils
 from chirp.data.soundscapes import dataset_fns
 from chirp.data.soundscapes import soundscapes
 from chirp.data.soundscapes import soundscapes_lib
+from chirp.taxonomy import namespace_db
 from etils import epath
+import librosa
 import tensorflow_datasets as tfds
 
 from absl.testing import absltest
@@ -239,6 +241,39 @@ class SoundscapesLibTest(parameterized.TestCase):
         metadata_fields=builder_config.metadata_fields,
     )
     self.assertLen(segments, len(annos))
+
+  def test_get_full_length_annotations(self):
+    builder_config = [
+        c for c in BUILDER_CONFIGS if c.name == 'caples_full_length'
+    ][0]
+    filename = (
+        builder_config.annotation_filename or f'{builder_config.name}.csv'
+    )
+    annotations_path = self.testdata_dir / filename
+    annos = builder_config.annotation_load_fn(annotations_path)
+    audio_path = epath.Path(self.data_dir) / builder_config.name / 'audio'
+    all_audio_filepaths = []
+    for _, anno in annos.iterrows():
+      self._make_audio(audio_path, anno.filename, 'wav', all_audio_filepaths)
+    segments = soundscapes_lib.create_segments_df(
+        all_audio_filepaths=all_audio_filepaths,
+        annotations_df=annos,
+        supervised=builder_config.supervised,
+        metadata_load_fn=builder_config.metadata_load_fn,
+        metadata_dir=self.testdata_dir,
+        metadata_fields=builder_config.metadata_fields,
+    )
+    # The Caples testdata contains only a single file, so no need to subselect.
+    self.assertLen(all_audio_filepaths, 1)
+    audio, _ = librosa.load(all_audio_filepaths[0], sr=32000)
+    db = namespace_db.load_db()
+    annotations = soundscapes_lib.get_full_length_annotations(
+        audio, segments, db.class_lists['caples'], 32000, unknown_guard=True
+    )
+    # Check that unknown guard annotations exist.
+    self.assertLen(annotations, 7)
+    self.assertEqual(annotations['label'][0], 'unknown')
+    self.assertEqual(annotations['label'][6], 'unknown')
 
 
 if __name__ == '__main__':

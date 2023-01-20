@@ -289,12 +289,18 @@ def get_full_length_annotations(
 
   if unknown_guard:
     prefix_annotation = annotations.iloc[:1].copy()
+    prefix_annotation['label'] = UNKNOWN_LABEL
     prefix_annotation['annotation_start'] = 0
     prefix_annotation['annotation_end'] = annotations['annotation_start'].min()
+    prefix_annotation['start_time_s'] = 0.0
+    prefix_annotation['end_time_s'] = annotations['start_time_s'].min()
 
     suffix_annotation = annotations.iloc[-1:].copy()
+    suffix_annotation['label'] = UNKNOWN_LABEL
     suffix_annotation['annotation_start'] = annotations['annotation_end'].max()
     suffix_annotation['annotation_end'] = audio.shape[-1]
+    prefix_annotation['start_time_s'] = annotations['end_time_s'].max()
+    prefix_annotation['end_time_s'] = audio.shape[-1] / sample_rate_hz
 
     annotations = pd.concat([prefix_annotation, annotations, suffix_annotation],
                             axis='rows',
