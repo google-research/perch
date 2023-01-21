@@ -50,6 +50,14 @@ class TrainableParams(enum.Enum):
   BN = "batch_norm"
 
 
+class LearningRateDecay(enum.Enum):
+  """Used to specify the learning rate decay schedule."""
+
+  COSINE = "cosine"
+  NRC = "nrc"
+  NONE = "none"
+
+
 def mask_parameters(params: flax.core.scope.VariableDict,
                     strategy: TrainableParams,
                     model: Union[image_model.ImageModel,
@@ -106,7 +114,7 @@ def prepare_learning_rates(optimizer_config, total_steps):
   """Prepare the learning rate(s)."""
   mult_lr_base = optimizer_config.mult_learning_rate_resnet_base
   learning_rate, learning_rate_base_resnet, learning_rate_top = None, None, None
-  if optimizer_config.use_cosine_decay:
+  if optimizer_config.learning_rate_decay == LearningRateDecay.COSINE:
     if mult_lr_base != 1:
       learning_rate_base_resnet = optax.cosine_decay_schedule(
           init_value=optimizer_config.learning_rate * mult_lr_base,
@@ -116,7 +124,7 @@ def prepare_learning_rates(optimizer_config, total_steps):
     else:
       learning_rate = optax.cosine_decay_schedule(
           optimizer_config.learning_rate, decay_steps=total_steps)
-  elif optimizer_config.use_nrc_schedule:
+  elif optimizer_config.learning_rate_decay == LearningRateDecay.NRC:
     if mult_lr_base != 1:
       learning_rate_base_resnet = nrc_schedule(
           init_value=optimizer_config.learning_rate * mult_lr_base,
@@ -131,12 +139,17 @@ def prepare_learning_rates(optimizer_config, total_steps):
           init_value=optimizer_config.learning_rate,
           power=0.75,
           transition_steps=total_steps)
-  else:
+  elif optimizer_config.learning_rate_decay == LearningRateDecay.NONE:
     if mult_lr_base != 1:
       learning_rate_base_resnet = optimizer_config.learning_rate * mult_lr_base
       learning_rate_top = optimizer_config.learning_rate
     else:
       learning_rate = optimizer_config.learning_rate
+  else:
+    raise NotImplementedError(
+        f"Decay schedule {optimizer_config.learning_rate_decay} is not "
+        "supported yet."
+    )
   return learning_rate, learning_rate_base_resnet, learning_rate_top
 
 
@@ -147,19 +160,44 @@ def prepare_optimizer(optimizer_config, total_steps, params):
    learning_rate_top) = prepare_learning_rates(optimizer_config, total_steps)
   opt = getattr(optax, optimizer_config.optimizer)
 
+  def get_opt_kwarg(key, default):
+    if key in optimizer_config.opt_kwargs:
+      return optimizer_config.opt_kwargs[key]
+    else:
+      return default
+
+  opt_kwargs = {}
+  if optimizer_config.optimizer == "adam":
+    opt_kwargs["b1"] = get_opt_kwarg("b1", 0.9)
+    opt_kwargs["b2"] = get_opt_kwarg("b2", 0.999)
+    opt_kwargs["eps"] = get_opt_kwarg("eps", 1e-08)
+    opt_kwargs["eps_root"] = get_opt_kwarg("eps_root", 0.0)
+    opt_kwargs["mu_dtype"] = get_opt_kwarg("mu_dtype", None)
+  elif optimizer_config.optimizer == "sgd":
+    opt_kwargs["momentum"] = get_opt_kwarg("momentum", None)
+    opt_kwargs["nesterov"] = get_opt_kwarg("nesterov", False)
+    opt_kwargs["accumulator_dtype"] = get_opt_kwarg("accumulator_dtype", None)
+  else:
+    raise NotImplementedError(
+        f"Optimizer {optimizer_config.optimizer} is not supported."
+    )
+
+  logging.info(
+      "Using optimizer %s with the following arguments: %s", opt, opt_kwargs
+  )
   if mult_lr_base == 1:
     # This is the simple case: use only one optimizer for all parameters.
     rename_params = identity_rename
     inverse_rename_params = identity_rename
-    optimizer = opt(learning_rate=learning_rate, **optimizer_config.opt_kwargs)
+    optimizer = opt(learning_rate=learning_rate, **opt_kwargs)
 
   else:
     # Use different optimizers for base resnet than for bottleneck/classifier
     # in the nrc_resnet architecture.
     optimizer_base_resnet = opt(
-        learning_rate=learning_rate_base_resnet, **optimizer_config.opt_kwargs)
-    optimizer_top = opt(
-        learning_rate=learning_rate_top, **optimizer_config.opt_kwargs)
+        learning_rate=learning_rate_base_resnet, **opt_kwargs
+    )
+    optimizer_top = opt(learning_rate=learning_rate_top, **opt_kwargs)
     label_fn = map_nested_fn(lambda k, _: k)
 
     def rename_params(params, renamed_params, prefix):

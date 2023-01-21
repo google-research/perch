@@ -183,7 +183,7 @@ def get_metadata(dataset_name: str) -> dict[str, Any]:
   elif dataset_name == 'vis_da_c':
     # In line with NRC's results, we do both the adaptation and the evaluation
     # on the validation set of VisDA-C.
-    split = {'train': 'validation', 'eval': 'validation'}
+    split = {'train': 'validation[:75%]', 'eval': 'validation[75%:]'}
     return {'num_classes': 12, 'resolution': 224, 'splits': split}
   else:
     raise NotImplementedError(

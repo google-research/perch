@@ -26,12 +26,11 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
 
   optimizer_cfg = config_dict.ConfigDict()
   optimizer_cfg.optimizer = "adam"
-  optimizer_cfg.opt_kwargs = {}
+  optimizer_cfg.opt_kwargs = {"momentum": 0.9, "nesterov": True}
   optimizer_cfg.weight_decay = 0.
   optimizer_cfg.learning_rate = 1e-3
-  optimizer_cfg.use_cosine_decay = True
+  optimizer_cfg.learning_rate_decay = model_utils.LearningRateDecay.COSINE
   optimizer_cfg.mult_learning_rate_resnet_base = 1.
-  optimizer_cfg.use_nrc_schedule = False
   optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
   image_config.optimizer_config = optimizer_cfg
 
@@ -53,12 +52,11 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
 
   optimizer_cfg = config_dict.ConfigDict()
   optimizer_cfg.optimizer = "adam"
-  optimizer_cfg.opt_kwargs = {}
+  optimizer_cfg.opt_kwargs = {"momentum": 0.9, "nesterov": True}
   optimizer_cfg.weight_decay = 0.
-  optimizer_cfg.learning_rate = 1e-5
-  optimizer_cfg.use_cosine_decay = False
+  optimizer_cfg.learning_rate = 0.0001
+  optimizer_cfg.learning_rate_decay = model_utils.LearningRateDecay.NONE
   optimizer_cfg.mult_learning_rate_resnet_base = 1.
-  optimizer_cfg.use_nrc_schedule = False
   optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
   audio_config.optimizer_config = optimizer_cfg
 

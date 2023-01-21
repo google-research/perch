@@ -72,7 +72,7 @@ def main(argv: Sequence[str]) -> None:
               "{}_{}".format(config.init_config.corruption_name,
                              config.init_config.corruption_severity)
       }
-    if config.init_config.target_class_list == "vis_da_c":
+    elif config.init_config.target_class_list == "vis_da_c":
       builder_kwargs = {
           "data_dir": _VISDA_DIR.value,
       }
