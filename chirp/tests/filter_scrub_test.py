@@ -590,5 +590,73 @@ class QuerySequenceTest(DataProcessingTest):
           fsu.apply_sequence(self.toy_df, query_sequence).to_dict())
 
 
+class FilterByClasslistTest(DataProcessingTest):
+
+  def test_filter_not_in_class_list(self):
+    """Test filtering all items not in the class list ."""
+    filter_query = fsu.filter_not_in_class_list('species_code', 'tiny_species')
+    expected_df = pd.DataFrame({
+        'species_code': ['ostric3', 'grerhe1'],
+        'Common name': ['Somali Ostrich', 'Greater Rhea'],
+        'bg_labels': [['ostric2', 'grerhe1'], ['ostric2', 'ostric3']],
+        'Country': ['Australia', 'France'],
+    })
+    self.assertEqual(
+        fsu.apply_query(self.toy_df, filter_query).values.tolist(),
+        expected_df.values.tolist(),
+    )
+
+  def test_filter_in_class_list(self):
+    """Test filtering all items not in the class list."""
+    filter_query = fsu.filter_in_class_list('species_code', 'tiny_species')
+    expected_df = pd.DataFrame({
+        'species_code': ['ostric2'],
+        'Common name': ['Common Ostrich'],
+        'bg_labels': [
+            ['ostric3', 'grerhe1'],
+        ],
+        'Country': ['Colombia'],
+    })
+    self.assertEqual(
+        fsu.apply_query(self.toy_df, filter_query).values.tolist(),
+        expected_df.values.tolist(),
+    )
+
+  # def test_filter_in_class_list(self):
+  def test_filter_contains_no_class_list(self):
+    """Test filtering all items not in target class list ."""
+    filter_query = fsu.filter_contains_no_class_list(
+        'bg_labels', 'tiny_species'
+    )
+
+    expected_df = pd.DataFrame({
+        'species_code': ['ostric2'],
+        'Common name': ['Common Ostrich'],
+        'bg_labels': [['ostric3', 'grerhe1']],
+        'Country': ['Colombia'],
+    })
+    self.assertEqual(
+        fsu.apply_query(self.toy_df, filter_query).values.tolist(),
+        expected_df.values.tolist(),
+    )
+
+  def test_filter_contains_any_class_list(self):
+    """Test filtering any  items that is in target class list ."""
+    filter_query = fsu.filter_contains_any_class_list(
+        'bg_labels', 'tiny_species'
+    )
+
+    expected_df = pd.DataFrame({
+        'species_code': ['ostric3', 'grerhe1'],
+        'Common name': ['Somali Ostrich', 'Greater Rhea'],
+        'bg_labels': [['ostric2', 'grerhe1'], ['ostric2', 'ostric3']],
+        'Country': ['Australia', 'France'],
+    })
+    self.assertEqual(
+        fsu.apply_query(self.toy_df, filter_query).values.tolist(),
+        expected_df.values.tolist(),
+    )
+
+
 if __name__ == '__main__':
   absltest.main()

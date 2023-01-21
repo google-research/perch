@@ -83,6 +83,7 @@ LocalizationFn = Callable[[Any, int, float], Sequence[Tuple[int, int]]]
 @dataclasses.dataclass
 class SoundeventsConfig(tfds.core.BuilderConfig):
   """The config to generate multiple versions of Sound Events from FSD50K."""
+
   sample_rate_hz: int = 32_000
   resampling_method: str = 'polyphase'
   localization_fn: Optional[LocalizationFn] = None
@@ -95,9 +96,10 @@ class SoundeventsConfig(tfds.core.BuilderConfig):
 class Soundevents(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for soundevents dataset."""
 
-  VERSION = tfds.core.Version('1.0.0')
+  VERSION = tfds.core.Version('1.0.1')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
+      '1.0.1': 'Added a config filter out bird classes',
   }
 
   BUILDER_CONFIGS = [
@@ -106,14 +108,32 @@ class Soundevents(tfds.core.GeneratorBasedBuilder):
           name='fsd50k_full_length',
           localization_fn=None,
           class_list_name='fsd50k',
-          description=('full length audio sequences processed with ')),
+          description='full length audio sequences processed with ',
+      ),
       SoundeventsConfig(
           name='fsd50k_slice_peaked',
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
           class_list_name='fsd50k',
-          description=('Chunked audio sequences processed with '
-                       'chirp.audio_utils.slice_peaked_audio.')),
+          description=(
+              'Chunked audio sequences processed with '
+              'chirp.audio_utils.slice_peaked_audio.'
+          ),
+      ),
+      SoundeventsConfig(
+          name='fsd50k_no_bird_slice_peaked',
+          localization_fn=audio_utils.slice_peaked_audio,
+          interval_length_s=6.0,
+          class_list_name='fsd50k',
+          description=(
+              'FSD50K dataset excluding bird classes '
+              'chunked audio sequences processed with '
+              'chirp.audio_utils.slice_peaked_audio.'
+          ),
+          data_processing_query=fsu.QuerySequence(
+              [fsu.filter_contains_no_class_list('class_code', 'fsd50k_birds')]
+          ),
+      ),
   ]
 
   GCS_URL = epath.Path('gs://chirp-public-bucket/soundevents/fsd50k')
