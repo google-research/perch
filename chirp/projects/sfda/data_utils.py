@@ -49,7 +49,9 @@ def to_tf_compatible_split(split_tuple: list[tuple[int, int]]) -> str:
 def get_audio_datasets(
     adaptation_data_config: config_dict.ConfigDict,
     eval_data_config: config_dict.ConfigDict,
-    sample_rate_hz: float) -> tuple[tf.data.Dataset, tf.data.Dataset]:
+    sample_rate_hz: float,
+    cache_data: bool = True,
+) -> tuple[tf.data.Dataset, tf.data.Dataset]:
   """Get audio datasets used for adaptation and evaluation.
 
   Args:
@@ -60,6 +62,7 @@ def get_audio_datasets(
     sample_rate_hz: The sample rate used by the current model. Used to
       double-check that this sample rate matches the one the data was created
       with.
+    cache_data: Whether to cache the dataset for fast subsequent access.
 
   Returns:
     The datasets used for adaptation and evaluation.
@@ -102,6 +105,9 @@ def get_audio_datasets(
         'Dataset sample rate must match config sample rate. To address this, '
         'need to set the sample rate in the config to {}.'.format(
             val_dataset_info.features['audio'].sample_rate))
+  if cache_data:
+    adaptation_dataset = adaptation_dataset.cache()
+    val_dataset = val_dataset.cache()
   return adaptation_dataset, val_dataset
 
 
@@ -112,6 +118,7 @@ def get_image_datasets(
     batch_size_eval: int,
     data_seed: int,
     builder_kwargs: dict[str, Any],
+    cache_data: bool = True,
 ) -> tuple[tf.data.Dataset, tf.data.Dataset]:
   """Get image dataset used for adaptation and evaluation.
 
@@ -123,6 +130,7 @@ def get_image_datasets(
     batch_size_eval: The batch size used for evaluation.
     data_seed: Used to seed data shuffling.
     builder_kwargs: Kwargs to pass when creating the data builder.
+    cache_data: Whether to cache the dataset for fast subsequent access.
 
   Returns:
     The adaptation and evaluation datasets.
@@ -151,6 +159,9 @@ def get_image_datasets(
 
   adaptation_dataset = build_image_dataset('train', batch_size_train)
   val_dataset = build_image_dataset('eval', batch_size_eval)
+  if cache_data:
+    adaptation_dataset = adaptation_dataset.cache()
+    val_dataset = val_dataset.cache()
   return adaptation_dataset, val_dataset
 
 

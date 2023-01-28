@@ -290,6 +290,12 @@ class SHOT(adapt.SFDAMethod):
         [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
     pseudo_label = method_state["pseudo_label"][batch_indexes]
 
+    # pad pseudo-labels to match model output as needed.
+    label_mask = method_utils.get_label_mask(batch)
+    pseudo_label = method_utils.pad_pseudo_label(
+        label_mask, pseudo_label, adaptation_state
+    )
+
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label)
     }

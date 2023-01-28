@@ -150,10 +150,15 @@ class DropoutStudent(adapt.SFDAMethod):
     if method_kwargs["online_pl_updates"]:
 
       # In the online version, we compute the pseudo-labels on-the-go.
-      model_outputs = method_utils.batch_forward(
-          adapt.keep_jax_types(batch), adaptation_state.model_state,
-          adaptation_state.model_params, model_bundle.model, modality,
-          method_kwargs["update_bn_statistics"])
+      forward_step = self.cache_get_forward_step(
+          model_bundle.model, modality, method_kwargs["update_bn_statistics"]
+      )
+      model_outputs = forward_step(
+          adapt.keep_jax_types(batch),
+          adaptation_state.model_state,
+          adaptation_state.model_params,
+          None,
+      )
       model_outputs = flax_utils.unreplicate(model_outputs)
       logit2proba = nn.sigmoid if multi_label else nn.softmax
       pseudo_label = self.compute_pseudo_label(

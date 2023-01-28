@@ -18,6 +18,8 @@
 import functools
 import itertools
 
+from chirp.projects.sfda import adapt
+from chirp.projects.sfda import method_utils
 from chirp.projects.sfda.methods import notela
 import flax.linen as nn
 import jax
@@ -117,8 +119,10 @@ class NOTELATest(absltest.TestCase):
     label_mask = jnp.array([0, 1, 0, 0, 1]).astype(bool)
     used_classes = label_mask.sum()
     pseudo_labels = jax.random.normal(key, (num_samples, used_classes))
-    padded_pseudo_label = notela.NOTELA.pad_pseudo_label(
-        label_mask, pseudo_labels)
+    fake_adaptation_state = adapt.AdaptationState(0, 0, {}, {}, {}, {}, True)
+    padded_pseudo_label = method_utils.pad_pseudo_label(
+        label_mask, pseudo_labels, fake_adaptation_state
+    )
     self.assertTrue((padded_pseudo_label[:, label_mask] == pseudo_labels).all())
 
 

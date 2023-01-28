@@ -23,7 +23,7 @@ from chirp.projects.sfda import model_utils
 from clu import metrics as clu_metrics
 import flax
 import flax.jax_utils as flax_utils
-import flax.linen as nn
+import flax.linen as flax_linen
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -219,7 +219,8 @@ class NRC(adapt.SFDAMethod):
       dataset_feature: The features for the whole dataset, shape [dataset_size,
         feature_dim]
       nn: The number of nearest-neighbors to use.
-      extended_nn: The number of extended nearest-neighbors to use.
+      memory_efficient_computation: whether to use a memory-efficient
+        implementation.
 
     Returns:
       The indices of batch_feature's nn nearest-neighbors among
@@ -298,7 +299,6 @@ class NRC(adapt.SFDAMethod):
         modality=modality,
         multi_label=multi_label,
         use_batch_statistics=method_kwargs["update_bn_statistics"],
-        only_keep_unmasked_classes=True,
     )
 
     # Store everything in the method_state dictionnary.
@@ -345,32 +345,24 @@ class NRC(adapt.SFDAMethod):
     id2index = method_state["id2index"]
     batch_indices = np.array(
         [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
-    if "label_mask" in batch:
-      label_mask = flax_utils.unreplicate(batch["label_mask"])
-      reference_label_mask = label_mask[0]  # [num_classes]
-      # Ensure that the label_mask is the same for all samples.
-      assert (jnp.tile(reference_label_mask,
-                       (label_mask.shape[0], 1)) == label_mask).all()
-    else:
-      label_mask = None
+    reference_label_mask = method_utils.get_label_mask(batch)
 
     # Obtain the model's output for the current batch.
-    model_outputs = method_utils.batch_forward(
+    forward_step = self.cache_get_forward_step(
+        model_bundle.model, modality, method_kwargs["update_bn_statistics"]
+    )
+    model_outputs = forward_step(
         adapt.keep_jax_types(batch),
         adaptation_state.model_state,
         adaptation_state.model_params,
-        model_bundle.model,
-        modality,
-        method_kwargs["update_bn_statistics"],
+        None,
     )
     model_outputs = flax_utils.unreplicate(model_outputs)
-    if label_mask is not None:
-      # We restrict the model's logits to the classes that appear in the
-      # current dataset.
-      model_outputs = model_outputs.replace(
-          label=model_outputs.label[..., reference_label_mask.astype(bool)])
+    model_outputs = method_utils.maybe_restrict_labels(
+        model_outputs, reference_label_mask, adaptation_state
+    )
 
-    logit2proba = nn.sigmoid if multi_label else nn.softmax
+    logit2proba = flax_linen.sigmoid if multi_label else flax_linen.softmax
 
     # Compute nearest-neighbors and extended nearest-neighbors indices.
     nn_indices = self.compute_nearest_neighbors(
@@ -379,13 +371,15 @@ class NRC(adapt.SFDAMethod):
         nn=method_kwargs["nn"],
     )  # [batch_size, nn]
     extended_nn_indices = jnp.stack(
-        [
+        [  # pylint: disable=g-complex-comprehension
             self.compute_nearest_neighbors(
-                batch_feature=method_state["dataset_feature"]
-                [sample_nn_indices],
+                batch_feature=method_state["dataset_feature"][
+                    sample_nn_indices
+                ],
                 dataset_feature=method_state["dataset_feature"],
                 nn=method_kwargs["extended_nn"],
-            ) for sample_nn_indices in nn_indices  # [nn, extended_nn]
+            )
+            for sample_nn_indices in nn_indices  # [nn, extended_nn]
         ],
         axis=0,
     )  # [batch_size, nn, extended_nn]

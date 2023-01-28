@@ -49,19 +49,17 @@ def label_kl(probabilities: jnp.ndarray,
     Single-class Kulback-Leibler divergence between probabilities and label.
     Shape [*,].
   """
-  return label_xent(probabilities, label) - label_ent(probabilities)
+  return label_xent(probabilities, label, eps) - label_ent(probabilities, eps)
 
 
 def label_binary_kl(probabilities: jnp.ndarray,
                     label: jnp.ndarray,
-                    eps: float = 1e-10,
                     **_) -> jnp.ndarray:
   """Kulback-Leibler divergence for multi-class classification settings.
 
   Args:
     probabilities: Model's probabilities, expected shape [*, num_classes].
     label: One-hot labels, expected shape [*, num_classes].
-    eps: For numerical stability
 
   Returns:
     Multi-class Kulback-Leibler divergence between probabilities and label.
@@ -123,6 +121,7 @@ def label_binary_ent(probabilities: jnp.ndarray,
     label_mask: Used to mask classes before averaging across classes. Expected
       shape [*, num_classes].
     eps: For numerical stability.
+    class_reduce: Class reduction strategy.
 
   Returns:
     The binary entropies, averaged across classes shape [*,]
@@ -141,7 +140,7 @@ def label_binary_ent(probabilities: jnp.ndarray,
     return (label_mask * binary_entropies).sum(axis=-1) / (
         label_mask.sum(axis=-1) + eps)
   elif class_reduce == ReduceStrategy.NONE:
-    return (label_mask * binary_entropies)
+    return label_mask * binary_entropies
   else:
     raise ValueError(f"Unknown reduce strategy {class_reduce} used.")
 
@@ -159,6 +158,7 @@ def label_binary_xent(probabilities: jnp.ndarray,
     label: Shape [*, num_classes]
     label_mask: Shape [*, num_classes]
     eps: For numerical stability.
+    class_reduce: Class reduction strategy.
 
   Returns:
     Average of per-class binary xent. Shape [*]
@@ -177,7 +177,7 @@ def label_binary_xent(probabilities: jnp.ndarray,
     return (label_mask * binary_entropies).sum(axis=-1) / (
         label_mask.sum(axis=-1) + eps)
   elif class_reduce == ReduceStrategy.NONE:
-    return (label_mask * binary_entropies)
+    return label_mask * binary_entropies
   else:
     raise ValueError(f"Unknown reduce strategy {class_reduce} used.")
 

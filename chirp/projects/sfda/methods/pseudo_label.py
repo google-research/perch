@@ -17,7 +17,6 @@
 
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import losses
-from chirp.projects.sfda import method_utils
 from chirp.projects.sfda import model_utils
 from clu import metrics as clu_metrics
 import flax.linen as nn
@@ -65,10 +64,15 @@ class PseudoLabel(adapt.SFDAMethod):
     """
 
     # In the online version, we compute the pseudo-labels on-the-go.
-    model_output = method_utils.batch_forward(
-        adapt.keep_jax_types(batch), adaptation_state.model_state,
-        adaptation_state.model_params, model_bundle.model, modality,
-        method_kwargs["update_bn_statistics"])
+    forward_step = self.cache_get_forward_step(
+        model_bundle.model, modality, method_kwargs["update_bn_statistics"]
+    )
+    model_output = forward_step(
+        adapt.keep_jax_types(batch),
+        adaptation_state.model_state,
+        adaptation_state.model_params,
+        None,
+    )
     logit2proba = nn.sigmoid if multi_label else nn.softmax
     probabilities = logit2proba(
         model_output.label)  # [1, batch_size, num_classes]

@@ -86,7 +86,7 @@ class NOTELA(adapt.SFDAMethod):
                                                       dataset_shape[-1]):
       raise ValueError(
           "Batch features and dataset features' shapes are not consistent."
-          f"Currently batch_feature: {batch_shape} and dataset_feature: {dataset_shape}"
+          f"(batch_feature: {batch_shape} and dataset_feature: {dataset_shape})"
       )
 
     # Compute the nearest-neighbors
@@ -198,7 +198,7 @@ class NOTELA(adapt.SFDAMethod):
           modality=modality,
           multi_label=multi_label,
           use_batch_statistics=method_kwargs["update_bn_statistics"],
-          only_keep_unmasked_classes=True)
+      )
 
       # Initialize global nearest-neighbor matrix
       nn_matrix = self.compute_nearest_neighbors(
@@ -258,7 +258,7 @@ class NOTELA(adapt.SFDAMethod):
           modality=modality,
           multi_label=multi_label,
           use_batch_statistics=method_kwargs["update_bn_statistics"],
-          only_keep_unmasked_classes=True)
+      )
 
       # Compute pseudo-labels that will be used during the next epoch of
       # adaptation.
@@ -314,29 +314,24 @@ class NOTELA(adapt.SFDAMethod):
     id2index = method_state["id2index"]
     batch_indices = np.array(
         [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
-    if "label_mask" in batch:
-      label_mask = flax_utils.unreplicate(batch["label_mask"])
-      reference_label_mask = label_mask[0]  # [num_classes]
-      # Ensure that the label_mask is the same for all samples.
-      assert (jnp.tile(reference_label_mask,
-                       (label_mask.shape[0], 1)) == label_mask).all()
-    else:
-      label_mask = None
+    reference_label_mask = method_utils.get_label_mask(batch)
+
     if method_kwargs["online_pl_updates"]:
 
       # In the online version, we compute the pseudo-labels on-the-go.
-      model_outputs = method_utils.batch_forward(
-          adapt.keep_jax_types(batch), adaptation_state.model_state,
-          adaptation_state.model_params, model_bundle.model, modality,
-          method_kwargs["update_bn_statistics"])
+      forward_step = self.cache_get_forward_step(
+          model_bundle.model, modality, method_kwargs["update_bn_statistics"]
+      )
+      model_outputs = forward_step(
+          adapt.keep_jax_types(batch),
+          adaptation_state.model_state,
+          adaptation_state.model_params,
+          None,
+      )
       model_outputs = flax_utils.unreplicate(model_outputs)
-      if label_mask is not None:
-        # We restrict the model's logits to the classes that appear in the
-        # current dataset to ensure compatibility with
-        # method_state["dataset_proba"].
-        model_outputs = model_outputs.replace(
-            label=model_outputs.label[...,
-                                      reference_label_mask.astype(bool)])
+      model_outputs = method_utils.maybe_restrict_labels(
+          model_outputs, reference_label_mask, adaptation_state
+      )
       logit2proba = nn.sigmoid if multi_label else nn.softmax
       previous_nn_matrix = self.indices_to_sparse_matrix(
           method_state["nn_matrix"], (method_state["dataset_feature"].shape[0],
@@ -367,48 +362,13 @@ class NOTELA(adapt.SFDAMethod):
       # In the offline version, we simply grab the pseudo-labels that were
       # computed before the epoch.
       pseudo_label = method_state["pseudo_label"][batch_indices]
-    if label_mask is not None:
-      # Here, we project back the pseudo-labels to the global label space.
-      pseudo_label = self.pad_pseudo_label(reference_label_mask, pseudo_label)
+    # Project back the pseudo-labels to the global label space, if needed.
+    pseudo_label = method_utils.pad_pseudo_label(
+        reference_label_mask, pseudo_label, adaptation_state
+    )
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label)
     }
-
-  @staticmethod
-  def pad_pseudo_label(label_mask: jnp.ndarray,
-                       pseudo_label: jnp.ndarray) -> jnp.ndarray:
-    """Pads pseudo-labels back to the global probability space.
-
-    Args:
-      label_mask: The mask indicating which 'global' classes are used for the
-        adaptation, shape [num_classes].
-      pseudo_label: Pseudo-label, expressed in a potentially reduced probability
-        space, shape [batch_size, label_mask.sum()].
-
-    Returns:
-      The zero-padded pseudo-labels, of shape [batch_size, num_classes]
-
-    Raises:
-      ValueError: If pseudo_label's last dimension does not match the number of
-        classes used for adaptation, as indicated by label_mask
-    """
-    if label_mask.ndim != 1:
-      raise ValueError("Expecting a vector for label_mask. Current shape is"
-                       f" {label_mask.shape}")
-    batch_size = pseudo_label.shape[0]
-    num_classes_used = label_mask.sum()
-    num_classes_total = label_mask.shape[0]
-    if pseudo_label.shape[-1] != num_classes_used:
-      raise ValueError("Pseudo-labels should be expressed in the same"
-                       "restricted set of classes provided by the label_mask."
-                       "Currently, label_mask indicates that "
-                       f"{num_classes_used} should be used, but pseudo_label "
-                       f"is defined over {pseudo_label.shape[-1]} classes.")
-    padded_pseudo_label = jnp.zeros((batch_size, num_classes_total))
-    col_index = jnp.tile(jnp.where(label_mask)[0], batch_size)
-    row_index = jnp.repeat(jnp.arange(batch_size), num_classes_used)
-    return padded_pseudo_label.at[(row_index,
-                                   col_index)].set(pseudo_label.flatten())
 
   @staticmethod
   def indices_to_sparse_matrix(indices: jnp.ndarray,

@@ -18,8 +18,12 @@
 import abc
 import enum
 import functools
-from typing import Any, Callable
+import time
+from typing import Any, Callable, Optional
+
+from absl import logging
 from chirp.models import cmap
+from chirp.models import output
 from chirp.projects.sfda import losses
 from chirp.projects.sfda import mca
 from chirp.projects.sfda import metrics
@@ -40,6 +44,17 @@ import tensorflow as tf
 import tqdm
 
 
+ForwardStepType = Callable[
+    [
+        dict[str, jnp.ndarray],
+        flax.core.scope.FrozenVariableDict,
+        flax.core.scope.VariableDict,
+        Optional[jax.random.PRNGKeyArray],
+    ],
+    output.ClassifierOutput,
+]
+
+
 @flax.struct.dataclass
 class AdaptationState:
   """All useful states and parameters kept during adaptation.
@@ -57,6 +72,8 @@ class AdaptationState:
     model_state: The state of the model.
     method_state: All values a method needs to keep track of during adaptation.
     opt_state: The optimizer's state.
+    restrict_classes: Whether to restrict to classes present in the target
+      dataset.
   """
   step: int
   epoch: int
@@ -64,6 +81,7 @@ class AdaptationState:
   model_state: flax.core.scope.FrozenVariableDict
   method_state: dict[str, Any]
   opt_state: optax.OptState
+  restrict_classes: bool
 
 
 class Modality(enum.Enum):
@@ -131,8 +149,10 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     key = jax.random.PRNGKey(rng_seed)
     if modality == Modality.AUDIO:
       prepare_fn = model_utils.prepare_audio_model
+      restrict_classes = True
     elif modality == Modality.IMAGE:
       prepare_fn = model_utils.prepare_image_model
+      restrict_classes = False
     else:
       raise ValueError(f"Modality {modality} not supported.")
 
@@ -155,7 +175,9 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         model_params=params,
         opt_state=opt_state,
         method_state={},
-        model_state=model_state)
+        model_state=model_state,
+        restrict_classes=restrict_classes,
+    )
 
     return model_bundle, adaptation_state, key, rename_fn, inverse_rename_fn
 
@@ -226,6 +248,38 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     del (key, model_bundle, adaptation_dataset, modality, multi_label,
          method_kwargs)
     return adaptation_state
+
+  # Prevent the forward_step from recompiling every step.
+  def cache_get_forward_step(
+      self,
+      model: nn.Module,
+      modality: Modality,
+      use_batch_statistics: bool,
+      train: bool = False,
+  ) -> ForwardStepType:
+    """Cache the forward step."""
+    if hasattr(self, "_forward_step") and self._forward_step is not None:
+      return self._forward_step
+    self._forward_step = batch_forward(
+        model, modality, use_batch_statistics, train
+    )
+    return self._forward_step
+
+  # Prevent the update_step from recompiling every time do_epoch is called.
+  def cache_get_update_step(self, update_step):
+    """Cache the update step."""
+    if hasattr(self, "_update_step") and self._update_step is not None:
+      return self._update_step
+    self._update_step = update_step
+    return self._update_step
+
+  # Prevent the update_step from recompiling every time do_epoch is called.
+  def cache_get_update_metrics(self, update_metrics):
+    """Cache the update step."""
+    if hasattr(self, "_update_metrics") and self._update_metrics is not None:
+      return self._update_metrics
+    self._update_metrics = update_metrics
+    return self._update_metrics
 
   def before_iter(
       self, key: jax.random.PRNGKeyArray, model_bundle: model_utils.ModelBundle,
@@ -420,6 +474,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       step_key, key = jax.random.split(key)
       step_key = jax.random.split(step_key, num=jax.local_device_count())
 
+      st = time.time()
       adaptation_state, method_gather_args = self.before_iter(
           key=step_key,
           model_bundle=model_bundle,
@@ -428,28 +483,42 @@ class SFDAMethod(metaclass=abc.ABCMeta):
           modality=modality,
           multi_label=multi_label,
           **method_kwargs)
+      elapsed = time.time() - st
+      logging.info("sfda_method.before_iter completed in %5.3f", elapsed)
 
       # Perform the update
+      st = time.time()
+      update_step = self.cache_get_update_step(update_step)
       batch_metrics, adaptation_state = update_step(
           batch=keep_jax_types(batch),
           adaptation_state=adaptation_state,
           key=step_key,
           **method_gather_args)
-      reporter(current_step)
-      writer.write_scalars(current_step, flax_utils.unreplicate(batch_metrics))
+      elapsed = time.time() - st
+      logging.info("sfda_method update_step completed in %5.3f", elapsed)
+
+      if current_step % 100 == 0:
+        st = time.time()
+        reporter(current_step)
+        writer.write_scalars(
+            current_step, flax_utils.unreplicate(batch_metrics)
+        )
+        elapsed = time.time() - st
+        logging.info("sfda_method reporting completed in %5.3f", elapsed)
 
     return flax_utils.unreplicate(adaptation_state)
 
-  @classmethod
-  def evaluate(cls,
-               model_bundle: model_utils.ModelBundle,
-               writer: jnp.ndarray,
-               adaptation_state: AdaptationState,
-               eval_dataset: tf.data.Dataset,
-               multi_label: bool,
-               modality: Modality,
-               sample_threshold: int = 5,
-               compute_mca: bool = False) -> None:
+  def evaluate(
+      self,
+      model_bundle: model_utils.ModelBundle,
+      writer: jnp.ndarray,
+      adaptation_state: AdaptationState,
+      eval_dataset: tf.data.Dataset,
+      multi_label: bool,
+      modality: Modality,
+      sample_threshold: int = 5,
+      compute_mca: bool = False,
+  ) -> None:
     """Evaluate the current adaptation state.
 
     The writer is in charge of logging all results.
@@ -476,9 +545,11 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     mca_metric = mca.make_mca_metric() if not multi_label else None
 
     @functools.partial(jax.pmap, axis_name="batch")
-    def update_metrics(metric_collection: clu_metrics.Collection,
-                       batch: dict[str, jnp.ndarray]):
-
+    def update_metrics(
+        metric_collection: clu_metrics.Collection,
+        batch: dict[str, jnp.ndarray],
+        adaptation_state: AdaptationState,
+    ):
       variables = {
           "params": adaptation_state.model_params,
           **adaptation_state.model_state
@@ -498,6 +569,8 @@ class SFDAMethod(metaclass=abc.ABCMeta):
               if "label_mask" not in batch else batch["label_mask"],
               label=batch["label"].astype(np.int32)))
 
+    update_metrics = self.cache_get_update_metrics(update_metrics)
+
     current_epoch = int(adaptation_state.epoch)
 
     # Loop over validation dataset
@@ -505,7 +578,10 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       batch = jax.tree_map(np.asarray, batch)
       verify_batch(batch)
       model_outputs, valid_metrics = update_metrics(
-          metric_collection=valid_metrics, batch=keep_jax_types(batch))
+          metric_collection=valid_metrics,
+          batch=keep_jax_types(batch),
+          adaptation_state=flax_utils.replicate(adaptation_state),
+      )
       cmap_metrics = cmap.update_cmap_metrics_dict(cmap_metrics, model_outputs,
                                                    batch)
       if compute_mca:
@@ -585,6 +661,7 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
       logdir, asynchronous=False, collection="validation")
 
   # Before run.
+  st = time.time()
   adaptation_state = sfda_method.before_run(
       key=key,
       model_bundle=model_bundle,
@@ -593,12 +670,15 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
       modality=modality,
       adaptation_dataset=adaptation_dataset,
       **method_kwargs)
+  elapsed = time.time() - st
+  logging.info("sfda.before_run completed in %5.3f", elapsed)
 
   for epoch in range(method_kwargs["num_epochs"]):
 
     # Before every epoch, perform a round of evaluation on the validation set.
     if epoch % eval_every == 0:
       compute_mca = (epoch % eval_mca_every == 0) and eval_mca_every >= 0
+      st = time.time()
       sfda_method.evaluate(
           model_bundle=model_bundle,
           adaptation_state=adaptation_state,
@@ -608,7 +688,10 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
           multi_label=multi_label,
           compute_mca=compute_mca)
       validation_writer.flush()
+      elapsed = time.time() - st
+      logging.info("sfda_method.evaluate completed in %5.3f", elapsed)
 
+    st = time.time()
     adaptation_state = sfda_method.before_epoch(
         key=key,
         model_bundle=model_bundle,
@@ -618,7 +701,10 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
         adaptation_dataset=adaptation_dataset,
         writer=adaptation_writer,
         **method_kwargs)
+    elapsed = time.time() - st
+    logging.info("sfda_method.before_epoch completed in %5.3f", elapsed)
 
+    st = time.time()
     adaptation_state = sfda_method.do_epoch(
         key=key,
         model_bundle=model_bundle,
@@ -634,6 +720,8 @@ def perform_adaptation(key: jax.random.PRNGKeyArray, sfda_method: SFDAMethod,
         workdir=logdir,
         use_supervised_metrics=use_supervised_metrics,
         **method_kwargs)
+    elapsed = time.time() - st
+    logging.info("sfda_method.do_epoch completed in %5.3f", elapsed)
     adaptation_state = adaptation_state.replace(epoch=adaptation_state.epoch +
                                                 1)
     adaptation_writer.flush()
@@ -706,3 +794,48 @@ def verify_batch(batch: dict[str, jnp.ndarray]) -> None:
           "sample's probability distribution is defined over the same set of"
           "classes. Therefore, we verify that `label_mask` is the same across "
           "samples.")
+
+
+def batch_forward(
+    model: nn.Module,
+    modality: Modality,
+    use_batch_statistics: bool,
+    train: bool = False,
+) -> ForwardStepType:
+  """Collects the model's output on the current batch of data.
+
+  Args:
+    model: The model.
+    modality: The modality used.
+    use_batch_statistics: Whether to use BatchNorm's running statistics, or the
+      batch's statistics.
+    train: Whether to use the model in training mode. Default to False, as this
+      function is nominally used to compute pseudo-labels (e.g. Teacher step of
+      Notela), which usually removes any source of noise (including dropout).
+
+  Returns:
+    Batch forward step callable.
+  """
+
+  @jax.pmap
+  def forward(batch, model_state, params, rngs):
+    if use_batch_statistics:
+      outputs, _ = model.apply(
+          {"params": params, **model_state},
+          batch[modality.value],
+          train=train,
+          mutable=list(model_state.keys()),
+          use_running_average=False,
+          rngs=rngs,
+      )
+    else:
+      outputs = model.apply(
+          {"params": params, **model_state},
+          batch[modality.value],
+          use_running_average=True,
+          train=train,
+          rngs=rngs,
+      )
+    return outputs
+
+  return forward

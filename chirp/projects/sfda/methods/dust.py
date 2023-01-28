@@ -73,7 +73,7 @@ class DUST(adapt.SFDAMethod):
         modality=modality,
         multi_label=multi_label,
         use_batch_statistics=method_kwargs["update_bn_statistics"],
-        only_keep_unmasked_classes=False)
+    )
 
     # Compute model's reference predictions (no dropout used)
     reference_forward_result = forward_fn(train=False)
@@ -86,7 +86,7 @@ class DUST(adapt.SFDAMethod):
     # more appropriate for our use-case.
     kl_distances = []
     kl_fn = losses.label_binary_kl if multi_label else losses.label_kl
-    for random_pass in range(method_kwargs["num_random_passes"]):
+    for _ in range(method_kwargs["num_random_passes"]):
       random_pass_key, key = jax.random.split(key)
       noisy_probability = forward_fn(key=random_pass_key, train=True)["proba"]
       kl_distances.append(kl_fn(reference_probability, noisy_probability))
@@ -134,8 +134,19 @@ class DUST(adapt.SFDAMethod):
     id2index = method_state["id2index"]
     batch_indices = np.array(
         [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
+
     pseudo_label = method_state["pseudo_label"][batch_indices]
     pseudo_label_mask = method_state["pseudo_label_mask"][batch_indices]
+
+    # pad pseudo-labels to match model output as needed.
+    label_mask = method_utils.get_label_mask(batch)
+    pseudo_label = method_utils.pad_pseudo_label(
+        label_mask, pseudo_label, adaptation_state
+    )
+    pseudo_label_mask = method_utils.pad_pseudo_label(
+        label_mask, pseudo_label_mask, adaptation_state
+    )
+
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label),
         "pseudo_label_mask": flax_utils.replicate(pseudo_label_mask)

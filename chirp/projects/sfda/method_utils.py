@@ -15,7 +15,7 @@
 
 """Some utils functions shared across methods."""
 
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 from absl import logging
 from chirp.models import output
@@ -29,6 +29,17 @@ import jax.numpy as jnp
 import numpy as np
 import tensorflow as tf
 import tqdm
+
+
+ForwardStepType = Callable[
+    [
+        dict[str, jnp.ndarray],
+        flax.core.scope.FrozenVariableDict,
+        flax.core.scope.VariableDict,
+        Optional[jax.random.PRNGKeyArray],
+    ],
+    output.ClassifierOutput,
+]
 
 
 @jax.jit
@@ -68,67 +79,6 @@ def jax_cdist(features_a: jnp.array, features_b: jnp.array) -> jnp.array:
   return distances
 
 
-def batch_forward(
-    batch: dict[str, jnp.ndarray],
-    model_state: flax.core.scope.FrozenVariableDict,
-    params: flax.core.scope.VariableDict,
-    model: nn.Module,
-    modality: adapt.Modality,
-    use_batch_statistics: bool,
-    train: bool = False,
-    key: Optional[jax.random.PRNGKeyArray] = None) -> output.ClassifierOutput:
-  """Collects the model's output on the current batch of data.
-
-  Args:
-    batch: The batch of data.
-    model_state: The model's state. Expects a replicated model_state.
-    params: The model's parameters. Expects replicated params.
-    model: The model.
-    modality: The modality used.
-    use_batch_statistics: Whether to use BatchNorm's running statistics, or the
-      batch's statistics.
-    train: Whether to use the model in training mode. Default to False, as this
-      function is nominally used to compute pseudo-labels (e.g. Teacher step of
-      Notela), which usually removes any source of noise (including dropout).
-    key: Jax random key to use for the forward pass in case train is set to
-      True.
-
-  Returns:
-    The model's output.
-
-  Raises:
-    ValueError: In case train is set to True, but no random key is specified.
-  """
-  if train and key is None:
-    raise ValueError("Please specifify a random key when using train=True.")
-  rngs = {"dropout": key} if key is not None else None
-
-  @jax.pmap
-  def forward(batch, model_state, params, rngs):
-    if use_batch_statistics:
-      outputs, _ = model.apply({
-          "params": params,
-          **model_state
-      },
-                               batch[modality.value],
-                               train=train,
-                               mutable=list(model_state.keys()),
-                               use_running_average=False,
-                               rngs=rngs)
-    else:
-      outputs = model.apply({
-          "params": params,
-          **model_state
-      },
-                            batch[modality.value],
-                            use_running_average=True,
-                            train=train,
-                            rngs=rngs)
-    return outputs
-
-  return forward(batch, model_state, params, rngs)
-
-
 def forward_dataset(
     dataset: tf.data.Dataset,
     adaptation_state: adapt.AdaptationState,
@@ -136,7 +86,6 @@ def forward_dataset(
     modality: adapt.Modality,
     multi_label: bool,
     use_batch_statistics: bool = False,
-    only_keep_unmasked_classes: bool = False,
     train: bool = False,
     key: Optional[jax.random.PRNGKeyArray] = None
 ) -> dict[str, Union[jnp.ndarray, np.ndarray]]:
@@ -152,11 +101,6 @@ def forward_dataset(
       probabilities are packaged.
     use_batch_statistics: Whether to use batch's statistics for BatchNorm layers
       during feature extraction.
-    only_keep_unmasked_classes: In case 'label_mask' is provided as a key in
-      batches of data, this option allows to only store the model's probabilties
-      for classes that are not masked. This can result in large memory savings,
-      e.g. for the bio-acoustic model where <100 classes are present versus the
-      ~11k total species.
     train: Whether to use dropout or not during the forward pass.
     key: The random key to use if train is set to True.
 
@@ -179,6 +123,10 @@ def forward_dataset(
   model_state = flax_utils.replicate(adaptation_state.model_state)
   params = flax_utils.replicate(adaptation_state.model_params)
   model = model_bundle.model
+  only_keep_unmasked_classes = adaptation_state.restrict_classes
+  forward_step = adapt.batch_forward(
+      model, modality, use_batch_statistics, train
+  )
 
   # Forward the whole dataset. Store embeddings, samples' ids, labels, and
   # model's probabilities.
@@ -188,15 +136,16 @@ def forward_dataset(
     if key is not None:
       batch_key, key = jax.random.split(key)
       batch_key = jax.random.split(batch_key, num=jax.local_device_count())
+      batch_key = {"dropout": batch_key}
     else:
       batch_key = None
     if "label_mask" in batch and only_keep_unmasked_classes and index == 0:
       # We will use the first sample's label_mask as a reference, and ensure
       # all label_masks are the same.
       reference_mask = flax_utils.unreplicate(batch["label_mask"])[0]
-    model_outputs = batch_forward(
-        adapt.keep_jax_types(batch), model_state, params, model, modality,
-        use_batch_statistics, train, batch_key)
+    model_outputs = forward_step(
+        adapt.keep_jax_types(batch), model_state, params, batch_key
+    )
     if "label_mask" in batch and only_keep_unmasked_classes:
       # We make sure that the label_mask is the same for all samples in the
       # dataset.
@@ -226,3 +175,82 @@ def forward_dataset(
     raise ValueError("Ids should uniquely define each sample.")
   result["id"] = ids
   return result
+
+
+def maybe_restrict_labels(
+    model_outputs, reference_label_mask, adaptation_state
+):
+  """Restrict model_outputs to target classes, if appropriate."""
+  if not adaptation_state.restrict_classes:
+    return model_outputs
+  if reference_label_mask is None:
+    raise ValueError("Asked to restrict classes, but no label mask provided.")
+  # We restrict the model's logits to the classes that appear in the
+  # current dataset to ensure compatibility with
+  # method_state["dataset_proba"].
+  model_outputs = model_outputs.replace(
+      label=model_outputs.label[..., reference_label_mask.astype(bool)]
+  )
+  return model_outputs
+
+
+def get_label_mask(batch) -> Optional[jnp.ndarray]:
+  if "label_mask" in batch:
+    label_mask = flax_utils.unreplicate(batch["label_mask"])
+    reference_label_mask = label_mask[0]  # [num_classes]
+    # Ensure that the label_mask is the same for all samples.
+    assert (
+        jnp.tile(reference_label_mask, (label_mask.shape[0], 1)) == label_mask
+    ).all()
+  else:
+    reference_label_mask = None
+  return reference_label_mask
+
+
+def pad_pseudo_label(
+    reference_label_mask: Optional[jnp.ndarray],
+    pseudo_label: jnp.ndarray,
+    adaptation_state: adapt.AdaptationState,
+) -> jnp.ndarray:
+  """Pads pseudo-labels back to the global probability space.
+
+  Args:
+    reference_label_mask: The mask indicating which 'global' classes are used
+      for the adaptation, shape [num_classes].
+    pseudo_label: Pseudo-label, expressed in a potentially reduced probability
+      space, shape [batch_size, label_mask.sum()].
+    adaptation_state: The adaptation state.
+
+  Returns:
+    The zero-padded pseudo-labels, of shape [batch_size, num_classes]
+
+  Raises:
+    ValueError: If pseudo_label's last dimension does not match the number of
+      classes used for adaptation, as indicated by label_mask
+  """
+  if not adaptation_state.restrict_classes:
+    return pseudo_label
+  if reference_label_mask is None:
+    raise ValueError("Asked to pad pseudolabels, but no label mask provided.")
+  if reference_label_mask.ndim != 1:
+    raise ValueError(
+        "Expecting a vector for label_mask. Current shape is"
+        f" {reference_label_mask.shape}"
+    )
+  batch_size = pseudo_label.shape[0]
+  num_classes_used = reference_label_mask.sum()
+  num_classes_total = reference_label_mask.shape[0]
+  if pseudo_label.shape[-1] != num_classes_used:
+    raise ValueError(
+        "Pseudo-labels should be expressed in the same"
+        "restricted set of classes provided by the label_mask."
+        "Currently, label_mask indicates that "
+        f"{num_classes_used} should be used, but pseudo_label "
+        f"is defined over {pseudo_label.shape[-1]} classes."
+    )
+  padded_pseudo_label = jnp.zeros((batch_size, num_classes_total))
+  col_index = jnp.tile(jnp.where(reference_label_mask)[0], batch_size)
+  row_index = jnp.repeat(jnp.arange(batch_size), num_classes_used)
+  return padded_pseudo_label.at[(row_index, col_index)].set(
+      pseudo_label.flatten()
+  )

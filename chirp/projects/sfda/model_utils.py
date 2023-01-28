@@ -287,6 +287,7 @@ def map_nested_fn(fn):
 
   return map_fn
 
+
 def prepare_audio_model(
     model_config: config_dict.ConfigDict,
     optimizer_config: Optional[config_dict.ConfigDict],

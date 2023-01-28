@@ -87,16 +87,21 @@ def main(argv: Sequence[str]) -> None:
         builder_kwargs=builder_kwargs)
 
   # Initialize state and bundles
-  model_bundle, adaptation_state, key, rename_fn, inverse_rename_fn = sfda_method.initialize(
-      model_config=config.model_config,
-      pretrained=config.init_config.pretrained_model,
-      rng_seed=config.init_config.rng_seed,
-      input_shape=None if config.modality == adapt.Modality.IMAGE else
-      config.init_config.input_shape,
-      target_class_list=config.init_config.target_class_list,
-      adaptation_iterations=len(adaptation_dataset) * method_config.num_epochs,
-      modality=config.modality,
-      optimizer_config=method_config.optimizer_config)
+  (model_bundle, adaptation_state, key, rename_fn, inverse_rename_fn) = (
+      sfda_method.initialize(
+          model_config=config.model_config,
+          pretrained=config.init_config.pretrained_model,
+          rng_seed=config.init_config.rng_seed,
+          input_shape=None
+          if config.modality == adapt.Modality.IMAGE
+          else config.init_config.input_shape,
+          target_class_list=config.init_config.target_class_list,
+          adaptation_iterations=len(adaptation_dataset)
+          * method_config.num_epochs,
+          modality=config.modality,
+          optimizer_config=method_config.optimizer_config,
+      )
+  )
 
   # Perform adaptation
   adaptation_state = adapt.perform_adaptation(
