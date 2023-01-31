@@ -160,11 +160,32 @@ class NOTELA(adapt.SFDAMethod):
       denominator = nn_matrix.sum(axis=-1)
     else:
       denominator = nn_matrix.sum(axis=-1, keepdims=True)
-    pseudo_label = batch_proba**(1 / alpha) * jnp.exp(
-        (lambda_ / alpha) * (nn_matrix @ dataset_proba) /
-        (denominator + eps))  # [*, batch_size, proba_dim]
-    if normalize_pseudo_labels:
-      pseudo_label /= (pseudo_label.sum(axis=-1, keepdims=True) + eps)
+
+    # In the limit where alpha goes to zero, we can rewrite the expression as
+    #
+    #     pseudo_label = [batch_proba * jnp.exp(lambda_ * ...)] ** (1 / alpha)
+    #
+    # and see that the normalized pseudo-label probabilities take value 1 if
+    # they have the maximum value for the expression above over the class axis
+    # and zero otherwise.
+    if alpha == 0 and normalize_pseudo_labels:
+      pseudo_label = batch_proba * jnp.exp(
+          lambda_
+          * (nn_matrix @ dataset_proba)
+          / (denominator + eps)  # [*, batch_size, proba_dim]
+      )
+      pseudo_label = (
+          pseudo_label == pseudo_label.max(axis=-1, keepdims=True)
+      ).astype(jnp.float32)
+      # If more than one class is maximally probable, we need to renormalize the
+      # distribution to be uniform over the maximally-probable classes.
+      pseudo_label /= pseudo_label.sum(axis=-1, keepdims=True)
+    else:
+      pseudo_label = batch_proba ** (1 / alpha) * jnp.exp(
+          (lambda_ / alpha) * (nn_matrix @ dataset_proba) / (denominator + eps)
+      )  # [*, batch_size, proba_dim]
+      if normalize_pseudo_labels:
+        pseudo_label /= pseudo_label.sum(axis=-1, keepdims=True) + eps
     return pseudo_label
 
   def before_run(self, key: jax.random.PRNGKeyArray,

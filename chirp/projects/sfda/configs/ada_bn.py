@@ -41,8 +41,8 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
 
   # Forward options
   audio_config.num_epochs = 10
-  audio_config.use_dropout = False
-  audio_config.update_bn_statistics = False
+  audio_config.use_dropout = True
+  audio_config.update_bn_statistics = True
   return audio_config
 
 
