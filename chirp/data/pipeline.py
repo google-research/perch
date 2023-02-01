@@ -908,10 +908,13 @@ def get_dataset(
           data_dir=tfds_data_dir,
           with_info=True,
           read_config=read_config,
-          shuffle_files=True)
+          shuffle_files=is_train,
+      )
     else:
       builder = tfds.builder_from_directory(dataset_dir)
-      ds = builder.as_dataset(split=split, read_config=read_config)
+      ds = builder.as_dataset(
+          split=split, read_config=read_config, shuffle_files=is_train
+      )
       dataset_info = builder.info
 
     datasets.append(pipeline(ds, dataset_info))

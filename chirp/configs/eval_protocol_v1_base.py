@@ -108,7 +108,9 @@ def get_config() -> config_dict.ConfigDict:
             _callable_config('pipeline.LabelsToString'),
         ]
 
-    dataset_config.pipeline = _callable_config('pipeline.Pipeline', ops=ops)
+    dataset_config.pipeline = _callable_config(
+        'pipeline.Pipeline', ops=ops, deterministic=True
+    )
     dataset_config.split = 'train'
     dataset_configs[dataset_description['dataset_name']] = dataset_config
 

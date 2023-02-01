@@ -42,8 +42,9 @@ ConfigDict = ml_collections.ConfigDict
 
 MaskFunction = Callable[[pd.DataFrame], pd.Series]
 ClasswiseMaskFunction = Callable[[pd.DataFrame, str], pd.Series]
-ClasswiseEvalSetGenerator = Generator[tuple[str, pd.DataFrame, pd.DataFrame],
-                                      None, None]
+ClasswiseEvalSetGenerator = Generator[
+    tuple[str, pd.DataFrame, pd.DataFrame], None, None
+]
 EvalSetGenerator = Generator[tuple[str, ClasswiseEvalSetGenerator], None, None]
 
 _T = TypeVar('_T', bound='EvalSetSpecification')
@@ -85,6 +86,7 @@ class EvalSetSpecification:
       uniformly at random to the correct size. If -1, all representatives are
       used.
   """
+
   class_names: Sequence[str]
   search_corpus_global_mask_fn: MaskFunction
   search_corpus_classwise_mask_fn: ClasswiseMaskFunction
@@ -93,8 +95,12 @@ class EvalSetSpecification:
   num_representatives_per_class: int
 
   @classmethod
-  def v1_specification(cls: type[_T], location: str, corpus_type: str,
-                       num_representatives_per_class: int) -> _T:
+  def v1_specification(
+      cls: type[_T],
+      location: str,
+      corpus_type: str,
+      num_representatives_per_class: int,
+  ) -> _T:
     """Instantiates an eval protocol v1 EvalSetSpecification.
 
     Args:
@@ -107,51 +113,63 @@ class EvalSetSpecification:
       The EvalSetSpecification.
     """
     downstream_class_names = (
-        namespace_db.load_db().class_lists['downstream_species'].classes)
+        namespace_db.load_db().class_lists['downstream_species'].classes
+    )
     # "At-risk" species are excluded from downstream data due to conservation
     # status.
     class_names = {
-        'ssw':
-            namespace_db.load_db().class_lists['artificially_rare_species']
-            .classes,
+        'ssw': (
+            namespace_db.load_db()
+            .class_lists['artificially_rare_species']
+            .classes
+        ),
         'colombia': [
-            c for c in
-            namespace_db.load_db().class_lists['birdclef2019_colombia'].classes
+            c
+            for c in namespace_db.load_db()
+            .class_lists['birdclef2019_colombia']
+            .classes
             if c in downstream_class_names
         ],
         'hawaii': [
-            c for c in namespace_db.load_db().class_lists['hawaii'].classes
+            c
+            for c in namespace_db.load_db().class_lists['hawaii'].classes
             if c in downstream_class_names
         ],
     }[location]
 
     # The name of the dataset to draw embeddings from to form the corpus.
-    corpus_dataset_name = (f'birdclef_{location}'
-                           if corpus_type == 'birdclef' else 'xc_downstream')
+    corpus_dataset_name = (
+        f'birdclef_{location}' if corpus_type == 'birdclef' else 'xc_downstream'
+    )
     has_corpus_dataset_name = (
-        lambda df: df['dataset_name'] == corpus_dataset_name)
+        lambda df: df['dataset_name'] == corpus_dataset_name
+    )
     # Only include embeddings in the searchcorpus which have foreground
     # ('label') and/or background labels ('bg_labels') for some class in
     # `class_names`, which are encoded as space-separated species IDs/codes.
     has_some_fg_annotation = (
         # `'|'.join(class_names)` is a regex which matches *any* class in
         # `class_names`.
-        lambda df: df['label'].str.contains('|'.join(class_names)))
-    has_some_bg_annotation = (
-        lambda df: df['bg_labels'].str.contains('|'.join(class_names)))
-    has_some_annotation = (
-        lambda df: has_some_fg_annotation(df) | has_some_bg_annotation(df))
+        lambda df: df['label'].str.contains('|'.join(class_names))
+    )
+    has_some_bg_annotation = lambda df: df['bg_labels'].str.contains(
+        '|'.join(class_names)
+    )
+    has_some_annotation = lambda df: has_some_fg_annotation(
+        df
+    ) | has_some_bg_annotation(df)
 
     class_representative_dataset_name = {
         'ssw': 'xc_artificially_rare',
         'colombia': 'xc_downstream',
-        'hawaii': 'xc_downstream'
+        'hawaii': 'xc_downstream',
     }[location]
 
     return cls(
         class_names=class_names,
         search_corpus_global_mask_fn=(
-            lambda df: has_corpus_dataset_name(df) & has_some_annotation(df)),
+            lambda df: has_corpus_dataset_name(df) & has_some_annotation(df)
+        ),
         # Ensure that target species' background vocalizations are not present
         # in the 'xc_fg' corpus and vice versa.
         search_corpus_classwise_mask_fn={
@@ -162,9 +180,11 @@ class EvalSetSpecification:
         # Class representatives are drawn only from foreground-vocalizing
         # species present in Xeno-Canto.
         class_representative_global_mask_fn=(
-            lambda df: df['dataset_name'] == class_representative_dataset_name),
+            lambda df: df['dataset_name'] == class_representative_dataset_name
+        ),
         class_representative_classwise_mask_fn=(
-            lambda df, class_name: df['label'].str.contains(class_name)),
+            lambda df, class_name: df['label'].str.contains(class_name)
+        ),
         num_representatives_per_class=num_representatives_per_class,
     )
 
@@ -192,20 +212,25 @@ class TaxonomyModelCallback:
       the evaluation protocol relying instead on embedded upstream recordings to
       form search queries.
   """
+
   init_config: ConfigDict
   workdir: str
   use_learned_representations: bool = True
   learned_representation_blocklist: Sequence[str] = dataclasses.field(
-      default_factory=list)
+      default_factory=list
+  )
   # The following are populated during init.
-  model_callback: Callable[[np.ndarray],
-                           np.ndarray] = dataclasses.field(init=False)
+  model_callback: Callable[[np.ndarray], np.ndarray] = dataclasses.field(
+      init=False
+  )
   learned_representations: dict[str, np.ndarray] = dataclasses.field(
-      init=False, default_factory=dict)
+      init=False, default_factory=dict
+  )
 
   def __post_init__(self):
     model_bundle, train_state = classifier.initialize_model(
-        workdir=self.workdir, **self.init_config)
+        workdir=self.workdir, **self.init_config
+    )
     train_state = model_bundle.ckpt.restore(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
 
@@ -216,15 +241,20 @@ class TaxonomyModelCallback:
     self.model_callback = fprop
 
     if self.use_learned_representations:
-      class_list = namespace_db.load_db().class_lists[
-          self.init_config.target_class_list].classes
+      class_list = (
+          namespace_db.load_db()
+          .class_lists[self.init_config.target_class_list]
+          .classes
+      )
       head_index = list(model_bundle.model.num_classes.keys()).index('label')
       output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
-      self.learned_representations.update({
-          n: w
-          for n, w in zip(class_list, output_weights)
-          if n not in self.learned_representation_blocklist
-      })
+      self.learned_representations.update(
+          {
+              n: w
+              for n, w in zip(class_list, output_weights)
+              if n not in self.learned_representation_blocklist
+          }
+      )
 
   def __call__(self, inputs: np.ndarray) -> np.ndarray:
     return np.asarray(self.model_callback(inputs))
@@ -233,16 +263,20 @@ class TaxonomyModelCallback:
 @dataclasses.dataclass
 class SeparatorTFCallback:
   """An eval model callback the embedding from an audio separator."""
+
   model_path: str
   use_learned_representations: bool = False
   learned_representation_blocklist: Sequence[str] = dataclasses.field(
-      default_factory=list)
+      default_factory=list
+  )
   frame_size: int = 32000
   # The following are populated during init.
-  model_callback: Callable[[np.ndarray],
-                           np.ndarray] = dataclasses.field(init=False)
+  model_callback: Callable[[np.ndarray], np.ndarray] = dataclasses.field(
+      init=False
+  )
   learned_representations: dict[str, np.ndarray] = dataclasses.field(
-      init=False, default_factory=dict)
+      init=False, default_factory=dict
+  )
 
   def _load_learned_representations(self):
     """Loads classifier output weights from the separator."""
@@ -250,39 +284,53 @@ class SeparatorTFCallback:
     with label_csv_path.open('r') as f:
       class_list = namespace.ClassList.from_csv('label', f)
     # Load the output layer weights.
-    variables_path = (epath.Path(self.model_path) /
-                      'savedmodel/variables/variables').as_posix()
+    variables_path = (
+        epath.Path(self.model_path) / 'savedmodel/variables/variables'
+    ).as_posix()
     variables = tf.train.list_variables(variables_path)
     candidates = []
     for v, v_shape in variables:
       # The classifier output layer is a 1D convolution with kernel size
       # (1, embedding_dim, num_classes).
-      if (len(v_shape) == 3 and v_shape[0] == 1 and
-          v_shape[-1] == class_list.size):
+      if (
+          len(v_shape) == 3
+          and v_shape[0] == 1
+          and v_shape[-1] == class_list.size
+      ):
         candidates.append(v)
     if not candidates:
       raise ValueError('Could not locate output weights layer.')
     elif len(candidates) > 1:
-      raise ValueError('Found multiple layers which could be the output '
-                       'weights layer (%s).' % candidates)
+      raise ValueError(
+          'Found multiple layers which could be the output weights layer (%s).'
+          % candidates
+      )
     else:
       output_weights = tf.train.load_variable(variables_path, candidates[0])
       output_weights = np.squeeze(output_weights)
-    self.learned_representations.update({
-        n: w
-        for n, w in zip(class_list.classes, output_weights)
-        if n not in self.learned_representation_blocklist
-    })
+    self.learned_representations.update(
+        {
+            n: w
+            for n, w in zip(class_list.classes, output_weights)
+            if n not in self.learned_representation_blocklist
+        }
+    )
 
   def __post_init__(self):
     logging.info('Loading separation model...')
     separation_model = tf.saved_model.load(
-        epath.Path(self.model_path) / 'savedmodel')
+        epath.Path(self.model_path) / 'savedmodel'
+    )
 
     def fprop(inputs):
-      framed_inputs = np.reshape(inputs, [
-          inputs.shape[0], inputs.shape[1] // self.frame_size, self.frame_size
-      ])
+      framed_inputs = np.reshape(
+          inputs,
+          [
+              inputs.shape[0],
+              inputs.shape[1] // self.frame_size,
+              self.frame_size,
+          ],
+      )
       # Outputs are separated audio, logits, and embeddings.
       _, _, embeddings = separation_model.infer_tf(framed_inputs)
       # Embeddings have shape [B, T, D]; we need to aggregate over time.
@@ -316,24 +364,29 @@ class HuBERTModelCallback:
       representation, created automatically post-initialization and left empty
       (because HuBERT is self-supervised).
   """
+
   init_config: ConfigDict
   workdir: str
   embedding_index: int
-  model_callback: Callable[[np.ndarray],
-                           np.ndarray] = dataclasses.field(init=False)
+  model_callback: Callable[[np.ndarray], np.ndarray] = dataclasses.field(
+      init=False
+  )
   learned_representations: dict[str, np.ndarray] = dataclasses.field(
-      init=False, default_factory=dict)
+      init=False, default_factory=dict
+  )
 
   def __post_init__(self):
     model_bundle, train_state, _ = hubert.initialize_model(
-        workdir=self.workdir, num_train_steps=1, **self.init_config)
+        workdir=self.workdir, num_train_steps=1, **self.init_config
+    )
     train_state = model_bundle.ckpt.restore(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
 
     @jax.jit
     def fprop(inputs):
       model_outputs = model_bundle.model.apply(
-          variables, inputs, train=False, mask_key=None)
+          variables, inputs, train=False, mask_key=None
+      )
       return model_outputs.embedding[self.embedding_index].mean(axis=-2)
 
     self.model_callback = fprop
@@ -357,23 +410,28 @@ class SeparationModelCallback:
       the evaluation protocol relying instead on embedded upstream recordings to
       form search queries.
   """
+
   init_config: ConfigDict
   workdir: str
-  model_callback: Callable[[np.ndarray],
-                           np.ndarray] = dataclasses.field(init=False)
+  model_callback: Callable[[np.ndarray], np.ndarray] = dataclasses.field(
+      init=False
+  )
   learned_representations: dict[str, np.ndarray] = dataclasses.field(
-      init=False, default_factory=dict)
+      init=False, default_factory=dict
+  )
 
   def __post_init__(self):
     model_bundle, train_state = separator.initialize_model(
-        workdir=self.workdir, **self.init_config)
+        workdir=self.workdir, **self.init_config
+    )
     train_state = model_bundle.ckpt.restore_or_initialize(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
 
     @jax.jit
     def fprop(inputs):
       return model_bundle.model.apply(
-          variables, inputs, train=False).embedding.mean(axis=-2)
+          variables, inputs, train=False
+      ).embedding.mean(axis=-2)
 
     self.model_callback = fprop
 
@@ -408,9 +466,11 @@ def load_eval_datasets(config: ConfigDict) -> dict[str, tf.data.Dataset]:
   }
 
 
-def get_embeddings(dataset: tf.data.Dataset,
-                   model_callback: Callable[[np.ndarray], np.ndarray],
-                   batch_size: int) -> tf.data.Dataset:
+def get_embeddings(
+    dataset: tf.data.Dataset,
+    model_callback: Callable[[np.ndarray], np.ndarray],
+    batch_size: int,
+) -> tf.data.Dataset:
   """Embeds the audio slice in each tf.Example across the input dataset.
 
   Args:
@@ -428,27 +488,34 @@ def get_embeddings(dataset: tf.data.Dataset,
   # by `batch_size`.
   num_elements = len(dataset)
   padded_dataset = dataset.concatenate(
-      dataset.take(1).repeat(batch_size - (num_elements % batch_size)))
+      dataset.take(1).repeat(batch_size - (num_elements % batch_size))
+  )
 
   def _map_func(example):
     example['embedding'] = tf.numpy_function(
-        func=model_callback, inp=[example['audio']], Tout=tf.float32)
+        func=model_callback, inp=[example['audio']], Tout=tf.float32
+    )
     del example['audio']
     return example
 
   # Use the 'audio' feature to produce a model embedding; delete the old 'audio'
   # feature.
-  embedded_padded_dataset = padded_dataset.batch(
-      batch_size, drop_remainder=True).prefetch(1).map(_map_func)
+  embedded_padded_dataset = (
+      padded_dataset.batch(batch_size, drop_remainder=True)
+      .prefetch(1)
+      .map(_map_func)
+  )
 
   # `take(num_elements)` ensures that we discard the padded examples.
   return embedded_padded_dataset.unbatch().take(num_elements)
 
 
-def _get_class_representatives_df(embeddings_df: pd.DataFrame,
-                                  class_representative_mask: pd.Series,
-                                  num_representatives_per_class: int,
-                                  rng_key: jax.random.KeyArray) -> pd.DataFrame:
+def _get_class_representatives_df(
+    embeddings_df: pd.DataFrame,
+    class_representative_mask: pd.Series,
+    num_representatives_per_class: int,
+    rng_key: jax.random.KeyArray,
+) -> pd.DataFrame:
   """Creates a class representatives DataFrame, possibly downsampling at random.
 
   Args:
@@ -475,22 +542,30 @@ def _get_class_representatives_df(embeddings_df: pd.DataFrame,
               rng_key,
               num_potential_class_representatives,
               shape=(num_representatives_per_class,),
-              replace=False).tolist())
+              replace=False,
+          ).tolist()
+      )
       # Set all other elements of the mask to False. Since
       # `class_representative_mask` is a boolean series, indexing it with
       # itself returns the True-valued rows. We can then use `locations` to
       # subsample those rows and retrieve the resulting index subset.
-      index_subset = class_representative_mask[class_representative_mask].iloc[
-          locations].index
+      index_subset = (
+          class_representative_mask[class_representative_mask]
+          .iloc[locations]
+          .index
+      )
       class_representative_mask = class_representative_mask.copy()
-      class_representative_mask[~class_representative_mask.index
-                                .isin(index_subset)] = False
+      class_representative_mask[
+          ~class_representative_mask.index.isin(index_subset)
+      ] = False
   return embeddings_df[class_representative_mask]
 
 
 def _get_search_corpus_df(
-    embeddings_df: pd.DataFrame, search_corpus_mask: pd.Series,
-    class_representatives_df: pd.DataFrame) -> pd.DataFrame:
+    embeddings_df: pd.DataFrame,
+    search_corpus_mask: pd.Series,
+    class_representatives_df: pd.DataFrame,
+) -> pd.DataFrame:
   """Creates a search corpus DataFrame, excluding any class representative.
 
   Args:
@@ -509,12 +584,15 @@ def _get_search_corpus_df(
       class_representatives_df.index,
       # It's possible that the class representatives and the search corpus don't
       # intersect; this is fine.
-      errors='ignore')
+      errors='ignore',
+  )
 
 
 def _eval_set_generator(
-    embeddings_df: pd.DataFrame, eval_set_specification: EvalSetSpecification,
-    rng_key: jax.random.KeyArray) -> ClasswiseEvalSetGenerator:
+    embeddings_df: pd.DataFrame,
+    eval_set_specification: EvalSetSpecification,
+    rng_key: jax.random.KeyArray,
+) -> ClasswiseEvalSetGenerator:
   """Creates a generator for a given eval set.
 
   Args:
@@ -528,12 +606,15 @@ def _eval_set_generator(
     A (class_name, class_representatives_df, search_corpus_df) tuple.
   """
   global_search_corpus_mask = (
-      eval_set_specification.search_corpus_global_mask_fn(embeddings_df))
+      eval_set_specification.search_corpus_global_mask_fn(embeddings_df)
+  )
   global_class_representative_mask = (
-      eval_set_specification.class_representative_global_mask_fn(embeddings_df))
+      eval_set_specification.class_representative_global_mask_fn(embeddings_df)
+  )
 
   num_representatives_per_class = (
-      eval_set_specification.num_representatives_per_class)
+      eval_set_specification.num_representatives_per_class
+  )
 
   for class_name in eval_set_specification.class_names:
     choice_key, rng_key = jax.random.split(rng_key)
@@ -541,41 +622,56 @@ def _eval_set_generator(
     class_representative_mask = (
         global_class_representative_mask
         & eval_set_specification.class_representative_classwise_mask_fn(
-            embeddings_df, class_name))
+            embeddings_df, class_name
+        )
+    )
     search_corpus_mask = (
         global_search_corpus_mask
         & eval_set_specification.search_corpus_classwise_mask_fn(
-            embeddings_df, class_name))
+            embeddings_df, class_name
+        )
+    )
 
     # TODO(vdumoulin): fix the issue upstream to avoid having to skip
     # classes in the first place.
-    if (num_representatives_per_class >= 0 and
-        class_representative_mask.sum() < num_representatives_per_class):
-      logging.warning('Skipping %s as we cannot find enough representatives',
-                      class_name)
+    if (
+        num_representatives_per_class >= 0
+        and class_representative_mask.sum() < num_representatives_per_class
+    ):
+      logging.warning(
+          'Skipping %s as we cannot find enough representatives', class_name
+      )
       continue
 
     class_representatives_df = _get_class_representatives_df(
-        embeddings_df, class_representative_mask, num_representatives_per_class,
-        choice_key)
+        embeddings_df,
+        class_representative_mask,
+        num_representatives_per_class,
+        choice_key,
+    )
 
-    search_corpus_df = _get_search_corpus_df(embeddings_df, search_corpus_mask,
-                                             class_representatives_df)
+    search_corpus_df = _get_search_corpus_df(
+        embeddings_df, search_corpus_mask, class_representatives_df
+    )
 
     # TODO(vdumoulin): fix the issue upstream to avoid having to skip classes
     # in the first place.
-    if (search_corpus_df['label'].str.contains(class_name)
-        | search_corpus_df['bg_labels'].str.contains(class_name)).sum() == 0:
+    if (
+        search_corpus_df['label'].str.contains(class_name)
+        | search_corpus_df['bg_labels'].str.contains(class_name)
+    ).sum() == 0:
       logging.warning(
           'Skipping %s as the corpus contains no individual of that class',
-          class_name)
+          class_name,
+      )
       continue
 
     yield (class_name, class_representatives_df, search_corpus_df)
 
 
-def _add_dataset_name(features: dict[str, tf.Tensor],
-                      dataset_name: str) -> dict[str, tf.Tensor]:
+def _add_dataset_name(
+    features: dict[str, tf.Tensor], dataset_name: str
+) -> dict[str, tf.Tensor]:
   """Adds a 'dataset_name' feature to a features dict.
 
   Args:
@@ -597,12 +693,17 @@ def _numpy_iterator_with_progress_logging(embedded_dataset):
 
   for i, example in enumerate(embedded_dataset.as_numpy_iterator()):
     yield example
-    logging.log_every_n(logging.INFO, 'Computing embeddings (%.1f%% done)...',
-                        roughly_5_per_cent, 100 * (i + 1) / num_embeddings)
+    logging.log_every_n(
+        logging.INFO,
+        'Computing embeddings (%.1f%% done)...',
+        roughly_5_per_cent,
+        100 * (i + 1) / num_embeddings,
+    )
 
 
-def _create_embeddings_dataframe(embedded_datasets: dict[str, tf.data.Dataset],
-                                 config: ConfigDict) -> pd.DataFrame:
+def _create_embeddings_dataframe(
+    embedded_datasets: dict[str, tf.data.Dataset], config: ConfigDict
+) -> pd.DataFrame:
   """Builds a dataframe out of all embedded datasets.
 
   The dataframe also contains upstream class representations (rows with the
@@ -625,22 +726,25 @@ def _create_embeddings_dataframe(embedded_datasets: dict[str, tf.data.Dataset],
 
   if config.debug.embedded_dataset_cache_path:
     embedded_dataset = embedded_dataset.cache(
-        config.debug.embedded_dataset_cache_path)
+        config.debug.embedded_dataset_cache_path
+    )
 
   embeddings_df = pd.DataFrame(
-      _numpy_iterator_with_progress_logging(embedded_dataset))
+      _numpy_iterator_with_progress_logging(embedded_dataset)
+  )
 
   # Encode 'label', 'bg_labels', 'dataset_name' column data as strings.
   for column_name in ('label', 'bg_labels', 'dataset_name'):
-    embeddings_df[column_name] = embeddings_df[column_name].str.decode(
-        'utf-8').astype('string')
+    embeddings_df[column_name] = (
+        embeddings_df[column_name].str.decode('utf-8').astype('string')
+    )
 
   return embeddings_df
 
 
 def prepare_eval_sets(
-    config: ConfigDict,
-    embedded_datasets: dict[str, tf.data.Dataset]) -> EvalSetGenerator:
+    config: ConfigDict, embedded_datasets: dict[str, tf.data.Dataset]
+) -> EvalSetGenerator:
   """Constructs and yields eval sets.
 
   Args:
@@ -661,33 +765,38 @@ def prepare_eval_sets(
   # Add a 'dataset_name' feature to all embedded datasets.
   embedded_datasets = {
       dataset_name: dataset.map(
-          functools.partial(_add_dataset_name, dataset_name=dataset_name))
+          functools.partial(_add_dataset_name, dataset_name=dataset_name)
+      )
       for dataset_name, dataset in embedded_datasets.items()
   }
 
   # Build a DataFrame out of all embedded datasets.
   embeddings_df = _create_embeddings_dataframe(embedded_datasets, config)
 
-  logging.info('Preparing %d unique eval sets.',
-               len(config.eval_set_specifications))
+  logging.info(
+      'Preparing %d unique eval sets.', len(config.eval_set_specifications)
+  )
 
   rng_key = jax.random.PRNGKey(config.rng_seed)
 
   # Yield eval sets one by one.
-  for (eval_set_name,
-       eval_set_specification) in config.eval_set_specifications.items():
+  for (
+      eval_set_name,
+      eval_set_specification,
+  ) in config.eval_set_specifications.items():
     rng_key, eval_set_key = jax.random.split(rng_key)
     yield eval_set_name, _eval_set_generator(
         embeddings_df=embeddings_df,
         eval_set_specification=eval_set_specification,
-        rng_key=eval_set_key)
+        rng_key=eval_set_key,
+    )
 
 
 def search(
     eval_and_search_corpus: ClasswiseEvalSetGenerator,
     learned_representations: Mapping[str, np.ndarray],
     create_species_query: Callable[[Sequence[np.ndarray]], np.ndarray],
-    search_score: Callable[[np.ndarray, np.ndarray], float]
+    search_score: Callable[[np.ndarray, np.ndarray], float],
 ) -> Mapping[str, pd.DataFrame]:
   """Performs search over evaluation set examples and search corpus pairs.
 
@@ -730,7 +839,8 @@ def search(
         query=query,
         species_id=species_id,
         search_corpus=search_corpus,
-        search_score=search_score)
+        search_score=search_score,
+    )
 
     eval_search_results[species_id] = species_scores
 
@@ -738,8 +848,11 @@ def search(
 
 
 def query_search(
-    query: np.ndarray, species_id: str, search_corpus: pd.DataFrame,
-    search_score: Callable[[np.ndarray, np.ndarray], float]) -> pd.DataFrame:
+    query: np.ndarray,
+    species_id: str,
+    search_corpus: pd.DataFrame,
+    search_score: Callable[[np.ndarray, np.ndarray], float],
+) -> pd.DataFrame:
   """Performs vector-based comparison between the query and search corpus.
 
   Args:
@@ -757,19 +870,28 @@ def query_search(
 
   search_species_scores = pd.DataFrame()
   search_species_scores['score'] = search_corpus[_EMBEDDING_KEY].apply(
-      lambda x: search_score(query, x))
-  fg_species_match = search_corpus[_LABEL_KEY].apply(
-      lambda x: species_id in x.split(' ')).astype(np.int16)
-  bg_species_match = search_corpus[_BACKGROUND_KEY].apply(
-      lambda x: species_id in x.split(' ')).astype(np.int16)
+      lambda x: search_score(query, x)
+  )
+  fg_species_match = (
+      search_corpus[_LABEL_KEY]
+      .apply(lambda x: species_id in x.split(' '))
+      .astype(np.int16)
+  )
+  bg_species_match = (
+      search_corpus[_BACKGROUND_KEY]
+      .apply(lambda x: species_id in x.split(' '))
+      .astype(np.int16)
+  )
   search_species_scores['species_match'] = fg_species_match | bg_species_match
 
   return search_species_scores
 
 
-def compute_metrics(eval_set_name: str,
-                    eval_set_results: Mapping[str, pd.DataFrame],
-                    sort_descending: bool = True):
+def compute_metrics(
+    eval_set_name: str,
+    eval_set_results: Mapping[str, pd.DataFrame],
+    sort_descending: bool = True,
+):
   """Operates over a DataFrame of eval results and produces average precision.
 
   Args:
@@ -791,15 +913,18 @@ def compute_metrics(eval_set_name: str,
     species_label_match = eval_results['species_match'].values
 
     average_precision = metrics.average_precision(
-        eval_scores, species_label_match, sort_descending=sort_descending)
+        eval_scores, species_label_match, sort_descending=sort_descending
+    )
     species_metric_eval_set.append(
-        (eval_species, average_precision, eval_set_name))
+        (eval_species, average_precision, eval_set_name)
+    )
 
   return species_metric_eval_set
 
 
-def write_results_to_csv(metric_results: Sequence[tuple[str, float, str]],
-                         write_results_dir: str):
+def write_results_to_csv(
+    metric_results: Sequence[tuple[str, float, str]], write_results_dir: str
+):
   """Writew evaluation metric results to csv.
 
     Writes a csv file where each row corresponds to a particular evaluation
@@ -822,7 +947,8 @@ def write_results_to_csv(metric_results: Sequence[tuple[str, float, str]],
 # np.ndarrays when extending create_species_query to support returning multiple
 # queries for a given eval species.
 def create_averaged_query(
-    species_representatives: Sequence[np.ndarray]) -> np.ndarray:
+    species_representatives: Sequence[np.ndarray],
+) -> np.ndarray:
   """Creates a search query from representatives by averaging embeddings.
 
   Args:
