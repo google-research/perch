@@ -17,7 +17,7 @@
 
 import dataclasses
 import tempfile
-from typing import Any, Optional
+from typing import Any
 
 from absl import logging
 from chirp.inference import interface
@@ -84,9 +84,9 @@ class BirbSepModelTF1(interface.EmbeddingModel):
   keep_raw_channel: bool
 
   # The following are populated at init time.
-  session: Optional[Any] = None
-  input_placeholder_ns: Optional[Any] = None
-  output_tensor_ns: Optional[Any] = None
+  session: Any | None = None
+  input_placeholder_ns: Any | None = None
+  output_tensor_ns: Any | None = None
 
   def __post_init__(self):
     """Load model files and create TF1 session graph."""
@@ -150,11 +150,11 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   model_path: str
   window_size_s: float
   hop_size_s: float
-  target_class_list: Optional[namespace.ClassList] = None
+  target_class_list: namespace.ClassList | None = None
 
   # The following are populated during init.
-  model: Optional[Any] = None  # TF SavedModel
-  class_list: Optional[namespace.ClassList] = None
+  model: Any | None = None  # TF SavedModel
+  class_list: namespace.ClassList | None = None
 
   def __post_init__(self):
     logging.info('Loading taxonomy model...')
@@ -203,12 +203,12 @@ class SeparatorModelTF(interface.EmbeddingModel):
 
   model_path: str
   frame_size: int
-  window_size_s: Optional[float] = None
-  target_class_list: Optional[namespace.ClassList] = None
+  window_size_s: float | None = None
+  target_class_list: namespace.ClassList | None = None
 
   # The following are populated during init.
-  model: Optional[Any] = None  # TF SavedModel
-  class_list: Optional[namespace.ClassList] = None
+  model: Any | None = None  # TF SavedModel
+  class_list: namespace.ClassList | None = None
 
   def __post_init__(self):
     logging.info('Loading taxonomy model...')
@@ -277,11 +277,11 @@ class BirdNet(interface.EmbeddingModel):
   window_size_s: float = 3.0
   hop_size_s: float = 3.0
   num_tflite_threads: int = 16
-  target_class_list: Optional[namespace.ClassList] = None
+  target_class_list: namespace.ClassList | None = None
   # The following are populated during init.
-  model: Optional[Any] = None
+  model: Any | None = None
   tflite: bool = False
-  class_list: Optional[namespace.ClassList] = None
+  class_list: namespace.ClassList | None = None
 
   def __post_init__(self):
     logging.info('Loading BirdNet model...')
@@ -356,7 +356,7 @@ class PlaceholderModel(interface.EmbeddingModel):
   make_embeddings: bool = True
   make_logits: bool = True
   make_separated_audio: bool = True
-  target_class_list: Optional[namespace.ClassList] = None
+  target_class_list: namespace.ClassList | None = None
 
   def __post_init__(self):
     db = namespace_db.load_db()

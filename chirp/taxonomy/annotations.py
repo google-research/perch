@@ -17,7 +17,7 @@
 
 import csv
 import dataclasses
-from typing import Callable, Optional, Sequence
+from typing import Callable, Sequence
 
 from etils import epath
 import pandas as pd
@@ -69,7 +69,7 @@ def read_dataset_annotations_csvs(
     class_fn: Callable[[dict[str, str]], Sequence[str]],
     start_time_fn: Callable[[dict[str, str]], float],
     end_time_fn: Callable[[dict[str, str]], float],
-    filter_fn: Optional[Callable[[dict[str, str]], bool]] = None,
+    filter_fn: Callable[[dict[str, str]], bool] | None = None,
     delimiter: str = ',',
 ) -> Sequence[TimeWindowAnnotation]:
   """Create annotations from a random CSV.

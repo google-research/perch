@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Shared utilities for training scripts."""
-from typing import Optional
+
 
 from chirp.taxonomy import namespace
 from clu import checkpoint
@@ -38,4 +38,4 @@ class ModelBundle:
   optimizer: optax.GradientTransformation
   key: jnp.ndarray
   ckpt: checkpoint.Checkpoint
-  class_lists: Optional[dict[str, namespace.ClassList]] = None
+  class_lists: dict[str, namespace.ClassList] | None = None

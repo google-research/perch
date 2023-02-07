@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Separation model."""
-from typing import Callable, Optional
+from typing import Callable
 
 from chirp.models import layers
 import flax
@@ -30,12 +30,12 @@ class SeparatorOutput:
   """Separation model outputs."""
 
   separated_audio: jnp.ndarray
-  bottleneck: Optional[jnp.ndarray] = None
-  embedding: Optional[jnp.ndarray] = None
-  label: Optional[jnp.ndarray] = None
-  genus: Optional[jnp.ndarray] = None
-  family: Optional[jnp.ndarray] = None
-  order: Optional[jnp.ndarray] = None
+  bottleneck: jnp.ndarray | None = None
+  embedding: jnp.ndarray | None = None
+  label: jnp.ndarray | None = None
+  genus: jnp.ndarray | None = None
+  family: jnp.ndarray | None = None
+  order: jnp.ndarray | None = None
 
   def time_reduce_logits(self, reduction: str = 'AVG') -> 'SeparatorOutput':
     """Returns a new ModelOutput with scores reduced over the time axis.
@@ -140,7 +140,7 @@ class SeparationModel(nn.Module):
   num_mask_channels: int = 4
   mask_kernel_size: int = 3
   bank_is_real: bool = False
-  num_classes: Optional[dict[str, int]] = None
+  num_classes: dict[str, int] | None = None
   classify_bottleneck: bool = False
   classify_pool_width: int = 250
   classify_stride: int = 50

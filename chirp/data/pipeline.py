@@ -14,10 +14,10 @@
 # limitations under the License.
 
 """Data pipeline functions."""
-import dataclasses
-from typing import Any, Iterable, Optional, Sequence, Union
 
-# Import bird_taxonomy and soundscapes to register the datasets with TFDS.
+import dataclasses
+from typing import Any, Iterable, Sequence
+
 from absl import logging
 from chirp import audio_utils
 import chirp.data.bird_taxonomy  # pylint: disable=unused-import
@@ -30,6 +30,8 @@ from jax import numpy as jnp
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
+
+# Import bird_taxonomy and soundscapes to register the datasets with TFDS.
 _DEFAULT_DATASET_DIR = None
 _DEFAULT_TFDS_DATADIR = None
 
@@ -67,7 +69,7 @@ class Pipeline:
     deterministic: Whether the ordering of the samples should be deterministic.
   """
 
-  ops: Sequence[Union[FeaturesPreprocessOp, DatasetPreprocessOp]]
+  ops: Sequence[FeaturesPreprocessOp | DatasetPreprocessOp]
   num_parallel_calls: int = tf.data.AUTOTUNE
   deterministic: bool = False
 
@@ -483,7 +485,7 @@ class MelSpectrogram(FeaturesPreprocessOp):
   freq_range: tuple[int, int]
   name: str = 'audio'
   power: float = 2.0
-  scaling_config: Optional[frontend.ScalingConfig] = None
+  scaling_config: frontend.ScalingConfig | None = None
 
   def __call__(
       self, features: Features, dataset_info: tfds.core.DatasetInfo
@@ -582,7 +584,7 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
   output_masks: bool = True
 
   # The following members are for cached / stateful data.
-  db: Optional[namespace_db.NamespaceDatabase] = None
+  db: namespace_db.NamespaceDatabase | None = None
 
   def __post_init__(self):
     # Create NamespaceDatabase in post_init to avoid loading CSVs repeatedly.
@@ -819,7 +821,7 @@ class Shuffle(DatasetPreprocessOp):
   """Shuffles the dataset."""
 
   shuffle_buffer_size: int
-  seed: Optional[int] = None
+  seed: int | None = None
 
   def __call__(
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
@@ -958,7 +960,7 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
       rate. If None, we set the threshold to one audio sample.
   """
 
-  overlap_threshold_sec: Optional[float] = None
+  overlap_threshold_sec: float | None = None
 
   def __call__(
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
@@ -1003,10 +1005,10 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
 def get_dataset(
     split: str,
     is_train: bool = False,
-    dataset_directory: Union[str, Iterable[str]] = _DEFAULT_DATASET_DIR,
-    tfds_data_dir: Optional[str] = _DEFAULT_TFDS_DATADIR,
-    tf_data_service_address: Optional[Any] = None,
-    pipeline: Optional[Pipeline] = None,
+    dataset_directory: str | Iterable[str] = _DEFAULT_DATASET_DIR,
+    tfds_data_dir: str | None = _DEFAULT_TFDS_DATADIR,
+    tf_data_service_address: Any | None = None,
+    pipeline: Pipeline | None = None,
 ) -> tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
   """Returns the placeholder dataset.
 

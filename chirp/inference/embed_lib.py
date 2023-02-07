@@ -17,7 +17,7 @@
 
 import dataclasses
 import os
-from typing import Any, Optional, Sequence
+from typing import Any, Sequence
 import warnings
 
 from absl import logging
@@ -56,7 +56,7 @@ class SourceInfo:
   num_shards: int
 
 
-def get_feature_description(logit_names: Optional[Sequence[str]] = None):
+def get_feature_description(logit_names: Sequence[str] | None = None):
   """Create a feature description for the TFExamples.
 
   Each tensor feature includes both a serialized tensor and a 'shape' feature.
@@ -139,7 +139,7 @@ class EmbedFn(beam.DoFn):
   def setup(self):
     self.embedding_model = MODEL_CLASSES[self.model_key](**self.model_config)
 
-  def load_audio(self, filepath: str) -> Optional[np.ndarray]:
+  def load_audio(self, filepath: str) -> np.ndarray | None:
     with warnings.catch_warnings():
       warnings.simplefilter('ignore')
       try:

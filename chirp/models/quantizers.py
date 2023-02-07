@@ -15,7 +15,7 @@
 
 """Quantizers."""
 import enum
-from typing import Optional, Sequence
+from typing import Sequence
 import flax
 from flax import linen as nn
 import jax
@@ -125,7 +125,7 @@ class BaseQuantizer(nn.Module):
 
   num_centroids: int
   stop_gradient_codes: bool = True
-  cross_replica_axis: Optional[str] = None
+  cross_replica_axis: str | None = None
   ema_decay: float = 0.99
   init_scale: float = 0.1
 

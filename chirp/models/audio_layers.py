@@ -15,7 +15,7 @@
 
 """Flax layers for audio processing."""
 import functools
-from typing import Optional
+
 from chirp import audio_utils
 from flax import linen as nn
 from jax import lax
@@ -32,11 +32,11 @@ class RandomLowPassFilter(nn.Module):
   """
 
   rate: float
-  deterministic: Optional[bool] = None
+  deterministic: bool | None = None
 
   @nn.compact
   def __call__(
-      self, inputs: jnp.ndarray, deterministic: Optional[bool] = None
+      self, inputs: jnp.ndarray, deterministic: bool | None = None
   ) -> jnp.ndarray:
     """Applies a random low-pass filter to a mel-spectrogram.
 

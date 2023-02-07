@@ -24,7 +24,7 @@ import math
 import re
 import subprocess
 import sys
-from typing import FrozenSet, Optional, Sequence, Union, cast
+from typing import FrozenSet, Sequence, cast
 
 from absl import flags
 from absl import logging
@@ -287,7 +287,7 @@ class RecordingInfo:
   sound_type: str  # What kind of vocalization (call, song, etc.).
 
   @classmethod
-  def from_info_dict(cls, info_dict: dict[str, Union[str, Sequence[str]]]):
+  def from_info_dict(cls, info_dict: dict[str, str | Sequence[str]]):
     # Infer file format.
     file_name = cast(str, info_dict['file-name'])
     m = re.search('(mp3|wav|ogg|flac)$', file_name.lower()[-4:])
@@ -317,7 +317,7 @@ class RecordingInfo:
 def _infer_species_codes_from_wikidata(
     taxonomy_info: pd.DataFrame,
     overrides: dict[str, str],
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
 ) -> pd.Series:
   """Infers each species' code from data obtained through a Wikidata query.
 
@@ -690,7 +690,7 @@ def _scrape_xeno_canto_recording_metadata(
 
 def create_taxonomy_info(
     species_mapping_config: SpeciesMappingConfig,
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
 ) -> pd.DataFrame:
   """Creates a taxonomy DataFrame for Xeno-Canto species.
 

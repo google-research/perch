@@ -16,7 +16,7 @@
 """Training loop."""
 import functools
 import time
-from typing import Optional
+
 
 from absl import logging
 from chirp import export_utils
@@ -75,7 +75,7 @@ def taxonomy_cross_entropy(
 
 def keyed_cross_entropy(
     key: str, outputs: output.AnyOutput, **kwargs
-) -> Optional[jnp.ndarray]:
+) -> jnp.ndarray | None:
   """Cross entropy for the specified taxonomic label set."""
   cross_entropy = optax.sigmoid_binary_cross_entropy(
       getattr(outputs, key), kwargs[key]
@@ -88,7 +88,7 @@ def keyed_cross_entropy(
 
 def keyed_map(
     key: str, outputs: output.AnyOutput, **kwargs
-) -> Optional[jnp.ndarray]:
+) -> jnp.ndarray | None:
   label_mask = kwargs.get(key + "_mask", None)
   return metrics.average_precision(
       scores=getattr(outputs, key), labels=kwargs[key], label_mask=label_mask
@@ -305,7 +305,7 @@ def evaluate(
     valid_dataset: tf.data.Dataset,
     writer: metric_writers.MetricWriter,
     reporter: periodic_actions.ReportProgress,
-    eval_steps_per_checkpoint: Optional[int] = None,
+    eval_steps_per_checkpoint: int | None = None,
 ):
   """Run evaluation."""
   valid_metrics = make_metrics_collection(
@@ -369,9 +369,9 @@ def evaluate_loop(
     workdir: str,
     logdir: str,
     num_train_steps: int,
-    eval_steps_per_checkpoint: Optional[int] = None,
+    eval_steps_per_checkpoint: int | None = None,
     tflite_export: bool = False,
-    input_shape: Optional[tuple[int, ...]] = None,
+    input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
 ):
   """Run evaluation in a loop."""

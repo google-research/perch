@@ -18,7 +18,7 @@
 Building blocks and layers to construct networks, implemented as Flax modules.
 
 """
-from typing import Callable, Optional
+from typing import Callable
 
 from flax import linen as nn
 import jax
@@ -103,7 +103,7 @@ class MBConv(nn.Module):
   kernel_size: tuple[int, int] = (3, 3)
   activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu6
   batch_norm: bool = False
-  reduction_ratio: Optional[int] = None
+  reduction_ratio: int | None = None
 
   @nn.compact
   def __call__(
@@ -300,8 +300,8 @@ class LightConv1D(nn.Module):
     dropout_prob:    Dropout probability.
   """
 
-  input_dims: Optional[int] = None
-  kernel_size: Optional[int] = None
+  input_dims: int | None = None
+  kernel_size: int | None = None
   conv_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.swish
   dropout_prob: float = 0.0
   downsample: bool = True
@@ -311,7 +311,7 @@ class LightConv1D(nn.Module):
       self,
       inputs: jnp.ndarray,
       train: bool,
-      use_running_average: Optional[bool] = None,
+      use_running_average: bool | None = None,
   ) -> jnp.ndarray:
     """Lightweight conv layer.
 
@@ -407,7 +407,7 @@ class SelfAttentionWithNormAndResidual(nn.Module):
       self,
       inputs: jnp.ndarray,
       train: bool,
-      atten_mask: Optional[JTensor] = None,
+      atten_mask: JTensor | None = None,
   ) -> jnp.ndarray:
     unnormalized_inputs = inputs
 
@@ -482,12 +482,12 @@ class Conformer(nn.Module):
   ffn_dim_multiplier: int = 4
   atten_num_heads: int = 8
   layer_order: str = "mhsa_before_conv"
-  dropout_prob: Optional[float] = None
-  conv_residual_dropout: Optional[float] = None
-  atten_residual_dropout: Optional[float] = None
-  ffn_residual_dropout: Optional[float] = None
-  atten_dropout: Optional[float] = None
-  ffn_relu_dropout: Optional[float] = None
+  dropout_prob: float | None = None
+  conv_residual_dropout: float | None = None
+  atten_residual_dropout: float | None = None
+  ffn_residual_dropout: float | None = None
+  atten_dropout: float | None = None
+  ffn_relu_dropout: float | None = None
   fflayer_weight_sharing: bool = False
   downsample: bool = False
   skip_layer_norm: bool = True
@@ -497,8 +497,8 @@ class Conformer(nn.Module):
       self,
       inputs: jnp.ndarray,
       train: bool,
-      use_running_average: Optional[bool] = None,
-      atten_mask: Optional[jnp.ndarray] = None,
+      use_running_average: bool | None = None,
+      atten_mask: jnp.ndarray | None = None,
   ) -> jnp.ndarray:
     """Conformer layer.
 

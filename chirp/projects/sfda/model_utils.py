@@ -16,7 +16,7 @@
 """Utilities to prepare models for SFDA methods."""
 
 import enum
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable
 
 from absl import logging
 import chex
@@ -62,7 +62,7 @@ class LearningRateDecay(enum.Enum):
 def mask_parameters(
     params: flax.core.scope.VariableDict,
     strategy: TrainableParams,
-    model: Union[image_model.ImageModel, taxonomy_model.TaxonomyModel],
+    model: image_model.ImageModel | taxonomy_model.TaxonomyModel,
 ):
   """Creates the mask of parameters to which zero_grad() will be applied.
 
@@ -107,7 +107,7 @@ class ModelBundle:
   """
 
   model: nn.Module
-  optimizer: Optional[optax.GradientTransformation]
+  optimizer: optax.GradientTransformation | None
 
 
 def identity_rename(params, *unused_args):
@@ -310,7 +310,7 @@ def map_nested_fn(fn):
 
 def prepare_audio_model(
     model_config: config_dict.ConfigDict,
-    optimizer_config: Optional[config_dict.ConfigDict],
+    optimizer_config: config_dict.ConfigDict | None,
     pretrained: bool,
     total_steps: int,
     rng_seed: int,
@@ -320,7 +320,7 @@ def prepare_audio_model(
     ModelBundle,
     scope.VariableDict,
     scope.FrozenVariableDict,
-    Optional[scope.FrozenVariableDict],
+    scope.FrozenVariableDict | None,
     Callable[[Any, Any, str], Any],
     Callable[[Any], Any],
 ]:
@@ -439,7 +439,7 @@ def prepare_audio_model(
 
 def prepare_image_model(
     model_config: config_dict.ConfigDict,
-    optimizer_config: Optional[config_dict.ConfigDict],
+    optimizer_config: config_dict.ConfigDict | None,
     total_steps: int,
     rng_seed: int,
     pretrained: bool,
@@ -449,7 +449,7 @@ def prepare_image_model(
     ModelBundle,
     scope.VariableDict,
     scope.FrozenVariableDict,
-    Optional[scope.FrozenVariableDict],
+    scope.FrozenVariableDict | None,
     Callable[[Any, Any, str], Any],
     Callable[[Any], Any],
 ]:

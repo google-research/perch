@@ -17,7 +17,7 @@
 
 import dataclasses
 import tempfile
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Sequence
 import warnings
 
 from absl import logging
@@ -86,10 +86,10 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
 
   audio_glob: str = ''
   class_list_name: str = ''
-  metadata_load_fn: Optional[soundscapes_lib.MetadataLoaderType] = None
-  metadata_fields: Optional[dict[str, soundscapes_lib.MetadataFeature]] = None
-  annotation_filename: Optional[str] = None
-  annotation_load_fn: Optional[Callable[[epath.Path], pd.DataFrame]] = None
+  metadata_load_fn: soundscapes_lib.MetadataLoaderType | None = None
+  metadata_fields: dict[str, soundscapes_lib.MetadataFeature] | None = None
+  annotation_filename: str | None = None
+  annotation_load_fn: Callable[[epath.Path], pd.DataFrame] | None = None
   keep_unknown_annotation: bool = False
   full_length_unknown_guard: bool = False
   supervised: bool = True

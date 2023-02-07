@@ -17,7 +17,7 @@
 
 import csv
 import dataclasses
-from typing import Dict, Iterable, Optional, Sequence, Set
+from typing import Dict, Iterable, Sequence, Set
 
 from jax import numpy as jnp
 import tensorflow as tf
@@ -240,7 +240,7 @@ class ClassList:
     return table, target_class_list
 
   def apply_namespace_mapping(
-      self, mapping: Mapping, mapped_name: Optional[str] = None
+      self, mapping: Mapping, mapped_name: str | None = None
   ) -> 'ClassList':
     """Produces a new ClassList by applying a Mapping.
 
@@ -264,7 +264,7 @@ class ClassList:
     return ClassList(mapped_name, mapping.target_namespace, mapped_classes)
 
   def get_class_map_matrix(
-      self, target_class_list: 'ClassList', mapping: Optional[Mapping] = None
+      self, target_class_list: 'ClassList', mapping: Mapping | None = None
   ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Construct a binary matrix for mapping to another ClassList.
 

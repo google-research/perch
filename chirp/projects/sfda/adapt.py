@@ -19,7 +19,7 @@ import abc
 import enum
 import functools
 import time
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from absl import logging
 from chirp.models import cmap
@@ -49,7 +49,7 @@ ForwardStepType = Callable[
         dict[str, jnp.ndarray],
         flax.core.scope.FrozenVariableDict,
         flax.core.scope.VariableDict,
-        Optional[jax.random.PRNGKeyArray],
+        jax.random.PRNGKeyArray | None,
     ],
     output.ClassifierOutput,
 ]

@@ -15,7 +15,6 @@
 
 """Metrics for training and validation."""
 
-from typing import Optional
 
 from jax import lax
 from jax import numpy as jnp
@@ -31,7 +30,7 @@ def mean_cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
 def map_(
     logits: jnp.ndarray,
     labels: jnp.ndarray,
-    label_mask: Optional[jnp.ndarray] = None,
+    label_mask: jnp.ndarray | None = None,
     sort_descending: bool = True,
 ) -> jnp.ndarray:
   return average_precision(
@@ -136,7 +135,7 @@ def source_sparsity_l1l2ratio_loss(
 def average_precision(
     scores: jnp.ndarray,
     labels: jnp.ndarray,
-    label_mask: Optional[jnp.ndarray] = None,
+    label_mask: jnp.ndarray | None = None,
     sort_descending: bool = True,
     interpolated: bool = False,
 ) -> jnp.ndarray:

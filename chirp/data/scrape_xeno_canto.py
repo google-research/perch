@@ -16,7 +16,7 @@
 """Scrapes the Xeno-Canto website for taxonomy and audio data."""
 
 import functools
-from typing import Sequence, Union
+from typing import Sequence
 
 from absl import app
 from absl import flags

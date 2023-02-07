@@ -16,7 +16,7 @@
 """Interface for models producing embeddings."""
 
 import dataclasses
-from typing import Dict, Optional
+from typing import Dict
 
 from chirp.taxonomy import namespace
 import librosa
@@ -38,9 +38,9 @@ class InferenceOutputs:
     separated_audio: Separated audio channels with shape [Channels, Samples].
   """
 
-  embeddings: Optional[np.ndarray] = None
-  logits: Optional[LogitType] = None
-  separated_audio: Optional[np.ndarray] = None
+  embeddings: np.ndarray | None = None
+  logits: LogitType | None = None
+  separated_audio: np.ndarray | None = None
 
 
 @dataclasses.dataclass
@@ -98,7 +98,7 @@ class EmbeddingModel:
       self,
       logits: np.ndarray,
       source_class_list: namespace.ClassList,
-      target_class_list: Optional[namespace.ClassList],
+      target_class_list: namespace.ClassList | None,
   ) -> np.ndarray:
     """Convert model logits to logits for a different class list."""
     if target_class_list is None:
@@ -116,7 +116,7 @@ class EmbeddingModel:
   def frame_audio(
       self,
       audio_array: np.ndarray,
-      window_size_s: Optional[float],
+      window_size_s: float | None,
       hop_size_s: float,
   ) -> np.ndarray:
     """Helper function for framing audio for inference."""

@@ -16,7 +16,7 @@
 """Utilities to filter/scrub data."""
 import enum
 import functools
-from typing import Any, Dict, NamedTuple, Optional, Sequence, Union
+from typing import Any, Dict, NamedTuple, Sequence, Union
 
 from chirp.data import sampling_utils as su
 from chirp.taxonomy import namespace_db
@@ -58,9 +58,7 @@ class TransformOp(enum.Enum):
   APPEND = 'append'
 
 
-SerializableType = Union[
-    list[Union[int, str, bytes]], MaskOp, TransformOp, Dict
-]
+SerializableType = list[int | str | bytes] | MaskOp | TransformOp | Dict
 
 
 class Query(NamedTuple):
@@ -75,7 +73,7 @@ class Query(NamedTuple):
   partition data for training and evaluation.
   """
 
-  op: Union[MaskOp, TransformOp]
+  op: MaskOp | TransformOp
   kwargs: dict[str, SerializableType]
 
 
@@ -89,7 +87,7 @@ class QuerySequence(NamedTuple):
   """
 
   queries: Sequence[Union[Query, 'QuerySequence', 'QueryParallel']]
-  mask_query: Optional[Union[Query, 'QueryParallel']] = None
+  mask_query: Union[Query, 'QueryParallel'] | None = None
 
 
 class QueryParallel(NamedTuple):
@@ -111,7 +109,7 @@ class QueryComplement(NamedTuple):
   at that field must remain **unchanged** throughout the application of query.
   """
 
-  query: Union[Query, 'QuerySequence']
+  query: Query | QuerySequence
   unique_key: str
 
 
@@ -163,7 +161,7 @@ def apply_complement(
 def apply_query(
     df: pd.DataFrame,
     query: Query,
-) -> Union[pd.DataFrame, pd.Series]:
+) -> pd.DataFrame | pd.Series:
   """Applies a query on a DataFrame.
 
   Args:
@@ -179,7 +177,7 @@ def apply_query(
 def apply_sequence(
     df: pd.DataFrame,
     query_sequence: QuerySequence,
-) -> Union[pd.DataFrame, pd.Series]:
+) -> pd.DataFrame | pd.Series:
   """Applies a QuerySequence to a DataFrame.
 
   Args:
@@ -210,7 +208,7 @@ def apply_sequence(
 def apply_parallel(
     df: pd.DataFrame,
     query_parallel: QueryParallel,
-) -> Union[pd.DataFrame, pd.Series]:
+) -> pd.DataFrame | pd.Series:
   """Applies a QueryParallel to a DataFrame.
 
   Args:
@@ -325,7 +323,7 @@ def scrub(
     key: str,
     values: Sequence[SerializableType],
     all_but: bool = False,
-    replace_value: Optional[SerializableType] = None,
+    replace_value: SerializableType | None = None,
 ) -> dict[str, Any]:
   """Removes any occurence of any value in values from feature_dict[key].
 

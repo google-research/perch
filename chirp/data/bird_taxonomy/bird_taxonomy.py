@@ -18,7 +18,7 @@
 import dataclasses
 import functools
 import tempfile
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Sequence
 import warnings
 
 from chirp import audio_utils
@@ -66,8 +66,8 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
 
   sample_rate_hz: int = 32_000
   resampling_method: str = 'polyphase'
-  localization_fn: Optional[LocalizationFn] = None
-  interval_length_s: Optional[float] = None
+  localization_fn: LocalizationFn | None = None
+  interval_length_s: float | None = None
   data_processing_query: fsu.QuerySequence = fsu.QuerySequence(queries=[])
   metadata_processing_query: fsu.QuerySequence = fsu.QuerySequence(queries=[])
   class_list_name: str = 'xenocanto'

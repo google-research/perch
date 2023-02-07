@@ -18,7 +18,7 @@ import enum
 import functools
 import os
 import time
-from typing import Callable, Optional
+from typing import Callable
 from absl import logging
 from chirp.data import pipeline
 from chirp.models import cmap
@@ -171,7 +171,7 @@ def supervised_loss(
 
 def keyed_cross_entropy(
     key: str, outputs: hubert.HubertOutput, readout_index: int = 0, **kwargs
-) -> Optional[jnp.ndarray]:
+) -> jnp.ndarray | None:
   """Cross entropy for the specified taxonomic label set."""
   outputs = getattr(outputs, key)
   outputs = outputs[readout_index]
@@ -183,7 +183,7 @@ def keyed_cross_entropy(
 
 def keyed_map(
     key: str, outputs: hubert.HubertOutput, readout_index: int = 0, **kwargs
-) -> Optional[jnp.ndarray]:
+) -> jnp.ndarray | None:
   outputs = getattr(outputs, key)
   outputs = outputs[readout_index]
   return metrics.average_precision(scores=outputs, labels=kwargs[key])
@@ -196,7 +196,7 @@ def final_loss(
     readout_loss_mult: float,
     hubert_loss_mult: float,
     **kwargs_for_supervised,
-) -> Optional[jnp.ndarray]:
+) -> jnp.ndarray | None:
   """Get the final loss to use for training."""
   # [bsz, sz].
   quant_loss = quantizer_loss(outputs, quant_loss_mult)
@@ -223,7 +223,7 @@ def final_loss(
 
 def cluster_targets_metrics(
     outputs: hubert.HubertOutput, key: str, **unused_kwargs
-) -> Optional[jnp.ndarray]:
+) -> jnp.ndarray | None:
   """Get the final loss to use for training."""
   del unused_kwargs
   assert key.startswith((
@@ -413,7 +413,7 @@ def initialize_model(
     reload_hubert_from: str,
     reload_hubert_omit_quantizers: bool,
     target_class_list: str,
-    early_fs_class: Optional[Callable] = layers.EarlyFeatureExtractor,
+    early_fs_class: Callable | None = layers.EarlyFeatureExtractor,
     **unused_kwargs,
 ):
   """Creates model for training, eval, or inference."""
@@ -904,7 +904,7 @@ def evaluate(
     valid_dataset: tf.data.Dataset,
     writer: metric_writers.MetricWriter,
     reporter: periodic_actions.ReportProgress,
-    eval_steps_per_checkpoint: Optional[int] = None,
+    eval_steps_per_checkpoint: int | None = None,
 ):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
@@ -982,9 +982,9 @@ def evaluate_loop(
     workdir: str,
     logdir: str,
     num_train_steps: int,
-    eval_steps_per_checkpoint: Optional[int] = None,
+    eval_steps_per_checkpoint: int | None = None,
     tflite_export: bool = False,
-    input_size: Optional[int] = None,
+    input_size: int | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
 ):
   """Run evaluation in a loop."""

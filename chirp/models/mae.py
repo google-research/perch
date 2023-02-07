@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Masked autoencoder for spectrograms."""
-from typing import Optional
+
 
 import flax.linen as nn
 from jax import numpy as jnp
@@ -177,7 +177,7 @@ class Embedder(nn.Module):
       x: jnp.ndarray,
       *,
       train: bool,
-      use_running_average: Optional[bool] = None
+      use_running_average: bool | None = None
   ):
     encoded_patches, _, _ = self.encoder(x, train=train)
     embedding = jnp.mean(encoded_patches, axis=-2)
