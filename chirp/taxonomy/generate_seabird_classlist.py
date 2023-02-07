@@ -43,8 +43,9 @@ def main(argv: Sequence[str]) -> None:
       for db_key in EBIRD_MAPPINGS
   }
   seabird_class_lists_by_namespace = {
-      db.class_lists[class_list].namespace:
-      set(db.class_lists[class_list].classes)
+      db.class_lists[class_list].namespace: set(
+          db.class_lists[class_list].classes
+      )
       for class_list in SEABIRD_CLASS_LISTS
   }
 
@@ -52,8 +53,10 @@ def main(argv: Sequence[str]) -> None:
   for ns, mapping in mappings.items():
     seabird_classes = seabird_class_lists_by_namespace[ns]
     ebirds.extend(
-        ebird for (ebird, classname) in mapping.mapped_pairs
-        if classname in seabird_classes)
+        ebird
+        for (ebird, classname) in mapping.mapped_pairs
+        if classname in seabird_classes
+    )
 
   seabirds = namespace.ClassList('_', 'ebird2021', ebirds)
   with open(path_utils.get_absolute_epath(OUTPUT), 'w') as f:

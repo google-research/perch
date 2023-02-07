@@ -40,12 +40,15 @@ def get_config() -> config_dict.ConfigDict:
       ops=[
           _c("pipeline.Shuffle", shuffle_buffer_size=512),
           _c("pipeline.OnlyKeep", names=["audio", "label"]),
-          _c("pipeline.ConvertBirdTaxonomyLabels",
-             source_namespace="ebird2021",
-             target_class_list=target_class_list,
-             add_taxonomic_labels=add_taxonomic_labels),
-          _c("pipeline.Batch", batch_size=batch_size,
-             split_across_devices=True),
+          _c(
+              "pipeline.ConvertBirdTaxonomyLabels",
+              source_namespace="ebird2021",
+              target_class_list=target_class_list,
+              add_taxonomic_labels=add_taxonomic_labels,
+          ),
+          _c(
+              "pipeline.Batch", batch_size=batch_size, split_across_devices=True
+          ),
           _c("pipeline.RandomSlice", window_size=window_size_s),
           _c(
               "pipeline.MelSpectrogram",
@@ -54,10 +57,12 @@ def get_config() -> config_dict.ConfigDict:
               kernel_size=2_048,  # ~0.08 * 32,000
               sample_rate=sample_rate_hz,
               freq_range=(60, 10_000),
-              scaling_config=_c("frontend.PCENScalingConfig", conv_width=256)),
+              scaling_config=_c("frontend.PCENScalingConfig", conv_width=256),
+          ),
           _c("pipeline.AddChannel"),
-          _c("pipeline.Repeat")
-      ])
+          _c("pipeline.Repeat"),
+      ],
+  )
   train_dataset_config.split = "train"
   config.train_dataset_config = train_dataset_config
 
@@ -66,12 +71,15 @@ def get_config() -> config_dict.ConfigDict:
       "pipeline.Pipeline",
       ops=[
           _c("pipeline.OnlyKeep", names=["audio", "label"]),
-          _c("pipeline.ConvertBirdTaxonomyLabels",
-             source_namespace="ebird2021",
-             target_class_list=target_class_list,
-             add_taxonomic_labels=add_taxonomic_labels),
-          _c("pipeline.Batch", batch_size=batch_size,
-             split_across_devices=True),
+          _c(
+              "pipeline.ConvertBirdTaxonomyLabels",
+              source_namespace="ebird2021",
+              target_class_list=target_class_list,
+              add_taxonomic_labels=add_taxonomic_labels,
+          ),
+          _c(
+              "pipeline.Batch", batch_size=batch_size, split_across_devices=True
+          ),
           _c("pipeline.Slice", window_size=window_size_s, start=0.0),
           _c(
               "pipeline.MelSpectrogram",
@@ -80,9 +88,11 @@ def get_config() -> config_dict.ConfigDict:
               kernel_size=2_048,  # ~0.08 * 32,000
               sample_rate=sample_rate_hz,
               freq_range=(60, 10_000),
-              scaling_config=_c("frontend.PCENScalingConfig", conv_width=256)),
+              scaling_config=_c("frontend.PCENScalingConfig", conv_width=256),
+          ),
           _c("pipeline.AddChannel"),
-      ])
+      ],
+  )
   eval_dataset_config.split = "train"
   config.eval_dataset_config = eval_dataset_config
 

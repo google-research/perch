@@ -29,6 +29,7 @@ class ClassAverage(metrics.Metric):
   along with a mapping from batches to (potentially multiple) classes in the
   form a multi-hot encoding.
   """
+
   total: jnp.array
   count: jnp.array
 
@@ -37,8 +38,9 @@ class ClassAverage(metrics.Metric):
     return cls(total=jnp.zeros((1,), float), count=jnp.zeros((1,), int))
 
   @classmethod
-  def from_model_output(cls, values: tuple[jnp.array, jnp.array],
-                        **_) -> metrics.Metric:
+  def from_model_output(
+      cls, values: tuple[jnp.array, jnp.array], **_
+  ) -> metrics.Metric:
     return cls(total=values[0] @ values[1], count=jnp.sum(values[1], axis=0))
 
   def merge(self, other: "ClassAverage") -> "ClassAverage":
@@ -49,5 +51,5 @@ class ClassAverage(metrics.Metric):
 
   def compute(self) -> Any:
     # Avoid introducing NaNs due to classes without positive labels
-    class_means = jnp.where(self.count > 0, self.total / self.count, 0.)
+    class_means = jnp.where(self.count > 0, self.total / self.count, 0.0)
     return jnp.sum(class_means) / jnp.sum(self.count > 0)

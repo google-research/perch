@@ -41,6 +41,7 @@ class TaxonomyOutput(ClassifierOutput):
 @runtime_checkable
 class AnyOutput(Protocol):
   """Any output must be a dataclass."""
+
   __dataclass_fields__: dict[str, dataclasses.Field]  # pylint: disable=g-bare-generic
 
 

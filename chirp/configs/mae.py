@@ -38,8 +38,9 @@ def get_config() -> config_dict.ConfigDict:
       ops=[
           _c("pipeline.Shuffle", shuffle_buffer_size=512),
           _c("pipeline.OnlyKeep", names=["audio"]),
-          _c("pipeline.Batch", batch_size=batch_size,
-             split_across_devices=True),
+          _c(
+              "pipeline.Batch", batch_size=batch_size, split_across_devices=True
+          ),
           _c("pipeline.RandomSlice", window_size=window_size_s),
           _c(
               "pipeline.MelSpectrogram",
@@ -48,10 +49,12 @@ def get_config() -> config_dict.ConfigDict:
               kernel_size=2_048,  # ~0.08 * 32,000
               sample_rate=sample_rate_hz,
               freq_range=(60, 10_000),
-              scaling_config=_c("frontend.PCENScalingConfig", conv_width=256)),
+              scaling_config=_c("frontend.PCENScalingConfig", conv_width=256),
+          ),
           _c("pipeline.AddChannel"),
-          _c("pipeline.Repeat")
-      ])
+          _c("pipeline.Repeat"),
+      ],
+  )
   train_dataset_config.split = "train"
   config.train_dataset_config = train_dataset_config
 

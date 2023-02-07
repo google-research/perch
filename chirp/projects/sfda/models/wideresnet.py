@@ -26,6 +26,7 @@ following modifications to the orignal model:
     Student and NOTELA.
   - Added a 'load_ckpt' method, following image_model.ImageModel template.
   - Added a 'get_ckpt_path' method, following image_model.ImageModel template.
+
 """
 import functools
 import re
@@ -46,12 +47,14 @@ class WideResnetBlock(nn.Module):
     channels: How many channels to use in the convolutional layers.
     strides: Strides for the pooling.
   """
+
   channels: int
   strides: tuple[int, int] = (1, 1)
 
   @nn.compact
-  def __call__(self, x: jnp.ndarray, train: bool,
-               use_running_average: bool) -> jnp.ndarray:
+  def __call__(
+      self, x: jnp.ndarray, train: bool, use_running_average: bool
+  ) -> jnp.ndarray:
     bn1 = nn.BatchNorm(use_running_average=use_running_average, name='norm_1')
     bn2 = nn.BatchNorm(use_running_average=use_running_average, name='norm_2')
     conv1 = nn.Conv(
@@ -60,14 +63,16 @@ class WideResnetBlock(nn.Module):
         strides=self.strides,
         padding=1,
         use_bias=False,
-        name='conv1')
+        name='conv1',
+    )
     conv2 = nn.Conv(
         self.channels,
         kernel_size=(3, 3),
         strides=(1, 1),
         padding=1,
         use_bias=False,
-        name='conv2')
+        name='conv2',
+    )
 
     if x.shape[-1] == self.channels:
       out = jax.nn.relu(bn1(x))
@@ -79,12 +84,13 @@ class WideResnetBlock(nn.Module):
       out = jax.nn.relu(bn2(conv1(x)))
       out = conv2(out)
       out += nn.Conv(
-          self.channels, (1, 1),
+          self.channels,
+          (1, 1),
           self.strides,
           padding='VALID',
           use_bias=False,
-          name='conv_shortcut')(
-              x)
+          name='conv_shortcut',
+      )(x)
 
     return out
 
@@ -98,16 +104,19 @@ class WideResnetGroup(nn.Module):
     channels: How many channels to use in the convolutional layers.
     strides: Strides for the pooling.
   """
+
   blocks_per_group: int
   channels: int
   strides: tuple[int, int] = (1, 1)
 
   @nn.compact
-  def __call__(self, x: jnp.ndarray, train: bool,
-               use_running_average: bool) -> jnp.ndarray:
+  def __call__(
+      self, x: jnp.ndarray, train: bool, use_running_average: bool
+  ) -> jnp.ndarray:
     for i in range(self.blocks_per_group):
-      x = WideResnetBlock(self.channels, self.strides if i == 0 else
-                          (1, 1))(x, train, use_running_average)
+      x = WideResnetBlock(self.channels, self.strides if i == 0 else (1, 1))(
+          x, train, use_running_average
+      )
     return x
 
 
@@ -122,16 +131,19 @@ class WideResnet(image_model.ImageModel):
     num_classes: Dimension of the output of the model (ie number of classes for
       a classification problem).
   """
+
   blocks_per_group: int
   channel_multiplier: int
   num_classes: int
 
   @nn.compact
-  def __call__(self, x: jnp.ndarray, train: bool,
-               use_running_average: bool) -> jnp.ndarray:
+  def __call__(
+      self, x: jnp.ndarray, train: bool, use_running_average: bool
+  ) -> jnp.ndarray:
     x = nn.Conv(16, (3, 3), padding=1, name='init_conv', use_bias=False)(x)
     x = WideResnetGroup(self.blocks_per_group, 16 * self.channel_multiplier)(
-        x, train=train, use_running_average=use_running_average)
+        x, train=train, use_running_average=use_running_average
+    )
     x = WideResnetGroup(
         self.blocks_per_group,
         32 * self.channel_multiplier,
@@ -144,7 +156,9 @@ class WideResnet(image_model.ImageModel):
     )(x, train=train, use_running_average=use_running_average)
     x = jax.nn.relu(
         nn.BatchNorm(
-            use_running_average=use_running_average, name='pre-pool-norm')(x))
+            use_running_average=use_running_average, name='pre-pool-norm'
+        )(x)
+    )
     # The following Dropout was added to inject noise during foward pass.
     x = nn.Dropout(0.1, deterministic=not train)(x)
     x = nn.avg_pool(x, x.shape[1:3])
@@ -180,8 +194,9 @@ class WideResnet(image_model.ImageModel):
       # Finally, replace the '' below by the `output_path` above.
       return epath.Path('')
     else:
-      raise NotImplementedError('No pretrained checkpoint available for '
-                                f'dataset {dataset_name}.')
+      raise NotImplementedError(
+          f'No pretrained checkpoint available for dataset {dataset_name}.'
+      )
 
   @staticmethod
   def is_bn_parameter(parameter_name: list[str]) -> bool:
@@ -201,7 +216,8 @@ class WideResnet(image_model.ImageModel):
 
 
 def _to_variables(
-    state_dict: dict[str, np.ndarray]) -> flax.core.scope.FrozenVariableDict:
+    state_dict: dict[str, np.ndarray]
+) -> flax.core.scope.FrozenVariableDict:
   """Translates a PyTorch-style state dictionnary into a flax FrozenVariableDict.
 
   Args:
@@ -220,10 +236,12 @@ def _to_variables(
       # Groups
       functools.partial(
           re.compile(r'block(\d)').sub,
-          repl=lambda m: f'WideResnetGroup_{int(m.group(1)) - 1}'),
+          repl=lambda m: f'WideResnetGroup_{int(m.group(1)) - 1}',
+      ),
       # Blocks
       functools.partial(
-          re.compile(r'layer\.(\d)').sub, repl=r'WideResnetBlock_\1'),
+          re.compile(r'layer\.(\d)').sub, repl=r'WideResnetBlock_\1'
+      ),
       # Initial convolution
       functools.partial(re.compile(r'^conv1').sub, repl=r'init_conv'),
       # Pre-pooling normalization
@@ -237,9 +255,11 @@ def _to_variables(
       # Normalization scaling coefficients. All other renamings of 'weight' map
       # to 'kernel', so we perform this renaming first.
       functools.partial(
-          re.compile(r'norm_(\d)\.weight').sub, repl=r'norm_\1.scale'),
+          re.compile(r'norm_(\d)\.weight').sub, repl=r'norm_\1.scale'
+      ),
       functools.partial(
-          re.compile(r'pre-pool-norm.weight').sub, repl=r'pre-pool-norm.scale'),
+          re.compile(r'pre-pool-norm.weight').sub, repl=r'pre-pool-norm.scale'
+      ),
       # Convolutional kernels
       functools.partial(re.compile(r'weight').sub, repl=r'kernel'),
       # Batch statistics
@@ -271,7 +291,8 @@ def _to_variables(
     # strings, which we take advantage of by splitting the keys by the '.'
     # character.
     flat_dict = (
-        flat_batch_stats if 'mean' in key or 'var' in key else flat_params)
+        flat_batch_stats if 'mean' in key or 'var' in key else flat_params
+    )
     flat_dict[tuple(key.split('.'))] = value
 
   return flax.core.freeze({
@@ -281,4 +302,5 @@ def _to_variables(
 
 
 WideResNet2810 = functools.partial(
-    WideResnet, blocks_per_group=4, channel_multiplier=10)
+    WideResnet, blocks_per_group=4, channel_multiplier=10
+)

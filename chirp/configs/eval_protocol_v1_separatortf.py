@@ -33,7 +33,8 @@ def get_config() -> config_dict.ConfigDict:
   model_checkpoint_path = config_dict.FieldReference(SEP_PATH)
   config.model_checkpoint_path = model_checkpoint_path
   config.model_callback = _c(
-      'eval_lib.SeparatorTFCallback', model_path=model_checkpoint_path)
+      'eval_lib.SeparatorTFCallback', model_path=model_checkpoint_path
+  )
 
 
   # TODO(bringingjoy): extend create_species_query to support returning multiple

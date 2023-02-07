@@ -34,9 +34,11 @@ def get_config() -> config_dict.ConfigDict:
   config.train_dataset_config = presets.get_supervised_train_pipeline(
       config,
       mixin_prob=0.75,
-      train_dataset_dir='bird_taxonomy/full_length:1.4.0')
+      train_dataset_dir='bird_taxonomy/full_length:1.4.0',
+  )
   config.eval_dataset_config = presets.get_supervised_eval_pipeline(
-      config, 'soundscapes/caples:1.1.0')
+      config, 'soundscapes/caples:1.1.0'
+  )
 
   # Configure the experiment setup
   config.init_config = presets.get_base_init_config(config)
@@ -45,21 +47,32 @@ def get_config() -> config_dict.ConfigDict:
   dim = 512
   model_config.frontend = _c(
       'layers.EarlyFeatureExtractor',
-      conv_layer_tuples=((dim, 20, 10), (dim, 3, 2), (dim, 3, 2), (dim, 3, 2),
-                         (dim, 3, 2), (dim, 2, 2), (160, 2, 2)))
+      conv_layer_tuples=(
+          (dim, 20, 10),
+          (dim, 3, 2),
+          (dim, 3, 2),
+          (dim, 3, 2),
+          (dim, 3, 2),
+          (dim, 2, 2),
+          (160, 2, 2),
+      ),
+  )
   # Aim to have output targets of 256, starting at 144
-  s = (256 / 144)**(1 / 5)
+  s = (256 / 144) ** (1 / 5)
   model_config.encoder = _c(
       'taxonomy_model.ConformerModel',
       downsample=[(2, s), (5, s), (8, s), (11, s), (14, s)],
-      kernel_size=15)
+      kernel_size=15,
+  )
   model_config.taxonomy_loss_weight = 0.0
   config.init_config.model_config = model_config
 
   # Configure the training loop
   config.train_config = presets.get_base_train_config(config)
-  input_shape = (config.get_ref('eval_window_size_s') *
-                 config.get_ref('sample_rate_hz'),)
+  input_shape = (
+      config.get_ref('eval_window_size_s') * config.get_ref('sample_rate_hz'),
+  )
   config.eval_config = presets.get_base_eval_config(
-      config, input_shape=input_shape)
+      config, input_shape=input_shape
+  )
   return config

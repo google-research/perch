@@ -42,21 +42,27 @@ class Batch(pipeline.DatasetPreprocessOp):
       minibatches to be distributed across the local devices present. This is
       useful for distributed training.
   """
+
   batch_size: int
   split_across_devices: bool = False
 
-  def __call__(self, dataset: tf.data.Dataset,
-               dataset_info: tfds.core.DatasetInfo) -> tf.data.Dataset:
+  def __call__(
+      self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
+  ) -> tf.data.Dataset:
     if self.split_across_devices:
       if self.batch_size % jax.device_count():
-        raise ValueError(f'batch size ({self.batch_size}) must be divisible by '
-                         f'number of devices ({jax.device_count()}).')
+        raise ValueError(
+            f'batch size ({self.batch_size}) must be divisible by '
+            f'number of devices ({jax.device_count()}).'
+        )
       logging.info(
-          'Splitting batch across %d devices, with '
-          'local device count %d.', jax.device_count(),
-          jax.local_device_count())
+          'Splitting batch across %d devices, with local device count %d.',
+          jax.device_count(),
+          jax.local_device_count(),
+      )
       dataset = dataset.batch(
-          self.batch_size // jax.device_count(), drop_remainder=False)
+          self.batch_size // jax.device_count(), drop_remainder=False
+      )
       return dataset.batch(jax.local_device_count(), drop_remainder=False)
     else:
       return dataset.batch(self.batch_size, drop_remainder=False)

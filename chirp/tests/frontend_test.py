@@ -36,33 +36,41 @@ class FrontendTest(parameterized.TestCase):
     cls.batch_dims = (2, 3)
     cls.signal = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, cls.num_samples))
     cls.noise = 0.5 * random.normal(
-        random.PRNGKey(0), cls.batch_dims + (cls.num_samples,))
+        random.PRNGKey(0), cls.batch_dims + (cls.num_samples,)
+    )
     cls.audio = cls.signal + cls.noise
 
-  @parameterized.product(({
-      "module_type": frontend.STFT,
-      "module_kwargs": {},
-  }, {
-      "module_type": frontend.MelSpectrogram,
-      "module_kwargs": {
-          "kernel_size": 128,
-          "sample_rate": 11_025,
-          "freq_range": (60, 5_000),
-      },
-  }, {
-      "module_type": frontend.LearnedFrontend,
-      "module_kwargs": {
-          "kernel_size": 256,
-      },
-  }, {
-      "module_type": frontend.MorletWaveletTransform,
-      "module_kwargs": {
-          "kernel_size": 256,
-          "sample_rate": 11_025,
-          "freq_range": (60, 10_000)
-      }
-  }),
-                         stride=(10, 11))
+  @parameterized.product(
+      (
+          {
+              "module_type": frontend.STFT,
+              "module_kwargs": {},
+          },
+          {
+              "module_type": frontend.MelSpectrogram,
+              "module_kwargs": {
+                  "kernel_size": 128,
+                  "sample_rate": 11_025,
+                  "freq_range": (60, 5_000),
+              },
+          },
+          {
+              "module_type": frontend.LearnedFrontend,
+              "module_kwargs": {
+                  "kernel_size": 256,
+              },
+          },
+          {
+              "module_type": frontend.MorletWaveletTransform,
+              "module_kwargs": {
+                  "kernel_size": 256,
+                  "sample_rate": 11_025,
+                  "freq_range": (60, 10_000),
+              },
+          },
+      ),
+      stride=(10, 11),
+  )
   def test_output_size(self, module_type, module_kwargs, stride):
     features = 7
 
@@ -71,13 +79,19 @@ class FrontendTest(parameterized.TestCase):
     output = module.apply(variables, self.audio)
     self.assertEqual(
         output.shape,
-        self.batch_dims + (-(-self.num_samples // stride), features))
+        self.batch_dims + (-(-self.num_samples // stride), features),
+    )
 
   @parameterized.parameters(
       (frontend.STFT, frontend.ISTFT, {}),
-      (frontend.LearnedFrontend, frontend.InverseLearnedFrontend, {
-          "kernel_size": 256,
-      }))
+      (
+          frontend.LearnedFrontend,
+          frontend.InverseLearnedFrontend,
+          {
+              "kernel_size": 256,
+          },
+      ),
+  )
   def test_inverse(self, module_type, inverse_module_type, module_kwargs):
     stride = 10
     features = 7
@@ -107,7 +121,7 @@ class FrontendTest(parameterized.TestCase):
               "stride": 64,
               "kernel_size": 64,
               "sample_rate": 22_025,
-              "freq_range": (60, 10_000)
+              "freq_range": (60, 10_000),
           },
           "atol": 1e-4,
       },
@@ -133,12 +147,11 @@ class FrontendTest(parameterized.TestCase):
               "kernel_size": 64,
           },
           "signal_shape": (1, 25, 64),
-      })
-  def test_tflite_stft_export(self,
-                              module_type,
-                              module_kwargs,
-                              signal_shape=None,
-                              atol=1e-6):
+      },
+  )
+  def test_tflite_stft_export(
+      self, module_type, module_kwargs, signal_shape=None, atol=1e-6
+  ):
     # Note that the TFLite stft requires power-of-two nfft, given by:
     # nfft = 2 * (features - 1).
     if signal_shape is None:
@@ -150,17 +163,20 @@ class FrontendTest(parameterized.TestCase):
 
     tf_predict = tf.function(
         jax2tf.convert(
-            lambda signal: fe.apply(params, signal), enable_xla=False),
+            lambda signal: fe.apply(params, signal), enable_xla=False
+        ),
         input_signature=[
             tf.TensorSpec(shape=signal.shape, dtype=tf.float32, name="input")
         ],
-        autograph=False)
+        autograph=False,
+    )
     converter = tf.lite.TFLiteConverter.from_concrete_functions(
-        [tf_predict.get_concrete_function()], tf_predict)
+        [tf_predict.get_concrete_function()], tf_predict
+    )
 
     converter.target_spec.supported_ops = [
         tf.lite.OpsSet.TFLITE_BUILTINS,  # enable TensorFlow Lite ops.
-        tf.lite.OpsSet.SELECT_TF_OPS  # enable TensorFlow ops.
+        tf.lite.OpsSet.SELECT_TF_OPS,  # enable TensorFlow ops.
     ]
     tflite_float_model = converter.convert()
 

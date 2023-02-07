@@ -27,9 +27,11 @@ from absl.testing import absltest
 from absl.testing import parameterized
 
 
-def _make_mock_requests_side_effect(broken_down_taxonomy_info,
-                                    wrong_num_recordings=False,
-                                    unknown_file_extension=False):
+def _make_mock_requests_side_effect(
+    broken_down_taxonomy_info,
+    wrong_num_recordings=False,
+    unknown_file_extension=False,
+):
   to_query = lambda row: row['xeno_canto_query'].replace(' ', '%20')
   to_genus = lambda row: row['xeno_canto_query'].split(' ')[0]
   api_url = xeno_canto._XC_API_URL
@@ -39,70 +41,68 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
 
   def make_recordings(i):
     suffix = '.unknown_extension' if unknown_file_extension else '.mp3'
-    return [{
-        'file': f'XC{i:05d}{suffix}',
-        'file-name': f'XC{i:05d}{suffix}',
-        'id': f'{i:05d}',
-        'q': {
-            0: 'A',
-            1: '',
-            2: 'no score'
-        }[i],
-        'also': [xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]],
-        'lic': 'cc-by',
-        'alt': '0',
-        'bird-seen': 'yes',
-        'playback-used': 'no',
-        'cnt': '',
-        'lat': '0.0',
-        'lng': '0.0',
-        'rec': '',
-        'rmk': '',
-        'type': 'song',
-        'length': '1:10',
-    }, {
-        'file': '',
-        'file-name': '',
-        'id': f'{i:05d}',
-        'q': {
-            0: 'A',
-            1: '',
-            2: 'no score'
-        }[i],
-        'also': [xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]],
-        'lic': 'cc-by',
-        'alt': '0',
-        'bird-seen': 'yes',
-        'playback-used': 'no',
-        'cnt': '',
-        'lat': '0.0',
-        'lng': '0.0',
-        'rec': '',
-        'rmk': '',
-        'type': 'song',
-        'length': '1:10',
-    }, {
-        'file': f'XC{i:05d}{suffix}',
-        'file-name': f'XC{i:05d}{suffix}',
-        'id': f'{i:05d}',
-        'q': {
-            0: 'A',
-            1: '',
-            2: 'no score'
-        }[i],
-        'also': [xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]],
-        'lic': 'cc-by-nd',
-        'alt': '0',
-        'bird-seen': 'yes',
-        'playback-used': 'no',
-        'cnt': '',
-        'lat': '0.0',
-        'lng': '0.0',
-        'rec': '',
-        'rmk': '',
-        'type': 'song',
-        'length': '1:10',
-    }]
+    return [
+        {
+            'file': f'XC{i:05d}{suffix}',
+            'file-name': f'XC{i:05d}{suffix}',
+            'id': f'{i:05d}',
+            'q': {0: 'A', 1: '', 2: 'no score'}[i],
+            'also': [
+                xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]
+            ],
+            'lic': 'cc-by',
+            'alt': '0',
+            'bird-seen': 'yes',
+            'playback-used': 'no',
+            'cnt': '',
+            'lat': '0.0',
+            'lng': '0.0',
+            'rec': '',
+            'rmk': '',
+            'type': 'song',
+            'length': '1:10',
+        },
+        {
+            'file': '',
+            'file-name': '',
+            'id': f'{i:05d}',
+            'q': {0: 'A', 1: '', 2: 'no score'}[i],
+            'also': [
+                xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]
+            ],
+            'lic': 'cc-by',
+            'alt': '0',
+            'bird-seen': 'yes',
+            'playback-used': 'no',
+            'cnt': '',
+            'lat': '0.0',
+            'lng': '0.0',
+            'rec': '',
+            'rmk': '',
+            'type': 'song',
+            'length': '1:10',
+        },
+        {
+            'file': f'XC{i:05d}{suffix}',
+            'file-name': f'XC{i:05d}{suffix}',
+            'id': f'{i:05d}',
+            'q': {0: 'A', 1: '', 2: 'no score'}[i],
+            'also': [
+                xeno_canto_queries[(i + 1) % len(broken_down_taxonomy_info)]
+            ],
+            'lic': 'cc-by-nd',
+            'alt': '0',
+            'bird-seen': 'yes',
+            'playback-used': 'no',
+            'cnt': '',
+            'lat': '0.0',
+            'lng': '0.0',
+            'rec': '',
+            'rmk': '',
+            'type': 'song',
+            'length': '1:10',
+        },
+    ]
 
   # Return recordings in two pages to test resiliency to multi-page results.
   # pylint: disable=g-complex-comprehension
@@ -111,15 +111,20 @@ def _make_mock_requests_side_effect(broken_down_taxonomy_info,
           'recordings': make_recordings(i)[:-1],
           'numRecordings': '4' if wrong_num_recordings else '3',
           'numPages': '2',
-      } for i, row in broken_down_taxonomy_info.iterrows()
+      }
+      for i, row in broken_down_taxonomy_info.iterrows()
   }
-  return_values.update({
-      to_url(row) + '&page=2': {
-          'recordings': make_recordings(i)[-1:],
-          'numRecordings': '4' if wrong_num_recordings else '3',
-          'numPages': '2',
-      } for i, row in broken_down_taxonomy_info.iterrows()
-  })
+  return_values.update(
+      {
+          to_url(row)
+          + '&page=2': {
+              'recordings': make_recordings(i)[-1:],
+              'numRecordings': '4' if wrong_num_recordings else '3',
+              'numPages': '2',
+          }
+          for i, row in broken_down_taxonomy_info.iterrows()
+      }
+  )
 
   # pylint: enable=g-complex-comprehension
 
@@ -144,11 +149,14 @@ class XenoCantoTest(parameterized.TestCase):
         '6,species,ostric3,Somali Ostrich,Struthio molybdophanes,'
         'Struthioniformes,Struthionidae (Ostriches),,\n'
         '8,species,grerhe1,Greater Rhea,Rhea americana,Rheiformes,'
-        'Rheidae (Rheas),Rheas,')
+        'Rheidae (Rheas),Rheas,'
+    )
     self.taxonomy_info = pd.DataFrame({
         'species_code': ['ostric2', 'ostric3', 'grerhe1'],
         'Scientific name': [
-            'Struthio camelus', 'Struthio molybdophanes', 'Rhea americana'
+            'Struthio camelus',
+            'Struthio molybdophanes',
+            'Rhea americana',
         ],
         'Common name': ['Common Ostrich', 'Somali Ostrich', 'Greater Rhea'],
         'No.': [2, 2, 2],
@@ -165,10 +173,14 @@ class XenoCantoTest(parameterized.TestCase):
     taxonomy_info['genus'] = ['struthio', 'struthio', 'rhea']
     taxonomy_info['family'] = ['struthionidae', 'struthionidae', 'rheidae']
     taxonomy_info['order'] = [
-        'struthioniformes', 'struthioniformes', 'rheiformes'
+        'struthioniformes',
+        'struthioniformes',
+        'rheiformes',
     ]
     taxonomy_info['common_name'] = [
-        'common ostrich', 'somali ostrich', 'greater rhea'
+        'common ostrich',
+        'somali ostrich',
+        'greater rhea',
     ]
     self.broken_down_taxonomy_info = taxonomy_info
 
@@ -178,8 +190,11 @@ class XenoCantoTest(parameterized.TestCase):
     name_to_code = dict(
         zip(
             self.taxonomy_info['Scientific name'].map(
-                lambda n: n.replace(' ', '-')),
-            self.taxonomy_info['species_code']))
+                lambda n: n.replace(' ', '-')
+            ),
+            self.taxonomy_info['species_code'],
+        )
+    )
     first_key, second_key = list(name_to_code.keys())[:2]
     overrides = {second_key.replace('-', ' '): name_to_code[second_key]}
     name_to_code[second_key] = name_to_code[first_key]
@@ -190,30 +205,27 @@ class XenoCantoTest(parameterized.TestCase):
     bindings = []
     for n, c in name_to_code.items():
       bindings.append({
-          'eBird_taxon_ID': {
-              'value': c
-          },
-          'Xeno_canto_species_ID': {
-              'value': n
-          }
+          'eBird_taxon_ID': {'value': c},
+          'Xeno_canto_species_ID': {'value': n},
       })
     mock_sparql_wrapper.return_value.queryAndConvert.return_value = {
-        'results': {
-            'bindings': bindings
-        }
+        'results': {'bindings': bindings}
     }
 
     function_call = functools.partial(
         xeno_canto._infer_species_codes_from_wikidata,
         # Pass in a species table without species codes; we want to infer them.
         taxonomy_info=self.taxonomy_info.drop(columns='species_code'),
-        overrides=overrides)
+        overrides=overrides,
+    )
 
     # We should recover the original species codes.
     checksum = hashlib.sha256(str(matches).encode('utf-8')).hexdigest()
     with mock.patch.object(xeno_canto, '_WIKIDATA_CHECKSUM', new=checksum):
-      self.assertListEqual(function_call().to_list(),
-                           self.taxonomy_info['species_code'].to_list())
+      self.assertListEqual(
+          function_call().to_list(),
+          self.taxonomy_info['species_code'].to_list(),
+      )
 
     # Without patching with the correct checksum, the function should raise a
     # RuntimeError.
@@ -228,7 +240,8 @@ class XenoCantoTest(parameterized.TestCase):
     taxonomy = pd.read_csv(io.StringIO(self.ebird_taxonomy_csv_str))
     checksum = hashlib.sha256(taxonomy.to_json().encode('utf-8')).hexdigest()
     with mock.patch.object(
-        xeno_canto, '_EBIRD_TAXONOMY_CHECKSUM', new=checksum):
+        xeno_canto, '_EBIRD_TAXONOMY_CHECKSUM', new=checksum
+    ):
       self.assertTrue(xeno_canto._load_ebird_taxonomy().equals(taxonomy))
 
     # Without patching with the correct checksum, the function should raise a
@@ -238,63 +251,91 @@ class XenoCantoTest(parameterized.TestCase):
     # A malformed taxonomy (non-unique species codes, for instance) should cause
     # the function to raise an error.
     malformed_csv_str = self.ebird_taxonomy_csv_str.replace(
-        'ostric3', 'ostric2')
+        'ostric3', 'ostric2'
+    )
     mock_run.return_value.stdout = malformed_csv_str.encode('utf-8')
     checksum = hashlib.sha256(
-        pd.read_csv(io.StringIO(malformed_csv_str)).to_json().encode(
-            'utf-8')).hexdigest()
+        pd.read_csv(io.StringIO(malformed_csv_str)).to_json().encode('utf-8')
+    ).hexdigest()
     with mock.patch.object(
-        xeno_canto, '_EBIRD_TAXONOMY_CHECKSUM', new=checksum):
+        xeno_canto, '_EBIRD_TAXONOMY_CHECKSUM', new=checksum
+    ):
       self.assertRaises(RuntimeError, xeno_canto._load_ebird_taxonomy)
 
   @parameterized.parameters(
       # A row with 'no_species_code' set to True should not be modified.
-      ('fake1,Fakus namus,Fake Name', ',true,Fakus namus,Fake Name,false',
-       ',true,Fakus namus,Fake Name,false'),
+      (
+          'fake1,Fakus namus,Fake Name',
+          ',true,Fakus namus,Fake Name,false',
+          ',true,Fakus namus,Fake Name,false',
+      ),
       # A row with an existing species code should not be modified.
-      ('fake1,Fakus namus,Fake Name', 'fake2,false,Fakus namus,Fake Name,false',
-       'fake2,false,Fakus namus,Fake Name,false'),
+      (
+          'fake1,Fakus namus,Fake Name',
+          'fake2,false,Fakus namus,Fake Name,false',
+          'fake2,false,Fakus namus,Fake Name,false',
+      ),
       # The function should prefer matching by scientific name over matching
       # by common name, and it should flag the cleaned up species row for
       # verification.
-      ('fake1,Fakus namus,Fake Name\nmock1,Mockus namus,Fake Name',
-       ',false,Fakus namus,Fake Name,false',
-       'fake1,false,Fakus namus,Fake Name,true'),
+      (
+          'fake1,Fakus namus,Fake Name\nmock1,Mockus namus,Fake Name',
+          ',false,Fakus namus,Fake Name,false',
+          'fake1,false,Fakus namus,Fake Name,true',
+      ),
       # The function should prefer matching by common name over matching by
       # common name variations, and it should flag the cleaned up species row
       # for verification.
-      (('fake1,Mockus namus,Fake Name\n'
-        'mock1,Mockus namus,Fake Name (undescribed form)'),
-       ',false,Fakus namus,Fake Name,false',
-       'fake1,false,Fakus namus,Fake Name,true'),
+      (
+          (
+              'fake1,Mockus namus,Fake Name\n'
+              'mock1,Mockus namus,Fake Name (undescribed form)'
+          ),
+          ',false,Fakus namus,Fake Name,false',
+          'fake1,false,Fakus namus,Fake Name,true',
+      ),
       # The function should prefer matching by common name variation over
       # matching by scientific name substrings, and it should flag the
       # cleaned up species row for verification.
-      (('fake1,Mockus namus,Fake Name (undescribed form)\n'
-        'mock1,Mockus fakus namus,Mock name'),
-       ',false,Fakus namus,Fake Name,false',
-       'fake1,false,Fakus namus,Fake Name,true'),
-      ('fake1,Mockus namus,Fake Gray Name',
-       ',false,Fakus namus,Fake Grey Name,false',
-       'fake1,false,Fakus namus,Fake Grey Name,true'),
+      (
+          (
+              'fake1,Mockus namus,Fake Name (undescribed form)\n'
+              'mock1,Mockus fakus namus,Mock name'
+          ),
+          ',false,Fakus namus,Fake Name,false',
+          'fake1,false,Fakus namus,Fake Name,true',
+      ),
+      (
+          'fake1,Mockus namus,Fake Gray Name',
+          ',false,Fakus namus,Fake Grey Name,false',
+          'fake1,false,Fakus namus,Fake Grey Name,true',
+      ),
       # The function should match by scientific name substring in the last
       # resort, and it should flag the cleaned up species row for
       # verification.
-      ('fake1,Fakus mockus namus,Mock Name',
-       ',false,Fakus namus,Fake Name,false',
-       'fake1,false,Fakus namus,Fake Name,true'),
+      (
+          'fake1,Fakus mockus namus,Mock Name',
+          ',false,Fakus namus,Fake Name,false',
+          'fake1,false,Fakus namus,Fake Name,true',
+      ),
       # It should however be conservative and avoid modifying the row if there
       # are multiple scientific name substring matches.
-      (('fake1,Fakus fakus namus,Mock Name\n'
-        'fake2,Fakus mockus namus,Mock Name'),
-       ',false,Fakus namus,Fake Name,false',
-       ',false,Fakus namus,Fake Name,false'),
+      (
+          (
+              'fake1,Fakus fakus namus,Mock Name\n'
+              'fake2,Fakus mockus namus,Mock Name'
+          ),
+          ',false,Fakus namus,Fake Name,false',
+          ',false,Fakus namus,Fake Name,false',
+      ),
   )
-  def test_clean_up_species_codes(self, ebird_taxonomy_str, taxonomy_info_str,
-                                  expected_taxonomy_info_str):
+  def test_clean_up_species_codes(
+      self, ebird_taxonomy_str, taxonomy_info_str, expected_taxonomy_info_str
+  ):
     ebird_taxonomy_header = 'SPECIES_CODE,SCI_NAME,PRIMARY_COM_NAME'
     taxonomy_info_header = (
-        'species_code,no_species_code,Scientific name,Common name,to_verify')
+        'species_code,no_species_code,Scientific name,Common name,to_verify'
+    )
 
     to_dataframe = lambda h, r: pd.read_csv(io.StringIO('\n'.join((h, r))))
     to_ebird_taxonomy = lambda r: to_dataframe(ebird_taxonomy_header, r)
@@ -304,23 +345,34 @@ class XenoCantoTest(parameterized.TestCase):
         to_taxonomy_info(expected_taxonomy_info_str).equals(
             xeno_canto._clean_up_species_codes(
                 to_taxonomy_info(taxonomy_info_str),
-                to_ebird_taxonomy(ebird_taxonomy_str))))
+                to_ebird_taxonomy(ebird_taxonomy_str),
+            )
+        )
+    )
 
   def test_ensure_species_code_uniqueness(self):
     # If there are no collisions, the taxonomy DataFrame should be untouched.
     self.assertTrue(
         xeno_canto._ensure_species_codes_uniqueness(
-            self.taxonomy_info, {}).equals(self.taxonomy_info))
+            self.taxonomy_info, {}
+        ).equals(self.taxonomy_info)
+    )
 
     # If there's a disallowed collision, the function should raise an exception.
     non_unique_taxonomy_info = self.taxonomy_info.copy()
-    first_code, second_code = non_unique_taxonomy_info['species_code'].to_list(
-    )[:2]
+    first_code, second_code = non_unique_taxonomy_info[
+        'species_code'
+    ].to_list()[:2]
     non_unique_taxonomy_info['species_code'] = non_unique_taxonomy_info[
-        'species_code'].map(lambda s: (second_code if s == first_code else s))
+        'species_code'
+    ].map(lambda s: (second_code if s == first_code else s))
 
-    self.assertRaises(ValueError, xeno_canto._ensure_species_codes_uniqueness,
-                      non_unique_taxonomy_info, {})
+    self.assertRaises(
+        ValueError,
+        xeno_canto._ensure_species_codes_uniqueness,
+        non_unique_taxonomy_info,
+        {},
+    )
 
     # If there is an allowed collision, the function merge the colliding rows
     # into the first colliding row and drop the others.
@@ -340,17 +392,22 @@ class XenoCantoTest(parameterized.TestCase):
 
     self.assertTrue(
         xeno_canto._ensure_species_codes_uniqueness(
-            non_unique_taxonomy_info, {
-                frozenset(non_unique_taxonomy_info.iloc[:2]['Scientific name']):
-                    second_code
-            }).equals(expected_taxonomy_info))
+            non_unique_taxonomy_info,
+            {
+                frozenset(
+                    non_unique_taxonomy_info.iloc[:2]['Scientific name']
+                ): second_code
+            },
+        ).equals(expected_taxonomy_info)
+    )
 
   def test_break_down_taxonomy(self):
     ebird_taxonomy = pd.read_csv(io.StringIO(self.ebird_taxonomy_csv_str))
     self.assertTrue(
         self.broken_down_taxonomy_info.equals(
-            xeno_canto._break_down_taxonomy(self.taxonomy_info,
-                                            ebird_taxonomy)))
+            xeno_canto._break_down_taxonomy(self.taxonomy_info, ebird_taxonomy)
+        )
+    )
 
   @mock.patch.object(xeno_canto.requests, 'Session', autospec=True)
   def test_scrape_xeno_canto_recording_metadata(self, mock_session_cls):
@@ -361,53 +418,63 @@ class XenoCantoTest(parameterized.TestCase):
     # number of recordings declared in the response.
     mock_session_cls.return_value.get.side_effect = (
         _make_mock_requests_side_effect(
-            self.broken_down_taxonomy_info, wrong_num_recordings=True))
+            self.broken_down_taxonomy_info, wrong_num_recordings=True
+        )
+    )
 
     with self.assertRaises(RuntimeError):
       xeno_canto._scrape_xeno_canto_recording_metadata(
           self.broken_down_taxonomy_info,
           include_nd_recordings=False,
-          progress_bar=False)
+          progress_bar=False,
+      )
 
     # We expect a RuntimeError to be raised if the code fails to infer the file
     # extension.
     mock_session_cls.return_value.get.side_effect = (
         _make_mock_requests_side_effect(
-            self.broken_down_taxonomy_info, unknown_file_extension=True))
+            self.broken_down_taxonomy_info, unknown_file_extension=True
+        )
+    )
 
     with self.assertRaises(RuntimeError):
       xeno_canto._scrape_xeno_canto_recording_metadata(
           self.broken_down_taxonomy_info,
           include_nd_recordings=False,
-          progress_bar=False)
+          progress_bar=False,
+      )
 
     # We expect only the first recording to be returned for each species code,
     # since the 'file' is empty for the second one and the third one has a *-nd
     # license.
     mock_session_cls.return_value.get.side_effect = (
         _make_mock_requests_side_effect(
-            self.broken_down_taxonomy_info, wrong_num_recordings=False))
+            self.broken_down_taxonomy_info, wrong_num_recordings=False
+        )
+    )
 
     species_code_to_recording_metadata = (
         xeno_canto._scrape_xeno_canto_recording_metadata(
             self.broken_down_taxonomy_info,
             include_nd_recordings=False,
-            progress_bar=False))
+            progress_bar=False,
+        )
+    )
     for i, row in self.broken_down_taxonomy_info.iterrows():
       self.assertListEqual(
-          species_code_to_recording_metadata[row['species_code']], [
+          species_code_to_recording_metadata[row['species_code']],
+          [
               xeno_canto.RecordingInfo(
                   xc_id=f'{i:05d}',
                   xc_format='mp3',
-                  quality_score={
-                      0: 'A',
-                      1: '',
-                      2: 'no score'
-                  }[i],
-                  background_species=[[
-                      'Struthio molybdophanes', 'Rhea americana',
-                      'Struthio camelus'
-                  ][i]],
+                  quality_score={0: 'A', 1: '', 2: 'no score'}[i],
+                  background_species=[
+                      [
+                          'Struthio molybdophanes',
+                          'Rhea americana',
+                          'Struthio camelus',
+                      ][i]
+                  ],
                   xc_license='cc-by',
                   altitude='0',
                   length='1:10',
@@ -418,85 +485,117 @@ class XenoCantoTest(parameterized.TestCase):
                   playback_used='no',
                   recordist='',
                   remarks='',
-                  sound_type='song')
-          ])
+                  sound_type='song',
+              )
+          ],
+      )
 
     # We expect two recordings to be returned for each species code when
     # including *-nd-licensed recordings.
     mock_session_cls.return_value.get.side_effect = (
         _make_mock_requests_side_effect(
-            self.broken_down_taxonomy_info, wrong_num_recordings=False))
+            self.broken_down_taxonomy_info, wrong_num_recordings=False
+        )
+    )
 
     species_code_to_recording_metadata = (
         xeno_canto._scrape_xeno_canto_recording_metadata(
             self.broken_down_taxonomy_info,
             include_nd_recordings=True,
-            progress_bar=False))
+            progress_bar=False,
+        )
+    )
     self.assertListEqual(
         [len(rs) for rs in species_code_to_recording_metadata.values()],
-        [2, 2, 2])
+        [2, 2, 2],
+    )
 
   @mock.patch.object(xeno_canto.SPARQLWrapper, 'SPARQLWrapper', autospec=True)
   @mock.patch.object(xeno_canto.subprocess, 'run', autospec=True)
   @mock.patch.object(xeno_canto.pd, 'read_html', autospec=True)
-  def test_create_taxonomy_info(self, mock_read_html, mock_run,
-                                mock_sparql_wrapper):
+  def test_create_taxonomy_info(
+      self, mock_read_html, mock_run, mock_sparql_wrapper
+  ):
     name_to_code = dict(
         zip(
             self.broken_down_taxonomy_info['xeno_canto_query'].map(
-                lambda n: n.replace(' ', '-')),
-            self.broken_down_taxonomy_info['species_code']))
+                lambda n: n.replace(' ', '-')
+            ),
+            self.broken_down_taxonomy_info['species_code'],
+        )
+    )
     matches = sorted((c, n) for n, c in name_to_code.items())
     bindings = []
     for n, c in name_to_code.items():
       bindings.append({
-          'eBird_taxon_ID': {
-              'value': c
-          },
-          'Xeno_canto_species_ID': {
-              'value': n
-          }
+          'eBird_taxon_ID': {'value': c},
+          'Xeno_canto_species_ID': {'value': n},
       })
     mock_sparql_wrapper.return_value.queryAndConvert.return_value = dict(
-        results=dict(bindings=bindings))
+        results=dict(bindings=bindings)
+    )
 
     mock_run.return_value = mock.MagicMock()
     mock_run.return_value.stdout = self.ebird_taxonomy_csv_str.encode('utf-8')
 
     self.taxonomy_info['Status'] = None
     mock_read_html.return_value = [
-        self.taxonomy_info.drop(columns=[
-            'species_code', 'is_insect', 'no_species_code', 'to_verify'
-        ])
+        self.taxonomy_info.drop(
+            columns=[
+                'species_code',
+                'is_insect',
+                'no_species_code',
+                'to_verify',
+            ]
+        )
     ]
 
     expected = self.broken_down_taxonomy_info.copy()[[
-        'No.', 'species_code', 'xeno_canto_query', 'scientific_name', 'species',
-        'genus', 'family', 'order', 'common_name'
+        'No.',
+        'species_code',
+        'xeno_canto_query',
+        'scientific_name',
+        'species',
+        'genus',
+        'family',
+        'order',
+        'common_name',
     ]]
 
     wikidata_checksum = hashlib.sha256(str(matches).encode('utf-8')).hexdigest()
     with mock.patch.object(
-        xeno_canto, '_WIKIDATA_CHECKSUM', new=wikidata_checksum):
+        xeno_canto, '_WIKIDATA_CHECKSUM', new=wikidata_checksum
+    ):
       taxonomy = pd.read_csv(io.StringIO(self.ebird_taxonomy_csv_str))
       taxonomy_checksum = hashlib.sha256(
-          taxonomy.to_json().encode('utf-8')).hexdigest()
+          taxonomy.to_json().encode('utf-8')
+      ).hexdigest()
       with mock.patch.object(
-          xeno_canto, '_EBIRD_TAXONOMY_CHECKSUM', new=taxonomy_checksum):
+          xeno_canto, '_EBIRD_TAXONOMY_CHECKSUM', new=taxonomy_checksum
+      ):
         self.assertTrue(
             xeno_canto.create_taxonomy_info(
-                xeno_canto.SpeciesMappingConfig()).equals(expected))
+                xeno_canto.SpeciesMappingConfig()
+            ).equals(expected)
+        )
 
   @mock.patch.object(xeno_canto.requests, 'Session', autospec=True)
   def test_retrieve_recording_metadata(self, mock_session_cls):
     # Mock requests.Session.get to simulate a Xeno-Canto API call.
     mock_session_cls.return_value.get.side_effect = (
-        _make_mock_requests_side_effect(self.broken_down_taxonomy_info))
+        _make_mock_requests_side_effect(self.broken_down_taxonomy_info)
+    )
 
-    taxonomy_info = self.broken_down_taxonomy_info.drop(columns=[
-        'Common name', 'Scientific name', 'No. Back', 'is_insect',
-        'no_species_code', 'to_verify'
-    ])
+    taxonomy_info = self.broken_down_taxonomy_info.drop(
+        columns=[
+            'Common name',
+            'Scientific name',
+            'No. Back',
+            'is_insect',
+            'no_species_code',
+            'to_verify',
+        ]
+    )
 
     expected = taxonomy_info.copy().drop(columns=['No.'])
     expected['xeno_canto_ids'] = [['00000'], ['00001'], ['00002']]
@@ -516,8 +615,9 @@ class XenoCantoTest(parameterized.TestCase):
     expected['bg_species_codes'] = [[['ostric3']], [['grerhe1']], [['ostric2']]]
     self.assertTrue(
         xeno_canto.retrieve_recording_metadata(
-            taxonomy_info, include_nd_recordings=False,
-            progress_bar=False).equals(expected))
+            taxonomy_info, include_nd_recordings=False, progress_bar=False
+        ).equals(expected)
+    )
 
     # The function should raise a RuntimeError if the number of foreground
     # recordings declared by `taxonomy_info` is greater than the number of
@@ -529,7 +629,8 @@ class XenoCantoTest(parameterized.TestCase):
         xeno_canto.retrieve_recording_metadata,
         taxonomy_info_wrong_no,
         include_nd_recordings=False,
-        progress_bar=False)
+        progress_bar=False,
+    )
 
 
 if __name__ == '__main__':

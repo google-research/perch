@@ -36,20 +36,24 @@ class LossesTest(absltest.TestCase):
     masked_ent = losses.label_binary_ent(
         probabilities=binary_probas,
         label_mask=jnp.tile(label_mask, (n_points, 1)),
-        eps=0.)
+        eps=0.0,
+    )
     ent = losses.label_binary_ent(
-        probabilities=binary_probas[:, label_mask.astype(bool)], eps=0.)
+        probabilities=binary_probas[:, label_mask.astype(bool)], eps=0.0
+    )
     self.assertAlmostEqual(masked_ent.mean(), ent.mean())
 
     # Test that binary entropies fall in the right range [0, log(2)]
-    self.assertTrue((ent >= 0.).all())
+    self.assertTrue((ent >= 0.0).all())
     self.assertTrue((ent <= jnp.log(2)).all())
 
     # Test that entropy and cross-entropy are consitent
     ent = losses.label_binary_ent(
-        probabilities=binary_probas, label=binary_probas)
+        probabilities=binary_probas, label=binary_probas
+    )
     xent = losses.label_binary_xent(
-        probabilities=binary_probas, label=binary_probas)
+        probabilities=binary_probas, label=binary_probas
+    )
     self.assertAlmostEqual(ent.mean(), xent.mean(), delta=1e-7)
 
   def test_standard_entropy(self):
@@ -60,14 +64,16 @@ class LossesTest(absltest.TestCase):
     ent = losses.label_ent(probabilities)
 
     # Test that multi-class entropies fall in the range [0, log(num_classes)]
-    self.assertTrue((ent >= 0.).all())
+    self.assertTrue((ent >= 0.0).all())
     self.assertTrue((ent <= jnp.log(num_classes)).all())
 
     # Ensure that entropy and cross-entropy with self are same.
     self.assertAlmostEqual(
         ent.mean(),
-        losses.label_xent(probabilities=probabilities,
-                          label=probabilities).mean())
+        losses.label_xent(
+            probabilities=probabilities, label=probabilities
+        ).mean(),
+    )
 
 
 if __name__ == "__main__":

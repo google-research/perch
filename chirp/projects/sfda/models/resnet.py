@@ -48,6 +48,7 @@ STDDEV_RGB = [0.229 * 255, 0.224 * 255, 0.225 * 255]
 
 class ResNetBlock(nn.Module):
   """ResNet block."""
+
   filters: int
   conv: ModuleDef
   norm: ModuleDef
@@ -68,8 +69,8 @@ class ResNetBlock(nn.Module):
 
     if residual.shape != y.shape:
       residual = self.conv(
-          self.filters, (1, 1), self.strides, name='conv_proj')(
-              residual)
+          self.filters, (1, 1), self.strides, name='conv_proj'
+      )(residual)
       residual = self.norm(name='norm_proj')(residual)
 
     return self.act(residual + y)
@@ -77,6 +78,7 @@ class ResNetBlock(nn.Module):
 
 class BottleneckResNetBlock(nn.Module):
   """Bottleneck ResNet block."""
+
   filters: int
   conv: ModuleDef
   norm: ModuleDef
@@ -97,8 +99,8 @@ class BottleneckResNetBlock(nn.Module):
 
     if residual.shape != y.shape:
       residual = self.conv(
-          self.filters * 4, (1, 1), self.strides, name='conv_proj')(
-              residual)
+          self.filters * 4, (1, 1), self.strides, name='conv_proj'
+      )(residual)
       residual = self.norm(name='norm_proj')(residual)
 
     return self.act(residual + y)
@@ -106,6 +108,7 @@ class BottleneckResNetBlock(nn.Module):
 
 class ResNet(image_model.ImageModel):
   """ResNetV1."""
+
   stage_sizes: Sequence[int]
   block_cls: ModuleDef
   num_classes: int
@@ -122,13 +125,16 @@ class ResNet(image_model.ImageModel):
         use_running_average=use_running_average,
         momentum=0.9,
         epsilon=1e-5,
-        dtype=self.dtype)
+        dtype=self.dtype,
+    )
 
     x = conv(
-        self.num_filters, (7, 7), (2, 2),
+        self.num_filters,
+        (7, 7),
+        (2, 2),
         padding=[(3, 3), (3, 3)],
-        name='conv_init')(
-            x)
+        name='conv_init',
+    )(x)
     x = norm(name='bn_init')(x)
     x = nn.relu(x)
     x = nn.max_pool(x, (3, 3), strides=(2, 2), padding='SAME')
@@ -140,8 +146,8 @@ class ResNet(image_model.ImageModel):
             strides=strides,
             conv=conv,
             norm=norm,
-            act=self.act)(
-                x)
+            act=self.act,
+        )(x)
     # The following Dropout was added to inject noise during foward pass.
     x = nn.Dropout(0.1, deterministic=not train)(x)
     x = jnp.mean(x, axis=(1, 2))
@@ -172,10 +178,11 @@ class ResNet(image_model.ImageModel):
   def load_ckpt(dataset_name: str) -> flax.core.frozen_dict.FrozenDict:
     pretrained_ckpt_dir = ResNet.get_ckpt_path(dataset_name)
     state_dict = flax_checkpoints.restore_checkpoint(
-        pretrained_ckpt_dir, target=None)
+        pretrained_ckpt_dir, target=None
+    )
     variables = flax.core.freeze({
         'params': state_dict['params'],
-        'batch_stats': state_dict['batch_stats']
+        'batch_stats': state_dict['batch_stats'],
     })
     return variables
 
@@ -183,21 +190,27 @@ class ResNet(image_model.ImageModel):
   def get_ckpt_path(dataset_name: str) -> epath.Path:
     if 'imagenet' in dataset_name:
       return epath.Path(
-          'gs://flax_public/examples/imagenet/v100_x8/checkpoint_250200')
+          'gs://flax_public/examples/imagenet/v100_x8/checkpoint_250200'
+      )
     else:
-      raise NotImplementedError('No pretrained checkpoint available for '
-                                f'dataset {dataset_name}.')
+      raise NotImplementedError(
+          f'No pretrained checkpoint available for dataset {dataset_name}.'
+      )
 
   @staticmethod
-  def get_input_pipeline(data_builder: tfds.core.DatasetBuilder, split: str,
-                         **kwargs) -> tf.data.Dataset:
+  def get_input_pipeline(
+      data_builder: tfds.core.DatasetBuilder, split: str, **kwargs
+  ) -> tf.data.Dataset:
     image_size = kwargs['image_size']
     dtype = tf.float32
     read_config = tfds.ReadConfig(add_tfds_id=True)
 
     def _resize(image):
-      return tf.image.resize([image], [image_size, image_size],
-                             method=tf.image.ResizeMethod.BICUBIC)[0]
+      return tf.image.resize(
+          [image],
+          [image_size, image_size],
+          method=tf.image.ResizeMethod.BICUBIC,
+      )[0]
 
     def _decode_and_center_crop(image_bytes):
       """Crops to center of image with padding then scales image_size."""
@@ -206,15 +219,20 @@ class ResNet(image_model.ImageModel):
       image_width = shape[1]
 
       padded_center_crop_size = tf.cast(
-          ((image_size / (image_size + CROP_PADDING)) *
-           tf.cast(tf.minimum(image_height, image_width), tf.float32)),
-          tf.int32)
+          (
+              (image_size / (image_size + CROP_PADDING))
+              * tf.cast(tf.minimum(image_height, image_width), tf.float32)
+          ),
+          tf.int32,
+      )
 
       offset_height = ((image_height - padded_center_crop_size) + 1) // 2
       offset_width = ((image_width - padded_center_crop_size) + 1) // 2
       crop_window = tf.stack([
-          offset_height, offset_width, padded_center_crop_size,
-          padded_center_crop_size
+          offset_height,
+          offset_width,
+          padded_center_crop_size,
+          padded_center_crop_size,
       ])
       image = tf.io.decode_and_crop_jpeg(image_bytes, crop_window, channels=3)
       image = _resize(image)
@@ -244,34 +262,44 @@ class ResNet(image_model.ImageModel):
 
     def decode_example(example):
       image = preprocess_for_eval(example['image'], dtype=dtype)
-      label = tf.one_hot(example['label'],
-                         data_builder.info.features['label'].num_classes)
+      label = tf.one_hot(
+          example['label'], data_builder.info.features['label'].num_classes
+      )
       return {'image': image, 'label': label, 'tfds_id': example['tfds_id']}
 
     dataset = data_builder.as_dataset(
         split=split,
         decoders={'image': tfds.decode.SkipDecoding()},
-        read_config=read_config)
+        read_config=read_config,
+    )
     options = tf.data.Options()
     options.experimental_threading.private_threadpool_size = 48
     dataset = dataset.with_options(options)
     dataset = dataset.map(
-        decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        decode_example, num_parallel_calls=tf.data.experimental.AUTOTUNE
+    )
     return dataset
 
 
 ResNet18 = functools.partial(
-    ResNet, stage_sizes=[2, 2, 2, 2], block_cls=ResNetBlock)
+    ResNet, stage_sizes=[2, 2, 2, 2], block_cls=ResNetBlock
+)
 ResNet34 = functools.partial(
-    ResNet, stage_sizes=[3, 4, 6, 3], block_cls=ResNetBlock)
+    ResNet, stage_sizes=[3, 4, 6, 3], block_cls=ResNetBlock
+)
 ResNet50 = functools.partial(
-    ResNet, stage_sizes=[3, 4, 6, 3], block_cls=BottleneckResNetBlock)
+    ResNet, stage_sizes=[3, 4, 6, 3], block_cls=BottleneckResNetBlock
+)
 ResNet101 = functools.partial(
-    ResNet, stage_sizes=[3, 4, 23, 3], block_cls=BottleneckResNetBlock)
+    ResNet, stage_sizes=[3, 4, 23, 3], block_cls=BottleneckResNetBlock
+)
 ResNet152 = functools.partial(
-    ResNet, stage_sizes=[3, 8, 36, 3], block_cls=BottleneckResNetBlock)
+    ResNet, stage_sizes=[3, 8, 36, 3], block_cls=BottleneckResNetBlock
+)
 ResNet200 = functools.partial(
-    ResNet, stage_sizes=[3, 24, 36, 3], block_cls=BottleneckResNetBlock)
+    ResNet, stage_sizes=[3, 24, 36, 3], block_cls=BottleneckResNetBlock
+)
 
 ResNet18Local = functools.partial(
-    ResNet, stage_sizes=[2, 2, 2, 2], block_cls=ResNetBlock, conv=nn.ConvLocal)
+    ResNet, stage_sizes=[2, 2, 2, 2], block_cls=ResNetBlock, conv=nn.ConvLocal
+)

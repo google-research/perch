@@ -42,14 +42,19 @@ class DUST(adapt.SFDAMethod):
       "Khurana, Sameer, et al. 'Unsupervised domain adaptation forspeech "
       "recognition via uncertainty driven self-training.' ICASSP 2021-2021 "
       "IEEE International Conference on Acoustics, Speech and Signal "
-      "Processing(ICASSP). IEEE, 2021.")
+      "Processing(ICASSP). IEEE, 2021."
+  )
 
-  def before_epoch(self, key: jax.random.PRNGKeyArray,
-                   model_bundle: model_utils.ModelBundle,
-                   adaptation_state: adapt.AdaptationState,
-                   adaptation_dataset: tf.data.Dataset,
-                   modality: adapt.Modality, multi_label: bool,
-                   **method_kwargs) -> adapt.AdaptationState:
+  def before_epoch(
+      self,
+      key: jax.random.PRNGKeyArray,
+      model_bundle: model_utils.ModelBundle,
+      adaptation_state: adapt.AdaptationState,
+      adaptation_dataset: tf.data.Dataset,
+      modality: adapt.Modality,
+      multi_label: bool,
+      **method_kwargs
+  ) -> adapt.AdaptationState:
     """Compute the pseudo-labels, the masks and store them in memory.
 
     Args:
@@ -93,8 +98,9 @@ class DUST(adapt.SFDAMethod):
 
     # We compute the mask by only keeping samples whose maximum kl_divergence
     # observed is lower than a pre-defined threshold.
-    pseudo_label_mask = jnp.stack(kl_distances,
-                                  0).max(axis=0) < method_kwargs["kl_threshold"]
+    pseudo_label_mask = (
+        jnp.stack(kl_distances, 0).max(axis=0) < method_kwargs["kl_threshold"]
+    )
     sample_ids = reference_forward_result["id"]
     pseudo_label = reference_probability
 
@@ -110,11 +116,15 @@ class DUST(adapt.SFDAMethod):
     return adaptation_state
 
   def before_iter(
-      self, key: jax.random.PRNGKeyArray, batch: dict[str, np.ndarray],
+      self,
+      key: jax.random.PRNGKeyArray,
+      batch: dict[str, np.ndarray],
       adaptation_state: adapt.AdaptationState,
-      model_bundle: model_utils.ModelBundle, modality: adapt.Modality,
+      model_bundle: model_utils.ModelBundle,
+      modality: adapt.Modality,
       multi_label: bool,
-      **method_kwargs) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
+      **method_kwargs
+  ) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
     """Grab the pseudo-labels and masks for the current batch.
 
     Args:
@@ -133,7 +143,8 @@ class DUST(adapt.SFDAMethod):
     method_state = flax_utils.unreplicate(adaptation_state.method_state)
     id2index = method_state["id2index"]
     batch_indices = np.array(
-        [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
+        [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])]
+    )
 
     pseudo_label = method_state["pseudo_label"][batch_indices]
     pseudo_label_mask = method_state["pseudo_label_mask"][batch_indices]
@@ -149,29 +160,34 @@ class DUST(adapt.SFDAMethod):
 
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label),
-        "pseudo_label_mask": flax_utils.replicate(pseudo_label_mask)
+        "pseudo_label_mask": flax_utils.replicate(pseudo_label_mask),
     }
 
-  def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> type[clu_metrics.Collection]:
+  def get_adaptation_metrics(
+      self, supervised: bool, multi_label: bool, **method_kwargs
+  ) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation."""
     metrics_dict = vars(
-        adapt.get_common_metrics(
-            supervised=supervised, multi_label=multi_label))["__annotations__"]
+        adapt.get_common_metrics(supervised=supervised, multi_label=multi_label)
+    )["__annotations__"]
 
-    def single_label_loss_fn(probabilities, pseudo_label, pseudo_label_mask,
-                             **_):
+    def single_label_loss_fn(
+        probabilities, pseudo_label, pseudo_label_mask, **_
+    ):
       pl_xent = losses.label_xent(
           probabilities=probabilities,
           label=pseudo_label,
-          sample_mask=pseudo_label_mask)
+          sample_mask=pseudo_label_mask,
+      )
       return pl_xent
 
-    def multi_label_loss_fn(probabilities: jnp.ndarray,
-                            pseudo_label: jnp.ndarray,
-                            pseudo_label_mask: jnp.ndarray,
-                            label_mask: jnp.ndarray, **_):
-
+    def multi_label_loss_fn(
+        probabilities: jnp.ndarray,
+        pseudo_label: jnp.ndarray,
+        pseudo_label_mask: jnp.ndarray,
+        label_mask: jnp.ndarray,
+        **_
+    ):
       # Sample's probabilities that end up contributing to the final computation
       # are those left unmasked by label_mask (defined by the target domain and
       # restricting the set of possible species) and are confident enough (

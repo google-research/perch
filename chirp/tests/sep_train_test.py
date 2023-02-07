@@ -53,7 +53,8 @@ class TrainSeparationTest(absltest.TestCase):
         interval_length_s=1.0,
     )
     fake_builder = fake_dataset.FakeDataset(
-        config=config, data_dir=self.data_dir)
+        config=config, data_dir=self.data_dir
+    )
     fake_builder.download_and_prepare()
     self.builder = fake_builder
 
@@ -69,7 +70,8 @@ class TrainSeparationTest(absltest.TestCase):
         is_train=False,  # Avoid shuffle in tests.
         dataset_directory=config.dataset_directory,
         tfds_data_dir=config.tfds_data_dir,
-        pipeline=pipeline_)
+        pipeline=pipeline_,
+    )
     if 'train' in split:
       ds = ds.repeat()
     return ds, dataset_info
@@ -84,30 +86,38 @@ class TrainSeparationTest(absltest.TestCase):
         'pipeline.Pipeline',
         ops=[
             _c('pipeline.OnlyJaxTypes'),
-            _c('pipeline.ConvertBirdTaxonomyLabels',
-               source_namespace='ebird2021',
-               target_class_list='tiny_species',
-               add_taxonomic_labels=True),
+            _c(
+                'pipeline.ConvertBirdTaxonomyLabels',
+                source_namespace='ebird2021',
+                target_class_list='tiny_species',
+                add_taxonomic_labels=True,
+            ),
             _c('pipeline.MixAudio', mixin_prob=1.0),
             _c('pipeline.Batch', batch_size=2, split_across_devices=True),
             _c('pipeline.RandomSlice', window_size=window_size_s),
-        ])
+        ],
+    )
 
     config.eval_dataset_config.pipeline = _c(
         'pipeline.Pipeline',
         ops=[
             _c('pipeline.OnlyJaxTypes'),
-            _c('pipeline.ConvertBirdTaxonomyLabels',
-               source_namespace='ebird2021',
-               target_class_list='tiny_species',
-               add_taxonomic_labels=True),
+            _c(
+                'pipeline.ConvertBirdTaxonomyLabels',
+                source_namespace='ebird2021',
+                target_class_list='tiny_species',
+                add_taxonomic_labels=True,
+            ),
             _c('pipeline.MixAudio', mixin_prob=1.0),
             _c('pipeline.Batch', batch_size=2, split_across_devices=True),
-            _c('pipeline.Slice',
-               window_size=window_size_s,
-               start=0,
-               names=('audio',)),
-        ])
+            _c(
+                'pipeline.Slice',
+                window_size=window_size_s,
+                start=0,
+                names=('audio',),
+            ),
+        ],
+    )
 
     config.train_config.num_train_steps = 1
     config.train_config.checkpoint_every_steps = 1
@@ -129,7 +139,8 @@ class TrainSeparationTest(absltest.TestCase):
       config.init_config.model_config.mask_kernel_size = 2
       config.init_config.model_config.classify_features = 4
       config.init_config.model_config.mask_generator = _c(
-          'soundstream_unet.SoundstreamUNet', soundstream_config)
+          'soundstream_unet.SoundstreamUNet', soundstream_config
+      )
 
     config = config_utils.parse_config(config, config_globals.get_globals())
     return config
@@ -137,19 +148,22 @@ class TrainSeparationTest(absltest.TestCase):
   def test_config_structure(self):
     # Check that the test config and model config have similar structure.
     raw_config = separator_config.get_config()
-    parsed_config = config_utils.parse_config(raw_config,
-                                              config_globals.get_globals())
+    parsed_config = config_utils.parse_config(
+        raw_config, config_globals.get_globals()
+    )
     test_config = self._get_test_config()
     self.assertEqual(
         jax.tree_util.tree_structure(parsed_config.to_dict()),
-        jax.tree_util.tree_structure(test_config.to_dict()))
+        jax.tree_util.tree_structure(test_config.to_dict()),
+    )
 
   def test_init_baseline(self):
     # Ensure that we can initialize the model with the baseline config.
     config = separator_config.get_config()
     config = config_utils.parse_config(config, config_globals.get_globals())
     model_bundle, train_state = separator.initialize_model(
-        workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config
+    )
     self.assertIsNotNone(model_bundle)
     self.assertIsNotNone(train_state)
 
@@ -160,10 +174,12 @@ class TrainSeparationTest(absltest.TestCase):
         config,
     )
     model = separator.initialize_model(
-        workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config
+    )
 
     separator.train(
-        *model, train_dataset=ds, logdir=self.train_dir, **config.train_config)
+        *model, train_dataset=ds, logdir=self.train_dir, **config.train_config
+    )
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)
     self.assertIsNotNone(ckpt.latest_checkpoint)
 
@@ -174,7 +190,8 @@ class TrainSeparationTest(absltest.TestCase):
 
     ds, _ = self._get_test_dataset('test', config)
     model_bundle, train_state = separator.initialize_model(
-        workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config
+    )
     # Write a chekcpoint, or else the eval will hang.
     model_bundle.ckpt.save(train_state)
 
@@ -185,7 +202,8 @@ class TrainSeparationTest(absltest.TestCase):
         workdir=self.train_dir,
         logdir=self.train_dir,
         eval_sleep_s=0,
-        **config.eval_config)
+        **config.eval_config,
+    )
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)
     self.assertIsNotNone(ckpt.latest_checkpoint)
 
@@ -194,36 +212,48 @@ class TrainSeparationTest(absltest.TestCase):
     config = self._get_test_config(use_small_encoder=True)
     config.init_config.model_config.mask_generator.groups = (1, 1)
     model_bundle, train_state = separator.initialize_model(
-        workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config
+    )
 
     logging.info('Export Test: Exporting model.')
     frame_size = 32 * 2 * 2 * 250
     separator.export_tf(model_bundle, train_state, self.train_dir, frame_size)
     self.assertTrue(
-        tf.io.gfile.exists(os.path.join(self.train_dir, 'model.tflite')))
+        tf.io.gfile.exists(os.path.join(self.train_dir, 'model.tflite'))
+    )
     self.assertTrue(
         tf.io.gfile.exists(
-            os.path.join(self.train_dir, 'savedmodel/saved_model.pb')))
+            os.path.join(self.train_dir, 'savedmodel/saved_model.pb')
+        )
+    )
     self.assertTrue(
-        tf.io.gfile.exists(os.path.join(self.train_dir, 'label.csv')))
+        tf.io.gfile.exists(os.path.join(self.train_dir, 'label.csv'))
+    )
 
     logging.info('Export Test: Loading SavedModel.')
     # Check that we can execute the saved model.
     reloaded_model = tf.saved_model.load(
-        os.path.join(self.train_dir, 'savedmodel'))
+        os.path.join(self.train_dir, 'savedmodel')
+    )
     num_seconds = 3
     framed_inputs = np.zeros([1, num_seconds, frame_size])
     logging.info('Export Test: Executing SavedModel.')
     sep_audio, logits, embeddings = reloaded_model.infer_tf(framed_inputs)
-    self.assertSequenceEqual(sep_audio.shape, [
-        1, config.init_config.model_config.num_mask_channels,
-        num_seconds * frame_size
-    ])
-    self.assertSequenceEqual(logits.shape,
-                             [1, 15, model_bundle.class_lists['label'].size])
+    self.assertSequenceEqual(
+        sep_audio.shape,
+        [
+            1,
+            config.init_config.model_config.num_mask_channels,
+            num_seconds * frame_size,
+        ],
+    )
+    self.assertSequenceEqual(
+        logits.shape, [1, 15, model_bundle.class_lists['label'].size]
+    )
     self.assertSequenceEqual(
         embeddings.shape,
-        [1, 15, config.init_config.model_config.classify_features])
+        [1, 15, config.init_config.model_config.classify_features],
+    )
     logging.info('Export Test: Complete.')
 
 

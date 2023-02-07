@@ -27,23 +27,25 @@ MELSPEC_PARAMS_BASE = {
 }
 
 
-def Melspec(audio,
-            sample_frequency,
-            melspec_frequency=25,
-            frame_length_secs=0.08,
-            melspec_depth=160,
-            lower_edge_hertz=60.0,
-            upper_edge_hertz=7920.0,
-            log_floor=1e-2,
-            log_offset=0.0,
-            logmel_scalar=0.1,
-            pcen_alpha=0.5,
-            pcen_s=0.1,
-            pcen_beta=0.5,
-            pcen_delta=2.0,
-            pcen_floor=1e-6,
-            scaling='log',
-            batched=False):
+def Melspec(
+    audio,
+    sample_frequency,
+    melspec_frequency=25,
+    frame_length_secs=0.08,
+    melspec_depth=160,
+    lower_edge_hertz=60.0,
+    upper_edge_hertz=7920.0,
+    log_floor=1e-2,
+    log_offset=0.0,
+    logmel_scalar=0.1,
+    pcen_alpha=0.5,
+    pcen_s=0.1,
+    pcen_beta=0.5,
+    pcen_delta=2.0,
+    pcen_floor=1e-6,
+    scaling='log',
+    batched=False,
+):
   """Convert audio to melspectrogram, using params."""
   # Add front padding so that mel window aligns with audio frame.
   frame_step = int(sample_frequency / melspec_frequency)
@@ -61,7 +63,8 @@ def Melspec(audio,
   # stfts is a complex64 Tensor representing the Short-time Fourier Transform
   # of audio. Its shape is [1, ?, num_spectrogram_bins]
   stfts = tf.signal.stft(
-      audio, frame_length=frame_length, frame_step=frame_step, pad_end=True)
+      audio, frame_length=frame_length, frame_step=frame_step, pad_end=True
+  )
 
   # An energy spectrogram is the magnitude of the complex-valued STFT.
   # A float32 Tensor of shape [batch_size, ?, num_spectrogram_bins].
@@ -70,12 +73,20 @@ def Melspec(audio,
 
   # Warp the linear-scale magnitude spectrograms into the mel-scale.
   linear_to_mel_weight_matrix = tf.signal.linear_to_mel_weight_matrix(
-      melspec_depth, num_spectrogram_bins, sample_frequency, lower_edge_hertz,
-      upper_edge_hertz)
-  mel_spectrograms = tf.tensordot(magnitude_spectrograms,
-                                  linear_to_mel_weight_matrix, 1)
-  mel_spectrograms.set_shape(magnitude_spectrograms.shape[:-1].concatenate(
-      linear_to_mel_weight_matrix.shape[-1:]))
+      melspec_depth,
+      num_spectrogram_bins,
+      sample_frequency,
+      lower_edge_hertz,
+      upper_edge_hertz,
+  )
+  mel_spectrograms = tf.tensordot(
+      magnitude_spectrograms, linear_to_mel_weight_matrix, 1
+  )
+  mel_spectrograms.set_shape(
+      magnitude_spectrograms.shape[:-1].concatenate(
+          linear_to_mel_weight_matrix.shape[-1:]
+      )
+  )
 
   if scaling == 'log':
     # Mimics the stabilized log used in mel_utils:
@@ -96,22 +107,24 @@ def Melspec(audio,
   else:
     raise ValueError('Unrecognized melspectrogram scaling mode.')
 
-  num_frames = (tf.shape(audio)[1] // sample_frequency * melspec_frequency + 1)
+  num_frames = tf.shape(audio)[1] // sample_frequency * melspec_frequency + 1
   x = x[:, :num_frames]
   if not batched:
     x = tf.squeeze(x, 0)
   return x
 
 
-def GetAugmentedMelspec(audio, sample_frequency, melspec_params,
-                        feature_cleaning, filter_params):
+def GetAugmentedMelspec(
+    audio, sample_frequency, melspec_params, feature_cleaning, filter_params
+):
   """Build melspec, apply freq domain augmentation, then clean-up."""
   batched = len(audio.shape) == 2
   melspec_base = Melspec(
       audio=audio,
       batched=batched,
       sample_frequency=sample_frequency,
-      **melspec_params)
+      **melspec_params
+  )
   if not batched:
     melspec_base = tf.expand_dims(melspec_base, 0)
   if filter_params:
@@ -129,21 +142,26 @@ def CleanupMelspec(melspec, feature_cleaning):
     return melspec
   if feature_cleaning['strategy'] == 'whiten':
     melspec = TwoStageWhitening(
-        melspec, thresh=feature_cleaning['clean_thresh'])
+        melspec, thresh=feature_cleaning['clean_thresh']
+    )
   elif feature_cleaning['strategy'] == 'denoise':
     melspec = MixtureDenoise(melspec, thresh=feature_cleaning['clean_thresh'])
   elif feature_cleaning['strategy'] == 'softmask':
     raise ValueError('Softmask denoiser was removed.')
   elif feature_cleaning and feature_cleaning['strategy']:
-    raise ValueError('Unknown feature cleaning strategy : %s' %
-                     feature_cleaning)
+    raise ValueError(
+        'Unknown feature cleaning strategy : %s' % feature_cleaning
+    )
   return melspec
 
 
 def FilterAugmentMelspec(melspec, filter_params):
   """Apply filtering augmentation to the melspec batch."""
-  if (not filter_params or not filter_params.strategy or
-      filter_params.filter_probability <= 0):
+  if (
+      not filter_params
+      or not filter_params.strategy
+      or filter_params.filter_probability <= 0
+  ):
     return melspec
 
   if filter_params.strategy == 'spec_augment':
@@ -154,12 +172,14 @@ def FilterAugmentMelspec(melspec, filter_params):
     filters = tf.expand_dims(filters, 1)
     filtered = melspec * filters
   else:
-    raise ValueError('Unknown filter augmentation strategy : %s' %
-                     filter_params.strategy)
+    raise ValueError(
+        'Unknown filter augmentation strategy : %s' % filter_params.strategy
+    )
 
   mask = tf.less_equal(
       tf.random.uniform([tf.shape(melspec)[0]], 0.0, 1.0),
-      filter_params.filter_probability)
+      filter_params.filter_probability,
+  )
   mask = tf.cast(tf.expand_dims(tf.expand_dims(mask, 1), 2), melspec.dtype)
   melspec = mask * filtered + (1 - mask) * melspec
   return melspec
@@ -173,15 +193,18 @@ def TwoStageWhitening(batched_melspec, thresh=0.5):
   # Remove extreme outliers, and re-estimate mean and std.
   mask = tf.cast(
       tf.less_equal(
-          tf.abs(batched_melspec - feature_mean), thresh * feature_std + 1e-4),
-      batched_melspec.dtype)
+          tf.abs(batched_melspec - feature_mean), thresh * feature_std + 1e-4
+      ),
+      batched_melspec.dtype,
+  )
   # number of non-zero elements per channel.
   denom = tf.math.reduce_sum(mask, axis=1)
   masked_x = mask * batched_melspec
   masked_mean = tf.math.reduce_sum(masked_x, axis=1) / (denom + 1)
   masked_mean = tf.expand_dims(masked_mean, 1)
   masked_std = tf.reduce_sum(
-      mask * tf.square(batched_melspec - masked_mean), axis=1)
+      mask * tf.square(batched_melspec - masked_mean), axis=1
+  )
   masked_std = tf.sqrt(masked_std / (denom + 1))
   masked_std = tf.expand_dims(masked_std, 1)
   return (batched_melspec - masked_mean) / (masked_std + 1)
@@ -253,7 +276,9 @@ def FindPeaks(summed_spectral_magnitudes, stft_fps):
   for x in peaks:
     passing = [
         y >= threshold
-        for y in summed_spectral_magnitudes[x - margin_frames:x + margin_frames]
+        for y in summed_spectral_magnitudes[
+            x - margin_frames : x + margin_frames
+        ]
     ]
     if any(passing):
       filt_peaks.append(x)
@@ -271,7 +296,8 @@ def FindPeaksFromAudio(audio, sample_rate_hz, max_peaks=-1):
           batched=False,
           sample_frequency=sample_rate_hz,
           melspec_frequency=melspec_rate_hz,
-          upper_edge_hertz=10000.0)
+          upper_edge_hertz=10000.0,
+      )
       melspec = tf.expand_dims(melspec, 0)
       melspec = MixtureDenoise(melspec, 0.75)[0]
 
@@ -335,12 +361,12 @@ def ApplySpecAugmentMask(target, axis, min_length=0.0, max_length=0.5):
   """Generate 0/1 mask."""
   batch_size = tf.shape(target)[0]
   dtype = target.dtype
-  masked_portion = tf.random.uniform([batch_size],
-                                     minval=min_length,
-                                     maxval=max_length,
-                                     dtype=dtype)
+  masked_portion = tf.random.uniform(
+      [batch_size], minval=min_length, maxval=max_length, dtype=dtype
+  )
   mask_length = tf.cast(
-      masked_portion * tf.cast(target.shape[axis], tf.float32), tf.int64)
+      masked_portion * tf.cast(target.shape[axis], tf.float32), tf.int64
+  )
 
   diag = tf.range(target.shape.as_list()[axis], dtype=tf.int64)
   diag = tf.expand_dims(diag, 0)
@@ -353,11 +379,11 @@ def ApplySpecAugmentMask(target, axis, min_length=0.0, max_length=0.5):
   def RandRoll(x):
     return tf.roll(
         x,
-        tf.random.uniform([],
-                          minval=0,
-                          maxval=target.shape[axis],
-                          dtype=tf.int64),
-        axis=0)
+        tf.random.uniform(
+            [], minval=0, maxval=target.shape[axis], dtype=tf.int64
+        ),
+        axis=0,
+    )
 
   mask = tf.map_fn(RandRoll, mask, dtype=mask.dtype, back_prop=False)
   if axis == 1:
@@ -379,9 +405,11 @@ def ApplySpecAugment(raw_melspec, batched=False, **kwargs):
   else:
     max_length = None
   melspec = ApplySpecAugmentMask(
-      melspec, 2, min_length=0.0, max_length=max_length)
+      melspec, 2, min_length=0.0, max_length=max_length
+  )
   melspec = ApplySpecAugmentMask(
-      melspec, 1, min_length=0.0, max_length=max_length)
+      melspec, 1, min_length=0.0, max_length=max_length
+  )
   if batched:
     return melspec
   else:

@@ -35,6 +35,7 @@ from jax import scipy as jsp
 @dataclasses.dataclass
 class LogScalingConfig:
   """Configuration for log-scaling of mel-spectrogram."""
+
   floor: float = 1e-2
   offset: float = 0.0
   scalar: float = 0.1
@@ -43,6 +44,7 @@ class LogScalingConfig:
 @dataclasses.dataclass
 class PCENScalingConfig:
   """Configuration for PCEN normalization of mel-spectrogram."""
+
   smoothing_coef: float = 0.1
   gain: float = 0.5
   bias: float = 2.0
@@ -86,6 +88,7 @@ class Frontend(nn.Module):
     stride: The stride to use. For an STFT this is sometimes called the hop
       length.
   """
+
   features: int
   stride: int
 
@@ -94,15 +97,18 @@ class Frontend(nn.Module):
     # Apply frequency scaling
     scaling_config = self.scaling_config
     if isinstance(scaling_config, LogScalingConfig):
-      outputs = audio_utils.log_scale(inputs,
-                                      **dataclasses.asdict(scaling_config))
+      outputs = audio_utils.log_scale(
+          inputs, **dataclasses.asdict(scaling_config)
+      )
     elif isinstance(scaling_config, PCENScalingConfig):
       kwargs = dataclasses.asdict(scaling_config)
       if kwargs.pop("spcen"):
-        init_smoothing_coef = jnp.ones(
-            (self.features,)) * scaling_config.smoothing_coef
-        smoothing_coef = self.param("spcen_smoothing_coef",
-                                    lambda _: init_smoothing_coef)
+        init_smoothing_coef = (
+            jnp.ones((self.features,)) * scaling_config.smoothing_coef
+        )
+        smoothing_coef = self.param(
+            "spcen_smoothing_coef", lambda _: init_smoothing_coef
+        )
         smoothing_coef = jnp.clip(smoothing_coef, 0, 1)
         kwargs["smoothing_coef"] = smoothing_coef
       outputs, _ = audio_utils.pcen(inputs, **kwargs)
@@ -127,6 +133,7 @@ class InverseFrontend(nn.Module):
     stride: The stride that was used for the frontend. This tells the inverse
       frontend how many samples to generate per step.
   """
+
   stride: int
 
 
@@ -147,6 +154,7 @@ class STFT(Frontend):
       spectrogram. If `None`, then the complex-valued STFT will be returned.
     scaling_config: The magnitude scaling configuration to use.
   """
+
   power: Optional[float] = 2.0
   scaling_config: Optional[ScalingConfig] = None
 
@@ -163,7 +171,8 @@ class STFT(Frontend):
         nperseg=nperseg,
         noverlap=nperseg - self.stride,
         nfft=nfft,
-        padded=False)
+        padded=False,
+    )
 
     # STFT does not use SAME padding (i.e., padding with a total of nperseg -
     # stride). Instead it pads with nperseg // 2 on both sides, so the total
@@ -175,7 +184,7 @@ class STFT(Frontend):
       stfts = stfts[..., :-1]
 
     stfts = jnp.swapaxes(stfts, -1, -2)
-    stfts = jnp.abs(stfts)**self.power if self.power is not None else stfts
+    stfts = jnp.abs(stfts) ** self.power if self.power is not None else stfts
     return self._magnitude_scale(stfts)
 
 
@@ -194,7 +203,8 @@ class ISTFT(InverseFrontend):
     pad_width = ((0, 0),) * (inputs.ndim - 1) + ((0, 1),)
     inputs = jnp.pad(inputs, pad_width, "edge")
     _, istfts = jsp.signal.istft(
-        inputs, nperseg=nperseg, noverlap=nperseg - self.stride, nfft=nfft)
+        inputs, nperseg=nperseg, noverlap=nperseg - self.stride, nfft=nfft
+    )
     return istfts
 
 
@@ -225,6 +235,7 @@ class MelSpectrogram(Frontend):
       this range are simply discarded.
     scaling_config: The magnitude scaling configuration to use.
   """
+
   kernel_size: int
   sample_rate: int
   freq_range: tuple[int, int]
@@ -238,19 +249,19 @@ class MelSpectrogram(Frontend):
         inputs,
         nperseg=self.kernel_size,
         noverlap=self.kernel_size - self.stride,
-        padded=False)
+        padded=False,
+    )
     # See notes in STFT regarding output size
     if inputs.shape[-1] % self.stride == 0:
       stfts = stfts[..., :-1]
     stfts = jnp.swapaxes(stfts, -1, -2)
-    magnitude_spectrograms = jnp.abs(stfts)**self.power
+    magnitude_spectrograms = jnp.abs(stfts) ** self.power
 
     # Construct mel-spectrogram
     num_spectrogram_bins = magnitude_spectrograms.shape[-1]
-    mel_matrix = signal.linear_to_mel_weight_matrix(self.features,
-                                                    num_spectrogram_bins,
-                                                    self.sample_rate,
-                                                    *self.freq_range)
+    mel_matrix = signal.linear_to_mel_weight_matrix(
+        self.features, num_spectrogram_bins, self.sample_rate, *self.freq_range
+    )
     mel_spectrograms = magnitude_spectrograms @ mel_matrix
     return self._magnitude_scale(mel_spectrograms)
 
@@ -267,6 +278,7 @@ class LearnedFrontend(Frontend):
     kernel_size: The size of the convolutional filters.
     scaling_config: The magnitude scaling configuration to use.
   """
+
   kernel_size: int
   scaling_config: Optional[ScalingConfig] = None
 
@@ -275,9 +287,11 @@ class LearnedFrontend(Frontend):
     output = nn.Conv(
         features=self.features,
         kernel_size=(self.kernel_size,),
-        strides=(self.stride,))(
-            # Collapse batch dimensions and add a single channel
-            jnp.reshape(inputs, (-1,) + inputs.shape[-1:] + (1,)))
+        strides=(self.stride,),
+    )(
+        # Collapse batch dimensions and add a single channel
+        jnp.reshape(inputs, (-1,) + inputs.shape[-1:] + (1,))
+    )
     output = jnp.reshape(output, inputs.shape[:-1] + output.shape[-2:])
     return self._magnitude_scale(output)
 
@@ -291,13 +305,14 @@ class InverseLearnedFrontend(InverseFrontend):
   Attributes:
     kernel_size: The size of the convolutional filters.
   """
+
   kernel_size: int
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
     output = nn.ConvTranspose(
-        features=1, kernel_size=(self.kernel_size,), strides=(self.stride,))(
-            jnp.reshape(inputs, (-1,) + inputs.shape[-2:]))
+        features=1, kernel_size=(self.kernel_size,), strides=(self.stride,)
+    )(jnp.reshape(inputs, (-1,) + inputs.shape[-2:]))
     output = jnp.reshape(output, inputs.shape[:-2] + output.shape[-2:])
     return jnp.squeeze(output, -1)
 
@@ -325,6 +340,7 @@ class MorletWaveletTransform(Frontend):
     freq_range: The filters are initialized to resemble a mel-spectrogram. These
       values determine the minimum and maximum frequencies of those filters.
   """
+
   kernel_size: int
   sample_rate: int
   freq_range: tuple[int, int]
@@ -335,26 +351,30 @@ class MorletWaveletTransform(Frontend):
   def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
     input_signal = jnp.reshape(inputs, (-1,) + inputs.shape[-1:] + (1,))
 
-    params = cwt.melspec_params(self.features, self.sample_rate,
-                                *self.freq_range)
+    params = cwt.melspec_params(
+        self.features, self.sample_rate, *self.freq_range
+    )
     gabor_mean = self.param("gabor_mean", lambda rng: params[0])
     gabor_std = self.param("gabor_std", lambda rng: params[1])
     sigma = gabor_mean * gabor_std
-    gabor_filter = cwt.gabor_filter(sigma, cwt.Domain.TIME,
-                                    cwt.Normalization.L1)
+    gabor_filter = cwt.gabor_filter(
+        sigma, cwt.Domain.TIME, cwt.Normalization.L1
+    )
     filtered_signal = cwt.convolve_filter(
         gabor_filter,
         input_signal,
         gabor_std,
         cwt.Normalization.L1,
         self.kernel_size,
-        stride=(self.stride,))
+        stride=(self.stride,),
+    )
 
-    power_signal = jnp.abs(filtered_signal)**self.power
+    power_signal = jnp.abs(filtered_signal) ** self.power
 
     scaled_signal = self._magnitude_scale(power_signal)
 
-    output = jnp.reshape(scaled_signal,
-                         inputs.shape[:-1] + scaled_signal.shape[-2:])
+    output = jnp.reshape(
+        scaled_signal, inputs.shape[:-1] + scaled_signal.shape[-2:]
+    )
 
     return output

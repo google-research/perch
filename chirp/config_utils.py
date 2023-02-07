@@ -46,8 +46,9 @@ _KWARGS = "__config"
 _OBJECT = "__object"
 
 
-def callable_config(callable_: str, *args: config_dict.ConfigDict,
-                    **kwargs: Any) -> config_dict.ConfigDict:
+def callable_config(
+    callable_: str, *args: config_dict.ConfigDict, **kwargs: Any
+) -> config_dict.ConfigDict:
   """Create a configuration for constructing a Python object.
 
   Args:
@@ -80,8 +81,9 @@ def object_config(object_: str) -> config_dict.ConfigDict:
   return config_dict.ConfigDict({_OBJECT: object_})
 
 
-def parse_config(config: config_dict.ConfigDict,
-                 globals_: dict[str, Any]) -> config_dict.ConfigDict:
+def parse_config(
+    config: config_dict.ConfigDict, globals_: dict[str, Any]
+) -> config_dict.ConfigDict:
   """Parse a configuration.
 
   This handles nested configurations, as long as the values are callables
@@ -103,7 +105,8 @@ def parse_config(config: config_dict.ConfigDict,
     if isinstance(value, config_dict.ConfigDict):
       if set(value.keys()) == {_CALLABLE, _KWARGS}:
         return eval(value[_CALLABLE], globals_)(  # pylint: disable=eval-used
-            **parse_config(value[_KWARGS], globals_))
+            **parse_config(value[_KWARGS], globals_)
+        )
       elif set(value.keys()) == {_OBJECT}:
         return eval(value[_OBJECT], globals_)  # pylint: disable=eval-used
       else:

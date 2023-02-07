@@ -66,16 +66,18 @@ def jax_cdist(features_a: jnp.array, features_b: jnp.array) -> jnp.array:
   if features_a.shape[-1] != features_b.shape[-1]:
     raise ValueError(
         "The feature dimension should be the same. Currently features_a: "
-        f"{features_a.shape} and features_b: {features_b.shape}")
+        f"{features_a.shape} and features_b: {features_b.shape}"
+    )
   feature_dim = features_a.shape[-1]
 
   flat_features_a = jnp.reshape(features_a, [-1, feature_dim])
   flat_features_b = jnp.reshape(features_b, [-1, feature_dim])
   flat_transpose_b = flat_features_b.T
   distances = (
-      jnp.sum(jnp.square(flat_features_a), 1, keepdims=True) -
-      2 * jnp.matmul(flat_features_a, flat_transpose_b) +
-      jnp.sum(jnp.square(flat_transpose_b), 0, keepdims=True))
+      jnp.sum(jnp.square(flat_features_a), 1, keepdims=True)
+      - 2 * jnp.matmul(flat_features_a, flat_transpose_b)
+      + jnp.sum(jnp.square(flat_transpose_b), 0, keepdims=True)
+  )
   return distances
 
 
@@ -87,7 +89,7 @@ def forward_dataset(
     multi_label: bool,
     use_batch_statistics: bool = False,
     train: bool = False,
-    key: Optional[jax.random.PRNGKeyArray] = None
+    key: Optional[jax.random.PRNGKeyArray] = None,
 ) -> dict[str, Union[jnp.ndarray, np.ndarray]]:
   """Fowards a dataset through a given model.
 
@@ -131,7 +133,8 @@ def forward_dataset(
   # Forward the whole dataset. Store embeddings, samples' ids, labels, and
   # model's probabilities.
   for index, batch in tqdm.tqdm(
-      enumerate(dataset.as_numpy_iterator()), total=len(dataset)):
+      enumerate(dataset.as_numpy_iterator()), total=len(dataset)
+  ):
     batch = jax.tree_map(np.asarray, batch)
     if key is not None:
       batch_key, key = jax.random.split(key)
@@ -149,14 +152,19 @@ def forward_dataset(
     if "label_mask" in batch and only_keep_unmasked_classes:
       # We make sure that the label_mask is the same for all samples in the
       # dataset.
-      if not (jnp.tile(reference_mask, (batch["label_mask"].shape[0], 1))
-              == batch["label_mask"]).all():
-        raise ValueError("All samples should have the same label_mask for the"
-                         "'only_keep_unmasked_classes' option to work"
-                         "adequately.")
+      if not (
+          jnp.tile(reference_mask, (batch["label_mask"].shape[0], 1))
+          == batch["label_mask"]
+      ).all():
+        raise ValueError(
+            "All samples should have the same label_mask for the"
+            "'only_keep_unmasked_classes' option to work"
+            "adequately."
+        )
       # We only keep unmasked classes.
       model_outputs = model_outputs.replace(
-          label=model_outputs.label[..., reference_mask.astype(bool)])
+          label=model_outputs.label[..., reference_mask.astype(bool)]
+      )
     all_ouputs.append(flax_utils.unreplicate(model_outputs))
     all_ids += list(batch["tfds_id"].reshape(-1))
 
@@ -164,10 +172,12 @@ def forward_dataset(
   # arrays in the result dictionary.
   logits2proba = nn.sigmoid if multi_label else nn.softmax
   result = {}
-  result["embedding"] = jnp.concatenate([x.embedding for x in all_ouputs],
-                                        axis=0)  # [dataset_size, n_dimensions]
-  result["proba"] = jnp.concatenate([logits2proba(x.label) for x in all_ouputs],
-                                    axis=0)  # [dataset_size, num_classes]
+  result["embedding"] = jnp.concatenate(
+      [x.embedding for x in all_ouputs], axis=0
+  )  # [dataset_size, n_dimensions]
+  result["proba"] = jnp.concatenate(
+      [logits2proba(x.label) for x in all_ouputs], axis=0
+  )  # [dataset_size, num_classes]
   ids = np.array(all_ids)  # [dataset_size,]
 
   # Make some verifications.

@@ -31,12 +31,16 @@ from absl.testing import absltest
 
 class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
   """Tests for the bird taxonomy dataset."""
+
   DATASET_CLASS = bird_taxonomy.BirdTaxonomy
   BUILDER_CONFIG_NAMES_TO_TEST = [
       config.name
       for config in DATASET_CLASS.BUILDER_CONFIGS
-      if not ('tiny' in config.name or 'upstream' in config.name or
-              'downstream' in config.name)
+      if not (
+          'tiny' in config.name
+          or 'upstream' in config.name
+          or 'downstream' in config.name
+      )
   ]
   EXAMPLE_DIR = DATASET_CLASS.code_path.parent / 'placeholder_data'
   DL_EXTRACT_RESULT = {'taxonomy_info': 'taxonomy_info.json'}
@@ -53,13 +57,18 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
 
     _ = tfds.core.lazy_imports.librosa
 
-    cls.url_patcher = mock.patch.object(cls.DATASET_CLASS, 'GCS_URL',
-                                        epath.Path(cls.tempdir))
+    cls.url_patcher = mock.patch.object(
+        cls.DATASET_CLASS, 'GCS_URL', epath.Path(cls.tempdir)
+    )
     cls.query_patchers = []
     for i in [3, 4]:
       cls.query_patchers.append(
-          mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[i],
-                            'data_processing_query', fsu.QuerySequence([])))
+          mock.patch.object(
+              cls.DATASET_CLASS.BUILDER_CONFIGS[i],
+              'data_processing_query',
+              fsu.QuerySequence([]),
+          )
+      )
     cls.url_patcher.start()
     for patcher in cls.query_patchers:
       patcher.start()
@@ -67,7 +76,8 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
     subdir.mkdir(parents=True)
     for i in range(4):
       tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(
-          subdir / f'XC{i:05d}.mp3', format='mp3')
+          subdir / f'XC{i:05d}.mp3', format='mp3'
+      )
 
   @classmethod
   def tearDownClass(cls):
@@ -91,20 +101,24 @@ class Int16AsFloatTensorTest(absltest.TestCase):
     feature = tfds_features.Int16AsFloatTensor(shape=[None], sample_rate=22050)
     np.testing.assert_allclose(
         feature.encode_example([-1.0, 0.0]),
-        np.array([-(2**15), 0], dtype=np.int16))
+        np.array([-(2**15), 0], dtype=np.int16),
+    )
 
   def test_reconstruct(self):
     example_data = [-1.0, 0.0, 0.5]
     feature = tfds_features.Int16AsFloatTensor(
-        shape=[None], sample_rate=22050, encoding=tfds.features.Encoding.ZLIB)
+        shape=[None], sample_rate=22050, encoding=tfds.features.Encoding.ZLIB
+    )
     np.testing.assert_allclose(
         example_data,
-        feature.decode_example(feature.encode_example(example_data)))
+        feature.decode_example(feature.encode_example(example_data)),
+    )
 
   def test_exception_on_non_float(self):
     feature = tfds_features.Int16AsFloatTensor(shape=[None], sample_rate=22050)
-    self.assertRaises(ValueError, feature.encode_example,
-                      np.array([-1, 0, 0], dtype=np.int16))
+    self.assertRaises(
+        ValueError, feature.encode_example, np.array([-1, 0, 0], dtype=np.int16)
+    )
 
   def test_exception_on_out_of_bound_values(self):
     feature = tfds_features.Int16AsFloatTensor(shape=[None], sample_rate=22050)

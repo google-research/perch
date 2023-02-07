@@ -24,6 +24,7 @@ import tensorflow as tf
 @dataclasses.dataclass()
 class DatasetInfo:
   """Describes dataset contents."""
+
   sample_rate_hz: int = 22050
   example_size_s: float = 6.0
   comment: str = ''
@@ -39,13 +40,17 @@ class DatasetInfo:
 
   def add_enums_from_taxonomy(self, taxo):
     self.label_set = tuple(
-        [taxo.label_enum[i] for i in range(len(taxo.label_enum) // 2)])
+        [taxo.label_enum[i] for i in range(len(taxo.label_enum) // 2)]
+    )
     self.genus_set = tuple(
-        [taxo.genus_enum[i] for i in range(len(taxo.genus_enum) // 2)])
+        [taxo.genus_enum[i] for i in range(len(taxo.genus_enum) // 2)]
+    )
     self.family_set = tuple(
-        [taxo.family_enum[i] for i in range(len(taxo.family_enum) // 2)])
+        [taxo.family_enum[i] for i in range(len(taxo.family_enum) // 2)]
+    )
     self.order_set = tuple(
-        [taxo.order_enum[i] for i in range(len(taxo.order_enum) // 2)])
+        [taxo.order_enum[i] for i in range(len(taxo.order_enum) // 2)]
+    )
 
   def write(self, output_path, filename='info.json'):
     with tf.io.gfile.GFile(os.path.join(output_path, filename), 'w') as f:

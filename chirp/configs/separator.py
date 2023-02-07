@@ -29,7 +29,8 @@ def get_config() -> config_dict.ConfigDict:
   config.train_dataset_config = presets.get_supervised_train_pipeline(
       config,
       mixin_prob=1.0,
-      train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0')
+      train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+  )
   config.train_dataset_config.split = 'train[:99%]'
 
   eval_dataset_config = config_dict.ConfigDict()
@@ -37,19 +38,26 @@ def get_config() -> config_dict.ConfigDict:
       'pipeline.Pipeline',
       ops=[
           _c('pipeline.OnlyJaxTypes'),
-          _c('pipeline.ConvertBirdTaxonomyLabels',
-             source_namespace='ebird2021',
-             target_class_list=config.get_ref('target_class_list'),
-             add_taxonomic_labels=True),
+          _c(
+              'pipeline.ConvertBirdTaxonomyLabels',
+              source_namespace='ebird2021',
+              target_class_list=config.get_ref('target_class_list'),
+              add_taxonomic_labels=True,
+          ),
           _c('pipeline.MixAudio', mixin_prob=1.0),
-          _c('pipeline.Batch',
-             batch_size=config.batch_size,
-             split_across_devices=True),
-          _c('pipeline.Slice',
-             window_size=config.get_ref('eval_window_size_s'),
-             start=0.0),
+          _c(
+              'pipeline.Batch',
+              batch_size=config.batch_size,
+              split_across_devices=True,
+          ),
+          _c(
+              'pipeline.Slice',
+              window_size=config.get_ref('eval_window_size_s'),
+              start=0.0,
+          ),
           _c('pipeline.NormalizeAudio', target_gain=0.45),
-      ])
+      ],
+  )
   eval_dataset_config.split = 'train[99%:]'
   eval_dataset_config.tfds_data_dir = config.tfds_data_dir
   eval_dataset_config.dataset_directory = 'bird_taxonomy/slice_peaked:1.4.0'
@@ -80,7 +88,8 @@ def get_config() -> config_dict.ConfigDict:
   soundstream_config.groups = (1, 1, 1)
   soundstream_config.unet_scalar = 1.0
   model_config.mask_generator = config_utils.callable_config(
-      'soundstream_unet.SoundstreamUNet', soundstream_config)
+      'soundstream_unet.SoundstreamUNet', soundstream_config
+  )
 
   # Frontend configuration
   stride = config_dict.FieldReference(32)
@@ -96,9 +105,11 @@ def get_config() -> config_dict.ConfigDict:
   frontend_config.kernel_size = kernel_size
   inverse_frontend_config.kernel_size = kernel_size
   model_config.bank_transform = config_utils.callable_config(
-      'frontend.LearnedFrontend', frontend_config)
+      'frontend.LearnedFrontend', frontend_config
+  )
   model_config.unbank_transform = config_utils.callable_config(
-      'frontend.InverseLearnedFrontend', inverse_frontend_config)
+      'frontend.InverseLearnedFrontend', inverse_frontend_config
+  )
   model_config.bank_is_real = True
 
   # Training loop configuration

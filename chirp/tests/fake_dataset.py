@@ -29,49 +29,32 @@ class FakeDataset(bird_taxonomy.BirdTaxonomy):
     }
 
   def _generate_examples(self, num_examples):
-
     for i in range(num_examples):
       yield i, {
-          'audio':
-              np.random.uniform(-1.0, 0.99,
-                                self.info.features['audio'].shape).astype(
-                                    np.float32),
-          'recording_id':
-              i,
-          'segment_id':
-              -1 + i,
-          'segment_start':
-              17,
-          'segment_end':
-              17 + self.info.features['audio'].shape[0],
-          'label':
-              np.random.choice(self.info.features['label'].names, size=[3]),
-          'bg_labels':
-              np.random.choice(self.info.features['bg_labels'].names, size=[2]),
-          'filename':
-              'placeholder',
-          'quality_score':
-              np.random.choice(['A', 'B', 'C', 'D', 'E', 'F']),
-          'license':
-              '//creativecommons.org/licenses/by-nc-sa/4.0/',
-          'country':
-              np.random.choice(['South Africa', 'Colombia', 'Namibia']),
-          'altitude':
-              str(np.random.uniform(0, 3000)),
-          'length':
-              np.random.choice(['1:10', '0:01']),
-          'bird_seen':
-              np.random.choice(['yes', 'no']),
-          'latitude':
-              str(np.random.uniform(0, 90)),
-          'longitude':
-              str(np.random.uniform(0, 90)),
-          'playback_used':
-              'yes',
-          'recordist':
-              'N/A',
-          'remarks':
-              'N/A',
-          'sound_type':
-              np.random.choice(['call', 'song'])
+          'audio': np.random.uniform(
+              -1.0, 0.99, self.info.features['audio'].shape
+          ).astype(np.float32),
+          'recording_id': i,
+          'segment_id': -1 + i,
+          'segment_start': 17,
+          'segment_end': 17 + self.info.features['audio'].shape[0],
+          'label': np.random.choice(
+              self.info.features['label'].names, size=[3]
+          ),
+          'bg_labels': np.random.choice(
+              self.info.features['bg_labels'].names, size=[2]
+          ),
+          'filename': 'placeholder',
+          'quality_score': np.random.choice(['A', 'B', 'C', 'D', 'E', 'F']),
+          'license': '//creativecommons.org/licenses/by-nc-sa/4.0/',
+          'country': np.random.choice(['South Africa', 'Colombia', 'Namibia']),
+          'altitude': str(np.random.uniform(0, 3000)),
+          'length': np.random.choice(['1:10', '0:01']),
+          'bird_seen': np.random.choice(['yes', 'no']),
+          'latitude': str(np.random.uniform(0, 90)),
+          'longitude': str(np.random.uniform(0, 90)),
+          'playback_used': 'yes',
+          'recordist': 'N/A',
+          'remarks': 'N/A',
+          'sound_type': np.random.choice(['call', 'song']),
       }

@@ -49,35 +49,45 @@ SPECIES_INFO_PATH = os.path.join(DATA_PATH, 'species_info.csv')
 ENSEMBLE_SIZE = 3
 
 flags.DEFINE_list('source_files', [], 'Source audio files (wav or mp3).')
-flags.DEFINE_string('model_path', '',
-                    'Where to find the model params and inference.pb')
-flags.DEFINE_string('separation_model_path', '',
-                    'Where to find the separation inference model.')
-flags.DEFINE_string('target_species', '',
-                    'Species code for single-species mode.')
+flags.DEFINE_string(
+    'model_path', '', 'Where to find the model params and inference.pb'
+)
+flags.DEFINE_string(
+    'separation_model_path', '', 'Where to find the separation inference model.'
+)
+flags.DEFINE_string(
+    'target_species', '', 'Species code for single-species mode.'
+)
 flags.DEFINE_string('output_dir', '', 'Where to dump output data.')
 flags.DEFINE_integer('num_shards', 2000, 'Number of CSV output shards.')
-flags.DEFINE_float('min_logit', -1.0,
-                   'Only emit predictions if a logit is above this threshold.')
-flags.DEFINE_integer('file_shards', 48,
-                     'Number of sub-jobs to divide each input file into.')
+flags.DEFINE_float(
+    'min_logit',
+    -1.0,
+    'Only emit predictions if a logit is above this threshold.',
+)
+flags.DEFINE_integer(
+    'file_shards', 48, 'Number of sub-jobs to divide each input file into.'
+)
 flags.DEFINE_string('hints_tag', '', 'Species set tag for hints.')
 flags.DEFINE_boolean('dry_run', False, 'Whether to exit after dry-run.')
 
 PredictionTuple = collections.namedtuple(
-    'PredictionTuple', ['file_id', 'start_time', 'end_time', 'logits'])
+    'PredictionTuple', ['file_id', 'start_time', 'end_time', 'logits']
+)
 
 
 class InferenceFn(beam.DoFn):
   """Beam function for model inference."""
 
-  def __init__(self,
-               model_path,
-               separation_model_path=None,
-               min_logit=-20.0,
-               target_species='',
-               sample_rate=22050,
-               hints_tag=None):
+  def __init__(
+      self,
+      model_path,
+      separation_model_path=None,
+      min_logit=-20.0,
+      target_species='',
+      sample_rate=22050,
+      hints_tag=None,
+  ):
     # Get a local copy of the inference.pb file.
     self.model_path = model_path
     self.separation_model_path = separation_model_path
@@ -92,17 +102,20 @@ class InferenceFn(beam.DoFn):
     # admittedly a bit brittle...
     self.model_params = model_utils.load_params_from_json(self.model_path)
     self.taxo = taxonomy.Taxonomy(self.model_path, DATA_PATH, SPECIES_INFO_PATH)
-    if (self.target_species and
-        self.target_species not in self.taxo.label_enum):
-      raise ValueError('Target species %s not found in taxonomy label enum.' %
-                       self.target_species)
+    if self.target_species and self.target_species not in self.taxo.label_enum:
+      raise ValueError(
+          'Target species %s not found in taxonomy label enum.'
+          % self.target_species
+      )
     self.hints = self.taxo.MakeSpeciesHints(species_list_tag=self.hints_tag)
 
     if self.separation_model_path:
       self.separation_model = model_utils.load_separation_model(
-          self.separation_model_path)
+          self.separation_model_path
+      )
     self.classifiers = model_utils.load_classifier_ensemble(
-        self.model_path, max_runs=ENSEMBLE_SIZE)
+        self.model_path, max_runs=ENSEMBLE_SIZE
+    )
 
   def get_hints(self, batch_size):
     if self.hints is not None:
@@ -118,8 +131,12 @@ class InferenceFn(beam.DoFn):
     hop_size_s = window_size_s / 2
     logging.info('...starting separation (%s)', file_id)
     sep_chunks, raw_chunks = model_utils.separate_windowed(
-        audio, self.separation_model, hop_size_s, window_size_s,
-        self.sample_rate)
+        audio,
+        self.separation_model,
+        hop_size_s,
+        window_size_s,
+        self.sample_rate,
+    )
     raw_chunks = raw_chunks[:, np.newaxis, :]
     stacked_chunks = np.concatenate([raw_chunks, sep_chunks], axis=1)
     n_chunks = stacked_chunks.shape[0]
@@ -143,15 +160,17 @@ class InferenceFn(beam.DoFn):
           big_batch,
           self.classifiers,
           hints=self.get_hints(big_batch.shape[0]),
-          logits_key=logits_key)
+          logits_key=logits_key,
+      )
       unbatched_logits = np.reshape(
           logits,
           [
               n_chunks,
               n_channels,
               logits.shape[1],  # ensemble
-              logits.shape[2]  # num classes
-          ])
+              logits.shape[2],  # num classes
+          ],
+      )
       # Take the mean logits over the ensemble.
       unbatched_logits = np.mean(unbatched_logits, axis=2)
       # Take the max logit over all separated and raw channels.
@@ -168,7 +187,7 @@ class InferenceFn(beam.DoFn):
         target_taxo_logits['label'][:, np.newaxis],
         target_taxo_logits['genus'][:, np.newaxis],
         target_taxo_logits['family'][:, np.newaxis],
-        target_taxo_logits['order'][:, np.newaxis]
+        target_taxo_logits['order'][:, np.newaxis],
     ]
     all_logits = np.concatenate(all_logits, axis=1)
 
@@ -177,13 +196,21 @@ class InferenceFn(beam.DoFn):
         continue
       beam.metrics.Metrics.counter('beaminference', 'predictions').inc()
       time_stamp = (i + 1) * hop_size_s + (timestamp_offset / self.sample_rate)
-      prediction = PredictionTuple(file_id, time_stamp, time_stamp + hop_size_s,
-                                   all_logits[i])
+      prediction = PredictionTuple(
+          file_id, time_stamp, time_stamp + hop_size_s, all_logits[i]
+      )
       yield prediction_to_csv(prediction)
     beam.metrics.Metrics.counter('beaminference', 'files_processed').inc()
 
-  def infer_all(self, audio_filepath, audio, file_id, window_size_s, hop_size_s,
-                timestamp_offset):
+  def infer_all(
+      self,
+      audio_filepath,
+      audio,
+      file_id,
+      window_size_s,
+      hop_size_s,
+      timestamp_offset,
+  ):
     """Create label logits for all species."""
     start = time.time()
     logging.info('...starting separate+classify (%s)', file_id)
@@ -194,11 +221,13 @@ class InferenceFn(beam.DoFn):
         hop_size_s=hop_size_s,
         window_size_s=window_size_s,
         sample_rate=self.sample_rate,
-        hints=self.get_hints(1))
+        hints=self.get_hints(1),
+    )
     elapsed = time.time() - start
     logging.info('finished separate+classify. %5.3fs elsapsed', elapsed)
-    beam.metrics.Metrics.distribution('beaminference',
-                                      'inference_duration_s').update(elapsed)
+    beam.metrics.Metrics.distribution(
+        'beaminference', 'inference_duration_s'
+    ).update(elapsed)
     if reduced_logits is None:
       beam.metrics.Metrics.counter('beaminference', 'no_logits_returned').inc()
       logging.error('no logits from inference : %s', audio_filepath)
@@ -209,8 +238,9 @@ class InferenceFn(beam.DoFn):
         continue
       beam.metrics.Metrics.counter('beaminference', 'predictions').inc()
       time_stamp = (i + 1) * hop_size_s + (timestamp_offset / self.sample_rate)
-      prediction = PredictionTuple(file_id, time_stamp, time_stamp + hop_size_s,
-                                   time_averaged_logits[i])
+      prediction = PredictionTuple(
+          file_id, time_stamp, time_stamp + hop_size_s, time_averaged_logits[i]
+      )
       yield prediction_to_csv(prediction)
     beam.metrics.Metrics.counter('beaminference', 'files_processed').inc()
 
@@ -240,35 +270,45 @@ class InferenceFn(beam.DoFn):
     if num_shards > 1:
       shard_len = audio.shape[0] // num_shards
       timestamp_offset = shard_num * shard_len
-      audio = audio[timestamp_offset:timestamp_offset + shard_len]
+      audio = audio[timestamp_offset : timestamp_offset + shard_len]
     else:
       timestamp_offset = 0
 
     if crop_s > 0:
-      audio = audio[:crop_s * self.sample_rate]
+      audio = audio[: crop_s * self.sample_rate]
 
     if self.target_species:
       for pred in self.infer_target_species(file_id, audio, timestamp_offset):
         yield pred
     else:
-      for pred in self.infer_all(audio_filepath, audio, file_id, window_size_s,
-                                 hop_size_s, timestamp_offset):
+      for pred in self.infer_all(
+          audio_filepath,
+          audio,
+          file_id,
+          window_size_s,
+          hop_size_s,
+          timestamp_offset,
+      ):
         yield pred
 
 
 def prediction_to_csv(prediction):
   logits = ['%1.3f' % l for l in prediction.logits]
-  csv_row = ','.join([
-      prediction.file_id,
-      '%1.5f' % prediction.start_time,
-      '%1.5f' % prediction.end_time
-  ] + logits)
+  csv_row = ','.join(
+      [
+          prediction.file_id,
+          '%1.5f' % prediction.start_time,
+          '%1.5f' % prediction.end_time,
+      ]
+      + logits
+  )
   return csv_row
 
 
 def get_counter(metrics, name):
-  counter = metrics.query(
-      beam.metrics.MetricsFilter().with_name(name))['counters']
+  counter = metrics.query(beam.metrics.MetricsFilter().with_name(name))[
+      'counters'
+  ]
   if not counter:
     return 0
   return counter[0].result
@@ -293,7 +333,8 @@ def main(unused_argv):
       FLAGS.model_path,
       FLAGS.separation_model_path,
       target_species=FLAGS.target_species,
-      hints_tag=FLAGS.hints_tag)
+      hints_tag=FLAGS.hints_tag,
+  )
   test_fn.setup()
   got_results = False
   start = time.time()
@@ -320,12 +361,15 @@ def main(unused_argv):
               FLAGS.separation_model_path,
               min_logit=FLAGS.min_logit,
               target_species=FLAGS.target_species,
-              hints_tag=FLAGS.hints_tag))
+              hints_tag=FLAGS.hints_tag,
+          )
+      )
       # When a file is corrupted and can't be loaded InferenceFn
       # returns None. In this case the lambda below returns false, which then
       # filters it out.
       | beam.Filter(lambda x: x)
-      | beam.io.WriteToText(output_prefix, file_name_suffix='.csv'))
+      | beam.io.WriteToText(output_prefix, file_name_suffix='.csv')
+  )
   pipeline.run()
 
 

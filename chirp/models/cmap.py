@@ -42,6 +42,7 @@ class CMAP(clu_metrics.Metric):
     scores: An array of logits or scores, with shape [batch, num_classes].
     labels: Array of ground-truth labels with shape [batch, num_classes].
   """
+
   scores: Optional[jnp.array] = None
   labels: Optional[jnp.array] = None
 
@@ -50,8 +51,9 @@ class CMAP(clu_metrics.Metric):
     return cls(scores=None, labels=None)
 
   @classmethod
-  def from_model_output(cls, values: tuple[jnp.array, jnp.array],
-                        **_) -> clu_metrics.Metric:
+  def from_model_output(
+      cls, values: tuple[jnp.array, jnp.array], **_
+  ) -> clu_metrics.Metric:
     scores, labels = values
     return cls(scores=scores, labels=labels)
 
@@ -61,10 +63,12 @@ class CMAP(clu_metrics.Metric):
     if other.scores is None:
       return self
     if other.scores.ndim not in [2, 3]:
-      raise ValueError("Expecting the scores to be in one of the following"
-                       "formats: [n_devices, batch_size, n_classes] or"
-                       "[batch_size, n_classes]. Current shape is"
-                       f"{self.scores.shape}")
+      raise ValueError(
+          "Expecting the scores to be in one of the following"
+          "formats: [n_devices, batch_size, n_classes] or"
+          "[batch_size, n_classes]. Current shape is"
+          f"{self.scores.shape}"
+      )
     return type(self)(
         scores=jnp.concatenate((self.scores, other.scores), axis=-2),
         labels=jnp.concatenate((self.labels, other.labels), axis=-2),
@@ -76,7 +80,7 @@ class CMAP(clu_metrics.Metric):
     class_av_prec = metrics.average_precision(self.scores.T, self.labels.T)
     class_counts = jnp.sum(self.labels, axis=0, keepdims=True)
     # Mask classes with no labels to avoid inflating the CMAP.
-    class_av_prec *= (class_counts > sample_threshold)
+    class_av_prec *= class_counts > sample_threshold
     return jnp.sum(class_av_prec) / jnp.sum(class_counts > sample_threshold)
 
 
@@ -89,5 +93,6 @@ def update_cmap_metrics_dict(cmap_metrics, model_outputs, batch):
   """Update a dict of cmap_metrics from model_outputs and a batch."""
   for label_name in cmap_metrics:
     cmap_metrics[label_name] = cmap_metrics[label_name].merge(
-        CMAP(getattr(model_outputs, label_name), batch[label_name]))
+        CMAP(getattr(model_outputs, label_name), batch[label_name])
+    )
   return cmap_metrics

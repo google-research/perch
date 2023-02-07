@@ -37,13 +37,17 @@ import tqdm
 
 FLAGS = flags.FLAGS
 _EBIRD_TAXONOMY_CHECKSUM = (
-    'b007a53bf43e401b6f217b15f78d574669af63dae913c670717bde2c56ea829b')
-_EBIRD_TAXONOMY_URL = ('https://www.birds.cornell.edu/clementschecklist/'
-                       'wp-content/uploads/2021/08/eBird_Taxonomy_v2021.csv')
+    'b007a53bf43e401b6f217b15f78d574669af63dae913c670717bde2c56ea829b'
+)
+_EBIRD_TAXONOMY_URL = (
+    'https://www.birds.cornell.edu/clementschecklist/'
+    'wp-content/uploads/2021/08/eBird_Taxonomy_v2021.csv'
+)
 # OLD_WIKIDATA_CHECKSUM = (
 #     '9b54e3a35dc6b2fae34ae22f3b16458ea5348d97dd0b2230073679041ba22eb3')
 _WIKIDATA_CHECKSUM = (
-    '1889353e1b7a484771c6233ee8a3b5cf4cbac4682748ef5d95324c209412fb31')
+    '1889353e1b7a484771c6233ee8a3b5cf4cbac4682748ef5d95324c209412fb31'
+)
 _WIKIDATA_QUERY = """\
 SELECT DISTINCT ?item ?itemLabel ?Xeno_canto_species_ID ?eBird_taxon_ID WHERE {
   SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE]". }
@@ -163,63 +167,109 @@ _SCIENTIFIC_NAME_TO_SPECIES_CODES_OVERRIDES = {
 }
 _ALLOWED_SPECIES_CODE_COLLISIONS = {
     # See eBird's 2021 taxonomy update regarding Vaurie's Nightjar.
-    frozenset(('Caprimulgus europaeus', 'Caprimulgus centralasicus')):
-        'eurnig1',
+    frozenset(
+        ('Caprimulgus europaeus', 'Caprimulgus centralasicus')
+    ): 'eurnig1',
     # See eBird's 2021 taxonomy update regarding Northwestern Crow.
-    frozenset(('Corvus brachyrhynchos', 'Corvus caurinus')):
-        'amecro',
+    frozenset(('Corvus brachyrhynchos', 'Corvus caurinus')): 'amecro',
     # Both are considered subspecies within Chaeture chapmani in eBird's 2021
     # taxonomy update.
-    frozenset(('Chaetura chapmani', 'Chaetura viridipennis')):
-        'chaswi2',
+    frozenset(('Chaetura chapmani', 'Chaetura viridipennis')): 'chaswi2',
     # Picumnus fulvescens is no longer recognized as a subspecies in eBird's
     # 2021 taxonomy update.
-    frozenset(('Picumnus fulvescens', 'Picumnus limae')):
-        'ochpic1',
+    frozenset(('Picumnus fulvescens', 'Picumnus limae')): 'ochpic1',
     # According to Wikipedia (which cites Birds of the World), Thamnolaea
     # coronata is sometimes considered a subspecies of Thamnolaea
     # cinnamomeiventris.
-    frozenset(('Thamnolaea cinnamomeiventris', 'Thamnolaea coronata')):
-        'moccha1',
+    frozenset(
+        ('Thamnolaea cinnamomeiventris', 'Thamnolaea coronata')
+    ): 'moccha1',
 }
 # These Xeno-Canto recordings are unavailable despite having an associated
 # filename.
-_SKIP_XC_IDS = ('104022', '727818', '731297', '737035', '738016', '737986',
-                '737993')
+_SKIP_XC_IDS = (
+    '104022',
+    '727818',
+    '731297',
+    '737035',
+    '738016',
+    '737986',
+    '737993',
+)
 
 
 @dataclasses.dataclass
 class SpeciesMappingConfig:
   """Configuration values for mapping Xeno-Canto species to eBird codes."""
+
   # Manual species code assignments.
   scientific_name_to_species_code_overrides: dict[str, str] = dataclasses.field(
-      default_factory=lambda: _SCIENTIFIC_NAME_TO_SPECIES_CODES_OVERRIDES)
+      default_factory=lambda: _SCIENTIFIC_NAME_TO_SPECIES_CODES_OVERRIDES
+  )
   # Species for which a species code is not required (usually because they are
   # extinct).
-  species_with_no_code: Sequence[str] = ('Cyanoramphus erythrotis',
-                                         'Cyanoramphus subflavescens',
-                                         'Nycticorax olsoni')
+  species_with_no_code: Sequence[str] = (
+      'Cyanoramphus erythrotis',
+      'Cyanoramphus subflavescens',
+      'Nycticorax olsoni',
+  )
   # Sets of species for which a species code collision is allowed (usually
   # because they are merged into one species in eBird's taxonomy).
-  allowed_species_code_collisions: dict[
-      FrozenSet[str], str] = dataclasses.field(
-          default_factory=lambda: _ALLOWED_SPECIES_CODE_COLLISIONS)
+  allowed_species_code_collisions: dict[FrozenSet[str], str] = (
+      dataclasses.field(
+          default_factory=lambda: _ALLOWED_SPECIES_CODE_COLLISIONS
+      )
+  )
   # Insect genera which should be ignored.
   insect_genera: Sequence[str] = (
-      'acheta', 'amphiestris', 'anonconotus', 'chorthippus', 'chrysochraon',
-      'conocephalus', 'decorana', 'decticus', 'euchorthippus', 'eupholidoptera',
-      'gomphocerippus', 'gryllodes', 'gryllodinus', 'gryllotalpa', 'gryllus',
-      'incertana', 'isophya', 'leptophyes', 'meconema', 'metrioptera',
-      'myrmeleotettix', 'nemobius', 'ochrilidia', 'oecanthus', 'omocestus',
-      'parnassiana', 'phaneroptera', 'pholidoptera', 'platycleis', 'poecilimon',
-      'pseudochorthippus', 'pterolepis', 'rhacocleis', 'roeseliana', 'ruspolia',
-      'sardoplatycleis', 'sporadiana', 'stenobothrus', 'stethophyma',
-      'tettigonia', 'zeuneriana')
+      'acheta',
+      'amphiestris',
+      'anonconotus',
+      'chorthippus',
+      'chrysochraon',
+      'conocephalus',
+      'decorana',
+      'decticus',
+      'euchorthippus',
+      'eupholidoptera',
+      'gomphocerippus',
+      'gryllodes',
+      'gryllodinus',
+      'gryllotalpa',
+      'gryllus',
+      'incertana',
+      'isophya',
+      'leptophyes',
+      'meconema',
+      'metrioptera',
+      'myrmeleotettix',
+      'nemobius',
+      'ochrilidia',
+      'oecanthus',
+      'omocestus',
+      'parnassiana',
+      'phaneroptera',
+      'pholidoptera',
+      'platycleis',
+      'poecilimon',
+      'pseudochorthippus',
+      'pterolepis',
+      'rhacocleis',
+      'roeseliana',
+      'ruspolia',
+      'sardoplatycleis',
+      'sporadiana',
+      'stenobothrus',
+      'stethophyma',
+      'tettigonia',
+      'zeuneriana',
+  )
 
 
 @dataclasses.dataclass
 class RecordingInfo:
   """Information on a Xeno-Canto recording."""
+
   xc_id: str  # Xeno-Canto recording ID.
   xc_format: str  # File format.
   xc_license: str  # Recording license.
@@ -260,13 +310,15 @@ class RecordingInfo:
         recordist=info_dict['rec'],
         remarks=info_dict['rmk'],
         sound_type=info_dict['type'],
-        length=info_dict['length'])
+        length=info_dict['length'],
+    )
 
 
 def _infer_species_codes_from_wikidata(
     taxonomy_info: pd.DataFrame,
     overrides: dict[str, str],
-    output_dir: Optional[str] = None) -> pd.Series:
+    output_dir: Optional[str] = None,
+) -> pd.Series:
   """Infers each species' code from data obtained through a Wikidata query.
 
   Args:
@@ -286,25 +338,32 @@ def _infer_species_codes_from_wikidata(
   """
   sparql = SPARQLWrapper.SPARQLWrapper(
       _WIKIDATA_URL,
-      agent=('ChirpBot/0.1 (https://github.com/google-research/chirp) '
-             f'Python/{sys.version_info.major}/{sys.version_info.minor}'))
+      agent=(
+          'ChirpBot/0.1 (https://github.com/google-research/chirp) '
+          f'Python/{sys.version_info.major}/{sys.version_info.minor}'
+      ),
+  )
   sparql.setQuery(_WIKIDATA_QUERY)
   sparql.setReturnFormat(SPARQLWrapper.JSON)
   matches = sorted(
       (item['eBird_taxon_ID']['value'], item['Xeno_canto_species_ID']['value'])
-      for item in sparql.queryAndConvert()['results']['bindings'])
+      for item in sparql.queryAndConvert()['results']['bindings']
+  )
 
   current_checksum = hashlib.sha256(str(matches).encode('utf-8')).hexdigest()
 
   if output_dir is not None:
     # Serialize the current matches for potentially inspection.
-    with (epath.Path(output_dir) /
-          f'wiki_matches_{current_checksum}.txt').open('w') as f:
+    with (epath.Path(output_dir) / f'wiki_matches_{current_checksum}.txt').open(
+        'w'
+    ) as f:
       f.writelines([f'{((t[0], t[1]))}\n' for t in matches])
   # Still raising an error if checksums are different !
   if current_checksum != _WIKIDATA_CHECKSUM:
-    raise RuntimeError('Return value for the Wikidata SPARQL query has the '
-                       'wrong checksum value.')
+    raise RuntimeError(
+        'Return value for the Wikidata SPARQL query has the '
+        'wrong checksum value.'
+    )
 
   scientific_name_to_species_code = {
       name.replace('-', ' '): code for code, name in matches
@@ -320,23 +379,29 @@ def _load_ebird_taxonomy() -> pd.DataFrame:
   # CSV file.
   ebird_taxonomy = pd.read_csv(
       io.StringIO(
-          subprocess.run(['curl', _EBIRD_TAXONOMY_URL],
-                         check=True,
-                         stdout=subprocess.PIPE).stdout.decode('utf-8')))
-  if hashlib.sha256(ebird_taxonomy.to_json().encode(
-      'utf-8')).hexdigest() != _EBIRD_TAXONOMY_CHECKSUM:
+          subprocess.run(
+              ['curl', _EBIRD_TAXONOMY_URL], check=True, stdout=subprocess.PIPE
+          ).stdout.decode('utf-8')
+      )
+  )
+  if (
+      hashlib.sha256(ebird_taxonomy.to_json().encode('utf-8')).hexdigest()
+      != _EBIRD_TAXONOMY_CHECKSUM
+  ):
     raise RuntimeError('eBird taxonomy has the wrong checksum value.')
   # Sanity check.
   for column in ('SPECIES_CODE', 'SCI_NAME', 'PRIMARY_COM_NAME'):
     if len(ebird_taxonomy[column].unique()) != len(ebird_taxonomy[column]):
       raise RuntimeError(
-          f"Expected eBird taxonomy's {column} values to be unique")
+          f"Expected eBird taxonomy's {column} values to be unique"
+      )
 
   return ebird_taxonomy
 
 
-def _clean_up_species_codes(taxonomy_info: pd.DataFrame,
-                            ebird_taxonomy: pd.DataFrame) -> pd.DataFrame:
+def _clean_up_species_codes(
+    taxonomy_info: pd.DataFrame, ebird_taxonomy: pd.DataFrame
+) -> pd.DataFrame:
   """Cleans up species codes.
 
   This function
@@ -361,7 +426,8 @@ def _clean_up_species_codes(taxonomy_info: pd.DataFrame,
   common_name_to_code = dict(zip(common_names, ebird_taxonomy['SPECIES_CODE']))
   scientific_names = map(format_scientific_name, ebird_taxonomy['SCI_NAME'])
   scientific_name_to_code = dict(
-      zip(scientific_names, ebird_taxonomy['SPECIES_CODE']))
+      zip(scientific_names, ebird_taxonomy['SPECIES_CODE'])
+  )
 
   def _address_edge_cases(row):
     # We try to salvage by matching scientific names or common names.
@@ -374,7 +440,8 @@ def _clean_up_species_codes(taxonomy_info: pd.DataFrame,
           # match.
           common_name.replace('grey', 'gray'),
           # Some species are of an 'undescribed form' on eBird.
-          common_name + '(undescribedform)')
+          common_name + '(undescribedform)',
+      )
 
       if scientific_name in scientific_name_to_code:
         row['species_code'] = scientific_name_to_code[scientific_name]
@@ -382,15 +449,17 @@ def _clean_up_species_codes(taxonomy_info: pd.DataFrame,
         row['species_code'] = common_name_to_code[common_name]
       elif any(n in common_name_to_code for n in alternative_common_names):
         common_name = next(
-            n for n in alternative_common_names if n in common_name_to_code)
+            n for n in alternative_common_names if n in common_name_to_code
+        )
         row['species_code'] = common_name_to_code[common_name]
       else:
         matches = [
-            k for k in scientific_name_to_code
+            k
+            for k in scientific_name_to_code
             if all(w in k for w in scientific_words)
         ]
         if len(matches) == 1:
-          scientific_name, = matches
+          (scientific_name,) = matches
           species_code = scientific_name_to_code[scientific_name]
           row['species_code'] = species_code
 
@@ -403,8 +472,8 @@ def _clean_up_species_codes(taxonomy_info: pd.DataFrame,
 
 
 def _ensure_species_codes_uniqueness(
-    taxonomy_info: pd.DataFrame, allowed_collisions: dict[FrozenSet[str],
-                                                          str]) -> pd.DataFrame:
+    taxonomy_info: pd.DataFrame, allowed_collisions: dict[FrozenSet[str], str]
+) -> pd.DataFrame:
   """Ensures the species codes are unique.
 
   If a collision is allowed for a specific code, the colliding rows are merged
@@ -427,11 +496,14 @@ def _ensure_species_codes_uniqueness(
   collisions = [k for k, v in species_code_counter.items() if v > 1]
   if collisions:
     for species_code in collisions:
-      colliding_rows = taxonomy_info[taxonomy_info['species_code'] ==
-                                     species_code]
+      colliding_rows = taxonomy_info[
+          taxonomy_info['species_code'] == species_code
+      ]
       scientific_names = frozenset(colliding_rows['Scientific name'])
-      if (scientific_names in allowed_collisions and
-          allowed_collisions[scientific_names] == species_code):
+      if (
+          scientific_names in allowed_collisions
+          and allowed_collisions[scientific_names] == species_code
+      ):
         # We merge colliding rows into a single row.
         merged_row = pd.Series({
             'Common name': ','.join(colliding_rows['Common name']),
@@ -450,8 +522,9 @@ def _ensure_species_codes_uniqueness(
   return taxonomy_info
 
 
-def _break_down_taxonomy(taxonomy_info: pd.DataFrame,
-                         ebird_taxonomy: pd.DataFrame) -> pd.DataFrame:
+def _break_down_taxonomy(
+    taxonomy_info: pd.DataFrame, ebird_taxonomy: pd.DataFrame
+) -> pd.DataFrame:
   """Breaks down the species taxonomy into multiple columns.
 
   Args:
@@ -465,35 +538,50 @@ def _break_down_taxonomy(taxonomy_info: pd.DataFrame,
   taxonomy_info['xeno_canto_query'] = taxonomy_info['Scientific name']
   # Use eBird's scientific names for the taxonomical breakdown.
   taxonomy_info['scientific_name'] = taxonomy_info['species_code'].map(
-      dict(zip(ebird_taxonomy['SPECIES_CODE'], ebird_taxonomy['SCI_NAME'])))
+      dict(zip(ebird_taxonomy['SPECIES_CODE'], ebird_taxonomy['SCI_NAME']))
+  )
   # The species is the second word in the scientific name, but sometimes
   # scientific names are of the form '<GENUS> [undescribed form]', which is
   # why we use all but the first word.
   taxonomy_info['species'] = taxonomy_info['scientific_name'].map(
-      lambda s: ' '.join(s.lower().split(' ')[1:]))
+      lambda s: ' '.join(s.lower().split(' ')[1:])
+  )
   # The genus is the first word in the scientific name.
   taxonomy_info['genus'] = taxonomy_info['scientific_name'].map(
-      lambda s: s.lower().split(' ')[0])
+      lambda s: s.lower().split(' ')[0]
+  )
   # The family name is of the form '<FAMILY> (<MORE COMMON NAME>)', which is why
   # we only keep the first word.
-  taxonomy_info['family'] = taxonomy_info['species_code'].map(
-      dict(
-          zip(ebird_taxonomy['SPECIES_CODE'],
-              ebird_taxonomy['FAMILY']))).map(lambda s: s.lower().split(' ')[0])
-  taxonomy_info['order'] = taxonomy_info['species_code'].map(
-      dict(zip(ebird_taxonomy['SPECIES_CODE'],
-               ebird_taxonomy['ORDER1']))).map(lambda s: s.lower())
-  taxonomy_info['common_name'] = taxonomy_info['species_code'].map(
-      dict(
-          zip(ebird_taxonomy['SPECIES_CODE'],
-              ebird_taxonomy['PRIMARY_COM_NAME']))).map(lambda s: s.lower())
+  taxonomy_info['family'] = (
+      taxonomy_info['species_code']
+      .map(dict(zip(ebird_taxonomy['SPECIES_CODE'], ebird_taxonomy['FAMILY'])))
+      .map(lambda s: s.lower().split(' ')[0])
+  )
+  taxonomy_info['order'] = (
+      taxonomy_info['species_code']
+      .map(dict(zip(ebird_taxonomy['SPECIES_CODE'], ebird_taxonomy['ORDER1'])))
+      .map(lambda s: s.lower())
+  )
+  taxonomy_info['common_name'] = (
+      taxonomy_info['species_code']
+      .map(
+          dict(
+              zip(
+                  ebird_taxonomy['SPECIES_CODE'],
+                  ebird_taxonomy['PRIMARY_COM_NAME'],
+              )
+          )
+      )
+      .map(lambda s: s.lower())
+  )
   return taxonomy_info
 
 
 def _scrape_xeno_canto_recording_metadata(
     taxonomy_info: pd.DataFrame,
     include_nd_recordings: bool,
-    progress_bar: bool = True) -> dict[str, Sequence[RecordingInfo]]:
+    progress_bar: bool = True,
+) -> dict[str, Sequence[RecordingInfo]]:
   """Scrapes and returns Xeno-Canto recording metadata for all species.
 
   Args:
@@ -513,7 +601,9 @@ def _scrape_xeno_canto_recording_metadata(
   session.mount(
       'http://',
       requests.adapters.HTTPAdapter(
-          max_retries=requests.adapters.Retry(total=5, backoff_factor=0.1)))
+          max_retries=requests.adapters.Retry(total=5, backoff_factor=0.1)
+      ),
+  )
 
   @ratelimiter.RateLimiter(max_calls=_XC_API_RATE_LIMIT, period=1)
   def retrieve_recording_info_dicts(row):
@@ -524,18 +614,21 @@ def _scrape_xeno_canto_recording_metadata(
       genus = query.split('%20')[0]
       response = session.get(
           # Specifying gen:<GENUS> speeds up the lookup.
-          url=f'{_XC_API_URL}?query={query}%20gen:{genus}').json()
+          url=f'{_XC_API_URL}?query={query}%20gen:{genus}'
+      ).json()
       info_dicts = response['recordings']
       # If there are more than one page of responses, loop over pages.
       if int(response['numPages']) > 1:
         for page in range(2, int(response['numPages']) + 1):
           # Specifying gen:<GENUS> speeds up the lookup.
           url_with_page = (
-              f'{_XC_API_URL}?query={query}%20gen:{genus}&page={page}')
+              f'{_XC_API_URL}?query={query}%20gen:{genus}&page={page}'
+          )
           info_dicts.extend(session.get(url=url_with_page).json()['recordings'])
       if len(info_dicts) != int(response['numRecordings']):
         raise RuntimeError(
-            f'wrong number of recordings obtained for {species_code}')
+            f'wrong number of recordings obtained for {species_code}'
+        )
       recording_info_dicts.extend(info_dicts)
     # 'No.' is the number of recordings reported for a given species by
     # https://xeno-canto.org/collection/species/all. It's possible that this
@@ -546,11 +639,13 @@ def _scrape_xeno_canto_recording_metadata(
     # a malformed query.
     if len(recording_info_dicts) < 0.75 * row['No.']:
       raise RuntimeError(
-          f'wrong number of recordings obtained for {species_code}')
+          f'wrong number of recordings obtained for {species_code}'
+      )
     return (species_code, recording_info_dicts)
 
   with concurrent.futures.ThreadPoolExecutor(
-      max_workers=_XC_API_RATE_LIMIT) as executor:
+      max_workers=_XC_API_RATE_LIMIT
+  ) as executor:
     rows = [row for _, row in taxonomy_info.iterrows()]
     iterator = executor.map(retrieve_recording_info_dicts, rows)
     if progress_bar:
@@ -566,7 +661,8 @@ def _scrape_xeno_canto_recording_metadata(
     # Avoid unavailable recordings and *-nd licenses. Unavailable recordings
     # have an empty string as the 'file' value.
     num_unavailable += len(
-        [r for r in info_dicts if not available_predicate(r)])
+        [r for r in info_dicts if not available_predicate(r)]
+    )
     if not include_nd_recordings:
       num_nd += len([r for r in info_dicts if '-nd' in r['lic']])
     recording_metadata = [
@@ -579,15 +675,23 @@ def _scrape_xeno_canto_recording_metadata(
     species_code_to_recording_metadata[species_code] = recording_metadata
 
   logging.info(
-      'Retrieved %d recordings out of %d, ignoring %d unavailable recordings '
-      'and %d ND-licensed recordings', num_remaining, num_total,
-      num_unavailable, num_nd)
+      (
+          'Retrieved %d recordings out of %d, ignoring %d unavailable'
+          ' recordings and %d ND-licensed recordings'
+      ),
+      num_remaining,
+      num_total,
+      num_unavailable,
+      num_nd,
+  )
 
   return species_code_to_recording_metadata
 
 
-def create_taxonomy_info(species_mapping_config: SpeciesMappingConfig,
-                         output_dir: Optional[str] = None) -> pd.DataFrame:
+def create_taxonomy_info(
+    species_mapping_config: SpeciesMappingConfig,
+    output_dir: Optional[str] = None,
+) -> pd.DataFrame:
   """Creates a taxonomy DataFrame for Xeno-Canto species.
 
   The DataFrame is populated with the following columns:
@@ -613,7 +717,7 @@ def create_taxonomy_info(species_mapping_config: SpeciesMappingConfig,
   # Download Xeno-Canto species table.
   # Columns: 'Common name', 'Scientific name', 'Status', 'No.', 'No. Back'.
   logging.info('Downloading Xeno-Canto species list...')
-  taxonomy_info, = pd.read_html(io=_XC_SPECIES_URL, match='Scientific name')
+  (taxonomy_info,) = pd.read_html(io=_XC_SPECIES_URL, match='Scientific name')
 
   # We drop this unused column early because it contains NaNs and we want to use
   # DataFrame.dropna() later on.
@@ -628,7 +732,8 @@ def create_taxonomy_info(species_mapping_config: SpeciesMappingConfig,
   logging.info('Querying Wikidata to infer species codes...')
   overrides = species_mapping_config.scientific_name_to_species_code_overrides
   taxonomy_info['species_code'] = _infer_species_codes_from_wikidata(
-      taxonomy_info, overrides=overrides, output_dir=output_dir)
+      taxonomy_info, overrides=overrides, output_dir=output_dir
+  )
 
   # Sometimes Wikidata causes false positives by matching a Xeno-Canto species
   # to a nonexistent eBird code. To remove false positives, we create an
@@ -637,7 +742,8 @@ def create_taxonomy_info(species_mapping_config: SpeciesMappingConfig,
   logging.info('Downloading eBird taxonomy...')
   ebird_taxonomy = _load_ebird_taxonomy()
   taxonomy_info['species_code'] = taxonomy_info['species_code'].map(
-      dict(zip(ebird_taxonomy['SPECIES_CODE'], ebird_taxonomy['SPECIES_CODE'])))
+      dict(zip(ebird_taxonomy['SPECIES_CODE'], ebird_taxonomy['SPECIES_CODE']))
+  )
 
   # Yes, Xeno-Canto has some insect songs, too! We ignore those. We also ignore
   # extinct species with no eBird code listed in
@@ -646,11 +752,11 @@ def create_taxonomy_info(species_mapping_config: SpeciesMappingConfig,
   #          'species_code', 'is_insect', 'no_species_code'.
   insect_genera = species_mapping_config.insect_genera
   taxonomy_info['is_insect'] = taxonomy_info['Scientific name'].map(
-      lambda s: any(genus in s.lower() for genus in insect_genera))
-  taxonomy_info['no_species_code'] = (
-      taxonomy_info['is_insect']
-      | taxonomy_info['Scientific name'].isin(
-          species_mapping_config.species_with_no_code))
+      lambda s: any(genus in s.lower() for genus in insect_genera)
+  )
+  taxonomy_info['no_species_code'] = taxonomy_info['is_insect'] | taxonomy_info[
+      'Scientific name'
+  ].isin(species_mapping_config.species_with_no_code)
 
   # Flag overridden species codes for manual verification.
   # Columns: 'Common name', 'Scientific name', 'No.', 'No. Back',
@@ -665,17 +771,23 @@ def create_taxonomy_info(species_mapping_config: SpeciesMappingConfig,
   # Drop insect-related species and bird species whose eBird code cannot be
   # found.
   insect_species = taxonomy_info[
-      taxonomy_info['species_code'].isna()
-      & taxonomy_info['is_insect']]['Common name'].tolist()
-  logging.info('Ignoring the following %d insect species:\n- %s',
-               len(insect_species), '\n- '.join(insect_species))
+      taxonomy_info['species_code'].isna() & taxonomy_info['is_insect']
+  ]['Common name'].tolist()
+  logging.info(
+      'Ignoring the following %d insect species:\n- %s',
+      len(insect_species),
+      '\n- '.join(insect_species),
+  )
 
   to_verify = taxonomy_info[taxonomy_info['to_verify']]
   to_verify_xeno_canto = to_verify['Common name']
   to_verify_ebird = to_verify['species_code'].map(
       dict(
-          zip(ebird_taxonomy['SPECIES_CODE'],
-              ebird_taxonomy['PRIMARY_COM_NAME'])))
+          zip(
+              ebird_taxonomy['SPECIES_CODE'], ebird_taxonomy['PRIMARY_COM_NAME']
+          )
+      )
+  )
 
   # `allowlist` is a set of (species code, scientific name) tuples representing
   # species code matches which have already been manually validated. The
@@ -684,38 +796,51 @@ def create_taxonomy_info(species_mapping_config: SpeciesMappingConfig,
       epath.Path(__file__).parent / 'species_code_rationales.json')
   allowlist = pd.read_json(file_path, orient='index')
   allowlist = set(
-      zip(allowlist['species_code'], allowlist['xc_scientific_name']))
+      zip(allowlist['species_code'], allowlist['xc_scientific_name'])
+  )
 
   needs_manual_validation = []
-  for k, v, s, c in zip(to_verify_xeno_canto, to_verify_ebird,
-                        to_verify['Scientific name'],
-                        to_verify['species_code']):
+  for k, v, s, c in zip(
+      to_verify_xeno_canto,
+      to_verify_ebird,
+      to_verify['Scientific name'],
+      to_verify['species_code'],
+  ):
     # When common names match exactly, we don't need manual validation.
     if k != v and (c, s) not in allowlist:
       needs_manual_validation.append((k, v))
 
   if needs_manual_validation:
     logging.info(
-        'The following %d species need manual verification (keys are '
-        'from Xeno-Canto, values are from eBird):',
-        len(needs_manual_validation))
+        (
+            'The following %d species need manual verification (keys are '
+            'from Xeno-Canto, values are from eBird):'
+        ),
+        len(needs_manual_validation),
+    )
     for k, v in needs_manual_validation:
       logging.info('- %s:\n      %s', k, v)
 
   not_found = taxonomy_info[
-      taxonomy_info['species_code'].isna()
-      & ~taxonomy_info['no_species_code']]['Scientific name'].tolist()
+      taxonomy_info['species_code'].isna() & ~taxonomy_info['no_species_code']
+  ]['Scientific name'].tolist()
   if not_found:
     logging.warning(
-        'Ignoring the following %d bird species because their eBird code '
-        'cannot be found: %s', len(not_found), not_found)
+        (
+            'Ignoring the following %d bird species because their eBird code '
+            'cannot be found: %s'
+        ),
+        len(not_found),
+        not_found,
+    )
   taxonomy_info = taxonomy_info.dropna()
 
   # Make sure the species codes are unique. If a collision is allowed for a
   # specific code, merge the colliding rows.
   taxonomy_info = _ensure_species_codes_uniqueness(
       taxonomy_info,
-      allowed_collisions=species_mapping_config.allowed_species_code_collisions)
+      allowed_collisions=species_mapping_config.allowed_species_code_collisions,
+  )
 
   # Map species code to species, genus, family, order, and common name.
   # Columns: 'Common name', 'Scientific name', 'No.', 'No. Back',
@@ -727,17 +852,25 @@ def create_taxonomy_info(species_mapping_config: SpeciesMappingConfig,
   # Drop unused columns.
   # Columns: 'No.', 'species_code', 'xeno_canto_query', 'scientific_name',
   #          'species', 'genus', 'family', 'order', 'common_name'.
-  taxonomy_info = taxonomy_info.drop(columns=[
-      'Common name', 'Scientific name', 'No. Back', 'is_insect',
-      'no_species_code', 'to_verify'
-  ])
+  taxonomy_info = taxonomy_info.drop(
+      columns=[
+          'Common name',
+          'Scientific name',
+          'No. Back',
+          'is_insect',
+          'no_species_code',
+          'to_verify',
+      ]
+  )
 
   return taxonomy_info
 
 
-def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
-                                include_nd_recordings: bool,
-                                progress_bar: bool = True) -> pd.DataFrame:
+def retrieve_recording_metadata(
+    taxonomy_info: pd.DataFrame,
+    include_nd_recordings: bool,
+    progress_bar: bool = True,
+) -> pd.DataFrame:
   """Retrieves recording metadata for a given Xeno-Canto taxonomy DataFrame.
 
   The input DataFrame expected to be populated with the following columns:
@@ -781,7 +914,8 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
   taxonomy_info = taxonomy_info.copy()
   logging.info('Scraping Xeno-Canto for recording IDs...')
   species_code_to_recording_metadata = _scrape_xeno_canto_recording_metadata(
-      taxonomy_info, include_nd_recordings, progress_bar=progress_bar)
+      taxonomy_info, include_nd_recordings, progress_bar=progress_bar
+  )
   taxonomy_info = taxonomy_info.drop(columns=['No.'])
   column_and_attribute_names = (
       ('xeno_canto_ids', 'xc_id'),
@@ -800,13 +934,16 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
       ('sound_types', 'sound_type'),
   )
   for column_name, attribute_name in column_and_attribute_names:
-    taxonomy_info[column_name] = taxonomy_info['species_code'].map({
-        species_code: [getattr(info, attribute_name) for info in metadata] for
-        species_code, metadata in species_code_to_recording_metadata.items()
-    })
+    taxonomy_info[column_name] = taxonomy_info['species_code'].map(
+        {
+            species_code: [getattr(info, attribute_name) for info in metadata]
+            for species_code, metadata in species_code_to_recording_metadata.items()
+        }
+    )
 
   xeno_canto_query_to_species_code = dict(
-      zip(taxonomy_info['xeno_canto_query'], taxonomy_info['species_code']))
+      zip(taxonomy_info['xeno_canto_query'], taxonomy_info['species_code'])
+  )
 
   # Assume some species s has had naming collisions. At this stage, all rows
   # pertaining to species s have been merged into a single row, with merged
@@ -823,9 +960,13 @@ def retrieve_recording_metadata(taxonomy_info: pd.DataFrame,
           result.append(xeno_canto_query_to_species_code[s])
     return result
 
-  taxonomy_info['bg_species_codes'] = taxonomy_info['species_code'].map({
-      code: [_to_species_codes(info.background_species) for info in metadata
-            ] for code, metadata in species_code_to_recording_metadata.items()
-  })
+  taxonomy_info['bg_species_codes'] = taxonomy_info['species_code'].map(
+      {
+          code: [
+              _to_species_codes(info.background_species) for info in metadata
+          ]
+          for code, metadata in species_code_to_recording_metadata.items()
+      }
+  )
 
   return taxonomy_info

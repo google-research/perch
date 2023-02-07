@@ -19,7 +19,6 @@ from ml_collections import config_dict
 
 
 def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-function-docstring
-
   # Configure adaptation
   image_config = config_dict.ConfigDict()
 
@@ -33,7 +32,6 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
 
 
 def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-function-docstring
-
   # Configure adaptation
   audio_config = config_dict.ConfigDict()
 
@@ -47,7 +45,6 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
 
 
 def get_config() -> config_dict.ConfigDict:
-
   method_config = config_dict.ConfigDict()
   method_config.sfda_method = config_utils.callable_config("ada_bn.AdaBN")
   method_config.audio = get_audio_config()

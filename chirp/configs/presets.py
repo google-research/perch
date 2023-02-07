@@ -55,12 +55,14 @@ def get_base_config(**kwargs):
   return config
 
 
-def get_base_init_config(config: config_dict.ConfigDict,
-                         **kwargs) -> config_dict.ConfigDict:
+def get_base_init_config(
+    config: config_dict.ConfigDict, **kwargs
+) -> config_dict.ConfigDict:
   """Default init config."""
   init_config = config_dict.ConfigDict()
-  init_config.input_shape = (config.get_ref('train_window_size_s') *
-                             config.get_ref('sample_rate_hz'),)
+  init_config.input_shape = (
+      config.get_ref('train_window_size_s') * config.get_ref('sample_rate_hz'),
+  )
   init_config.learning_rate = 0.0001
   init_config.rng_seed = 0
   init_config.target_class_list = config.get_ref('target_class_list')
@@ -68,8 +70,9 @@ def get_base_init_config(config: config_dict.ConfigDict,
   return init_config
 
 
-def get_base_train_config(config: config_dict.ConfigDict,
-                          **kwargs) -> config_dict.ConfigDict:
+def get_base_train_config(
+    config: config_dict.ConfigDict, **kwargs
+) -> config_dict.ConfigDict:
   train_config = config_dict.ConfigDict()
   train_config.num_train_steps = config.get_ref('num_train_steps')
   train_config.log_every_steps = 250
@@ -78,8 +81,9 @@ def get_base_train_config(config: config_dict.ConfigDict,
   return train_config
 
 
-def get_base_eval_config(config: config_dict.ConfigDict,
-                         **kwargs) -> config_dict.ConfigDict:
+def get_base_eval_config(
+    config: config_dict.ConfigDict, **kwargs
+) -> config_dict.ConfigDict:
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = config.get_ref('num_train_steps')
   eval_config.eval_steps_per_checkpoint = 1000
@@ -89,9 +93,11 @@ def get_base_eval_config(config: config_dict.ConfigDict,
 
 
 def get_pcen_melspec_config(
-    config: config_dict.ConfigDict) -> config_dict.ConfigDict:
-  frontend_stride = (
-      config.get_ref('sample_rate_hz') // config.get_ref('frame_rate_hz'))
+    config: config_dict.ConfigDict,
+) -> config_dict.ConfigDict:
+  frontend_stride = config.get_ref('sample_rate_hz') // config.get_ref(
+      'frame_rate_hz'
+  )
   return _c(
       'frontend.MelSpectrogram',
       features=config.get_ref('num_channels'),
@@ -99,12 +105,13 @@ def get_pcen_melspec_config(
       kernel_size=2_048,  # ~0.08 * 32,000
       sample_rate=config.get_ref('sample_rate_hz'),
       freq_range=(60, 10_000),
-      scaling_config=_c('frontend.PCENScalingConfig', conv_width=256))
+      scaling_config=_c('frontend.PCENScalingConfig', conv_width=256),
+  )
 
 
 def get_supervised_train_pipeline(
-    config: config_dict.ConfigDict, mixin_prob: float,
-    train_dataset_dir: str) -> config_dict.ConfigDict:
+    config: config_dict.ConfigDict, mixin_prob: float, train_dataset_dir: str
+) -> config_dict.ConfigDict:
   """Create the supervised training data pipeline."""
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
@@ -112,22 +119,31 @@ def get_supervised_train_pipeline(
       ops=[
           _c('pipeline.Shuffle', shuffle_buffer_size=512),
           _c('pipeline.OnlyJaxTypes'),
-          _c('pipeline.ConvertBirdTaxonomyLabels',
-             source_namespace='ebird2021',
-             target_class_list=config.get_ref('target_class_list'),
-             add_taxonomic_labels=config.get_ref('add_taxonomic_labels')),
+          _c(
+              'pipeline.ConvertBirdTaxonomyLabels',
+              source_namespace='ebird2021',
+              target_class_list=config.get_ref('target_class_list'),
+              add_taxonomic_labels=config.get_ref('add_taxonomic_labels'),
+          ),
           _c('pipeline.MixAudio', mixin_prob=mixin_prob),
-          _c('pipeline.Pad',
-             pad_size=config.get_ref('train_window_size_s'),
-             add_mask=config.get_ref('pad_mask')),
-          _c('pipeline.RandomSlice',
-             window_size=config.get_ref('train_window_size_s')),
-          _c('pipeline.Batch',
-             batch_size=config.get_ref('batch_size'),
-             split_across_devices=True),
+          _c(
+              'pipeline.Pad',
+              pad_size=config.get_ref('train_window_size_s'),
+              add_mask=config.get_ref('pad_mask'),
+          ),
+          _c(
+              'pipeline.RandomSlice',
+              window_size=config.get_ref('train_window_size_s'),
+          ),
+          _c(
+              'pipeline.Batch',
+              batch_size=config.get_ref('batch_size'),
+              split_across_devices=True,
+          ),
           _c('pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25),
-          _c('pipeline.Repeat')
-      ])
+          _c('pipeline.Repeat'),
+      ],
+  )
   train_dataset_config.split = 'train'
   train_dataset_config.tfds_data_dir = config.get_ref('tfds_data_dir')
   train_dataset_config.dataset_directory = train_dataset_dir
@@ -135,30 +151,39 @@ def get_supervised_train_pipeline(
 
 
 def get_supervised_eval_pipeline(
-    config: config_dict.ConfigDict,
-    eval_dataset_dir: str) -> config_dict.ConfigDict:
+    config: config_dict.ConfigDict, eval_dataset_dir: str
+) -> config_dict.ConfigDict:
   """Create Caples eval data pipeline."""
   eval_dataset_config = config_dict.ConfigDict()
   eval_dataset_config.pipeline = _c(
       'pipeline.Pipeline',
       ops=[
           _c('pipeline.OnlyJaxTypes'),
-          _c('pipeline.ConvertBirdTaxonomyLabels',
-             source_namespace='ebird2021',
-             target_class_list=config.get_ref('target_class_list'),
-             add_taxonomic_labels=config.get_ref('add_taxonomic_labels')),
-          _c('pipeline.Pad',
-             pad_size=config.get_ref('eval_window_size_s'),
-             random=False,
-             add_mask=config.get_ref('pad_mask')),
-          _c('pipeline.Slice',
-             window_size=config.get_ref('eval_window_size_s'),
-             start=0.0),
-          _c('pipeline.Batch',
-             batch_size=config.get_ref('batch_size'),
-             split_across_devices=True),
+          _c(
+              'pipeline.ConvertBirdTaxonomyLabels',
+              source_namespace='ebird2021',
+              target_class_list=config.get_ref('target_class_list'),
+              add_taxonomic_labels=config.get_ref('add_taxonomic_labels'),
+          ),
+          _c(
+              'pipeline.Pad',
+              pad_size=config.get_ref('eval_window_size_s'),
+              random=False,
+              add_mask=config.get_ref('pad_mask'),
+          ),
+          _c(
+              'pipeline.Slice',
+              window_size=config.get_ref('eval_window_size_s'),
+              start=0.0,
+          ),
+          _c(
+              'pipeline.Batch',
+              batch_size=config.get_ref('batch_size'),
+              split_across_devices=True,
+          ),
           _c('pipeline.NormalizeAudio', target_gain=0.2),
-      ])
+      ],
+  )
   eval_dataset_config.split = 'train'
   eval_dataset_config.tfds_data_dir = config.get_ref('tfds_data_dir')
   eval_dataset_config.dataset_directory = eval_dataset_dir

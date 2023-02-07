@@ -33,6 +33,7 @@ class QuantizerOutputs:
 
 class QuantizationStrategy(enum.Enum):
   """The Quantization strategy."""
+
   PRODUCT_QUANTIZATION = 'product_quantization'
   RESIDUAL_QUANTIZATION = 'residual_quantization'
 
@@ -42,7 +43,7 @@ def refresh_codebooks(
     model_state: flax.core.FrozenDict,
     rng: jnp.ndarray,
     utilization_thresh: float,
-    init_scalar: float = 0.1
+    init_scalar: float = 0.1,
 ) -> tuple[flax.core.FrozenDict, flax.core.FrozenDict]:
   """Restart dead codebook vectors.
 
@@ -81,18 +82,21 @@ def refresh_codebooks(
     # their popularity and add a bit of noise.
     noise_key, rng = jax.random.split(rng)
     init_fn = jax.nn.initializers.variance_scaling(
-        init_scalar, 'fan_avg', 'normal', dtype=codebook.dtype)
+        init_scalar, 'fan_avg', 'normal', dtype=codebook.dtype
+    )
     init_noise = init_fn(noise_key, codebook.shape)
 
     categorical_key, rng = jax.random.split(rng)
     idxs = jax.random.categorical(
-        categorical_key, counts, shape=[num_centroids])
+        categorical_key, counts, shape=[num_centroids]
+    )
     replacement_entries = codebook[idxs, :]
 
     init_values = replacement_entries + init_noise
     updated_codebook = replace * init_values + (1.0 - replace) * codebook
     updated_counts = (
-        replace[:, 0] * jnp.ones_like(counts) + (1.0 - replace[:, 0]) * counts)
+        replace[:, 0] * jnp.ones_like(counts) + (1.0 - replace[:, 0]) * counts
+    )
 
     flat_params[k] = updated_codebook
     flat_model_state[count_key] = updated_counts
@@ -118,6 +122,7 @@ class BaseQuantizer(nn.Module):
     ema_decay: Decay rate for EMA operations.
     init_scale: Scale for codebook initialization.
   """
+
   num_centroids: int
   stop_gradient_codes: bool = True
   cross_replica_axis: Optional[str] = None
@@ -133,17 +138,20 @@ class BaseQuantizer(nn.Module):
   def create_codebook(self, flat_inputs):
     """Default codebook variable."""
     embedding_dim = flat_inputs.shape[-1]
-    init_fn = jax.nn.initializers.variance_scaling(self.init_scale, 'fan_avg',
-                                                   'normal')
-    codebook = self.param('codebook', init_fn,
-                          (self.num_centroids, embedding_dim))
+    init_fn = jax.nn.initializers.variance_scaling(
+        self.init_scale, 'fan_avg', 'normal'
+    )
+    codebook = self.param(
+        'codebook', init_fn, (self.num_centroids, embedding_dim)
+    )
     return codebook
 
   def update_cluster_counts(self, encodings, train):
     """Track cluster utilization with an EMA counter."""
     counts = jnp.sum(encodings, axis=range(len(encodings.shape) - 1))
-    cluster_counts = self.variable('quantizer', 'cluster_counts', jnp.ones,
-                                   [self.num_centroids])
+    cluster_counts = self.variable(
+        'quantizer', 'cluster_counts', jnp.ones, [self.num_centroids]
+    )
     if not train:
       # TODO(tomdenton): Define some better behavior for eval?
       # Would be nice to re-init during eval to get eval-specific metrics.
@@ -154,8 +162,9 @@ class BaseQuantizer(nn.Module):
   def update_mean_estimate(self, flat_inputs, train):
     """Update an EMA estimate of the feature means."""
     embedding_dim = flat_inputs.shape[-1]
-    feature_means = self.variable('quantizer', 'feature_means', jnp.zeros,
-                                  [embedding_dim])
+    feature_means = self.variable(
+        'quantizer', 'feature_means', jnp.zeros, [embedding_dim]
+    )
     new_observation = jnp.mean(flat_inputs, axis=0)
     if train:
       self._ema_update(feature_means, new_observation)
@@ -163,8 +172,9 @@ class BaseQuantizer(nn.Module):
 
   def update_stdev_estimate(self, flat_inputs, train):
     """Update an EMA estimate of the feature standard deviation."""
-    feature_stdev = self.variable('quantizer', 'feature_stdev', jnp.std,
-                                  flat_inputs)
+    feature_stdev = self.variable(
+        'quantizer', 'feature_stdev', jnp.std, flat_inputs
+    )
     new_observation = jnp.std(flat_inputs)
     if train:
       self._ema_update(feature_stdev, new_observation)
@@ -175,7 +185,8 @@ class BaseQuantizer(nn.Module):
     if self.cross_replica_axis:
       new_value = jax.lax.psum(new_value, axis_name=self.cross_replica_axis)
     variable.value = (
-        self.ema_decay * variable.value + (1.0 - self.ema_decay) * new_value)
+        self.ema_decay * variable.value + (1.0 - self.ema_decay) * new_value
+    )
 
 
 class VectorQuantizer(BaseQuantizer):
@@ -184,6 +195,7 @@ class VectorQuantizer(BaseQuantizer):
   Attributes:
     commitment_loss: Loss weight for propagating quantization loss to inputs.
   """
+
   commitment_loss: float = 0.0
   demean: bool = False
   rescale: bool = False
@@ -209,9 +221,10 @@ class VectorQuantizer(BaseQuantizer):
 
     # Find nearest neighbor indices.
     distances = (
-        jnp.sum(jnp.square(flat_inputs), 1, keepdims=True) -
-        2 * jnp.matmul(flat_inputs, codebook.T) +
-        jnp.sum(jnp.square(codebook.T), 0, keepdims=True))
+        jnp.sum(jnp.square(flat_inputs), 1, keepdims=True)
+        - 2 * jnp.matmul(flat_inputs, codebook.T)
+        + jnp.sum(jnp.square(codebook.T), 0, keepdims=True)
+    )
     nn_idx = jnp.argmin(distances, axis=1)
     encodings = jax.nn.one_hot(nn_idx, self.num_centroids)
     counts = self.update_cluster_counts(encodings, train)
@@ -238,12 +251,14 @@ class VectorQuantizer(BaseQuantizer):
     if self.stop_gradient_codes:
       codebook_values = jax.lax.stop_gradient(codebook_values)
 
-    return QuantizerOutputs(quantized, quantization_loss, nn_idx,
-                            codebook_values, [counts])
+    return QuantizerOutputs(
+        quantized, quantization_loss, nn_idx, codebook_values, [counts]
+    )
 
 
 class VectorQuantizerEnt(BaseQuantizer):
   """Vector Quantizer using entropy loss."""
+
   gamma: float = 1.0
 
   def loss(self, scores):
@@ -292,8 +307,9 @@ class VectorQuantizerEnt(BaseQuantizer):
     if self.stop_gradient_codes:
       codebook_values = jax.lax.stop_gradient(codebook_values)
 
-    return QuantizerOutputs(quantized, quantization_loss, nn_idx,
-                            codebook_values, [counts])
+    return QuantizerOutputs(
+        quantized, quantization_loss, nn_idx, codebook_values, [counts]
+    )
 
 
 class ProductQuantizer(nn.Module):
@@ -308,6 +324,7 @@ class ProductQuantizer(nn.Module):
       (keeping only for comparisons purposes with previous code).
     pca_dim: Dimension for learned PCA projection. Set <= 0 to disable.
   """
+
   base_quantizers: Sequence[BaseQuantizer]
   stop_gradient_codes: bool = True
   pca_dim: int = 0
@@ -319,10 +336,13 @@ class ProductQuantizer(nn.Module):
     projection = self.param(
         'pca_proj',
         jax.nn.initializers.variance_scaling(
-            1.0, 'fan_avg', 'normal', dtype=jnp.float32),
-        [embedding_dim, self.pca_dim])
-    pre_bias = self.param('pre_bias', jax.nn.initializers.zeros,
-                          [1, embedding_dim])
+            1.0, 'fan_avg', 'normal', dtype=jnp.float32
+        ),
+        [embedding_dim, self.pca_dim],
+    )
+    pre_bias = self.param(
+        'pre_bias', jax.nn.initializers.zeros, [1, embedding_dim]
+    )
     return projection, pre_bias
 
   def pca_project(self, flat_inputs):
@@ -350,9 +370,9 @@ class ProductQuantizer(nn.Module):
 
   def get_num_centroids(self):
     nc = [q.num_centroids for q in self.base_quantizers]
-    assert len(
-        list(set(nc))
-    ) == 1, 'Expected all quantizers to have the same number of centroids.'
+    assert (
+        len(list(set(nc))) == 1
+    ), 'Expected all quantizers to have the same number of centroids.'
     return nc[0]
 
   def get_num_sections(self):
@@ -379,7 +399,8 @@ class ProductQuantizer(nn.Module):
       nn_idx.append(outputs.nn_idx)
       codebook_list.append(outputs.codebook)
       loss.append(
-          jnp.reshape(outputs.quantization_loss, inputs.shape[:-1] + (-1,)))
+          jnp.reshape(outputs.quantization_loss, inputs.shape[:-1] + (-1,))
+      )
       counts += outputs.cluster_counts
 
     # Aggregate across 'sections' to get the following shapes:
@@ -397,8 +418,9 @@ class ProductQuantizer(nn.Module):
     if self.stop_gradient_codes:
       codebook = jax.lax.stop_gradient(codebook)
 
-    return QuantizerOutputs(quantized, quantization_loss, nn_idx, codebook,
-                            counts)
+    return QuantizerOutputs(
+        quantized, quantization_loss, nn_idx, codebook, counts
+    )
 
 
 class ResidualQuantizer(nn.Module):
@@ -407,14 +429,15 @@ class ResidualQuantizer(nn.Module):
   Accepting a list allows using arbitrary quantizers (e.g., product quantizers)
   in sequence.
   """
+
   quantizers: Sequence[nn.Module] = ()
   stop_gradient_codes: bool = True
 
   def get_num_centroids(self):
     nc = [q.num_centroids for q in self.quantizers]
-    assert len(
-        list(set(nc))
-    ) == 1, 'Expected all quantizers to have the same number of centroids.'
+    assert (
+        len(list(set(nc))) == 1
+    ), 'Expected all quantizers to have the same number of centroids.'
     return nc[0]
 
   def get_num_sections(self):
@@ -450,5 +473,6 @@ class ResidualQuantizer(nn.Module):
       codebooks = jax.lax.stop_gradient(codebooks)
     quantized = jnp.reshape(quantized, inputs.shape)
     quantization_loss = jnp.full(inputs.shape[:-1] + (1,), quantization_loss)
-    return QuantizerOutputs(quantized, quantization_loss, nn_idx, codebooks,
-                            counts)
+    return QuantizerOutputs(
+        quantized, quantization_loss, nn_idx, codebooks, counts
+    )

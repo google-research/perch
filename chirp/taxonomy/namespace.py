@@ -28,6 +28,7 @@ UNKNOWN_LABEL = 'unknown'
 @dataclasses.dataclass
 class Namespace:
   """An unordered collection of classes."""
+
   name: str
   classes: Set[str]
 
@@ -62,14 +63,17 @@ class Namespace:
 @dataclasses.dataclass
 class Mapping:
   """A mapping between two Namespaces."""
+
   name: str
   source_namespace: str
   target_namespace: str
   mapped_pairs: Sequence[tuple[str, str]]
 
   def __repr__(self) -> str:
-    return (f'Mapping {self.name} from {self.source_namespace} '
-            f'to {self.target_namespace}')
+    return (
+        f'Mapping {self.name} from {self.source_namespace} '
+        f'to {self.target_namespace}'
+    )
 
   def __eq__(self, other) -> bool:
     if not isinstance(other, Mapping):
@@ -83,14 +87,20 @@ class Mapping:
     if len(self.mapped_pairs) != len(other.mapped_pairs):
       return False
     for pair_self, pair_other in zip(
-        sorted(self.mapped_pairs), sorted(other.mapped_pairs)):
+        sorted(self.mapped_pairs), sorted(other.mapped_pairs)
+    ):
       if pair_self[0] != pair_other[0] or pair_self[1] != pair_other[1]:
         return False
     return True
 
   @classmethod
-  def from_dict(cls, name: str, source_namespace: str, target_namespace: str,
-                mapped_pairs: Dict[str, str]) -> 'Mapping':
+  def from_dict(
+      cls,
+      name: str,
+      source_namespace: str,
+      target_namespace: str,
+      mapped_pairs: Dict[str, str],
+  ) -> 'Mapping':
     pairs = tuple((k, v) for (k, v) in mapped_pairs.items())
     return Mapping(name, source_namespace, target_namespace, pairs)
 
@@ -102,8 +112,9 @@ class Mapping:
     pairs = []
     for row in reader:
       pairs.append((row[source_namespace], row[target_namespace]))
-    return Mapping(name, source_namespace.strip(), target_namespace.strip(),
-                   pairs)
+    return Mapping(
+        name, source_namespace.strip(), target_namespace.strip(), pairs
+    )
 
   def to_dict(self) -> dict[str, str]:
     return {m[0]: m[1] for m in self.mapped_pairs}
@@ -121,6 +132,7 @@ class Mapping:
 @dataclasses.dataclass
 class ClassList:
   """An ordered set of classes from a specific Domain."""
+
   name: str
   namespace: str
   classes: Sequence[str]
@@ -185,8 +197,9 @@ class ClassList:
     target_idxs = target_class_list.get_index_lookup()
     keys = [source_idxs[k] for k in intersection]
     values = [target_idxs[k] for k in intersection]
-    initializer = tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64,
-                                                      tf.int64)
+    initializer = tf.lookup.KeyValueTensorInitializer(
+        keys, values, tf.int64, tf.int64
+    )
     table = tf.lookup.StaticHashTable(
         initializer,
         default_value=-1,
@@ -196,7 +209,8 @@ class ClassList:
     return table, image_mask
 
   def get_namespace_map_tf_lookup(
-      self, mapping: Mapping) -> tuple[tf.lookup.StaticHashTable, 'ClassList']:
+      self, mapping: Mapping
+  ) -> tuple[tf.lookup.StaticHashTable, 'ClassList']:
     """Create a tf.lookup.StaticHasTable for namespace mappings.
 
     Args:
@@ -216,17 +230,18 @@ class ClassList:
         target_cl = mapping_dict[cl]
         keys.append(i)
         values.append(target_class_idxs[target_cl])
-    initializer = tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64,
-                                                      tf.int64)
+    initializer = tf.lookup.KeyValueTensorInitializer(
+        keys, values, tf.int64, tf.int64
+    )
     table = tf.lookup.StaticHashTable(
         initializer=initializer,
         default_value=-1,
     )
     return table, target_class_list
 
-  def apply_namespace_mapping(self,
-                              mapping: Mapping,
-                              mapped_name: Optional[str] = None) -> 'ClassList':
+  def apply_namespace_mapping(
+      self, mapping: Mapping, mapped_name: Optional[str] = None
+  ) -> 'ClassList':
     """Produces a new ClassList by applying a Mapping.
 
     The output ClassList is in alphabetical order, and includes only the
@@ -244,13 +259,13 @@ class ClassList:
       mapped_name = self.name + '_' + mapping.target_namespace
     mapping_dict = mapping.to_dict()
     mapped_classes = sorted(
-        set([mapping_dict[cl] for cl in self.classes if cl in mapping_dict]))
+        set([mapping_dict[cl] for cl in self.classes if cl in mapping_dict])
+    )
     return ClassList(mapped_name, mapping.target_namespace, mapped_classes)
 
   def get_class_map_matrix(
-      self,
-      target_class_list: 'ClassList',
-      mapping: Optional[Mapping] = None) -> tuple[jnp.ndarray, jnp.ndarray]:
+      self, target_class_list: 'ClassList', mapping: Optional[Mapping] = None
+  ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Construct a binary matrix for mapping to another ClassList.
 
     Args:
@@ -263,8 +278,10 @@ class ClassList:
       for the image of the mapping.
     """
     if self.namespace != target_class_list.namespace and mapping is None:
-      raise ValueError('If source and target classes are from different '
-                       'namespaces, a namespace mapping must be provided.')
+      raise ValueError(
+          'If source and target classes are from different '
+          'namespaces, a namespace mapping must be provided.'
+      )
     elif mapping is not None:
       mapping_dict = mapping.to_dict()
     else:

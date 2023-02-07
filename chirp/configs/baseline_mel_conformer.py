@@ -31,32 +31,38 @@ def get_config() -> config_dict.ConfigDict:
   config.train_dataset_config = presets.get_supervised_train_pipeline(
       config,
       mixin_prob=0.75,
-      train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0')
+      train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+  )
   config.eval_dataset_config = presets.get_supervised_eval_pipeline(
-      config, 'soundscapes/caples:1.1.0')
+      config, 'soundscapes/caples:1.1.0'
+  )
 
   # Configure the experiment setup
-  input_shape = (config.get_ref('train_window_size_s') *
-                 config.get_ref('sample_rate_hz'),)
+  input_shape = (
+      config.get_ref('train_window_size_s') * config.get_ref('sample_rate_hz'),
+  )
   config.init_config = presets.get_base_init_config(
-      config, input_shape=input_shape)
+      config, input_shape=input_shape
+  )
 
   model_config = config_dict.ConfigDict()
   model_config.frontend = presets.get_pcen_melspec_config(config)
   # Aim to have output targets of 256, starting at 144
-  s = (256 / 144)**(1 / 5)
+  s = (256 / 144) ** (1 / 5)
   model_config.encoder = _c(
       'taxonomy_model.ConformerModel',
       # Each downsample reduces time by a factor of 2.
       # An additional downsample by 4 happens in the ConvolutionalSubsampling.
       downsample=[(2, s), (5, s), (8, s), (11, s), (14, s)],
-      kernel_size=15)
+      kernel_size=15,
+  )
   model_config.taxonomy_loss_weight = 0.001
   config.init_config.model_config = model_config
 
   # Configure the training loop
   config.train_config = presets.get_base_train_config(config)
   config.eval_config = presets.get_base_eval_config(
-      config, input_shape=input_shape)
+      config, input_shape=input_shape
+  )
 
   return config

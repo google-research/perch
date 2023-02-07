@@ -36,17 +36,20 @@ class SoundstreamUNetTest(absltest.TestCase):
         output_filters=8,
         strides=(2, 2),
         feature_mults=(2, 2),
-        groups=(1, 2))
+        groups=(1, 2),
+    )
     inp_audio = jnp.zeros([batch_size, input_time_steps, input_width])
 
     (out, embedding), variables = model.init_with_output(
-        {"params": random.PRNGKey(0)}, inp_audio, train=True)
+        {"params": random.PRNGKey(0)}, inp_audio, train=True
+    )
     self.assertEqual(out.shape, inp_audio.shape)
     # Embedding shape: (batch, input_time / prod(strides), bottleneck_filters).
     self.assertEqual(embedding.shape, (2, 4, 4))
 
     num_parameters = tree_util.tree_reduce(
-        operator.add, tree_util.tree_map(jnp.size, variables["params"]))
+        operator.add, tree_util.tree_map(jnp.size, variables["params"])
+    )
     self.assertEqual(num_parameters, 864)
 
 

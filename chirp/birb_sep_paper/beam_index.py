@@ -47,31 +47,38 @@ SPECIES_INFO_PATH = os.path.join(DATA_PATH, 'species_info.csv')
 ENSEMBLE_SIZE = 3
 
 flags.DEFINE_list('source_files', [], 'Source audio files (wav or mp3).')
-flags.DEFINE_string('model_path', '',
-                    'Where to find the model params and inference.pb')
-flags.DEFINE_string('separation_model_path', '',
-                    'Where to find the separation inference model.')
+flags.DEFINE_string(
+    'model_path', '', 'Where to find the model params and inference.pb'
+)
+flags.DEFINE_string(
+    'separation_model_path', '', 'Where to find the separation inference model.'
+)
 flags.DEFINE_string('output_dir', '', 'Where to dump output data.')
-flags.DEFINE_string('embedding_key', 'hidden_embedding',
-                    'Embedding output key in saved_model.')
-flags.DEFINE_integer('file_shards', 48,
-                     'Number of sub-jobs to divide each input file into.')
+flags.DEFINE_string(
+    'embedding_key', 'hidden_embedding', 'Embedding output key in saved_model.'
+)
+flags.DEFINE_integer(
+    'file_shards', 48, 'Number of sub-jobs to divide each input file into.'
+)
 flags.DEFINE_string('hints_tag', '', 'Species set tag for hints.')
 flags.DEFINE_boolean('dry_run', False, 'Whether to exit after dry-run.')
 
 PredictionTuple = collections.namedtuple(
-    'PredictionTuple', ['file_id', 'start_time', 'end_time', 'logits'])
+    'PredictionTuple', ['file_id', 'start_time', 'end_time', 'logits']
+)
 
 
 class EmbedFn(beam.DoFn):
   """Beam function for model inference."""
 
-  def __init__(self,
-               model_path,
-               embedding_key,
-               separation_model_path=None,
-               sample_rate=22050,
-               hints_tag=None):
+  def __init__(
+      self,
+      model_path,
+      embedding_key,
+      separation_model_path=None,
+      sample_rate=22050,
+      hints_tag=None,
+  ):
     # Get a local copy of the inference.pb file.
     self.model_path = model_path
     self.separation_model_path = separation_model_path
@@ -90,9 +97,11 @@ class EmbedFn(beam.DoFn):
 
     if self.separation_model_path:
       self.separation_model = model_utils.load_separation_model(
-          self.separation_model_path)
+          self.separation_model_path
+      )
     classifiers = model_utils.load_classifier_ensemble(
-        self.model_path, max_runs=1)
+        self.model_path, max_runs=1
+    )
     self.embedding_model = list(classifiers.values())[0]
 
   def get_hints(self, batch_size):
@@ -109,8 +118,12 @@ class EmbedFn(beam.DoFn):
     hop_size_s = window_size_s / 2
     logging.info('...starting separation (%s)', file_id)
     sep_chunks, raw_chunks = model_utils.separate_windowed(
-        audio, self.separation_model, hop_size_s, window_size_s,
-        self.sample_rate)
+        audio,
+        self.separation_model,
+        hop_size_s,
+        window_size_s,
+        self.sample_rate,
+    )
     raw_chunks = raw_chunks[:, np.newaxis, :]
     stacked_chunks = np.concatenate([raw_chunks, sep_chunks], axis=1)
     n_chunks = stacked_chunks.shape[0]
@@ -124,7 +137,8 @@ class EmbedFn(beam.DoFn):
         big_batch,
         self.embedding_model,
         hints=self.get_hints(big_batch.shape[0]),
-        output_key=self.embedding_key)
+        output_key=self.embedding_key,
+    )
     embedding = np.reshape(embedding, [n_chunks, n_channels, -1])
     print('embedding shape : ', embedding.shape)
 
@@ -133,7 +147,7 @@ class EmbedFn(beam.DoFn):
         'file_id': data_tools.BytesFeature(bytes(file_id, encoding='utf8')),
         'timestamp_offset': data_tools.IntFeature(timestamp_offset),
         'embedding': data_tools.BytesFeature(serialized_embedding.numpy()),
-        'embedding_shape': data_tools.IntFeature(embedding.shape)
+        'embedding_shape': data_tools.IntFeature(embedding.shape),
     }
     ex = tf.train.Example(features=tf.train.Features(feature=feature))
     beam.metrics.Metrics.counter('beaminference', 'segments_processed').inc()
@@ -162,18 +176,19 @@ class EmbedFn(beam.DoFn):
     if num_shards > 1:
       shard_len = audio.shape[0] // num_shards
       timestamp_offset = shard_num * shard_len
-      audio = audio[timestamp_offset:timestamp_offset + shard_len]
+      audio = audio[timestamp_offset : timestamp_offset + shard_len]
     else:
       timestamp_offset = 0
 
     if crop_s > 0:
-      audio = audio[:crop_s * self.sample_rate]
+      audio = audio[: crop_s * self.sample_rate]
     return self.embed(file_id, audio, timestamp_offset)
 
 
 def get_counter(metrics, name):
-  counter = metrics.query(
-      beam.metrics.MetricsFilter().with_name(name))['counters']
+  counter = metrics.query(beam.metrics.MetricsFilter().with_name(name))[
+      'counters'
+  ]
   if not counter:
     return 0
   return counter[0].result
@@ -200,7 +215,8 @@ def main(unused_argv):
       FLAGS.model_path,
       FLAGS.embedding_key,
       FLAGS.separation_model_path,
-      hints_tag=FLAGS.hints_tag)
+      hints_tag=FLAGS.hints_tag,
+  )
   test_fn.setup()
   got_results = False
   start = time.time()
@@ -224,13 +240,17 @@ def main(unused_argv):
               FLAGS.model_path,
               FLAGS.embedding_key,
               FLAGS.separation_model_path,
-              hints_tag=FLAGS.hints_tag))
+              hints_tag=FLAGS.hints_tag,
+          )
+      )
       # When a file is corrupted and can't be loaded InferenceFn
       # returns None. In this case the lambda below returns false, which then
       # filters it out.
       | beam.Filter(lambda x: x)
       | beam.io.WriteToTFRecord(
-          output_prefix, coder=beam.coders.ProtoCoder(tf.train.Example)))
+          output_prefix, coder=beam.coders.ProtoCoder(tf.train.Example)
+      )
+  )
   pipeline.run()
 
 

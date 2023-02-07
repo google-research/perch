@@ -41,11 +41,15 @@ class ConformerTest(absltest.TestCase):
     self.assertEqual(outputs.shape, (batch_size, time // 4, features))
 
     num_parameters = tree_util.tree_reduce(
-        operator.add, tree_util.tree_map(jnp.size, variables['params']))
+        operator.add, tree_util.tree_map(jnp.size, variables['params'])
+    )
     expected_num_parameters = (
-        3 * 3 * 144 + 144 +  # First conv layer
-        3 * 3 * 144 * 144 + 144 +  # Second conv layer
-        freqs // 4 * 144 * 144 + 144  # Projection layer
+        3 * 3 * 144
+        + 144
+        + 3 * 3 * 144 * 144  # First conv layer
+        + 144
+        + freqs // 4 * 144 * 144  # Second conv layer
+        + 144  # Projection layer
     )
     self.assertEqual(num_parameters, expected_num_parameters)
 

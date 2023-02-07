@@ -38,6 +38,7 @@ def mock_localization_fn(audio, sr, interval_length_s, max_intervals):
 
 class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
   """Tests for the soundscape dataset."""
+
   DATASET_CLASS = soundscapes.Soundscapes
   BUILDER_CONFIG_NAMES_TO_TEST = [
       config.name
@@ -62,10 +63,16 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     _ = tfds.core.lazy_imports.librosa
 
     cls.metadata_patcher = mock.patch.object(soundscapes_lib, 'load_class_list')
-    cls.loc_patcher = mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[0],
-                                        'localization_fn', mock_localization_fn)
-    cls.url_patcher = mock.patch.object(cls.DATASET_CLASS.BUILDER_CONFIGS[0],
-                                        'audio_dir', epath.Path(cls.tempdir))
+    cls.loc_patcher = mock.patch.object(
+        cls.DATASET_CLASS.BUILDER_CONFIGS[0],
+        'localization_fn',
+        mock_localization_fn,
+    )
+    cls.url_patcher = mock.patch.object(
+        cls.DATASET_CLASS.BUILDER_CONFIGS[0],
+        'audio_dir',
+        epath.Path(cls.tempdir),
+    )
     # We mock the localization part with a function that finds signal in the
     # first interval_length_s (5 sec.). This means that fake segments 1, 2 and 4
     # should be selected. Segment 3 should not be selected (not overlap with
@@ -81,19 +88,24 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     )
     fake_segments = pd.read_csv(cls.EXAMPLE_DIR / 'test.csv')
     fake_segments['ebird_codes'] = fake_segments['ebird_codes'].apply(
-        lambda codes: codes.split())
+        lambda codes: codes.split()
+    )
 
     cls.url_patcher.start()
     subdir = epath.Path(cls.tempdir) / 'caples' / 'audio'
     subdir.mkdir(parents=True)
     tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
-        subdir / 'soundscape_1.flac', format='flac')
+        subdir / 'soundscape_1.flac', format='flac'
+    )
     tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
-        subdir / 'soundscape_2.wav', format='wav')
+        subdir / 'soundscape_2.wav', format='wav'
+    )
     tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
-        subdir / 'soundscape_3.wav', format='wav')
+        subdir / 'soundscape_3.wav', format='wav'
+    )
     tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
-        subdir / 'soundscape_4.wav', format='wav')
+        subdir / 'soundscape_4.wav', format='wav'
+    )
 
   @classmethod
   def tearDownClass(cls):

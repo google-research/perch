@@ -27,13 +27,15 @@ class AdaBN(adapt.SFDAMethod):
 
   _CITATION = (
       "Li, Yanghao, et al. 'Revisiting batch normalization for practical "
-      "domain adaptation.' arXiv preprint arXiv:1603.04779 (2016).")
+      "domain adaptation.' arXiv preprint arXiv:1603.04779 (2016)."
+  )
 
-  def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> type[clu_metrics.Collection]:
+  def get_adaptation_metrics(
+      self, supervised: bool, multi_label: bool, **method_kwargs
+  ) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation."""
     metrics_dict = vars(
-        adapt.get_common_metrics(
-            supervised=supervised, multi_label=multi_label))["__annotations__"]
+        adapt.get_common_metrics(supervised=supervised, multi_label=multi_label)
+    )["__annotations__"]
 
     return clu_metrics.Collection.create(**metrics_dict)

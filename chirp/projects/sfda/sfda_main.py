@@ -31,7 +31,8 @@ import tensorflow as tf
 _CONFIG = config_flags.DEFINE_config_file("config")
 _METHOD_CONFIG = config_flags.DEFINE_config_file(
     "method_config",
-    help_string="Configuration file for method-specific hyperparamaters.")
+    help_string="Configuration file for method-specific hyperparamaters.",
+)
 _LOGDIR = flags.DEFINE_string("logdir", None, "Work unit logging directory.")
 _VISDA_DIR = flags.DEFINE_string("visda_dir", None,
  "Data directory for VisDa dataset.")
@@ -45,14 +46,17 @@ def main(argv: Sequence[str]) -> None:
   logging.info(_METHOD_CONFIG.value)
   # Preventing tensorflow from taking any GPU memory and starving Jax.
   tf.config.experimental.set_visible_devices([], "GPU")
-  config = config_utils.parse_config(_CONFIG.value,
-                                     config_globals.get_globals())
-  method_config = config_utils.parse_config(_METHOD_CONFIG.value,
-                                            config_globals.get_globals())
+  config = config_utils.parse_config(
+      _CONFIG.value, config_globals.get_globals()
+  )
+  method_config = config_utils.parse_config(
+      _METHOD_CONFIG.value, config_globals.get_globals()
+  )
 
   if jax.local_device_count() > 1:
     raise NotImplementedError(
-        "Only supporting non-distributed setting for now.")
+        "Only supporting non-distributed setting for now."
+    )
   # Recover the SDFA method
   sfda_method = method_config.sfda_method
 
@@ -64,13 +68,15 @@ def main(argv: Sequence[str]) -> None:
     adaptation_dataset, val_dataset = data_utils.get_audio_datasets(
         adaptation_data_config=config.adaptation_data_config,
         eval_data_config=config.eval_data_config,
-        sample_rate_hz=config.sample_rate_hz)
+        sample_rate_hz=config.sample_rate_hz,
+    )
   else:
     if "corrupted" in config.init_config.target_class_list:
       builder_kwargs = {
-          "config":
-              "{}_{}".format(config.init_config.corruption_name,
-                             config.init_config.corruption_severity)
+          "config": "{}_{}".format(
+              config.init_config.corruption_name,
+              config.init_config.corruption_severity,
+          )
       }
     elif config.init_config.target_class_list == "vis_da_c":
       builder_kwargs = {
@@ -84,7 +90,8 @@ def main(argv: Sequence[str]) -> None:
         batch_size_train=config.batch_size_adaptation,
         batch_size_eval=config.batch_size_eval,
         data_seed=config.init_config.rng_seed,
-        builder_kwargs=builder_kwargs)
+        builder_kwargs=builder_kwargs,
+    )
 
   # Initialize state and bundles
   (model_bundle, adaptation_state, key, rename_fn, inverse_rename_fn) = (

@@ -28,28 +28,31 @@ def mean_cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
   return lax.pmean(mean, axis_name="batch")
 
 
-def map_(logits: jnp.ndarray,
-         labels: jnp.ndarray,
-         label_mask: Optional[jnp.ndarray] = None,
-         sort_descending: bool = True) -> jnp.ndarray:
+def map_(
+    logits: jnp.ndarray,
+    labels: jnp.ndarray,
+    label_mask: Optional[jnp.ndarray] = None,
+    sort_descending: bool = True,
+) -> jnp.ndarray:
   return average_precision(
       scores=logits,
       labels=labels,
       label_mask=label_mask,
-      sort_descending=sort_descending)
+      sort_descending=sort_descending,
+  )
 
 
-def cmap_(logits: jnp.ndarray,
-          labels: jnp.ndarray,
-          sort_descending: bool = True) -> jnp.ndarray:
+def cmap_(
+    logits: jnp.ndarray, labels: jnp.ndarray, sort_descending: bool = True
+) -> jnp.ndarray:
   return average_precision(
-      scores=logits.T, labels=labels.T, sort_descending=sort_descending)
+      scores=logits.T, labels=labels.T, sort_descending=sort_descending
+  )
 
 
-def log_mse_loss(source: jnp.ndarray,
-                 estimate: jnp.ndarray,
-                 max_snr: float = 1e6,
-                 eps=1e-8) -> jnp.ndarray:
+def log_mse_loss(
+    source: jnp.ndarray, estimate: jnp.ndarray, max_snr: float = 1e6, eps=1e-8
+) -> jnp.ndarray:
   """Negative log MSE loss, the negated log of SNR denominator.
 
   With default max_snr = 1e6, this gives the usual log((source-estimate)**2).
@@ -65,17 +68,19 @@ def log_mse_loss(source: jnp.ndarray,
   Returns:
     Array of loss values.
   """
-  err_pow = jnp.sum((source - estimate)**2, axis=-1)
-  snrfactor = 10.**(-max_snr / 10.)
+  err_pow = jnp.sum((source - estimate) ** 2, axis=-1)
+  snrfactor = 10.0 ** (-max_snr / 10.0)
   ref_pow = jnp.sum(jnp.square(source), axis=-1)
   bias = snrfactor * ref_pow
   return 10 * jnp.log10(bias + err_pow + eps)
 
 
-def negative_snr_loss(source: jnp.ndarray,
-                      estimate: jnp.ndarray,
-                      max_snr: float = 1e6,
-                      eps: float = 1e-8) -> jnp.ndarray:
+def negative_snr_loss(
+    source: jnp.ndarray,
+    estimate: jnp.ndarray,
+    max_snr: float = 1e6,
+    eps: float = 1e-8,
+) -> jnp.ndarray:
   """Negative SNR loss with max SNR term.
 
   Args:
@@ -88,18 +93,20 @@ def negative_snr_loss(source: jnp.ndarray,
   Returns:
     Loss tensor.
   """
-  snrfactor = 10.**(-max_snr / 10.)
+  snrfactor = 10.0 ** (-max_snr / 10.0)
   ref_pow = jnp.sum(jnp.square(source), axis=-1)
   bias = snrfactor * ref_pow
 
-  numer = 10. * jnp.log10(ref_pow + eps)
+  numer = 10.0 * jnp.log10(ref_pow + eps)
   err_pow = jnp.sum(jnp.square(source - estimate), axis=-1)
   return 10 * jnp.log10(bias + err_pow + eps) - numer
 
 
-def source_sparsity_l1l2ratio_loss(separated_waveforms: jnp.ndarray,
-                                   mix_of_mix_waveforms: jnp.ndarray,
-                                   eps: float = 1e-8) -> jnp.ndarray:
+def source_sparsity_l1l2ratio_loss(
+    separated_waveforms: jnp.ndarray,
+    mix_of_mix_waveforms: jnp.ndarray,
+    eps: float = 1e-8,
+) -> jnp.ndarray:
   """Sparsity loss for separated audio.
 
   Computes the ratio of L1 to L2 measures across source rms power.
@@ -126,11 +133,13 @@ def source_sparsity_l1l2ratio_loss(separated_waveforms: jnp.ndarray,
   return loss
 
 
-def average_precision(scores: jnp.ndarray,
-                      labels: jnp.ndarray,
-                      label_mask: Optional[jnp.ndarray] = None,
-                      sort_descending: bool = True,
-                      interpolated: bool = False) -> jnp.ndarray:
+def average_precision(
+    scores: jnp.ndarray,
+    labels: jnp.ndarray,
+    label_mask: Optional[jnp.ndarray] = None,
+    sort_descending: bool = True,
+    interpolated: bool = False,
+) -> jnp.ndarray:
   """Average precision.
 
   The average precision is the area under the precision-recall curve. When
@@ -171,9 +180,9 @@ def average_precision(scores: jnp.ndarray,
 
   # In case of an empty row, assign precision = 1, and avoid dividing by zero.
   mask = jnp.float32(jnp.sum(labels, axis=-1) == 0)
-  raw_av_prec = (
-      jnp.sum(pr_curve * labels, axis=-1) /
-      jnp.maximum(jnp.sum(labels, axis=-1), 1.0))
+  raw_av_prec = jnp.sum(pr_curve * labels, axis=-1) / jnp.maximum(
+      jnp.sum(labels, axis=-1), 1.0
+  )
   return mask + (1 - mask) * raw_av_prec
 
 
@@ -184,9 +193,11 @@ def least_squares_solve_mix(matrix, rhs, diag_loading=1e-3):
 
   # diag_loading ensures invertibility of the (pos. semi-definite) cov_matrix.
   cov_matrix += diag_loading * jnp.eye(
-      cov_matrix.shape[-1], dtype=cov_matrix.dtype)
+      cov_matrix.shape[-1], dtype=cov_matrix.dtype
+  )
   return scipy.linalg.solve(
-      cov_matrix, jnp.matmul(adj_matrix, rhs), sym_pos=True)
+      cov_matrix, jnp.matmul(adj_matrix, rhs), sym_pos=True
+  )
 
 
 def least_squares_mixit(reference, estimate):
@@ -194,7 +205,8 @@ def least_squares_mixit(reference, estimate):
   # Reference shape is [B, M, T]
   # Estimate shape is [B, C, T]
   mix_matrix = least_squares_solve_mix(
-      jnp.swapaxes(estimate, -1, -2), jnp.swapaxes(reference, -1, -2))
+      jnp.swapaxes(estimate, -1, -2), jnp.swapaxes(reference, -1, -2)
+  )
   mix_matrix = jnp.swapaxes(mix_matrix, -1, -2)
   max_per_column = jnp.max(mix_matrix, axis=-2, keepdims=True)
   mix_matrix = jnp.where(mix_matrix == max_per_column, 1.0, 0.0)

@@ -38,7 +38,8 @@ def hertz_to_mel(frequencies_hertz: jnp.ndarray) -> jnp.ndarray:
     frequencies in the mel scale.
   """
   return _MEL_HIGH_FREQUENCY_Q * jnp.log1p(
-      frequencies_hertz / _MEL_BREAK_FREQUENCY_HERTZ)
+      frequencies_hertz / _MEL_BREAK_FREQUENCY_HERTZ
+  )
 
 
 def mel_to_hertz(frequencies_mel: jnp.ndarray) -> jnp.ndarray:
@@ -52,7 +53,8 @@ def mel_to_hertz(frequencies_mel: jnp.ndarray) -> jnp.ndarray:
     frequencies in Hertz.
   """
   return _MEL_BREAK_FREQUENCY_HERTZ * (
-      jnp.expm1(frequencies_mel / _MEL_HIGH_FREQUENCY_Q))
+      jnp.expm1(frequencies_mel / _MEL_HIGH_FREQUENCY_Q)
+  )
 
 
 @functools.partial(jax.jit, static_argnums=(0, 1))
@@ -61,7 +63,8 @@ def linear_to_mel_weight_matrix(
     num_spectrogram_bins: int = 129,
     sample_rate: int = 8000,
     lower_edge_hertz: float = 125.0,
-    upper_edge_hertz: float = 3800.0) -> jnp.ndarray:
+    upper_edge_hertz: float = 3800.0,
+) -> jnp.ndarray:
   """Returns a matrix to warp linear scale spectrograms to the mel scale.
 
   A port of tf.signal.linear_to_mel_weight_matrix.
@@ -85,8 +88,9 @@ def linear_to_mel_weight_matrix(
   # HTK excludes the spectrogram DC bin.
   bands_to_zero = 1
   nyquist_hertz = sample_rate / 2.0
-  linear_frequencies = jnp.linspace(0.0, nyquist_hertz,
-                                    num_spectrogram_bins)[bands_to_zero:]
+  linear_frequencies = jnp.linspace(0.0, nyquist_hertz, num_spectrogram_bins)[
+      bands_to_zero:
+  ]
   spectrogram_bins_mel = hertz_to_mel(linear_frequencies)[:, jnp.newaxis]
 
   # Compute num_mel_bins triples of (lower_edge, center, upper_edge). The
@@ -94,8 +98,10 @@ def linear_to_mel_weight_matrix(
   # Accordingly, we divide [lower_edge_hertz, upper_edge_hertz] into
   # num_mel_bins + 2 pieces.
   band_edges_mel = jnp.linspace(
-      hertz_to_mel(lower_edge_hertz), hertz_to_mel(upper_edge_hertz),
-      num_mel_bins + 2)
+      hertz_to_mel(lower_edge_hertz),
+      hertz_to_mel(upper_edge_hertz),
+      num_mel_bins + 2,
+  )
 
   # Split the triples up and reshape them into [1, num_mel_bins] tensors.
   lower_edge_mel = band_edges_mel[jnp.newaxis, :-2]
@@ -105,9 +111,11 @@ def linear_to_mel_weight_matrix(
   # Calculate lower and upper slopes for every spectrogram bin.
   # Line segments are linear in the mel domain, not Hertz.
   lower_slopes = (spectrogram_bins_mel - lower_edge_mel) / (
-      center_mel - lower_edge_mel)
+      center_mel - lower_edge_mel
+  )
   upper_slopes = (upper_edge_mel - spectrogram_bins_mel) / (
-      upper_edge_mel - center_mel)
+      upper_edge_mel - center_mel
+  )
 
   # Intersect the line segments with each other and zero.
   mel_weights_matrix = jnp.maximum(0.0, jnp.minimum(lower_slopes, upper_slopes))
@@ -121,8 +129,9 @@ def frame(
     frame_length: int,
     frame_step: int,
     pad_end: bool = False,
-    pad_value: float = 0.,  # pylint: disable=unused-argument
-    axis: int = -1) -> jnp.ndarray:
+    pad_value: float = 0.0,  # pylint: disable=unused-argument
+    axis: int = -1,
+) -> jnp.ndarray:
   """Split a spectrogram into multiple bands.
 
   JAX version of `tf.signal.frame`.
@@ -155,7 +164,8 @@ def frame(
   offset_dims = tuple(range(axis)) + tuple(range(axis + 1, signal.ndim + 1))
 
   dimension_numbers = lax.GatherDimensionNumbers(
-      offset_dims=offset_dims, collapsed_slice_dims=(), start_index_map=(axis,))
-  slice_sizes = signal.shape[:axis] + (frame_length,) + signal.shape[axis + 1:]
+      offset_dims=offset_dims, collapsed_slice_dims=(), start_index_map=(axis,)
+  )
+  slice_sizes = signal.shape[:axis] + (frame_length,) + signal.shape[axis + 1 :]
   frames = lax.gather(signal, start_indices, dimension_numbers, slice_sizes)
   return frames

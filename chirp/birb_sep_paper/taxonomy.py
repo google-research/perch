@@ -85,7 +85,7 @@ class Taxonomy(object):
 
   def CommonNameToSpeciesCode(self, common_name):
     cn = common_name.strip().lower()
-    for (k, v) in self.species_info.items():
+    for k, v in self.species_info.items():
       if v[COMMON_NAME] == cn:
         return k
       elif cn.replace('-', '') == k.replace('-', ''):
@@ -94,19 +94,19 @@ class Taxonomy(object):
 
   def BackgroundSpeciesLookup(self, bg_string):
     """Get species label from a background species string."""
-    if ('(') not in bg_string:
+    if '(' not in bg_string:
       return self.CommonNameToSpeciesCode(bg_string)
 
     common, latin = bg_string.split('(')
     common = common.strip().lower()
     latin = latin.replace(')', '').strip().lower()
     genus = latin.split(' ')[0].lower()
-    species = latin[len(genus):].strip().lower()
-    for (k, v) in self.species_info.items():
+    species = latin[len(genus) :].strip().lower()
+    for k, v in self.species_info.items():
       if v[COMMON_NAME] == common:
         return k
     # Failed to find an exact match for the common name; try to find from latin.
-    for (k, v) in self.species_info.items():
+    for k, v in self.species_info.items():
       if v[GENUS] != genus:
         continue
       if v[SPECIES].startswith(species) or species.startswith(v[SPECIES]):
@@ -139,11 +139,9 @@ class Taxonomy(object):
     self.order_enum = {i: k for (i, k) in enumerate(ds_info.order_set)}
     self.order_enum.update({k: i for (i, k) in enumerate(ds_info.order_set)})
 
-  def GenerateEnum(self,
-                   code_list,
-                   enum_type=ORDER,
-                   other_labels=None,
-                   code_whitelist=None):
+  def GenerateEnum(
+      self, code_list, enum_type=ORDER, other_labels=None, code_whitelist=None
+  ):
     """Create an Enum mapping for the provided list of species codes."""
     if other_labels is None:
       other_labels = [UNKNOWN, NONBIRD, HUMAN]
@@ -169,23 +167,30 @@ class Taxonomy(object):
     if whitelist is None:
       whitelist = {}
     self.label_enum = self.GenerateEnum(
-        code_list, LABEL, code_whitelist=whitelist)
+        code_list, LABEL, code_whitelist=whitelist
+    )
     self.order_enum = self.GenerateEnum(
-        code_list, ORDER, code_whitelist=whitelist)
+        code_list, ORDER, code_whitelist=whitelist
+    )
     self.family_enum = self.GenerateEnum(
-        code_list, FAMILY, code_whitelist=whitelist)
+        code_list, FAMILY, code_whitelist=whitelist
+    )
     self.genus_enum = self.GenerateEnum(
-        code_list, GENUS, code_whitelist=whitelist)
+        code_list, GENUS, code_whitelist=whitelist
+    )
 
   def TranslateLabelVector(self, label_vector, other_taxonomy_path):
     """Convert a label vector from another taxonomy to this one."""
     taxo_old = Taxonomy(self.model_path, data_path=other_taxonomy_path)
     if label_vector.shape[1] != taxo_old.NumLabels():
-      raise ValueError(('Label vector for conversion has shape %s, but '
-                        'the taxonomy has %d labels.') %
-                       (label_vector.shape, taxo_old.NumLabels()))
+      raise ValueError(
+          'Label vector for conversion has shape %s, but '
+          'the taxonomy has %d labels.'
+          % (label_vector.shape, taxo_old.NumLabels())
+      )
     trans = np.zeros(
-        [taxo_old.NumLabels(), self.NumLabels()], label_vector.dtype)
+        [taxo_old.NumLabels(), self.NumLabels()], label_vector.dtype
+    )
     misses = []
     for i in range(taxo_old.NumLabels()):
       sp = taxo_old.label_enum[i]
@@ -198,14 +203,20 @@ class Taxonomy(object):
       print('Some species were not in this taxonomy : %s' % misses)
     return labels_new
 
-  def MakeSpeciesHints(self,
-                       species_list=None,
-                       species_list_tag='',
-                       dataset_info_path='',
-                       csv_path=''):
+  def MakeSpeciesHints(
+      self,
+      species_list=None,
+      species_list_tag='',
+      dataset_info_path='',
+      csv_path='',
+  ):
     """Create a species hint vector from a provided list or taxonomy info."""
-    if (species_list is None and not dataset_info_path and not csv_path and
-        not species_list_tag):
+    if (
+        species_list is None
+        and not dataset_info_path
+        and not csv_path
+        and not species_list_tag
+    ):
       logging.info('Using all-ones species hints.')
       return np.ones([self.NumLabels()], np.float32)
 
@@ -220,8 +231,9 @@ class Taxonomy(object):
             if sp in self.label_enum:
               hints[self.label_enum[sp]] = 1
       else:
-        raise ValueError('File with the desired hints cannot be found : %s' %
-                         csv_fp)
+        raise ValueError(
+            'File with the desired hints cannot be found : %s' % csv_fp
+        )
 
     if csv_path:
       with open(csv_path) as f:

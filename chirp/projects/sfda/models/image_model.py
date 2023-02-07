@@ -29,8 +29,9 @@ class ImageModel(nn.Module):
   """A template for any image model."""
 
   @nn.compact
-  def __call__(self, x, train: bool,
-               use_running_average: Optional[bool]) -> output.ClassifierOutput:
+  def __call__(
+      self, x, train: bool, use_running_average: Optional[bool]
+  ) -> output.ClassifierOutput:
     """Just like any standard nn.Module, defines the foward pass of the model.
 
     We formulate two non-standard requirements for the forward pass. First, it
@@ -97,8 +98,9 @@ class ImageModel(nn.Module):
     raise NotImplementedError
 
   @staticmethod
-  def get_input_pipeline(data_builder: tfds.core.DatasetBuilder, split: str,
-                         **kwargs) -> tf.data.Dataset:
+  def get_input_pipeline(
+      data_builder: tfds.core.DatasetBuilder, split: str, **kwargs
+  ) -> tf.data.Dataset:
     """Get the data pipeline for the current model.
 
     Because we're relying on pretrained models from the web, this part of the
@@ -121,8 +123,9 @@ class ImageModel(nn.Module):
 
     def _pp(example):
       image = tf.image.convert_image_dtype(example['image'], tf.float32)
-      label = tf.one_hot(example['label'],
-                         data_builder.info.features['label'].num_classes)
+      label = tf.one_hot(
+          example['label'], data_builder.info.features['label'].num_classes
+      )
 
       return {'image': image, 'label': label, 'tfds_id': example['tfds_id']}
 

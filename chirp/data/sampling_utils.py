@@ -35,7 +35,8 @@ def sample_recordings_under_constraints(
     df: pd.DataFrame,
     target_fg: dict[str, int],
     target_bg: dict[str, int],
-    species_stats: Optional[dict[str, dict[str, int]]] = None):
+    species_stats: Optional[dict[str, dict[str, int]]] = None,
+):
   """Subsamples recordings from df under foreground/background constraints.
 
   Args:
@@ -58,23 +59,33 @@ def sample_recordings_under_constraints(
   """
   if target_fg.keys() != target_bg.keys():
     raise ValueError(
-        'Please provide consistent keys for the foreground/background constraints.'
+        'Please provide consistent keys for the foreground/background'
+        ' constraints.'
     )
   if species_stats:
     for k in target_fg:
-      if species_stats[k]['fg'] < target_fg[k] or species_stats[k][
-          'bg'] < target_bg[k]:
+      if (
+          species_stats[k]['fg'] < target_fg[k]
+          or species_stats[k]['bg'] < target_bg[k]
+      ):
         raise ValueError(
             'The problem is not feasible. There are only {} foreground samples'
             'for species {}, and {} background samples'.format(
-                species_stats[k]['fg'], k, species_stats[k]['bg']))
+                species_stats[k]['fg'], k, species_stats[k]['bg']
+            )
+        )
   else:
-    logging.warning('Could not verify the feasibility of the proble. No species'
-                    'statistics provided.')
+    logging.warning(
+        'Could not verify the feasibility of the proble. No species'
+        'statistics provided.'
+    )
   recordings = list(
-      zip(df['species_code'].tolist(),
+      zip(
+          df['species_code'].tolist(),
           [tuple(x) for x in df['bg_species_codes'].tolist()],
-          df.index.tolist()))
+          df.index.tolist(),
+      )
+  )
   if species_stats:
     # We sort species by difficulty, as measured by the frequency at which
     # this species co-occurs with other species. `find_valid_subset` will
@@ -83,23 +94,30 @@ def sample_recordings_under_constraints(
     sorted_species = list(
         sorted(
             list(target_fg.keys()),
-            key=lambda s: species_stats[s]['bg_wo_coocurrence']))
+            key=lambda s: species_stats[s]['bg_wo_coocurrence'],
+        )
+    )
     ordered_target_fg = collections.OrderedDict(
-        {k: target_fg[k] for k in sorted_species})
+        {k: target_fg[k] for k in sorted_species}
+    )
     ordered_target_bg = collections.OrderedDict(
-        {k: target_bg[k] for k in sorted_species})
+        {k: target_bg[k] for k in sorted_species}
+    )
   else:
     logging.info(
-        'No files stats provided, using the species in provided order.')
+        'No files stats provided, using the species in provided order.'
+    )
     ordered_target_fg = target_fg
     ordered_target_bg = target_bg
 
   seen = collections.defaultdict(lambda: False)
-  valid_subset = find_valid_subset(ordered_target_fg, ordered_target_bg, [],
-                                   seen, recordings)
+  valid_subset = find_valid_subset(
+      ordered_target_fg, ordered_target_bg, [], seen, recordings
+  )
   if not valid_subset:
-    raise RuntimeError('Could not find a solution to the constrained sampling '
-                       'problem.')
+    raise RuntimeError(
+        'Could not find a solution to the constrained sampling problem.'
+    )
   return df.loc[[x[2] for x in valid_subset]]
 
 
@@ -171,18 +189,24 @@ def find_valid_subset(
       new_chosen = copy.copy(chosen)
       bisect.insort(new_chosen, recording)
       res = find_valid_subset(
-          updated_fg, updated_bg, new_chosen, seen,
-          [x for i, x in enumerate(candidates) if i != index])
+          updated_fg,
+          updated_bg,
+          new_chosen,
+          seen,
+          [x for i, x in enumerate(candidates) if i != index],
+      )
       if res is not None:
         return res
   seen[tuple(chosen)] = True
   return None
 
 
-def valid_recording(recording: _RECORDING,
-                    remaining_fg: collections.OrderedDict[str, int],
-                    remaining_bg: collections.OrderedDict[str, int],
-                    current_species: str) -> bool:
+def valid_recording(
+    recording: _RECORDING,
+    remaining_fg: collections.OrderedDict[str, int],
+    remaining_bg: collections.OrderedDict[str, int],
+    current_species: str,
+) -> bool:
   """Decides whether a child (=recording) should be explored next.
 
   The function checks whether (i) The recording contains the species we are
@@ -201,14 +225,16 @@ def valid_recording(recording: _RECORDING,
     True if the recording should be explored, False otherwise.
   """
   # Ensure the current_species is in this recording.
-  if (remaining_fg[current_species] > 0 and
-      recording[0] == current_species) or (remaining_bg[current_species] > 0 and
-                                           current_species in recording[1]):
+  if (
+      remaining_fg[current_species] > 0 and recording[0] == current_species
+  ) or (remaining_bg[current_species] > 0 and current_species in recording[1]):
     # Ensure it doesn't violate any constraint.
-    violates_fg = recording[0] in remaining_fg and remaining_fg[
-        recording[0]] == 0
+    violates_fg = (
+        recording[0] in remaining_fg and remaining_fg[recording[0]] == 0
+    )
     violates_bg = any(
-        [x in remaining_bg and remaining_bg[x] == 0 for x in recording[1]])
+        [x in remaining_bg and remaining_bg[x] == 0 for x in recording[1]]
+    )
     if not violates_fg and not violates_bg:
       return True
   return False

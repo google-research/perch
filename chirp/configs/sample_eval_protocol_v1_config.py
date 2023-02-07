@@ -35,7 +35,8 @@ def get_config() -> config_dict.ConfigDict:
   config.model_callback = _c(
       'eval_lib.TaxonomyModelCallback',
       init_config=baseline_attention_config.init_config,
-      workdir=model_checkpoint_path)
+      workdir=model_checkpoint_path,
+  )
 
 
   # TODO(bringingjoy): extend create_species_query to support returning multiple

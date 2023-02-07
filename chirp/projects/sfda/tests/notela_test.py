@@ -44,7 +44,8 @@ class NOTELATest(absltest.TestCase):
         notela.NOTELA.compute_nearest_neighbors,
         batch_feature=batch_feature,
         dataset_feature=dataset_feature,
-        knn=knn)
+        knn=knn,
+    )
 
     def to_dense(matrix):
       if isinstance(matrix, jnp.ndarray):
@@ -53,23 +54,27 @@ class NOTELATest(absltest.TestCase):
         return matrix.todense()
 
     nearest_neighbors_matrices = []
-    for (efficient, sparse_storage) in itertools.product((True, False),
-                                                         (True, False)):
+    for efficient, sparse_storage in itertools.product(
+        (True, False), (True, False)
+    ):
       nearest_neighbors_matrices.append(
           compute_nearest_neighbor_fn(
               sparse_storage=sparse_storage,
-              memory_efficient_computation=efficient))
+              memory_efficient_computation=efficient,
+          )
+      )
 
     nearest_neighbors_reference = to_dense(nearest_neighbors_matrices[0])
-    self.assertEqual(nearest_neighbors_reference.shape,
-                     (n_points_batch, n_points_dataset))
+    self.assertEqual(
+        nearest_neighbors_reference.shape, (n_points_batch, n_points_dataset)
+    )
     self.assertTrue((nearest_neighbors_reference.sum(-1) >= 0).all())
     self.assertTrue((nearest_neighbors_reference.sum(-1) <= knn).all())
 
     for nn_matrix_version in nearest_neighbors_matrices[1:]:
       self.assertTrue(
-          jnp.allclose(nearest_neighbors_reference,
-                       to_dense(nn_matrix_version)))
+          jnp.allclose(nearest_neighbors_reference, to_dense(nn_matrix_version))
+      )
 
   def test_teacher_step(self):
     """Ensure that NOTELA's teacher-step produces valid pseudo-labels."""
@@ -84,8 +89,9 @@ class NOTELATest(absltest.TestCase):
 
     batch_proba = nn.sigmoid(jax.random.normal(key, (n_points_batch,)))
     dataset_proba = nn.sigmoid(jax.random.normal(key, (n_points_dataset,)))
-    nn_matrix = jax.random.randint(key, (n_points_batch, n_points_dataset), 0,
-                                   2)
+    nn_matrix = jax.random.randint(
+        key, (n_points_batch, n_points_dataset), 0, 2
+    )
     sparse_nn_matrix = sparse.csr_matrix(nn_matrix)
     pseudo_labels = notela.NOTELA.teacher_step(
         batch_proba=one_hot(batch_proba),
@@ -107,11 +113,15 @@ class NOTELATest(absltest.TestCase):
         jnp.allclose(
             pseudo_labels.sum(-1),
             jnp.ones_like(pseudo_labels.sum(-1)),
-            atol=1e-4))
-    self.assertTrue(jnp.allclose(
-        pseudo_labels,
-        pseudo_labels_from_sparse,
-    ))
+            atol=1e-4,
+        )
+    )
+    self.assertTrue(
+        jnp.allclose(
+            pseudo_labels,
+            pseudo_labels_from_sparse,
+        )
+    )
 
   def test_pad_pseudo_label(self):
     key = jax.random.PRNGKey(0)

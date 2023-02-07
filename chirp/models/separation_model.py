@@ -28,6 +28,7 @@ SOUNDSTREAM_UNET = 'soundstream_unet'
 @flax.struct.dataclass
 class SeparatorOutput:
   """Separation model outputs."""
+
   separated_audio: jnp.ndarray
   bottleneck: Optional[jnp.ndarray] = None
   embedding: Optional[jnp.ndarray] = None
@@ -64,9 +65,9 @@ class SeparatorOutput:
     )
 
 
-def enforce_mixture_consistency_time_domain(mixture_waveforms,
-                                            separated_waveforms,
-                                            use_mag_weighting=False):
+def enforce_mixture_consistency_time_domain(
+    mixture_waveforms, separated_waveforms, use_mag_weighting=False
+):
   """Projection implementing mixture consistency in time domain.
 
   This projection makes the sum across sources of separated_waveforms equal to
@@ -91,7 +92,9 @@ def enforce_mixture_consistency_time_domain(mixture_waveforms,
   mix = jnp.expand_dims(mixture_waveforms, 1)
   mix_estimate = jnp.sum(separated_waveforms, 1, keepdims=True)
   if use_mag_weighting:
-    mix_weights = 1e-8 + jnp.mean(separated_waveforms**2, axis=2, keepdims=True)
+    mix_weights = 1e-8 + jnp.mean(
+        separated_waveforms**2, axis=2, keepdims=True
+    )
     mix_weights /= jnp.sum(mix_weights, axis=1, keepdims=True)
   else:
     mix_weights = 1.0 / num_sources
@@ -147,22 +150,23 @@ class SeparationModel(nn.Module):
     if mask_hiddens.shape[-3] != banked_inputs.shape[-3]:
       raise ValueError(
           'Output mask_hiddens must have the same time dimensionality as the '
-          'banked_inputs. Got shapes: %s vs %s' %
-          (mask_hiddens.shape, banked_inputs.shape))
+          'banked_inputs. Got shapes: %s vs %s'
+          % (mask_hiddens.shape, banked_inputs.shape)
+      )
 
   def bottleneck_classifier(self, bottleneck, train: bool):
     """Create classification layer over the bottleneck."""
     # TODO(tomdenton): Experiment with removing this layernorm.
     bottleneck = nn.normalization.LayerNorm(reduction_axes=(-2, -1))(bottleneck)
     classify_hiddens = layers.StridedAutopool(
-        0.5, self.classify_pool_width, self.classify_stride, padding='SAME')(
-            bottleneck)
+        0.5, self.classify_pool_width, self.classify_stride, padding='SAME'
+    )(bottleneck)
     classify_hiddens = nn.Conv(
         features=self.classify_features,
         kernel_size=(1,),
         strides=(1,),
-        padding='SAME')(
-            classify_hiddens)
+        padding='SAME',
+    )(classify_hiddens)
     classify_hiddens = nn.swish(classify_hiddens)
     classify_outputs = {}
     for k, n in self.num_classes.items():
@@ -187,15 +191,20 @@ class SeparationModel(nn.Module):
     # TODO(tomdenton): Check whether non-trivial mask_kernel_size really helps.
     masks = nn.ConvTranspose(
         features=self.num_mask_channels * num_banked_filters,
-        kernel_size=(self.mask_kernel_size,))(
-            mask_hiddens)
+        kernel_size=(self.mask_kernel_size,),
+    )(mask_hiddens)
     masks = jax.nn.sigmoid(masks)
 
     # Reshape the masks for broadcasting to [B, T, C, F].
-    masks = jnp.reshape(masks, [
-        masks.shape[0], masks.shape[1], self.num_mask_channels,
-        num_banked_filters
-    ])
+    masks = jnp.reshape(
+        masks,
+        [
+            masks.shape[0],
+            masks.shape[1],
+            self.num_mask_channels,
+            num_banked_filters,
+        ],
+    )
 
     # Apply the masks to the banked input.
     masked_banked_inputs = masks * jnp.expand_dims(banked_inputs, -2)

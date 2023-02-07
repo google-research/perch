@@ -40,15 +40,18 @@ class HubertOutput:
 
 class QuantizerPoints(enum.Enum):
   """A point in the architecture to add a quantizer."""
+
   FRONTEND = -2
   EARLY_FS = -1
 
 
-def compute_mask_indices(key: jnp.ndarray,
-                         shape: tuple[int, int],
-                         mask_prob: float,
-                         mask_length: int,
-                         min_masks: int = 0) -> jnp.ndarray:
+def compute_mask_indices(
+    key: jnp.ndarray,
+    shape: tuple[int, int],
+    mask_prob: float,
+    mask_length: int,
+    min_masks: int = 0,
+) -> jnp.ndarray:
   """Computes random mask spans for a given shape.
 
   Args:
@@ -83,7 +86,9 @@ def compute_mask_indices(key: jnp.ndarray,
   for _ in range(bsz):
     mask_idc.append(
         jax.random.choice(
-            subkey, max_start_index + 1, shape=(max_masks,), replace=False))
+            subkey, max_start_index + 1, shape=(max_masks,), replace=False
+        )
+    )
     key, subkey = jax.random.split(key)
   mask_idc = jnp.stack(mask_idc, axis=0)
 
@@ -94,30 +99,39 @@ def compute_mask_indices(key: jnp.ndarray,
   inactive_start_idx = sz
   a = jnp.array([a % max_masks for a in jnp.arange(max_masks * bsz)])
   num_mask = jnp.reshape(
-      jnp.repeat(jnp.expand_dims(num_mask, 1), axis=1, repeats=max_masks), [-1])
+      jnp.repeat(jnp.expand_dims(num_mask, 1), axis=1, repeats=max_masks), [-1]
+  )
   mask_idc = jnp.where(a < num_mask, mask_idc, inactive_start_idx)
 
   # Add the offsets, to get all masked indices of each span.
   mask_idc = jnp.concatenate(
-      [mask_idc + offset for offset in range(mask_length)])
+      [mask_idc + offset for offset in range(mask_length)]
+  )
 
   # Prepare the `scatter_indices`, i.e. the positions of a (bsz, sz) array that
   # will be set to 1s in the binary mask that will be returned.
   batch_inds = jnp.reshape(
       jnp.repeat(
-          jnp.expand_dims(jnp.arange(bsz), 1), axis=1, repeats=max_masks), [-1])
+          jnp.expand_dims(jnp.arange(bsz), 1), axis=1, repeats=max_masks
+      ),
+      [-1],
+  )
   batch_inds = jnp.reshape(
       jnp.repeat(jnp.expand_dims(batch_inds, 0), axis=0, repeats=mask_length),
-      [-1])
+      [-1],
+  )
   scatter_indices = jnp.stack((batch_inds, mask_idc), axis=1)
 
   mask = jax.lax.scatter(
-      jnp.zeros((bsz, sz)).astype(int), scatter_indices,
+      jnp.zeros((bsz, sz)).astype(int),
+      scatter_indices,
       jnp.ones_like((mask_idc)).astype(int),
       jax.lax.ScatterDimensionNumbers(
           update_window_dims=(),
           inserted_window_dims=(0, 1),
-          scatter_dims_to_operand_dims=(0, 1)))
+          scatter_dims_to_operand_dims=(0, 1),
+      ),
+  )
   return mask
 
 
@@ -147,6 +161,7 @@ class HuBERTEval(nn.Module):
     add_positional_embeddings: Whether to add positional embeddings to the late
       feature extractor.
   """
+
   early_feature_extractor: Union[nn.Module, None]
   late_feature_extractor: nn.Module
   frontend: Optional[nn.Module] = None
@@ -188,13 +203,15 @@ class HuBERTEval(nn.Module):
     # Pass x through the "late" feature extractor. Returns a list of x's for the
     # different "readout points".
     x_list = self.late_feature_extractor(
-        x, train=False, return_intermediate_list=True)
+        x, train=False, return_intermediate_list=True
+    )
     if block_to_readout < 0 or block_to_readout >= len(x_list):
-      raise ValueError("The `block_to_readout` should be in the range "
-                       "[0, len(x_list)) where x_list is the list that the "
-                       "late feature extractor returns. But got {} and "
-                       "len(x_list) is {}".format(block_to_readout,
-                                                  len(x_list)))
+      raise ValueError(
+          "The `block_to_readout` should be in the range "
+          "[0, len(x_list)) where x_list is the list that the "
+          "late feature extractor returns. But got {} and "
+          "len(x_list) is {}".format(block_to_readout, len(x_list))
+      )
 
     # Stop gradient so that a classifier is trained on frozen features for
     # evaluation purposes.
@@ -259,6 +276,7 @@ class HuBERTModel(nn.Module):
     add_positional_embeddings: Whether to add positional embeddings to the late
       feature extractor.
   """
+
   num_classes: dict[str, int]
   early_feature_extractor: Union[nn.Module, None]
   late_feature_extractor: nn.Module
@@ -277,15 +295,25 @@ class HuBERTModel(nn.Module):
   omit_classifier_stop_grads: Optional[Sequence[int]] = None
   add_positional_embeddings: bool = False
 
-  def classify(self, x_list, mask_idc, per_frame_predictions,
-               classify_pool_width, classify_stride, classify_features,
-               reduction_type, classify_from_all):
+  def classify(
+      self,
+      x_list,
+      mask_idc,
+      per_frame_predictions,
+      classify_pool_width,
+      classify_stride,
+      classify_features,
+      reduction_type,
+      classify_from_all,
+  ):
     # The gradients of this loss will not propagate to train the representation
     # (the representation is trained purely self-supervised), unless it is
     # requested to omit placing a stop-gradient on the classifier.
     for i in range(len(x_list)):
-      if (self.omit_classifier_stop_grads is None or
-          i not in self.omit_classifier_stop_grads):
+      if (
+          self.omit_classifier_stop_grads is None
+          or i not in self.omit_classifier_stop_grads
+      ):
         x_list[i] = jax.lax.stop_gradient(x_list[i])
     outputs = {}
     midpt = x_list[-1].shape[-2] // 2  # The middle frame.
@@ -301,25 +329,26 @@ class HuBERTModel(nn.Module):
         if per_frame_predictions:
           # Borrow the classifier from `separation_model.py`.
           x_interm = nn.normalization.LayerNorm(reduction_axes=(-2, -1))(
-              x_interm)
+              x_interm
+          )
           x_interm = layers.StridedAutopool(
               0.5,
               classify_pool_width,
               classify_stride,
               padding="SAME",
-              name="readout_autopool_{}_{}".format(k, i))(
-                  x_interm)
+              name="readout_autopool_{}_{}".format(k, i),
+          )(x_interm)
           x_interm = nn.Conv(
               features=classify_features,
               kernel_size=(1,),
               strides=(1,),
               padding="SAME",
-              name="readout_conv1_{}_{}".format(k, i))(
-                  x_interm)
+              name="readout_conv1_{}_{}".format(k, i),
+          )(x_interm)
           x_interm = nn.swish(x_interm)
           per_frame_preds = nn.Conv(
-              n, (1,), (1,), "SAME", name="readout_conv2_{}_{}".format(k, i))(
-                  x_interm)
+              n, (1,), (1,), "SAME", name="readout_conv2_{}_{}".format(k, i)
+          )(x_interm)
           # Now reduce over the time axis to get 1 prediction per *sample*.
           if reduction_type == "AVG":
             reduce_fn = lambda x: jnp.mean(x, axis=-2)
@@ -341,14 +370,16 @@ class HuBERTModel(nn.Module):
             # x_filtered_zeros has 0s in place of masked embeddings, while
             # keeping only the unmasked embeddings intact. [bsz, sz, csz_].
             mask_idc_exp = jnp.repeat(
-                jnp.expand_dims(mask_idc, 2), repeats=csz_, axis=2)
+                jnp.expand_dims(mask_idc, 2), repeats=csz_, axis=2
+            )
             x_filtered = jnp.where(mask_idc_exp, 0, x_interm)
-            mean = jnp.sum(
-                x_filtered, axis=1) / jnp.sum(
-                    mask_idc_exp == 0, axis=1)
+            mean = jnp.sum(x_filtered, axis=1) / jnp.sum(
+                mask_idc_exp == 0, axis=1
+            )
 
           outputs[k].append(
-              nn.Dense(n, name="readout_{}_{}".format(k, i))(mean))
+              nn.Dense(n, name="readout_{}_{}".format(k, i))(mean)
+          )
     return outputs
 
   def add_projected_quantizer(self, x, quantizers, train):
@@ -372,15 +403,17 @@ class HuBERTModel(nn.Module):
     # A list of ns many elements that have shape [nc, final_dim].
     codes_pj = [
         nn.Dense(
-            self.final_dim, name="codes_proj_{}_{}".format(quant_index,
-                                                           i))(codes[i])
+            self.final_dim, name="codes_proj_{}_{}".format(quant_index, i)
+        )(codes[i])
         for i in range(ns)
     ]
     # [ns, nc, final_dim].
     codes_pj = jnp.stack(codes_pj, axis=0)
     quantizers.append(
-        QuantizerBundle(quant_outputs.quantization_loss, targets, codes,
-                        codes_pj))
+        QuantizerBundle(
+            quant_outputs.quantization_loss, targets, codes, codes_pj
+        )
+    )
     return quantizers
 
   def apply_final_projection(self, x, quantizers):
@@ -405,8 +438,8 @@ class HuBERTModel(nn.Module):
       # A list of ns many elements that have shape [bsz, sz, final_dim].
       x_proj = [
           nn.Dense(
-              self.final_dim,
-              name="final_proj_section_{}_quant_{}".format(i, j))(x_sec)
+              self.final_dim, name="final_proj_section_{}_quant_{}".format(i, j)
+          )(x_sec)
           for (i, x_sec) in enumerate(x_sections)
       ]
       # [ns, bsz, sz, final_dim].
@@ -434,9 +467,9 @@ class HuBERTModel(nn.Module):
     all_logits = []
     for x, q_bundle, q_module in zip(x_list, quantizers, self.quantizer):
       # First, l2-normalize the (projected) features and codes.
-      x /= (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-5)
+      x /= jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-5
       codes_pj = q_bundle.projected_feature_codes
-      codes_pj /= (jnp.linalg.norm(codes_pj, axis=-1, keepdims=True) + 1e-5)
+      codes_pj /= jnp.linalg.norm(codes_pj, axis=-1, keepdims=True) + 1e-5
 
       # Then, compute the dot product between them.
       ns = q_module.get_num_sections()
@@ -455,8 +488,9 @@ class HuBERTModel(nn.Module):
     return all_logits
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray, train: bool,
-               mask_key: Union[jnp.ndarray, None]) -> HubertOutput:
+  def __call__(
+      self, inputs: jnp.ndarray, train: bool, mask_key: Union[jnp.ndarray, None]
+  ) -> HubertOutput:
     """Apply the HuBERT model.
 
     The quantizer used may either be Product Quantizer (PQ) or a base quantizer.
@@ -486,9 +520,12 @@ class HuBERTModel(nn.Module):
       raise ValueError("During training mode, `mask_key` should not be None.")
 
     if len(self.quantizer) != len(self.quantizer_points):
-      raise ValueError("The lengths of `quantizer` and `quantizer_points` "
-                       "should match, but are {} and {}.".format(
-                           len(self.quantizer), len(self.quantizer_points)))
+      raise ValueError(
+          "The lengths of `quantizer` and `quantizer_points` "
+          "should match, but are {} and {}.".format(
+              len(self.quantizer), len(self.quantizer_points)
+          )
+      )
 
     if self.omit_classifier_stop_grads is not None:
       for i in self.omit_classifier_stop_grads:
@@ -496,7 +533,8 @@ class HuBERTModel(nn.Module):
           raise ValueError(
               "Requested to omit the stop-grad from classifier "
               f"with index {i} but there are only {len(self.readout_points)} "
-              "readout points / classifiers.")
+              "readout points / classifiers."
+          )
 
     model_outputs = {}
     quantizers = []
@@ -513,7 +551,8 @@ class HuBERTModel(nn.Module):
               " to match the number of frames from the early feature extractor "
               f"({x_earlyfs.shape[-2]}) in order to have as many HuBERT "
               "predictions as there are targets, since `quantizer_points` "
-              "includes quantizing on top of the frontend.")
+              "includes quantizing on top of the frontend."
+          )
       x = x_earlyfs
     else:
       # Process audio with a frontend before the early feature extractor.
@@ -552,7 +591,8 @@ class HuBERTModel(nn.Module):
     mask_idc = jnp.zeros((bsz, sz))
     if train:
       mask_idc = compute_mask_indices(
-          mask_key, shape=(bsz, sz), **self.mask_config)
+          mask_key, shape=(bsz, sz), **self.mask_config
+      )
     model_outputs["mask_idc"] = mask_idc
     mask_idc_exp = jnp.repeat(jnp.expand_dims(mask_idc, 2), repeats=csz, axis=2)
     x = jnp.where(mask_idc_exp > 0, mask_emb, x)
@@ -560,39 +600,49 @@ class HuBERTModel(nn.Module):
     # Pass the corrupted x through the "late" feature extractor. Returns a list
     # of x's for the different "readout points".
     x_list = self.late_feature_extractor(
-        x, train=train, return_intermediate_list=True)
+        x, train=train, return_intermediate_list=True
+    )
     for block_ind in self.readout_points:
       if block_ind < 0 or block_ind >= len(x_list):
-        raise ValueError("Each element of `readout_points` should be in the "
-                         "range [0, len(x_list)) where x_list is the list that "
-                         "the late feature extractor returns. Found element "
-                         "{} and len(x_list) is {}".format(
-                             block_ind, len(x_list)))
+        raise ValueError(
+            "Each element of `readout_points` should be in the "
+            "range [0, len(x_list)) where x_list is the list that "
+            "the late feature extractor returns. Found element "
+            "{} and len(x_list) is {}".format(block_ind, len(x_list))
+        )
     x = x_list[-1]  # the final-layer "embeddings"
     _, _, csz = x.shape
     model_outputs["embedding"] = x_list
 
     # Add additional quantizers on blocks of the late feature extractor.
     for point in list(self.quantizer_points):
-      if (point == QuantizerPoints.FRONTEND.value or
-          point == QuantizerPoints.EARLY_FS.value):
+      if (
+          point == QuantizerPoints.FRONTEND.value
+          or point == QuantizerPoints.EARLY_FS.value
+      ):
         # Quantizers on the frontend and the early feature extractor will have
         # already been added, if requested. Nothing more to do here.
         continue
       elif point < 0:
-        raise ValueError("An element of `quantizer_points` can only be "
-                         f"negative if it's -1 or -2, but found {point}.")
+        raise ValueError(
+            "An element of `quantizer_points` can only be "
+            f"negative if it's -1 or -2, but found {point}."
+        )
       elif point >= len(x_list):
-        raise ValueError("Each element of `quantizer_points` should be in the "
-                         "range [0, len(x_list)) where x_list is the list that "
-                         "the late feature extractor returns. Found element "
-                         "{} and len(x_list) is {}".format(point, len(x_list)))
-      quantizers = self.add_projected_quantizer(x_list[point], quantizers,
-                                                train)
+        raise ValueError(
+            "Each element of `quantizer_points` should be in the "
+            "range [0, len(x_list)) where x_list is the list that "
+            "the late feature extractor returns. Found element "
+            "{} and len(x_list) is {}".format(point, len(x_list))
+        )
+      quantizers = self.add_projected_quantizer(
+          x_list[point], quantizers, train
+      )
 
     # Linear readouts for supervised classification on top of HuBERT embeddings.
     classification_outputs = self.classify(
-        x_list, mask_idc=mask_idc, **self.classifier_config)
+        x_list, mask_idc=mask_idc, **self.classifier_config
+    )
     model_outputs.update(classification_outputs)
 
     # Final projection layer that projects embeddings to `final_dim`.
@@ -617,6 +667,7 @@ class HuBERTModel(nn.Module):
         quantizers[i].quantization_loss for i in range(len(quantizers))
     ]
     model_outputs["quantization_loss"] = jnp.mean(
-        jnp.stack(quant_losses, axis=0), axis=0)
+        jnp.stack(quant_losses, axis=0), axis=0
+    )
 
     return HubertOutput(**model_outputs)

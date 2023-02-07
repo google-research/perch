@@ -42,6 +42,7 @@ class TaxonomyModel(nn.Module):
       trained in a self-supervised way. This option is mutually exclusive with
       frontend and is used for evaluation of self-supervised representations.
   """
+
   num_classes: dict[str, int]
   encoder: nn.Module
   taxonomy_loss_weight: float
@@ -54,7 +55,7 @@ class TaxonomyModel(nn.Module):
       inputs: jnp.ndarray,
       train: bool,
       use_running_average: Optional[bool] = None,
-      mask: Optional[jnp.ndarray] = None
+      mask: Optional[jnp.ndarray] = None,
   ) -> Union[output.ClassifierOutput, output.TaxonomyOutput]:
     """Apply the taxonomy model.
 
@@ -74,8 +75,9 @@ class TaxonomyModel(nn.Module):
       Logits for each output head.
     """
     if self.frontend is not None and self.hubert_feature_extractor is not None:
-      raise ValueError("`frontend` and `hubert_feature_extractor` are mutually "
-                       "exclusive.")
+      raise ValueError(
+          "`frontend` and `hubert_feature_extractor` are mutually exclusive."
+      )
 
     if use_running_average is None:
       use_running_average = not train
@@ -103,7 +105,8 @@ class TaxonomyModel(nn.Module):
       x = x[..., jnp.newaxis]
     # Treat the spectrogram as a gray-scale image
     x = self.encoder(
-        x, train=train, use_running_average=use_running_average, **kwargs)
+        x, train=train, use_running_average=use_running_average, **kwargs
+    )
 
     # Classify the encoder outputs and assemble outputs.
     model_outputs = {}
@@ -119,6 +122,7 @@ class TaxonomyModel(nn.Module):
 
 class ConformerModel(nn.Module):
   """Conformer model."""
+
   num_conformer_blocks: int = 16
   features: int = 144
   num_heads: int = 4
@@ -126,14 +130,17 @@ class ConformerModel(nn.Module):
   downsample: list[tuple[int, float]] = dataclasses.field(default_factory=list)
 
   @nn.compact
-  def __call__(self,
-               inputs: jnp.ndarray,
-               train: bool,
-               use_running_average: Optional[bool] = None,
-               mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
+  def __call__(
+      self,
+      inputs: jnp.ndarray,
+      train: bool,
+      use_running_average: Optional[bool] = None,
+      mask: Optional[jnp.ndarray] = None,
+  ) -> jnp.ndarray:
     # Subsample from (x, 160) to (x // 4, 40)
     x = conformer.ConvolutionalSubsampling(features=self.features)(
-        inputs, train=train)
+        inputs, train=train
+    )
     # Apply conformer blocks
     x = conformer.Conformer(
         model_dims=self.features,
@@ -141,11 +148,13 @@ class ConformerModel(nn.Module):
         num_blocks=self.num_conformer_blocks,
         kernel_size=self.kernel_size,
         downsample=self.downsample,
-        dropout_prob=0.1)(
-            x,
-            train=train,
-            use_running_average=use_running_average,
-            return_intermediate_list=False)
+        dropout_prob=0.1,
+    )(
+        x,
+        train=train,
+        use_running_average=use_running_average,
+        return_intermediate_list=False,
+    )
 
     # To get a global embedding we now just pool
     return jnp.mean(x, axis=-2)

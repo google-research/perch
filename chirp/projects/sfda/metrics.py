@@ -31,12 +31,15 @@ class Accuracy(clu_metrics.Average):
   """
 
   @classmethod
-  def from_model_output(cls, probabilities: jnp.array, label: jnp.array,
-                        **kwargs) -> clu_metrics.Metric:
+  def from_model_output(
+      cls, probabilities: jnp.array, label: jnp.array, **kwargs
+  ) -> clu_metrics.Metric:
     return super().from_model_output(
         values=(probabilities.argmax(axis=-1) == label.argmax(axis=-1)).astype(
-            jnp.float32),
-        **kwargs)
+            jnp.float32
+        ),
+        **kwargs
+    )
 
 
 @flax.struct.dataclass
@@ -54,12 +57,14 @@ class MarginalEntropy(clu_metrics.Metric):
   multi_label: bool
 
   @classmethod
-  def from_model_output(cls, probabilities: jnp.array, multi_label: bool,
-                        **_) -> "MarginalEntropy":
+  def from_model_output(
+      cls, probabilities: jnp.array, multi_label: bool, **_
+  ) -> "MarginalEntropy":
     return cls(
         probability_sum=probabilities.sum(axis=0),
         n_samples=probabilities.shape[0],
-        multi_label=multi_label)
+        multi_label=multi_label,
+    )
 
   def merge(self, other: "MarginalEntropy") -> "MarginalEntropy":
     return type(self)(
@@ -74,7 +79,7 @@ class MarginalEntropy(clu_metrics.Metric):
 
   @classmethod
   def empty(cls) -> "MarginalEntropy":
-    return cls(probability_sum=0., n_samples=0, multi_label=False)
+    return cls(probability_sum=0.0, n_samples=0, multi_label=False)
 
 
 @flax.struct.dataclass
@@ -91,9 +96,13 @@ class MarginalBinaryEntropy(clu_metrics.Metric):
   multi_label: bool
 
   @classmethod
-  def from_model_output(cls, label_mask: jnp.ndarray, probabilities: jnp.array,
-                        multi_label: bool, **_) -> "MarginalBinaryEntropy":
-
+  def from_model_output(
+      cls,
+      label_mask: jnp.ndarray,
+      probabilities: jnp.array,
+      multi_label: bool,
+      **_
+  ) -> "MarginalBinaryEntropy":
     # TODO(mboudiaf). Verify here that label_mask is the same across samples.
     # Problem is to make assert inside jitted function. Right now, this is done
     # before each iteration, but ideally should be here.
@@ -102,7 +111,8 @@ class MarginalBinaryEntropy(clu_metrics.Metric):
         probability_sum=probabilities.sum(axis=0),
         label_mask=label_mask[0],
         n_samples=probabilities.shape[0],
-        multi_label=multi_label)
+        multi_label=multi_label,
+    )
 
   def merge(self, other: "MarginalBinaryEntropy") -> "MarginalBinaryEntropy":
     return type(self)(
@@ -115,9 +125,11 @@ class MarginalBinaryEntropy(clu_metrics.Metric):
   def compute(self):
     proba_marginal = self.probability_sum * (1 / self.n_samples)
     return losses.label_binary_ent(
-        probabilities=proba_marginal, label_mask=self.label_mask)
+        probabilities=proba_marginal, label_mask=self.label_mask
+    )
 
   @classmethod
   def empty(cls) -> "MarginalBinaryEntropy":
     return cls(
-        probability_sum=0., n_samples=0, label_mask=0., multi_label=False)
+        probability_sum=0.0, n_samples=0, label_mask=0.0, multi_label=False
+    )

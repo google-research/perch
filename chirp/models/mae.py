@@ -86,6 +86,7 @@ class Encoder(nn.Module):
     class_token: Whether or not to prepend a zero-initialized learned class
       token to the patches.
   """
+
   patch_size: tuple[int, int] = (16, 16)
   mlp_dim: int = 3072
   num_layers: int = 12
@@ -124,11 +125,12 @@ class Encoder(nn.Module):
     fh, fw = self.patch_size
     # Extracting patches and then embedding is in fact a single convolution.
     x = nn.Conv(
-        self.hidden_size, (fh, fw),
+        self.hidden_size,
+        (fh, fw),
         strides=(fh, fw),
         padding='VALID',
-        name='embedding')(
-            x)
+        name='embedding',
+    )(x)
     n, h, w, c = x.shape
 
     # Add positional embeddings
@@ -146,8 +148,9 @@ class Encoder(nn.Module):
 
     # If we want to add a class token, add it here.
     if self.class_token:
-      class_token = self.param('class_token', nn.initializers.zeros, (1, 1, c),
-                               x.dtype)
+      class_token = self.param(
+          'class_token', nn.initializers.zeros, (1, 1, c), x.dtype
+      )
       class_token = jnp.tile(class_token, [n, 1, 1])
       x = jnp.concatenate([class_token, x], axis=1)
 
@@ -158,8 +161,8 @@ class Encoder(nn.Module):
         positional_embedding='none',
         dropout_rate=self.dropout_rate,
         attention_dropout_rate=self.attention_dropout_rate,
-        stochastic_depth=self.stochastic_depth)(
-            x, train=train)
+        stochastic_depth=self.stochastic_depth,
+    )(x, train=train)
 
     return x, unmasked, masked
 
@@ -169,11 +172,13 @@ class Embedder(nn.Module):
   taxonomy_loss_weight: float = 0.0
 
   @nn.compact
-  def __call__(self,
-               x: jnp.ndarray,
-               *,
-               train: bool,
-               use_running_average: Optional[bool] = None):
+  def __call__(
+      self,
+      x: jnp.ndarray,
+      *,
+      train: bool,
+      use_running_average: Optional[bool] = None
+  ):
     encoded_patches, _, _ = self.encoder(x, train=train)
     embedding = jnp.mean(encoded_patches, axis=-2)
     return optax.scale_gradient(embedding, 0.01)
@@ -202,6 +207,7 @@ class Decoder(nn.Module):
     attention_dropout_rate: Dropout for attention heads.
     stochastic_depth: The layer dropout probability.
   """
+
   output_size: tuple[int, int, int]
   patch_size: tuple[int, int] = (16, 16)
   mlp_dim: int = 1536
@@ -227,12 +233,16 @@ class Decoder(nn.Module):
     """
     # First restore the patches in their correct order and use mask tokens
     n, num_patches, features = x.shape
-    h, w, c = (self.output_size[0] // self.patch_size[0],
-               self.output_size[1] // self.patch_size[1], self.output_size[2])
+    h, w, c = (
+        self.output_size[0] // self.patch_size[0],
+        self.output_size[1] // self.patch_size[1],
+        self.output_size[2],
+    )
     if unmasked.shape != (n, num_patches):
       raise ValueError('shape of encoded patches and mask do not match')
-    mask_token = self.param('mask_token', nn.initializers.zeros,
-                            (1, 1, features), x.dtype)
+    mask_token = self.param(
+        'mask_token', nn.initializers.zeros, (1, 1, features), x.dtype
+    )
     embeddings = jnp.tile(mask_token, (n, h * w, 1))
     embeddings = embeddings.at[jnp.arange(n)[:, jnp.newaxis], unmasked].set(x)
 
@@ -247,8 +257,8 @@ class Decoder(nn.Module):
         positional_embedding='sinusoidal_1d',
         dropout_rate=self.dropout_rate,
         attention_dropout_rate=self.attention_dropout_rate,
-        stochastic_depth=self.stochastic_depth)(
-            x, train=train)
+        stochastic_depth=self.stochastic_depth,
+    )(x, train=train)
 
     x = nn.Dense(features=self.patch_size[0] * self.patch_size[1] * c)(x)
 
@@ -257,6 +267,7 @@ class Decoder(nn.Module):
 
 class MaskedAutoencoder(nn.Module):
   """A masked autoencoder."""
+
   encoder: nn.Module
   decoder: nn.Module
 

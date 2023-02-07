@@ -36,6 +36,7 @@ def mock_localization_fn(audio, sr, interval_length_s, max_intervals):
 
 class SoundeventsTest(tfds.testing.DatasetBuilderTestCase):
   """Tests for the soundevents dataset."""
+
   DATASET_CLASS = soundevents.Soundevents
   BUILDER_CONFIG_NAMES_TO_TEST = [
       config.name
@@ -44,12 +45,16 @@ class SoundeventsTest(tfds.testing.DatasetBuilderTestCase):
   ]
   DL_EXTRACT_RESULT = {}
   DL_SAMPLE_FILES = {
-      'dev_samples':
-          DATASET_CLASS.code_path.parent / 'placeholder_data' /
-          'dev_samples.json',
-      'eval_samples':
-          DATASET_CLASS.code_path.parent / 'placeholder_data' /
-          'eval_samples.json'
+      'dev_samples': (
+          DATASET_CLASS.code_path.parent
+          / 'placeholder_data'
+          / 'dev_samples.json'
+      ),
+      'eval_samples': (
+          DATASET_CLASS.code_path.parent
+          / 'placeholder_data'
+          / 'eval_samples.json'
+      ),
   }
   SKIP_CHECKSUMS = True
 
@@ -73,7 +78,8 @@ class SoundeventsTest(tfds.testing.DatasetBuilderTestCase):
     subdir.mkdir(parents=True)
     for _, row in df_dev_samples.iterrows():
       tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(
-          subdir / f'{row["fname"]}.wav', format='wav')
+          subdir / f'{row["fname"]}.wav', format='wav'
+      )
 
     # create audio files for eval set from placeholder_data samples
     df_eval_samples = pd.read_json(cls.DL_SAMPLE_FILES['eval_samples'])
@@ -83,7 +89,8 @@ class SoundeventsTest(tfds.testing.DatasetBuilderTestCase):
     print(subdir)
     for _, row in df_eval_samples.iterrows():
       tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(
-          subdir / f'{row["fname"]}.wav', format='wav')
+          subdir / f'{row["fname"]}.wav', format='wav'
+      )
 
     subdir = epath.Path(cls.tempdir) / 'FSD50K.ground_truth'
     subdir.mkdir(parents=True)
@@ -93,23 +100,24 @@ class SoundeventsTest(tfds.testing.DatasetBuilderTestCase):
     cls.DL_EXTRACT_RESULT['dataset_info_eval'] = subdir / 'eval.csv'
     cls.SPLITS = {'train': len(df_dev_samples), 'test': len(df_eval_samples)}
     cls.EXAMPLE_DIR = epath.Path(cls.tempdir)
-    cls.url_patcher = mock.patch.object(cls.DATASET_CLASS, 'GCS_URL',
-                                        epath.Path(cls.tempdir))
+    cls.url_patcher = mock.patch.object(
+        cls.DATASET_CLASS, 'GCS_URL', epath.Path(cls.tempdir)
+    )
     cls.url_patcher.start()
     mock_gcs_url = epath.Path(cls.tempdir)
     mock_dataset_config = {
         'dev': {
-            'ground_truth_file': (mock_gcs_url / 'FSD50K.ground_truth/dev.csv'),
-            'audio_dir': (mock_gcs_url / 'dev_audio'),
+            'ground_truth_file': mock_gcs_url / 'FSD50K.ground_truth/dev.csv',
+            'audio_dir': mock_gcs_url / 'dev_audio',
         },
         'eval': {
-            'ground_truth_file':
-                (mock_gcs_url / 'FSD50K.ground_truth/eval.csv'),
-            'audio_dir': (mock_gcs_url / 'eval_audio'),
-        }
+            'ground_truth_file': mock_gcs_url / 'FSD50K.ground_truth/eval.csv',
+            'audio_dir': mock_gcs_url / 'eval_audio',
+        },
     }
-    cls.config_patcher = mock.patch.object(cls.DATASET_CLASS, 'DATASET_CONFIG',
-                                           mock_dataset_config)
+    cls.config_patcher = mock.patch.object(
+        cls.DATASET_CLASS, 'DATASET_CONFIG', mock_dataset_config
+    )
     cls.config_patcher.start()
 
   @classmethod

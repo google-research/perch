@@ -41,14 +41,13 @@ def gaussian(M: int, std: float, sym: bool = True) -> jnp.ndarray:  # pylint: di
 
   n = jnp.arange(0, M) - (M - 1.0) / 2.0
   sig2 = 2 * std * std
-  w = jnp.exp(-n**2 / sig2)
+  w = jnp.exp(-(n**2) / sig2)
   return w
 
 
-def gaussian_init(key: jnp.ndarray,
-                  num_channels: int,
-                  window_size: int,
-                  std: float = 0.4) -> jnp.ndarray:
+def gaussian_init(
+    key: jnp.ndarray, num_channels: int, window_size: int, std: float = 0.4
+) -> jnp.ndarray:
   """Initializes Gaussian windows.
 
   Args:
@@ -63,7 +62,7 @@ def gaussian_init(key: jnp.ndarray,
     the standard deviation scaled by the window size.
   """
   del key
-  return std * 0.5 * (window_size - 1) * jnp.ones((num_channels,)),
+  return (std * 0.5 * (window_size - 1) * jnp.ones((num_channels,)),)
 
 
 class WindowPool(nn.Module):
@@ -96,6 +95,7 @@ class WindowPool(nn.Module):
     stride: The stride to use.
     padding: Padding to use.
   """
+
   window: Callable[..., jnp.ndarray]
   window_size: int
   window_init: Callable[[jnp.ndarray, int, int], jnp.ndarray]
@@ -116,21 +116,24 @@ class WindowPool(nn.Module):
       The pooled outputs of shape (batch, time, channels).
     """
     num_channels = inputs.shape[-1]
-    window_params = self.param("window_params", self.window_init, num_channels,
-                               self.window_size)
+    window_params = self.param(
+        "window_params", self.window_init, num_channels, self.window_size
+    )
     window_values = jax.vmap(
-        self.window,
-        in_axes=(None,) + (0,) * len(window_params))(self.window_size,
-                                                     *window_params)
+        self.window, in_axes=(None,) + (0,) * len(window_params)
+    )(self.window_size, *window_params)
     if self.normalize_window:
       window_values /= jnp.sum(window_values, axis=1, keepdims=True)
     window_values = window_values.T[:, jnp.newaxis]
-    dn = lax.conv_dimension_numbers(inputs.shape, window_values.shape,
-                                    ("NWC", "WIO", "NWC"))
+    dn = lax.conv_dimension_numbers(
+        inputs.shape, window_values.shape, ("NWC", "WIO", "NWC")
+    )
 
     return lax.conv_general_dilated(
         inputs,
-        window_values, (self.stride,),
+        window_values,
+        (self.stride,),
         self.padding,
         dimension_numbers=dn,
-        feature_group_count=num_channels)
+        feature_group_count=num_channels,
+    )

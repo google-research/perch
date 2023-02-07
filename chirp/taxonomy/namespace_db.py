@@ -45,6 +45,7 @@ def load_db() -> 'NamespaceDatabase':
 @dataclasses.dataclass
 class NamespaceDatabase:
   """A database of Namespaces, Mappings, and ClassLists."""
+
   namespaces: dict[str, namespace.Namespace]
   mappings: dict[str, namespace.Mapping]
   class_lists: dict[str, namespace.ClassList]
@@ -89,7 +90,8 @@ class NamespaceDatabase:
     class_list_csvs = [p for p in class_list_csvs if p.endswith('.csv')]
     for c in class_list_csvs:
       filepath = path_utils.get_absolute_epath(
-          os.path.join(CLASS_LISTS_PATH, c))
+          os.path.join(CLASS_LISTS_PATH, c)
+      )
       with open(filepath, 'r') as f:
         class_list = namespace.ClassList.from_csv(c[:-4], f)
         class_lists[class_list.name] = class_list
@@ -104,15 +106,21 @@ class NamespaceDatabase:
         raise ValueError(f'Multiple definitions for namespace {space.name}')
     for mapping in mappings.values():
       if mapping.source_namespace not in namespaces:
-        raise ValueError(f'Mapping {mapping.name} has an unknown source '
-                         f'namespace {mapping.source_namespace}.')
+        raise ValueError(
+            f'Mapping {mapping.name} has an unknown source '
+            f'namespace {mapping.source_namespace}.'
+        )
       if mapping.target_namespace not in namespaces:
-        raise ValueError(f'Mapping {mapping.name} has an unknown target '
-                         f'namespace {mapping.target_namespace}.')
+        raise ValueError(
+            f'Mapping {mapping.name} has an unknown target '
+            f'namespace {mapping.target_namespace}.'
+        )
     for class_list in class_lists.values():
       if class_list.namespace not in namespaces:
-        raise ValueError(f'ClassList {class_list.name} has an unknown '
-                         f'namespace {class_list.namespace}.')
+        raise ValueError(
+            f'ClassList {class_list.name} has an unknown '
+            f'namespace {class_list.namespace}.'
+        )
 
     db = NamespaceDatabase(namespaces, mappings, class_lists)
     return db
@@ -157,6 +165,7 @@ class NamespaceDatabase:
         composite[sp] = ioc_to_ebird[sp]
       else:
         misses.append(sp)
-    composite = namespace.Mapping.from_dict('xc_to_ebird2021', 'xenocanto_10_1',
-                                            'ebird2021', composite)
+    composite = namespace.Mapping.from_dict(
+        'xc_to_ebird2021', 'xenocanto_10_1', 'ebird2021', composite
+    )
     return composite, misses

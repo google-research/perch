@@ -30,15 +30,19 @@ class MethodUtilsTest(absltest.TestCase):
     n_points_a = 2
     n_points_b = 3
     features_a = jax.random.normal(
-        jax.random.PRNGKey(0), (n_points_a, feature_dim))
+        jax.random.PRNGKey(0), (n_points_a, feature_dim)
+    )
     feature_b = jax.random.normal(
-        jax.random.PRNGKey(1), (n_points_b, feature_dim))
+        jax.random.PRNGKey(1), (n_points_b, feature_dim)
+    )
 
     pairwises_sqr_distances_ours = method_utils.jax_cdist(features_a, feature_b)
-    pairwises_sqr_distances_scipy = distance.cdist(features_a, feature_b)**2
+    pairwises_sqr_distances_scipy = distance.cdist(features_a, feature_b) ** 2
     self.assertTrue(
-        jnp.allclose(pairwises_sqr_distances_scipy,
-                     pairwises_sqr_distances_ours))
+        jnp.allclose(
+            pairwises_sqr_distances_scipy, pairwises_sqr_distances_ours
+        )
+    )
 
 
 if __name__ == "__main__":

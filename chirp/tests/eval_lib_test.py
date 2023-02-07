@@ -39,10 +39,12 @@ from absl.testing import absltest
 _c = config_utils.callable_config
 
 
-def _stub_localization_fn(audio: Any,
-                          sample_rate_hz: int,
-                          interval_length_s: float = 6.0,
-                          max_intervals: int = 5) -> Sequence[tuple[int, int]]:
+def _stub_localization_fn(
+    audio: Any,
+    sample_rate_hz: int,
+    interval_length_s: float = 6.0,
+    max_intervals: int = 5,
+) -> Sequence[tuple[int, int]]:
   # The only purpose of this stub function is to avoid a default
   # `localization_fn` value of None in `BirdTaxonomyConfig` so that the audio
   # feature shape gets computed properly.
@@ -55,11 +57,13 @@ class FakeBirdTaxonomy(fake_dataset.FakeDataset):
       bird_taxonomy.BirdTaxonomyConfig(
           name='fake_variant_1',
           localization_fn=_stub_localization_fn,
-          interval_length_s=6.0),
+          interval_length_s=6.0,
+      ),
       bird_taxonomy.BirdTaxonomyConfig(
           name='fake_variant_2',
           localization_fn=_stub_localization_fn,
-          interval_length_s=6.0),
+          interval_length_s=6.0,
+      ),
   ]
 
 
@@ -69,44 +73,45 @@ class LoadEvalDatasetsTest(absltest.TestCase):
     super().setUp()
     self.data_dir = tempfile.TemporaryDirectory('data_dir').name
     FakeBirdTaxonomy(
-        data_dir=self.data_dir, config='fake_variant_1').download_and_prepare()
+        data_dir=self.data_dir, config='fake_variant_1'
+    ).download_and_prepare()
     FakeBirdTaxonomy(
-        data_dir=self.data_dir, config='fake_variant_2').download_and_prepare()
+        data_dir=self.data_dir, config='fake_variant_2'
+    ).download_and_prepare()
 
   def test_return_value_structure(self):
     fake_config = ml_collections.ConfigDict()
     fake_config.dataset_configs = {
         'fake_dataset_1': {
-            'tfds_name':
-                'fake_bird_taxonomy/fake_variant_1',
-            'tfds_data_dir':
-                self.data_dir,
-            'pipeline':
-                _c('pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]),
-            'split':
-                'train',
+            'tfds_name': 'fake_bird_taxonomy/fake_variant_1',
+            'tfds_data_dir': self.data_dir,
+            'pipeline': _c(
+                'pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]
+            ),
+            'split': 'train',
         },
         'fake_dataset_2': {
-            'tfds_name':
-                'fake_bird_taxonomy/fake_variant_2',
-            'tfds_data_dir':
-                self.data_dir,
-            'pipeline':
-                _c('pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]),
-            'split':
-                'train',
+            'tfds_name': 'fake_bird_taxonomy/fake_variant_2',
+            'tfds_data_dir': self.data_dir,
+            'pipeline': _c(
+                'pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]
+            ),
+            'split': 'train',
         },
     }
-    fake_config = config_utils.parse_config(fake_config,
-                                            config_globals.get_globals())
+    fake_config = config_utils.parse_config(
+        fake_config, config_globals.get_globals()
+    )
     eval_datasets = eval_lib.load_eval_datasets(fake_config)
 
-    self.assertSameElements(['fake_dataset_1', 'fake_dataset_2'],
-                            eval_datasets.keys())
+    self.assertSameElements(
+        ['fake_dataset_1', 'fake_dataset_2'], eval_datasets.keys()
+    )
     for dataset in eval_datasets.values():
       self.assertIsInstance(dataset, tf.data.Dataset)
-      self.assertContainsSubset(['audio', 'label', 'bg_labels'],
-                                dataset.element_spec.keys())
+      self.assertContainsSubset(
+          ['audio', 'label', 'bg_labels'], dataset.element_spec.keys()
+      )
 
   def tearDown(self):
     super().tearDown()
@@ -119,32 +124,34 @@ class GetEmbeddingsTest(absltest.TestCase):
     super().setUp()
     self.data_dir = tempfile.TemporaryDirectory('data_dir').name
     FakeBirdTaxonomy(
-        data_dir=self.data_dir, config='fake_variant_1').download_and_prepare()
+        data_dir=self.data_dir, config='fake_variant_1'
+    ).download_and_prepare()
 
   def test_get_embeddings(self):
     fake_config = ml_collections.ConfigDict()
     fake_config.dataset_configs = {
         'fake_dataset_1': {
-            'tfds_name':
-                'fake_bird_taxonomy/fake_variant_1',
-            'tfds_data_dir':
-                self.data_dir,
-            'pipeline':
-                _c('pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]),
-            'split':
-                'train',
+            'tfds_name': 'fake_bird_taxonomy/fake_variant_1',
+            'tfds_data_dir': self.data_dir,
+            'pipeline': _c(
+                'pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]
+            ),
+            'split': 'train',
         },
     }
     fake_config.model_callback = lambda x: x + 1
-    fake_config = config_utils.parse_config(fake_config,
-                                            config_globals.get_globals())
+    fake_config = config_utils.parse_config(
+        fake_config, config_globals.get_globals()
+    )
     dataset = eval_lib.load_eval_datasets(fake_config)
-    dataset_name, = dataset.keys()
+    (dataset_name,) = dataset.keys()
     dataset = dataset[dataset_name]
     embedded_dataset = eval_lib.get_embeddings(
-        dataset, fake_config.model_callback, batch_size=1)
-    self.assertContainsSubset(['embedding'],
-                              embedded_dataset.element_spec.keys())
+        dataset, fake_config.model_callback, batch_size=1
+    )
+    self.assertContainsSubset(
+        ['embedding'], embedded_dataset.element_spec.keys()
+    )
 
     embedding = next(embedded_dataset.as_numpy_iterator())['embedding']
     self.assertTrue(((0 <= embedding) & (embedding <= 2)).all())
@@ -161,20 +168,34 @@ class EvalSetTest(absltest.TestCase):
     self.class_names = ['a', 'b', 'c']
     self.fake_embeddings_df = pd.DataFrame({
         'label': (['a'] * 4 + ['b'] * 4 + ['c'] * 4) * 2,
-        'embedding': ([[0.0]] * 24),
-        'bg_labels':
-            ['', 'b', 'c', 'b c', '', 'a', 'c', 'a c', '', 'a', 'b', 'a b'] * 2,
+        'embedding': [[0.0]] * 24,
+        'bg_labels': [
+            '',
+            'b',
+            'c',
+            'b c',
+            '',
+            'a',
+            'c',
+            'a c',
+            '',
+            'a',
+            'b',
+            'a b',
+        ] * 2,
         'dataset_name': ['dataset_1'] * 12 + ['dataset_2'] * 12,
     })
     self.embedded_datasets = {
-        'dataset_1':
-            tf.data.Dataset.from_tensor_slices(
-                self.fake_embeddings_df.groupby('dataset_name').get_group(
-                    'dataset_1').to_dict('list')),
-        'dataset_2':
-            tf.data.Dataset.from_tensor_slices(
-                self.fake_embeddings_df.groupby('dataset_name').get_group(
-                    'dataset_2').to_dict('list')),
+        'dataset_1': tf.data.Dataset.from_tensor_slices(
+            self.fake_embeddings_df.groupby('dataset_name')
+            .get_group('dataset_1')
+            .to_dict('list')
+        ),
+        'dataset_2': tf.data.Dataset.from_tensor_slices(
+            self.fake_embeddings_df.groupby('dataset_name')
+            .get_group('dataset_2')
+            .to_dict('list')
+        ),
     }
 
   def test_prepare_eval_sets(self):
@@ -182,35 +203,44 @@ class EvalSetTest(absltest.TestCase):
         eval_lib.EvalSetSpecification,
         class_names=self.class_names,
         search_corpus_classwise_mask_fn=(
-            lambda df, _: df['label'].map(lambda s: True)),
+            lambda df, _: df['label'].map(lambda s: True)
+        ),
         class_representative_global_mask_fn=(
-            lambda df: df['label'].map(lambda s: True)),
+            lambda df: df['label'].map(lambda s: True)
+        ),
         class_representative_classwise_mask_fn=(
-            lambda df, class_name: df['label'].str.contains(class_name)),
-        num_representatives_per_class=0)
+            lambda df, class_name: df['label'].str.contains(class_name)
+        ),
+        num_representatives_per_class=0,
+    )
 
     fake_config = ml_collections.ConfigDict()
     fake_config.rng_seed = 1234
     fake_config.model_callback = {'learned_representations': {'a': [0.0]}}
     fake_config.debug = {'embedded_dataset_cache_path': ''}
     fake_config.eval_set_specifications = {
-        'fake_specification_1':
-            partial_specification(
-                search_corpus_global_mask_fn=(
-                    lambda df: df['dataset_name'] == 'dataset_1')),
-        'fake_specification_2':
-            partial_specification(
-                search_corpus_global_mask_fn=(
-                    lambda df: df['dataset_name'] == 'dataset_2')),
+        'fake_specification_1': partial_specification(
+            search_corpus_global_mask_fn=(
+                lambda df: df['dataset_name'] == 'dataset_1'
+            )
+        ),
+        'fake_specification_2': partial_specification(
+            search_corpus_global_mask_fn=(
+                lambda df: df['dataset_name'] == 'dataset_2'
+            )
+        ),
     }
 
-    eval_set_generator = eval_lib.prepare_eval_sets(fake_config,
-                                                    self.embedded_datasets)
+    eval_set_generator = eval_lib.prepare_eval_sets(
+        fake_config, self.embedded_datasets
+    )
     eval_sets = [(n, list(g)) for n, g in eval_set_generator]
 
     # There should be two eval sets.
-    self.assertEqual([n for n, _ in eval_sets],
-                     ['fake_specification_1', 'fake_specification_2'])
+    self.assertEqual(
+        [n for n, _ in eval_sets],
+        ['fake_specification_1', 'fake_specification_2'],
+    )
     # There should be one classwise eval set per class.
     for _, classwise_eval_sets in eval_sets:
       self.assertEqual([n for n, _, _ in classwise_eval_sets], ['a', 'b', 'c'])
@@ -223,25 +253,32 @@ class EvalSetTest(absltest.TestCase):
     fake_config.model_callback = {'learned_representations': {'a': [0.0]}}
     fake_config.debug = {'embedded_dataset_cache_path': ''}
     fake_config.eval_set_specifications = {
-        'fake_specification':
-            eval_lib.EvalSetSpecification(
-                search_corpus_global_mask_fn=(
-                    lambda df: df['dataset_name'] == 'dataset_1'),
-                class_names=self.class_names,
-                search_corpus_classwise_mask_fn=(
-                    lambda df, n: ~df['bg_labels'].str.contains(n)),
-                class_representative_global_mask_fn=(
-                    lambda df: df['dataset_name'] == 'dataset_1'),
-                class_representative_classwise_mask_fn=(
-                    lambda df, n: df['label'].str.contains(n)),
-                num_representatives_per_class=num_representatives_per_class)
+        'fake_specification': eval_lib.EvalSetSpecification(
+            search_corpus_global_mask_fn=(
+                lambda df: df['dataset_name'] == 'dataset_1'
+            ),
+            class_names=self.class_names,
+            search_corpus_classwise_mask_fn=(
+                lambda df, n: ~df['bg_labels'].str.contains(n)
+            ),
+            class_representative_global_mask_fn=(
+                lambda df: df['dataset_name'] == 'dataset_1'
+            ),
+            class_representative_classwise_mask_fn=(
+                lambda df, n: df['label'].str.contains(n)
+            ),
+            num_representatives_per_class=num_representatives_per_class,
+        )
     }
 
-    (_,
-     classwise_eval_sets), = eval_lib.prepare_eval_sets(fake_config,
-                                                        self.embedded_datasets)
-    for (class_name, class_representatives_df,
-         search_corpus_df) in classwise_eval_sets:
+    ((_, classwise_eval_sets),) = eval_lib.prepare_eval_sets(
+        fake_config, self.embedded_datasets
+    )
+    for (
+        class_name,
+        class_representatives_df,
+        search_corpus_df,
+    ) in classwise_eval_sets:
       # We should get the number of class representatives we requested.
       self.assertLen(class_representatives_df, num_representatives_per_class)
       # All class representatives should have the label `class_name`.
@@ -249,13 +286,16 @@ class EvalSetTest(absltest.TestCase):
       # According to our `search_corpus_classwise_mask_fn`, `class_name` should
       # not appear in any background label.
       self.assertTrue(
-          (~search_corpus_df['bg_labels'].str.contains(class_name)).all())
+          (~search_corpus_df['bg_labels'].str.contains(class_name)).all()
+      )
       # Class representatives should not be included in the search corpus.
       self.assertTrue(
-          (~search_corpus_df.index.isin(class_representatives_df.index)).all())
+          (~search_corpus_df.index.isin(class_representatives_df.index)).all()
+      )
       # Embeddings from 'dataset_2' should not be found anywhere.
       self.assertTrue(
-          (class_representatives_df['dataset_name'] != 'dataset_2').all())
+          (class_representatives_df['dataset_name'] != 'dataset_2').all()
+      )
       self.assertTrue((search_corpus_df['dataset_name'] != 'dataset_2').all())
       # By construction of `self.embeddings_df`, we know that the above three
       # result in 4 + 2 + 12 = 18 rows being excluded.
@@ -271,20 +311,19 @@ class SearchProcedureTest(absltest.TestCase):
     self.search_corpus = pd.DataFrame({
         'embedding': [[0, 1], [1, 0], [1, 1]],
         'label': ['B', 'A', 'C'],
-        'bg_labels': ['B C', ' ', 'A']
+        'bg_labels': ['B C', ' ', 'A'],
     })
 
   def test_query_search(self):
-
     actual_query_result = eval_lib.query_search(
         query=self.query,
         species_id=self.species_id,
         search_corpus=self.search_corpus,
-        search_score=eval_lib.cosine_similarity)
-    expected_query_result = pd.DataFrame({
-        'score': [0.0, 1.0, 0.7071],
-        'species_match': [1, 0, 1]
-    })
+        search_score=eval_lib.cosine_similarity,
+    )
+    expected_query_result = pd.DataFrame(
+        {'score': [0.0, 1.0, 0.7071], 'species_match': [1, 0, 1]}
+    )
     actual_query_scores = actual_query_result['score'].round(4)
     expected_query_scores = expected_query_result['score']
     self.assertTrue((actual_query_scores == expected_query_scores).all())
@@ -312,15 +351,17 @@ class DefaultFunctionsTest(absltest.TestCase):
 
     orthog_embedding0 = [-0.5, 0.0, -0.5, 0.0, -0.5]
     orthog_embedding1 = [0.0, 0.5, 0.0, 0.5, 0.0]
-    actual_similarity = eval_lib.cosine_similarity(orthog_embedding0,
-                                                   orthog_embedding1)
+    actual_similarity = eval_lib.cosine_similarity(
+        orthog_embedding0, orthog_embedding1
+    )
     expected_similarity = 0.0
     self.assertAlmostEqual(actual_similarity, expected_similarity)
 
     opposite_embedding0 = [-1] * 5
     opposite_embedding1 = [1] * 5
-    actual_similarity = eval_lib.cosine_similarity(opposite_embedding0,
-                                                   opposite_embedding1)
+    actual_similarity = eval_lib.cosine_similarity(
+        opposite_embedding0, opposite_embedding1
+    )
     expected_similarity = -1.0
     self.assertAlmostEqual(actual_similarity, expected_similarity)
 
@@ -334,10 +375,11 @@ class TaxonomyModelCallbackTest(absltest.TestCase):
   def test_learned_representation_blocklist(self):
     workdir = os.path.join(self.workdir, '1')
     init_config = config_utils.parse_config(
-        baseline_mel_conformer.get_config(),
-        config_globals.get_globals()).init_config
+        baseline_mel_conformer.get_config(), config_globals.get_globals()
+    ).init_config
     model_bundle, train_state = classifier.initialize_model(
-        workdir=workdir, **init_config)
+        workdir=workdir, **init_config
+    )
     _ = model_bundle.ckpt.restore_or_initialize(train_state)
 
     db = namespace_db.load_db()
@@ -348,8 +390,10 @@ class TaxonomyModelCallbackTest(absltest.TestCase):
     # representations.
     self.assertLen(
         eval_lib.TaxonomyModelCallback(
-            init_config=init_config, workdir=workdir).learned_representations,
-        len(all_species))
+            init_config=init_config, workdir=workdir
+        ).learned_representations,
+        len(all_species),
+    )
     # When learned_representation_blocklist is passed, the model callback
     # should *not* load any learned representation for species in the blocklist.
     self.assertNoCommonElements(
@@ -357,7 +401,9 @@ class TaxonomyModelCallbackTest(absltest.TestCase):
             init_config=init_config,
             workdir=workdir,
             learned_representation_blocklist=downstream_species,
-        ).learned_representations.keys(), downstream_species)
+        ).learned_representations.keys(),
+        downstream_species,
+    )
 
   def tearDown(self):
     super().tearDown()

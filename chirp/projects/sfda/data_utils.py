@@ -71,7 +71,8 @@ def get_audio_datasets(
     ValueError: If the model's sample_rate and data's sample_rate do not match.
   """
   adaptation_split = to_tf_compatible_split(
-      ast.literal_eval(adaptation_data_config.split))
+      ast.literal_eval(adaptation_data_config.split)
+  )
   eval_split = to_tf_compatible_split(ast.literal_eval(eval_data_config.split))
 
   # is_train only affects how data is processed by tensorflow internally,
@@ -89,7 +90,9 @@ def get_audio_datasets(
     raise ValueError(
         'Dataset sample rate must match config sample rate. To address this, '
         'need to set the sample rate in the config to {}.'.format(
-            adaptation_dataset_info.features['audio'].sample_rate))
+            adaptation_dataset_info.features['audio'].sample_rate
+        )
+    )
 
   # Grab the data used for evaluation
   val_dataset, val_dataset_info = pipeline.get_dataset(
@@ -104,7 +107,9 @@ def get_audio_datasets(
     raise ValueError(
         'Dataset sample rate must match config sample rate. To address this, '
         'need to set the sample rate in the config to {}.'.format(
-            val_dataset_info.features['audio'].sample_rate))
+            val_dataset_info.features['audio'].sample_rate
+        )
+    )
   if cache_data:
     adaptation_dataset = adaptation_dataset.cache()
     val_dataset = val_dataset.cache()
@@ -136,7 +141,8 @@ def get_image_datasets(
     The adaptation and evaluation datasets.
   """
   input_pipeline = models.MODEL_REGISTRY[image_model](
-      num_classes=0).get_input_pipeline
+      num_classes=0
+  ).get_input_pipeline
   dataset_metadata = get_metadata(dataset_name)
   num_devices = jax.local_device_count()
 
@@ -147,7 +153,8 @@ def get_image_datasets(
     dataset = input_pipeline(
         data_builder=data_builder,
         split=tfds_split,
-        image_size=dataset_metadata['resolution'])
+        image_size=dataset_metadata['resolution'],
+    )
     if split == 'train':
       dataset = dataset.shuffle(512, seed=data_seed)
     if num_devices is not None:
@@ -198,4 +205,5 @@ def get_metadata(dataset_name: str) -> dict[str, Any]:
     return {'num_classes': 12, 'resolution': 224, 'splits': split}
   else:
     raise NotImplementedError(
-        f'Unknown number of classes for dataset {dataset_name}.')
+        f'Unknown number of classes for dataset {dataset_name}.'
+    )

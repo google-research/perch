@@ -26,10 +26,9 @@ from absl.testing import absltest
 
 class ShotTest(absltest.TestCase):
 
-  def original_pl(self,
-                  embeddings: np.ndarray,
-                  probabilities: np.ndarray,
-                  threshold=0.) -> np.ndarray:
+  def original_pl(
+      self, embeddings: np.ndarray, probabilities: np.ndarray, threshold=0.0
+  ) -> np.ndarray:
     """The orignal implementation of SHOT's pseudo-labelling function.
 
     Taken from https://github.com/tim-learn/SHOT/blob/
@@ -64,20 +63,23 @@ class ShotTest(absltest.TestCase):
     return predict.astype('int')
 
   def test_pseudo_label(self):
-    """Ensure that our reimplementation of SHOT's pseudo-labelling is correct.
-    """
+    """Ensure that our reimplementation of SHOT's pseudo-labelling is correct."""
     n_points, feature_dim, num_classes = 10, 100, 10
     fake_embeddings = jax.random.normal(
-        jax.random.PRNGKey(57), (n_points, feature_dim))
+        jax.random.PRNGKey(57), (n_points, feature_dim)
+    )
     fake_probabilities = nn.softmax(
-        jax.random.normal(jax.random.PRNGKey(58), (n_points, num_classes)))
+        jax.random.normal(jax.random.PRNGKey(58), (n_points, num_classes))
+    )
 
     pl_original = self.original_pl(
-        np.array(fake_embeddings), np.array(fake_probabilities))
+        np.array(fake_embeddings), np.array(fake_probabilities)
+    )
     pl_ours = shot.SHOT.compute_pseudo_label(
         dataset_feature=fake_embeddings,
         dataset_probability=fake_probabilities,
-        multi_label=False)
+        multi_label=False,
+    )
 
     self.assertTrue(np.allclose(pl_original, pl_ours.argmax(-1)))
 

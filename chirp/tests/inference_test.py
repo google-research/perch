@@ -42,9 +42,16 @@ class InferenceTest(parameterized.TestCase):
       write_separated_audio=(True, False),
       write_raw_audio=(True, False),
   )
-  def test_embed_fn(self, make_embeddings, make_logits, make_separated_audio,
-                    write_embeddings, write_logits, write_raw_audio,
-                    write_separated_audio):
+  def test_embed_fn(
+      self,
+      make_embeddings,
+      make_logits,
+      make_separated_audio,
+      write_embeddings,
+      write_logits,
+      write_raw_audio,
+      write_separated_audio,
+  ):
     model_kwargs = {
         'sample_rate': 16000,
         'embedding_size': 128,
@@ -58,16 +65,19 @@ class InferenceTest(parameterized.TestCase):
         write_separated_audio=write_separated_audio,
         write_raw_audio=write_raw_audio,
         model_key='placeholder_model',
-        model_config=model_kwargs)
+        model_config=model_kwargs,
+    )
     embed_fn.setup()
     self.assertIsNotNone(embed_fn.embedding_model)
 
     test_wav_path = path_utils.get_absolute_epath(
-        'tests/testdata/tfds_builder_wav_directory_test/clap.wav')
+        'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+    )
 
     source_info = embed_lib.SourceInfo(test_wav_path, 0, 1)
     feature_description = embed_lib.get_feature_description(
-        logit_names=['label'])
+        logit_names=['label']
+    )
 
     example = embed_fn.process(source_info, crop_s=10.0)[0]
     serialized = example.SerializeToString()
@@ -88,10 +98,12 @@ class InferenceTest(parameterized.TestCase):
       self.assertEqual(got_example['label'], '')
 
     if make_separated_audio and write_separated_audio:
-      separated_audio = tf.io.parse_tensor(got_example['separated_audio'],
-                                           tf.float32)
-      self.assertSequenceEqual(separated_audio.shape,
-                               got_example['separated_audio_shape'])
+      separated_audio = tf.io.parse_tensor(
+          got_example['separated_audio'], tf.float32
+      )
+      self.assertSequenceEqual(
+          separated_audio.shape, got_example['separated_audio_shape']
+      )
     else:
       self.assertEqual(got_example['separated_audio'], '')
 
@@ -107,7 +119,8 @@ class InferenceTest(parameterized.TestCase):
         sample_rate=22050,
         make_embeddings=False,
         make_logits=False,
-        make_separated_audio=True)
+        make_separated_audio=True,
+    )
     db = namespace_db.load_db()
     target_class_list = db.class_lists['high_sierras']
 
@@ -116,28 +129,33 @@ class InferenceTest(parameterized.TestCase):
         make_embeddings=True,
         make_logits=True,
         make_separated_audio=False,
-        target_class_list=target_class_list)
+        target_class_list=target_class_list,
+    )
     sep_embed = models.SeparateEmbedModel(22050, separator, embeddor)
     audio = np.zeros(5 * 22050, np.float32)
 
     sep_outputs = separator.embed(audio)
     outputs = sep_embed.embed(audio)
-    self.assertSequenceEqual(sep_outputs.separated_audio.shape,
-                             outputs.separated_audio.shape)
+    self.assertSequenceEqual(
+        sep_outputs.separated_audio.shape, outputs.separated_audio.shape
+    )
     # The PlaceholderModel produces one embedding per second, and we have
     # five seconds of audio, with two separated channels.
     # Note that this checks that the sample-rate conversion between the
     # separation model and embedding model has worked correctly.
-    self.assertSequenceEqual(outputs.embeddings.shape,
-                             [5, 2, embeddor.embedding_size])
+    self.assertSequenceEqual(
+        outputs.embeddings.shape, [5, 2, embeddor.embedding_size]
+    )
     # The Sep+Embed model takes the max logits over the channel dimension.
-    self.assertSequenceEqual(outputs.logits['label'].shape,
-                             [5, target_class_list.size])
+    self.assertSequenceEqual(
+        outputs.logits['label'].shape, [5, target_class_list.size]
+    )
 
   def test_beam_pipeline(self):
     """Check that we can write embeddings to TFRecord file."""
     test_wav_path = path_utils.get_absolute_epath(
-        'tests/testdata/tfds_builder_wav_directory_test/clap.wav')
+        'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+    )
     source_infos = [embed_lib.SourceInfo(test_wav_path.as_posix(), 0, 0)]
     base_pipeline = test_pipeline.TestPipeline()
     tempdir = tempfile.gettempdir()
@@ -156,12 +174,15 @@ class InferenceTest(parameterized.TestCase):
         write_separated_audio=False,
         write_raw_audio=False,
         model_key='placeholder_model',
-        model_config=model_kwargs)
+        model_config=model_kwargs,
+    )
 
-    metrics = embed_lib.build_run_pipeline(base_pipeline, output_dir,
-                                           source_infos, embed_fn)
-    counter = counter = metrics.query(beam.metrics.MetricsFilter().with_name(
-        'examples_processed'))['counters']
+    metrics = embed_lib.build_run_pipeline(
+        base_pipeline, output_dir, source_infos, embed_fn
+    )
+    counter = counter = metrics.query(
+        beam.metrics.MetricsFilter().with_name('examples_processed')
+    )['counters']
     self.assertEqual(counter[0].result, 1)
 
     print(metrics)

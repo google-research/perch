@@ -35,16 +35,18 @@ _BOUNDARY_TO_PADDING_MODE = {"zeros": "CONSTANT"}
 
 
 # pylint: disable=g-doc-return-or-yield,g-doc-args,unused-argument
-def stft_tf(x,
-            fs=1.0,
-            window="hann",
-            nperseg=256,
-            noverlap=None,
-            nfft=None,
-            detrend=False,
-            return_onesided=True,
-            boundary="zeros",
-            padded=True) -> tf.Tensor:
+def stft_tf(
+    x,
+    fs=1.0,
+    window="hann",
+    nperseg=256,
+    noverlap=None,
+    nfft=None,
+    detrend=False,
+    return_onesided=True,
+    boundary="zeros",
+    padded=True,
+) -> tf.Tensor:
   """Computes the Short Time Fourier Transform (STFT).
 
   This is a port of `scipy.signal.stft` to TensorFlow. This allows us to exactly
@@ -59,11 +61,16 @@ def stft_tf(x,
   if x.dtype.is_complex:
     raise ValueError("tf.signal.stft only supports real signals")
   if window not in _WINDOW_FNS:
-    raise ValueError(f"tf.signal.stft does not support window {window}, "
-                     f"supported functions are {', '.join(_WINDOW_FNS)}")
+    raise ValueError(
+        f"tf.signal.stft does not support window {window}, "
+        f"supported functions are {', '.join(_WINDOW_FNS)}"
+    )
   if boundary is not None and boundary not in _BOUNDARY_TO_PADDING_MODE:
-    raise ValueError("tf.signal.stft only supports boundary modes None and "
-                     ", ".join(_BOUNDARY_TO_PADDING_MODE))
+    raise ValueError(
+        "tf.signal.stft only supports boundary modes None and , ".join(
+            _BOUNDARY_TO_PADDING_MODE
+        )
+    )
   if detrend:
     raise ValueError("tf.signal.stft only supports detrend = False")
   if not return_onesided:
@@ -73,11 +80,13 @@ def stft_tf(x,
   # Put the time axis at the end and then put it back
   if boundary in _BOUNDARY_TO_PADDING_MODE:
     mode = _BOUNDARY_TO_PADDING_MODE[boundary]
-    paddings = tf.concat([
-        tf.repeat([[0, 0]], tf.rank(x) - 1, axis=0),
-        [[nperseg // 2, nperseg // 2]]
-    ],
-                         axis=0)
+    paddings = tf.concat(
+        [
+            tf.repeat([[0, 0]], tf.rank(x) - 1, axis=0),
+            [[nperseg // 2, nperseg // 2]],
+        ],
+        axis=0,
+    )
     x = tf.pad(x, paddings, mode)
     input_length += nperseg
   Zxx = tf.signal.stft(
@@ -86,7 +95,8 @@ def stft_tf(x,
       frame_step=nstep,
       fft_length=nfft,
       window_fn=_WINDOW_FNS[window],
-      pad_end=padded)
+      pad_end=padded,
+  )
   Zxx = tf.linalg.matrix_transpose(Zxx)
 
   # TODO(bartvm): tf.signal.frame seems to have a bug which sometimes adds
@@ -101,10 +111,12 @@ def stft_tf(x,
   return Zxx
 
 
-def ema(xs: jnp.ndarray,
-        gamma: Union[float, jnp.ndarray],
-        initial_state: Optional[jnp.ndarray] = None,
-        axis: int = 0) -> jnp.ndarray:
+def ema(
+    xs: jnp.ndarray,
+    gamma: Union[float, jnp.ndarray],
+    initial_state: Optional[jnp.ndarray] = None,
+    axis: int = 0,
+) -> jnp.ndarray:
   """Computes the exponential moving average along one axis."""
   # Bring target axis to front.
   xs = jnp.swapaxes(xs, 0, axis)
@@ -125,8 +137,9 @@ def ema(xs: jnp.ndarray,
   return ys, final_state
 
 
-def ema_conv1d(xs: jnp.ndarray, gamma: Union[float, jnp.ndarray],
-               conv_width: int) -> jnp.ndarray:
+def ema_conv1d(
+    xs: jnp.ndarray, gamma: Union[float, jnp.ndarray], conv_width: int
+) -> jnp.ndarray:
   """Uses a depth-wise conv1d to approximate the EMA operation."""
   if conv_width == -1:
     conv_width = xs.shape[1]
@@ -134,8 +147,9 @@ def ema_conv1d(xs: jnp.ndarray, gamma: Union[float, jnp.ndarray],
   left_pad = jnp.repeat(xs[:, 0:1], conv_width - 1, axis=1)
   padded_inp = jnp.concatenate([left_pad, xs], axis=1)
 
-  kernel = jnp.array([(1.0 - gamma)**k for k in range(conv_width - 1)] +
-                     [gamma])
+  kernel = jnp.array(
+      [(1.0 - gamma) ** k for k in range(conv_width - 1)] + [gamma]
+  )
   if isinstance(gamma, float) or gamma.ndim == 0:
     kernel = kernel[jnp.newaxis, jnp.newaxis, :]
     kernel = jnp.repeat(kernel, xs.shape[-1], axis=1)
@@ -144,21 +158,25 @@ def ema_conv1d(xs: jnp.ndarray, gamma: Union[float, jnp.ndarray],
     kernel = kernel[jnp.newaxis, :, :]
   outp = lax.conv_general_dilated(
       padded_inp,
-      kernel, (1,),
+      kernel,
+      (1,),
       padding="VALID",
       feature_group_count=xs.shape[-1],
-      dimension_numbers=("NTC", "IOT", "NTC"))
+      dimension_numbers=("NTC", "IOT", "NTC"),
+  )
   return outp
 
 
-def pcen(filterbank_energy: jnp.ndarray,
-         smoothing_coef: float = 0.05638943879134889,
-         gain: float = 0.98,
-         bias: float = 2.0,
-         root: float = 2.0,
-         eps: float = 1e-6,
-         state: Optional[jnp.ndarray] = None,
-         conv_width: int = 0) -> tuple[jnp.ndarray, Optional[jnp.ndarray]]:
+def pcen(
+    filterbank_energy: jnp.ndarray,
+    smoothing_coef: float = 0.05638943879134889,
+    gain: float = 0.98,
+    bias: float = 2.0,
+    root: float = 2.0,
+    eps: float = 1e-6,
+    state: Optional[jnp.ndarray] = None,
+    conv_width: int = 0,
+) -> tuple[jnp.ndarray, Optional[jnp.ndarray]]:
   """Per-Channel Energy Normalization (PCEN).
 
   See https://arxiv.org/abs/1607.05666 for details.
@@ -202,23 +220,26 @@ def pcen(filterbank_energy: jnp.ndarray,
 
   if conv_width == 0:
     smoothed_energy, filter_state = ema(
-        filterbank_energy, smoothing_coef, initial_state=state, axis=-2)
+        filterbank_energy, smoothing_coef, initial_state=state, axis=-2
+    )
   elif len(filterbank_energy.shape) == 3:
     smoothed_energy = ema_conv1d(filterbank_energy, smoothing_coef, conv_width)
     filter_state = None
   else:
     raise ValueError(
-        "Can only apply convolutional EMA to inputs with shape [B, T, D].")
-  inv_root = 1. / root
-  pcen_output = ((filterbank_energy /
-                  (eps + smoothed_energy)**gain + bias)**inv_root -
-                 bias**inv_root)
+        "Can only apply convolutional EMA to inputs with shape [B, T, D]."
+    )
+  inv_root = 1.0 / root
+  pcen_output = (
+      filterbank_energy / (eps + smoothed_energy) ** gain + bias
+  ) ** inv_root - bias**inv_root
 
   return pcen_output, filter_state
 
 
-def log_scale(x: jnp.ndarray, floor: float, offset: float,
-              scalar: float) -> jnp.ndarray:
+def log_scale(
+    x: jnp.ndarray, floor: float, offset: float, scalar: float
+) -> jnp.ndarray:
   """Apply log-scaling.
 
   Args:
@@ -236,14 +257,16 @@ def log_scale(x: jnp.ndarray, floor: float, offset: float,
   return scalar * x
 
 
-def random_low_pass_filter(key: jnp.ndarray,
-                           melspec: jnp.ndarray,
-                           time_axis: int = -2,
-                           channel_axis: int = -1,
-                           min_slope: float = 2.,
-                           max_slope: float = 8.,
-                           min_offset: float = 0.,
-                           max_offset: float = 5.0) -> jnp.ndarray:
+def random_low_pass_filter(
+    key: jnp.ndarray,
+    melspec: jnp.ndarray,
+    time_axis: int = -2,
+    channel_axis: int = -1,
+    min_slope: float = 2.0,
+    max_slope: float = 8.0,
+    min_offset: float = 0.0,
+    max_offset: float = 5.0,
+) -> jnp.ndarray:
   """Applies a random low-pass rolloff frequency envelope.
 
   Args:
@@ -267,7 +290,8 @@ def random_low_pass_filter(key: jnp.ndarray,
   slope_key, offset_key = random.split(key)
   slope = random.uniform(slope_key, shape, minval=min_slope, maxval=max_slope)
   offset = random.uniform(
-      offset_key, shape, minval=min_offset, maxval=max_offset)
+      offset_key, shape, minval=min_offset, maxval=max_offset
+  )
 
   shape = [1] * melspec.ndim
   shape[channel_axis] = melspec.shape[channel_axis]
@@ -278,8 +302,9 @@ def random_low_pass_filter(key: jnp.ndarray,
   return melspec * envelope
 
 
-def apply_mixture_denoising(melspec: jnp.ndarray,
-                            threshold: float) -> jnp.ndarray:
+def apply_mixture_denoising(
+    melspec: jnp.ndarray, threshold: float
+) -> jnp.ndarray:
   """Denoises the melspectrogram using an estimated Gaussian noise distribution.
 
   Forms a noise estimate by a) estimating mean+std, b) removing extreme
@@ -304,7 +329,8 @@ def apply_mixture_denoising(melspec: jnp.ndarray,
   noise_counts = jnp.sum(is_noise.astype(x.dtype), axis=0, keepdims=True)
   noise_mean = jnp.sum(x * is_noise, axis=0, keepdims=True) / (noise_counts + 1)
   noise_var = jnp.sum(
-      is_noise * jnp.square(x - noise_mean), axis=0, keepdims=True)
+      is_noise * jnp.square(x - noise_mean), axis=0, keepdims=True
+  )
   noise_std = jnp.sqrt(noise_var / (noise_counts + 1))
 
   # Recompute signal/noise separation.
@@ -338,10 +364,12 @@ def pad_to_length_if_shorter(audio: jnp.ndarray, target_length: int):
   return audio
 
 
-def slice_peaked_audio(audio: jnp.ndarray,
-                       sample_rate_hz: int,
-                       interval_length_s: float = 6.0,
-                       max_intervals: int = 5) -> Sequence[tuple[int, int]]:
+def slice_peaked_audio(
+    audio: jnp.ndarray,
+    sample_rate_hz: int,
+    interval_length_s: float = 6.0,
+    max_intervals: int = 5,
+) -> Sequence[tuple[int, int]]:
   """Extracts audio intervals from melspec peaks.
 
   Args:
@@ -369,15 +397,18 @@ def slice_peaked_audio(audio: jnp.ndarray,
   # As a result, it's possible that some (start, stop) pairs become identical;
   # eliminate duplicates.
   start_stop = jnp.unique(
-      jnp.stack([peaks - left_shift, peaks + right_shift], axis=-1), axis=0)
+      jnp.stack([peaks - left_shift, peaks + right_shift], axis=-1), axis=0
+  )
 
   return start_stop
 
 
-def find_peaks_from_audio(audio: jnp.ndarray,
-                          sample_rate_hz: int,
-                          max_peaks: int,
-                          num_mel_bins: int = 160) -> jnp.ndarray:
+def find_peaks_from_audio(
+    audio: jnp.ndarray,
+    sample_rate_hz: int,
+    max_peaks: int,
+    num_mel_bins: int = 160,
+) -> jnp.ndarray:
   """Construct melspec and find peaks.
 
   Args:
@@ -394,7 +425,8 @@ def find_peaks_from_audio(audio: jnp.ndarray,
   nperseg = int(frame_length_s * sample_rate_hz)
   nstep = sample_rate_hz // melspec_rate_hz
   _, _, spectrogram = jsp.signal.stft(
-      audio, nperseg=nperseg, noverlap=nperseg - nstep)
+      audio, nperseg=nperseg, noverlap=nperseg - nstep
+  )
   # apply_mixture_denoising/find_peaks_from_melspec expect frequency axis last
   spectrogram = jnp.swapaxes(spectrogram, -1, -2)
   magnitude_spectrogram = jnp.abs(spectrogram)
@@ -411,7 +443,8 @@ def find_peaks_from_audio(audio: jnp.ndarray,
       num_spectrogram_bins,
       sample_rate_hz,
       lower_edge_hertz=60,
-      upper_edge_hertz=10_000)
+      upper_edge_hertz=10_000,
+  )
   mel_spectrograms = magnitude_spectrogram @ mel_matrix
 
   melspec = log_scale(mel_spectrograms, floor=1e-2, offset=0.0, scalar=0.1)
@@ -447,13 +480,17 @@ def find_peaks_from_melspec(melspec: jnp.ndarray, stft_fps: int) -> jnp.ndarray:
   width_step_size = int(round((max_width - min_width) / 10))
   peaks = scipy_signal.find_peaks_cwt(
       summed_spectral_magnitudes,
-      jnp.arange(min_width, max_width, width_step_size))
+      jnp.arange(min_width, max_width, width_step_size),
+  )
   margin_frames = int(round(0.3 * stft_fps))
   start_stop = jnp.clip(
-      jnp.stack([peaks - margin_frames, peaks + margin_frames], axis=-1), 0,
-      summed_spectral_magnitudes.shape[0])
+      jnp.stack([peaks - margin_frames, peaks + margin_frames], axis=-1),
+      0,
+      summed_spectral_magnitudes.shape[0],
+  )
   peaks = [
-      p for p, (a, b) in zip(peaks, start_stop)
+      p
+      for p, (a, b) in zip(peaks, start_stop)
       if summed_spectral_magnitudes[a:b].max() >= threshold
   ]
   return jnp.asarray(peaks, dtype=jnp.int32)

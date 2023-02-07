@@ -53,7 +53,7 @@ _UNPARSED_CONFIGS = {
     "ada_bn": ada_bn_config,
     "dropout_student": ds_config,
     "nrc": nrc_config,
-    "dust": dust_config
+    "dust": dust_config,
 }
 
 
@@ -64,10 +64,7 @@ class ConstantEncoder(nn.Module):
 
   @nn.compact
   def __call__(
-      self,
-      inputs: jnp.ndarray,
-      train: bool,
-      use_running_average: bool  # pylint: disable=redefined-outer-name
+      self, inputs: jnp.ndarray, train: bool, use_running_average: bool  # pylint: disable=redefined-outer-name
   ) -> jnp.ndarray:
     return jnp.zeros([inputs.shape[0], self.output_dim])
 
@@ -81,7 +78,8 @@ class AdaptationTest(parameterized.TestCase):
     self.image_data_dir = tempfile.mkdtemp()
     fake_audio_builder = fake_dataset.FakeDataset(data_dir=self.audio_data_dir)
     fake_image_builder = fake_image_dataset.FakeImageDataset(
-        data_dir=self.image_data_dir)
+        data_dir=self.image_data_dir
+    )
     fake_audio_builder.download_and_prepare()
     fake_image_builder.download_and_prepare()
     self.image_builder = fake_image_builder
@@ -98,40 +96,49 @@ class AdaptationTest(parameterized.TestCase):
       adaptation_dataset, _ = pipeline.get_dataset(
           "train[:2]",
           dataset_directory=self.audio_builder.data_dir,
-          pipeline=config.adaptation_data_config.pipeline)
+          pipeline=config.adaptation_data_config.pipeline,
+      )
       val_dataset, _ = pipeline.get_dataset(
           "train[1:2]",
           dataset_directory=self.audio_builder.data_dir,
-          pipeline=config.eval_data_config.pipeline)
+          pipeline=config.eval_data_config.pipeline,
+      )
     else:
       input_pipeline = models.MODEL_REGISTRY[config.model_config.encoder](
-          num_classes=1).get_input_pipeline
+          num_classes=1
+      ).get_input_pipeline
       dataset = input_pipeline(
-          data_builder=self.image_builder, split="train[:2]")
-      dataset = dataset.batch(
-          1, drop_remainder=False).batch(
-              1, drop_remainder=False)
+          data_builder=self.image_builder, split="train[:2]"
+      )
+      dataset = dataset.batch(1, drop_remainder=False).batch(
+          1, drop_remainder=False
+      )
       adaptation_dataset = val_dataset = dataset
     return adaptation_dataset, val_dataset
 
-  def _get_configs(self,
-                   modality: adapt.Modality,
-                   method: str,
-                   use_constant_encoder: bool = True):
+  def _get_configs(
+      self,
+      modality: adapt.Modality,
+      method: str,
+      use_constant_encoder: bool = True,
+  ):
     """Create configuration dictionary for training."""
     if modality == adapt.Modality.AUDIO:
       config = audio_baseline.get_config()
       config = config_utils.parse_config(config, config_globals.get_globals())
       config.init_config.target_class_list = "xenocanto"
       config.sample_rate_hz = 50
-      toy_pipeline = pipeline.Pipeline(ops=[
-          pipeline.ConvertBirdTaxonomyLabels(
-              source_namespace="ebird2021",
-              target_class_list=config.init_config.target_class_list,
-              add_taxonomic_labels=True),
-          pipeline.Batch(batch_size=1, split_across_devices=True),
-          pipeline.RandomSlice(window_size=1),
-      ])
+      toy_pipeline = pipeline.Pipeline(
+          ops=[
+              pipeline.ConvertBirdTaxonomyLabels(
+                  source_namespace="ebird2021",
+                  target_class_list=config.init_config.target_class_list,
+                  add_taxonomic_labels=True,
+              ),
+              pipeline.Batch(batch_size=1, split_across_devices=True),
+              pipeline.RandomSlice(window_size=1),
+          ]
+      )
 
       config.adaptation_data_config.pipeline = toy_pipeline
       config.eval_data_config.pipeline = toy_pipeline
@@ -143,7 +150,8 @@ class AdaptationTest(parameterized.TestCase):
           stride=config.sample_rate_hz // 25,
           kernel_size=10,
           sample_rate=config.sample_rate_hz,
-          freq_range=(60, 10_000))
+          freq_range=(60, 10_000),
+      )
     elif modality == adapt.Modality.IMAGE:
       config = image_baseline.get_config()
       config = config_utils.parse_config(config, config_globals.get_globals())
@@ -152,17 +160,29 @@ class AdaptationTest(parameterized.TestCase):
       if use_constant_encoder:
         config.model_config.encoder = models.ImageModelName.CONSTANT
     method_config = _UNPARSED_CONFIGS[method].get_config()
-    method_config = config_utils.parse_config(method_config,
-                                              config_globals.get_globals())
+    method_config = config_utils.parse_config(
+        method_config, config_globals.get_globals()
+    )
     return config, method_config
 
-  @parameterized.named_parameters(*[
-      (f"{method}_{modality.value}", method, modality)
-      for method, modality in itertools.product([
-          "dropout_student", "ada_bn", "tent", "notela", "pseudo_label", "shot",
-          "nrc", "dust"
-      ], [adapt.Modality.IMAGE, adapt.Modality.AUDIO])
-  ])
+  @parameterized.named_parameters(
+      *[
+          (f"{method}_{modality.value}", method, modality)
+          for method, modality in itertools.product(
+              [
+                  "dropout_student",
+                  "ada_bn",
+                  "tent",
+                  "notela",
+                  "pseudo_label",
+                  "shot",
+                  "nrc",
+                  "dust",
+              ],
+              [adapt.Modality.IMAGE, adapt.Modality.AUDIO],
+          )
+      ]
+  )
   def test_adapt_one_epoch(self, method: str, modality: adapt.Modality):
     """Test an epoch of adaptation for SFDA methods."""
 
@@ -176,16 +196,19 @@ class AdaptationTest(parameterized.TestCase):
     adaptation_dataset, val_dataset = self._get_datasets(config, modality)
 
     # Initialize state and parameters
-    model_bundle, adaptation_state, key, rename_fn, inverse_rename_fn = sfda_method.initialize(
-        model_config=config.model_config,
-        rng_seed=config.init_config.rng_seed,
-        pretrained=False,
-        input_shape=config.init_config.input_shape,
-        target_class_list=config.init_config.target_class_list,
-        adaptation_iterations=method_config.num_epochs *
-        len(adaptation_dataset),
-        modality=modality,
-        optimizer_config=method_config.optimizer_config)
+    model_bundle, adaptation_state, key, rename_fn, inverse_rename_fn = (
+        sfda_method.initialize(
+            model_config=config.model_config,
+            rng_seed=config.init_config.rng_seed,
+            pretrained=False,
+            input_shape=config.init_config.input_shape,
+            target_class_list=config.init_config.target_class_list,
+            adaptation_iterations=method_config.num_epochs
+            * len(adaptation_dataset),
+            modality=modality,
+            optimizer_config=method_config.optimizer_config,
+        )
+    )
 
     # Perform adaptation.
     new_adaptation_state = adapt.perform_adaptation(
@@ -204,13 +227,15 @@ class AdaptationTest(parameterized.TestCase):
         eval_every=config.eval_every,
         eval_mca_every=config.eval_mca_every,
         sfda_method=sfda_method,
-        **method_config)
+        **method_config,
+    )
     self.assertIsNotNone(new_adaptation_state)
 
   def test_mask_parameters_audio(self):
     """Testing parameter masking used to restrict trainable parameters."""
     config, _ = self._get_configs(
-        adapt.Modality.AUDIO, "tent", use_constant_encoder=False)
+        adapt.Modality.AUDIO, "tent", use_constant_encoder=False
+    )
     model_bundle, params, _, _, _, _ = model_utils.prepare_audio_model(
         model_config=config.model_config,
         optimizer_config=None,
@@ -218,13 +243,15 @@ class AdaptationTest(parameterized.TestCase):
         rng_seed=config.init_config.rng_seed,
         input_shape=config.init_config.input_shape,
         pretrained=False,
-        target_class_list=config.init_config.target_class_list)
+        target_class_list=config.init_config.target_class_list,
+    )
 
     self._test_mask_parameters(params, model_bundle.model)
 
   @parameterized.named_parameters(
       ("resnet", models.ImageModelName.RESNET),
-      ("wideresnet", models.ImageModelName.WIDERESNET))
+      ("wideresnet", models.ImageModelName.WIDERESNET),
+  )
   def test_mask_parameters_image(self, model: models.ImageModelName):
     """Testing parameter masking used to restrict trainable parameters."""
 
@@ -237,14 +264,15 @@ class AdaptationTest(parameterized.TestCase):
         rng_seed=config.init_config.rng_seed,
         pretrained=False,
         input_shape=config.init_config.input_shape,
-        target_class_list=config.init_config.target_class_list)
+        target_class_list=config.init_config.target_class_list,
+    )
     self._test_mask_parameters(params, model_bundle.model)
 
   def _test_mask_parameters(self, params, model):
     # Test BN masking
-    masked_params = model_utils.mask_parameters(params,
-                                                model_utils.TrainableParams.BN,
-                                                model)
+    masked_params = model_utils.mask_parameters(
+        params, model_utils.TrainableParams.BN, model
+    )
     for p, masked in traverse_util.flatten_dict(masked_params).items():
       if model.is_bn_parameter(p):
         self.assertFalse(masked)
@@ -252,9 +280,9 @@ class AdaptationTest(parameterized.TestCase):
         self.assertTrue(masked)
 
     # Test no masking
-    masked_params = model_utils.mask_parameters(params,
-                                                model_utils.TrainableParams.ALL,
-                                                model)
+    masked_params = model_utils.mask_parameters(
+        params, model_utils.TrainableParams.ALL, model
+    )
     for p, masked in traverse_util.flatten_dict(masked_params).items():
       self.assertFalse(masked)
 

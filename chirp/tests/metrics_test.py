@@ -41,18 +41,21 @@ class MetricsTest(absltest.TestCase):
     os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=2"
 
   def test_parallel_metric_agreemenet(self):
-
     @jax.jit
     def update_metrics(valid_metrics, labels, logits):
       return valid_metrics.merge(
           ValidationMetrics.single_from_model_output(
-              logits=logits, labels=labels))
+              logits=logits, labels=labels
+          )
+      )
 
     @functools.partial(jax.pmap, axis_name="batch")
     def p_update_metrics(valid_metrics, labels, logits):
       return valid_metrics.merge(
           ValidationMetrics.gather_from_model_output(
-              logits=logits, labels=labels, axis_name="batch"))
+              logits=logits, labels=labels, axis_name="batch"
+          )
+      )
 
     batch_size = 4
     num_classes = 5
@@ -99,16 +102,22 @@ class MetricsTest(absltest.TestCase):
     mix2 = f5 + f25
     reference = jnp.concatenate(
         [mix1[jnp.newaxis, jnp.newaxis, :], mix2[jnp.newaxis, jnp.newaxis, :]],
-        1)
-    estimate = jnp.concatenate([
-        f3[jnp.newaxis, jnp.newaxis, :], f5[jnp.newaxis, jnp.newaxis, :],
-        f9[jnp.newaxis, jnp.newaxis, :], f25[jnp.newaxis, jnp.newaxis, :]
-    ], 1)
+        1,
+    )
+    estimate = jnp.concatenate(
+        [
+            f3[jnp.newaxis, jnp.newaxis, :],
+            f5[jnp.newaxis, jnp.newaxis, :],
+            f9[jnp.newaxis, jnp.newaxis, :],
+            f25[jnp.newaxis, jnp.newaxis, :],
+        ],
+        1,
+    )
     best_mix, mix_matrix = metrics.least_squares_mixit(reference, estimate)
 
     l1_err = lambda x, y: jnp.sum(jnp.abs(x - y))
     # The mix matrix corresponding to the definition of mix1 and mix2.
-    expected_mix = jnp.array([[1., 0., 1., 0.], [0., 1., 0., 1.]])
+    expected_mix = jnp.array([[1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0]])
     self.assertEqual(l1_err(mix_matrix, expected_mix), 0.0)
 
     # The best_mix should recover the mixture channels exactly.
@@ -149,9 +158,11 @@ class MetricsTest(absltest.TestCase):
 
     batched_cmap_metric = cmap.CMAP.empty()
     batched_cmap_metric = batched_cmap_metric.merge(
-        cmap.CMAP.from_model_output((scores[:5], labels[:5])))
+        cmap.CMAP.from_model_output((scores[:5], labels[:5]))
+    )
     batched_cmap_metric = batched_cmap_metric.merge(
-        cmap.CMAP.from_model_output((scores[5:], labels[5:])))
+        cmap.CMAP.from_model_output((scores[5:], labels[5:]))
+    )
     batched_cmap_value = batched_cmap_metric.compute()
     self.assertEqual(batched_cmap_value, full_cmap_value)
 
@@ -159,10 +170,12 @@ class MetricsTest(absltest.TestCase):
     # taking into account column 1 (the only one with >3 samples).
     full_cmap_metric = cmap.CMAP.from_model_output((scores, labels))
     restricted_cmap_metric = cmap.CMAP.from_model_output(
-        (scores[:, 1:2], labels[:, 1:2]))
+        (scores[:, 1:2], labels[:, 1:2])
+    )
     self.assertEqual(
         full_cmap_metric.compute(sample_threshold=3),
-        restricted_cmap_metric.compute())
+        restricted_cmap_metric.compute(),
+    )
 
 
 if __name__ == "__main__":

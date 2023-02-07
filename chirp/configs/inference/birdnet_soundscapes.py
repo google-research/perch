@@ -46,6 +46,6 @@ def get_config() -> config_dict.ConfigDict:
           'window_size_s': 3.0,
           'hop_size_s': 3.0,
           'sample_rate': 48000,
-      }
+      },
   }
   return config

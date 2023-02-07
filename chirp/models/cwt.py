@@ -65,8 +65,8 @@ class Normalization(enum.Enum):
 
 
 def gabor_filter(
-    sigma: float, domain: Domain,
-    normalization: Normalization) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    sigma: float, domain: Domain, normalization: Normalization
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
   """A one-dimensional Gabor filter.
 
   The Gabor filter is a complex sinusoid modulated by a Gaussian. Its frequency
@@ -104,28 +104,29 @@ def gabor_filter(
     if normalization is Normalization.L1:
       norm = 1 / jnp.sqrt(2 * jnp.pi)
     elif normalization is Normalization.L2:
-      norm = jnp.pi**(-1 / 4)
+      norm = jnp.pi ** (-1 / 4)
 
     def _gabor_filter(t: jnp.ndarray) -> jnp.ndarray:
       sinusoids = jnp.exp(1j * t * sigma)
       gaussian = jnp.exp(-1 / 2 * t**2)
       return norm * gaussian * sinusoids
+
   elif domain is Domain.FREQUENCY:
     if normalization is Normalization.L1:
-      norm = 1.
+      norm = 1.0
     elif normalization is Normalization.L2:
-      norm = jnp.pi**(1 / 4) * jnp.sqrt(2)
+      norm = jnp.pi ** (1 / 4) * jnp.sqrt(2)
 
     def _gabor_filter(f: jnp.ndarray) -> jnp.ndarray:
-      gaussian = jnp.exp(-1 / 2 * (sigma - f * 2 * jnp.pi)**2)
+      gaussian = jnp.exp(-1 / 2 * (sigma - f * 2 * jnp.pi) ** 2)
       return norm * gaussian
 
   return _gabor_filter
 
 
 def sinc_filter(
-    sigma: float, domain: Domain,
-    normalization: Normalization) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    sigma: float, domain: Domain, normalization: Normalization
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
   """A sinc filter.
 
   Rather than being parameterized by its upper and lower frequency, this sinc
@@ -160,6 +161,7 @@ def sinc_filter(
       shift = jnp.exp(2j * jnp.pi * t * sigma)
       # NOTE: Normalized sinc function
       return shift * jnp.sinc(t)
+
   elif domain is Domain.FREQUENCY:
 
     def _sinc_filter(f: jnp.ndarray) -> jnp.ndarray:
@@ -169,8 +171,8 @@ def sinc_filter(
 
 
 def morlet_wavelet(
-    sigma: float, domain: Domain,
-    normalization: Normalization) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    sigma: float, domain: Domain, normalization: Normalization
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
   """A Morlet wavelet.
 
   This wavelet is a sinusoid modulated by a Gaussian which is shifted down in
@@ -199,28 +201,40 @@ def morlet_wavelet(
 
   # Follows notation from, e.g., https://en.wikipedia.org/wiki/Morlet_wavelet
   kappa = jnp.exp(-1 / 2 * sigma**2)
-  c = (1 + jnp.exp(-sigma**2) - 2 * jnp.exp(-3 / 4 * sigma**2))**(-1 / 2)
+  c = (1 + jnp.exp(-(sigma**2)) - 2 * jnp.exp(-3 / 4 * sigma**2)) ** (
+      -1 / 2
+  )
 
   if domain is Domain.TIME:
 
     def _morlet_wavelet(t: jnp.ndarray) -> jnp.ndarray:
-      return (c * jnp.pi**(-1 / 4) * jnp.exp(-1 / 2 * t**2) *
-              (jnp.exp(1j * sigma * t) - kappa))
+      return (
+          c
+          * jnp.pi ** (-1 / 4)
+          * jnp.exp(-1 / 2 * t**2)
+          * (jnp.exp(1j * sigma * t) - kappa)
+      )
 
   elif domain is Domain.FREQUENCY:
 
     def _morlet_wavelet(f: jnp.ndarray) -> jnp.ndarray:
       f = jnp.pi * 2 * f
-      return (c * jnp.pi**(1 / 4) * jnp.sqrt(2) *
-              (jnp.exp(-1 / 2 *
-                       (sigma - f)**2) - kappa * jnp.exp(-1 / 2 * f**2)))
+      return (
+          c
+          * jnp.pi ** (1 / 4)
+          * jnp.sqrt(2)
+          * (
+              jnp.exp(-1 / 2 * (sigma - f) ** 2)
+              - kappa * jnp.exp(-1 / 2 * f**2)
+          )
+      )
 
   return _morlet_wavelet
 
 
 def morse_wavelet(
-    gamma: float, beta: float, domain: Domain,
-    normalization: Normalization) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    gamma: float, beta: float, domain: Domain, normalization: Normalization
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
   """A Morse wavelet.
 
   For a general overview of Morse wavelets see Lilly and Olhede[^1][^2]. For
@@ -259,7 +273,8 @@ def morse_wavelet(
   """
   if domain is not Domain.FREQUENCY:
     raise ValueError(
-        "Morse wavelets have no analytic expression in the time domain")
+        "Morse wavelets have no analytic expression in the time domain"
+    )
 
   r = (2 * beta + 1) / gamma
 
@@ -270,16 +285,19 @@ def morse_wavelet(
     log_norm = jnp.log(gamma) - jsp.special.gammaln((1 + beta) / gamma)
 
   def _morse_wavelet(f: jnp.ndarray) -> jnp.ndarray:
-    f_nonneg = (f >= 0)
+    f_nonneg = f >= 0
     f *= f_nonneg
     return jnp.exp(log_norm + beta * jnp.log(f) - f**gamma) * f_nonneg
 
   return _morse_wavelet
 
 
-def melspec_params(num_mel_bins: int, sample_rate: float,
-                   lower_edge_hertz: float,
-                   upper_edge_hertz: float) -> jnp.ndarray:
+def melspec_params(
+    num_mel_bins: int,
+    sample_rate: float,
+    lower_edge_hertz: float,
+    upper_edge_hertz: float,
+) -> jnp.ndarray:
   """Gets the peak frequencies and bandwidths of a standard mel-filterbank.
 
   This assumes a Gaussian frequency response (i.e., Gabor filters) and matches
@@ -313,13 +331,15 @@ def melspec_params(num_mel_bins: int, sample_rate: float,
   return bands[1:-1], inv_fwhms
 
 
-def convolve_filter(filter_: Callable[[jnp.ndarray], jnp.ndarray],
-                    signal: jnp.ndarray,
-                    scale_factors: jnp.ndarray,
-                    normalization: Normalization,
-                    window_size_frames: int,
-                    stride: tuple[int, ...] = (1,),
-                    padding: str = "SAME") -> jnp.ndarray:
+def convolve_filter(
+    filter_: Callable[[jnp.ndarray], jnp.ndarray],
+    signal: jnp.ndarray,
+    scale_factors: jnp.ndarray,
+    normalization: Normalization,
+    window_size_frames: int,
+    stride: tuple[int, ...] = (1,),
+    padding: str = "SAME",
+) -> jnp.ndarray:
   """Convolves a given set of filters with a signal in the time domain.
 
   Note that this takes the conjugate of the filter in order to match the usual
@@ -347,8 +367,9 @@ def convolve_filter(filter_: Callable[[jnp.ndarray], jnp.ndarray],
 
   # We assume a single input channel
   sampled_filters = sampled_filters[:, jnp.newaxis]
-  dn = lax.conv_dimension_numbers(signal.shape, sampled_filters.shape,
-                                  ("NWC", "WIO", "NWC"))
+  dn = lax.conv_dimension_numbers(
+      signal.shape, sampled_filters.shape, ("NWC", "WIO", "NWC")
+  )
   # TODO(bartvm): Not all platforms (e.g., TF Lite) support complex inputs for
   # convolutions. Can be addressed by convolving with the real/imaginary parts
   # separately in the future if needed.
@@ -356,14 +377,18 @@ def convolve_filter(filter_: Callable[[jnp.ndarray], jnp.ndarray],
   # filters to be the same type, but this results in 33% more multiplications
   # than necessary, so this is probably not the fastest option.
   signal = signal.astype(jnp.complex64)
-  filtered_signal = lax.conv_general_dilated(signal, sampled_filters, stride,
-                                             padding, (1,), (1,), dn)
+  filtered_signal = lax.conv_general_dilated(
+      signal, sampled_filters, stride, padding, (1,), (1,), dn
+  )
   return filtered_signal
 
 
-def multiply_filter(filter_: Callable[[jnp.ndarray], jnp.ndarray],
-                    signal: jnp.ndarray, scale_factors: jnp.ndarray,
-                    normalization: Normalization) -> jnp.ndarray:
+def multiply_filter(
+    filter_: Callable[[jnp.ndarray], jnp.ndarray],
+    signal: jnp.ndarray,
+    scale_factors: jnp.ndarray,
+    normalization: Normalization,
+) -> jnp.ndarray:
   """Applies a filter to a signal in the frequency domain.
 
   This takes the DFT of the given signals and applies the given filter.
@@ -387,7 +412,8 @@ def multiply_filter(filter_: Callable[[jnp.ndarray], jnp.ndarray],
   # unnecessary computation. Might be faster to use RFFT and then take the
   # complex conjugates manually.
   filtered_signal = jnp.fft.ifft(
-      jnp.fft.fft(signal, axis=-2) * filter_(fs), axis=-2)
+      jnp.fft.fft(signal, axis=-2) * filter_(fs), axis=-2
+  )
   if normalization is Normalization.L1:
     norm = 1
   elif normalization is Normalization.L2:

@@ -31,8 +31,11 @@ def _slice_if_xc(is_xc: bool, **kwargs):
 
 
 def _melspec_if_baseline(config_string: str, **kwargs):
-  return ([_callable_config('pipeline.MelSpectrogram', **kwargs)]
-          if config_string == 'baseline' else [])
+  return (
+      [_callable_config('pipeline.MelSpectrogram', **kwargs)]
+      if config_string == 'baseline'
+      else []
+  )
 
 
 def get_config() -> config_dict.ConfigDict:
@@ -68,22 +71,22 @@ def get_config() -> config_dict.ConfigDict:
       {
           'dataset_name': 'xc_artificially_rare',
           'is_xc': True,
-          'tfds_name': 'bird_taxonomy/upstream_ar_only_slice_peaked'
+          'tfds_name': 'bird_taxonomy/upstream_ar_only_slice_peaked',
       },
       {
           'dataset_name': 'xc_downstream',
           'is_xc': True,
-          'tfds_name': 'bird_taxonomy/downstream_slice_peaked'
+          'tfds_name': 'bird_taxonomy/downstream_slice_peaked',
       },
       {
           'dataset_name': 'birdclef_ssw',
           'is_xc': False,
-          'tfds_name': 'soundscapes/ssw'
+          'tfds_name': 'soundscapes/ssw',
       },
       {
           'dataset_name': 'birdclef_colombia',
           'is_xc': False,
-          'tfds_name': 'soundscapes/birdclef2019_colombia'
+          'tfds_name': 'soundscapes/birdclef2019_colombia',
       },
   )
 
@@ -93,20 +96,32 @@ def get_config() -> config_dict.ConfigDict:
     dataset_config.tfds_name = dataset_description['tfds_name']
     dataset_config.tfds_data_dir = tfds_data_dir
 
-    ops = [
-        _callable_config(
-            'pipeline.OnlyKeep',
-            names=['audio', 'label', 'bg_labels', 'recording_id', 'segment_id'
-                  ]),
-    ] + _slice_if_xc(
-        # Xeno-Canto data needs to be cropped before normalizing the audio.
-        dataset_description['is_xc'],
-        window_size=xc_window_size_seconds,
-        start=xc_slice_start) + [
+    ops = (
+        [
             _callable_config(
-                'pipeline.NormalizeAudio', target_gain=target_gain),
+                'pipeline.OnlyKeep',
+                names=[
+                    'audio',
+                    'label',
+                    'bg_labels',
+                    'recording_id',
+                    'segment_id',
+                ],
+            ),
+        ]
+        + _slice_if_xc(
+            # Xeno-Canto data needs to be cropped before normalizing the audio.
+            dataset_description['is_xc'],
+            window_size=xc_window_size_seconds,
+            start=xc_slice_start,
+        )
+        + [
+            _callable_config(
+                'pipeline.NormalizeAudio', target_gain=target_gain
+            ),
             _callable_config('pipeline.LabelsToString'),
         ]
+    )
 
     dataset_config.pipeline = _callable_config('pipeline.Pipeline', ops=ops)
     dataset_config.split = 'train'
@@ -116,30 +131,35 @@ def get_config() -> config_dict.ConfigDict:
 
   # Build all eval set specifications.
   config.eval_set_specifications = {}
-  for corpus_type, location in itertools.product(('xc_fg', 'xc_bg', 'birdclef'),
-                                                 ('ssw', 'colombia', 'hawaii')):
+  for corpus_type, location in itertools.product(
+      ('xc_fg', 'xc_bg', 'birdclef'), ('ssw', 'colombia', 'hawaii')
+  ):
     # SSW species are "artificially rare" (a limited number of examples were
     # included during upstream training). If provided, we use the singular
     # learned vector representation from upstream training during search.
     # Otherwise, we use all available upstream recordings.
     if location == 'ssw':
-      config.eval_set_specifications[
-          f'artificially_rare_{corpus_type}'] = _callable_config(
+      config.eval_set_specifications[f'artificially_rare_{corpus_type}'] = (
+          _callable_config(
               'eval_lib.EvalSetSpecification.v1_specification',
               location=location,
               corpus_type=corpus_type,
-              num_representatives_per_class=-1)
+              num_representatives_per_class=-1,
+          )
+      )
     # For downstream species, we sweep over {1, 2, 4, 8, 16} representatives
     # per class, and in each case we resample the collection of class
     # representatives 5 times to get confidence intervals on the metrics.
     else:
       for k, seed in itertools.product((1, 2, 4, 8, 16), range(1, 6)):
         config.eval_set_specifications[
-            f'{location}_{corpus_type}_{k}_seed{seed}'] = _callable_config(
-                'eval_lib.EvalSetSpecification.v1_specification',
-                location=location,
-                corpus_type=corpus_type,
-                num_representatives_per_class=k)
+            f'{location}_{corpus_type}_{k}_seed{seed}'
+        ] = _callable_config(
+            'eval_lib.EvalSetSpecification.v1_specification',
+            location=location,
+            corpus_type=corpus_type,
+            num_representatives_per_class=k,
+        )
 
   config.debug = config_dict.ConfigDict()
   # Path to the embedded dataset cache. If set, the embedded dataset will be

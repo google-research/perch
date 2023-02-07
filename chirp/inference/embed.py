@@ -33,12 +33,15 @@ import numpy as np
 
 FLAGS = flags.FLAGS
 
-_CONFIG_KEY = flags.DEFINE_string('config', 'raw_soundscapes',
-                                  'Name of the config to use.')
-_DRY_RUN_ONLY = flags.DEFINE_bool('dry_run', False,
-                                  'Whether to execute a dry-run only.')
-_DRY_RUN_CROP_S = flags.DEFINE_float('dry_run_crop_s', 10.0,
-                                     'Amount of audio to use for dry run.')
+_CONFIG_KEY = flags.DEFINE_string(
+    'config', 'raw_soundscapes', 'Name of the config to use.'
+)
+_DRY_RUN_ONLY = flags.DEFINE_bool(
+    'dry_run', False, 'Whether to execute a dry-run only.'
+)
+_DRY_RUN_CROP_S = flags.DEFINE_float(
+    'dry_run_crop_s', 10.0, 'Amount of audio to use for dry run.'
+)
 
 
 def dry_run(config, source_files):
@@ -51,7 +54,8 @@ def dry_run(config, source_files):
   test_file = np.random.choice(source_files)
   print(f'   processing test file {test_file}')
   got = test_embed_fn.process(
-      embed_lib.SourceInfo(test_file, 0, 1), _DRY_RUN_CROP_S.value)
+      embed_lib.SourceInfo(test_file, 0, 1), _DRY_RUN_CROP_S.value
+  )
   elapsed = time.time() - start
   if not got:
     raise Exception('Something went wrong; no results found.')
@@ -85,12 +89,14 @@ def main(unused_argv: Sequence[str]) -> None:
     return
 
   # Create and run the beam pipeline.
-  source_infos = embed_lib.create_source_infos(source_files,
-                                               config.num_shards_per_file)
+  source_infos = embed_lib.create_source_infos(
+      source_files, config.num_shards_per_file
+  )
   pipeline = beam.Pipeline()
   embed_fn = embed_lib.EmbedFn(**config.embed_fn_config)
-  embed_lib.build_run_pipeline(pipeline, config.output_dir, source_infos,
-                               embed_fn)
+  embed_lib.build_run_pipeline(
+      pipeline, config.output_dir, source_infos, embed_fn
+  )
 
 
 if __name__ == '__main__':

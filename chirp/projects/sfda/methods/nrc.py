@@ -66,14 +66,20 @@ class NRCLoss(clu_metrics.Metric):
       NRCLoss: An instance of NRCLoss.
     """
 
-    nn_loss = -(nn_weight *
-                (probabilities[:, None, :] * nn_probability).sum(axis=-1)).sum(
-                    axis=-1)  # [batch_size]
+    nn_loss = -(
+        nn_weight * (probabilities[:, None, :] * nn_probability).sum(axis=-1)
+    ).sum(
+        axis=-1
+    )  # [batch_size]
 
-    extended_nn_loss = -(extended_nn_weight *
-                         (probabilities[:, None, None, :] *
-                          extended_nn_probability).sum(axis=-1)).sum(
-                              axis=1)  # [batch_size]
+    extended_nn_loss = -(
+        extended_nn_weight
+        * (probabilities[:, None, None, :] * extended_nn_probability).sum(
+            axis=-1
+        )
+    ).sum(
+        axis=1
+    )  # [batch_size]
     probabilities_sum = probabilities.sum(axis=0)  # [num classes]
 
     return cls(
@@ -87,17 +93,18 @@ class NRCLoss(clu_metrics.Metric):
     return type(self)(
         probabilities_sum=self.probabilities_sum + other.probabilities_sum,
         nn_loss_sum=self.nn_loss_sum + other.nn_loss_sum,
-        extended_nn_loss_sum=self.extended_nn_loss_sum +
-        other.extended_nn_loss_sum,
+        extended_nn_loss_sum=self.extended_nn_loss_sum
+        + other.extended_nn_loss_sum,
         n_samples=self.n_samples + other.n_samples,
     )
 
   def compute(self):
-
     probabilities_marginal = self.probabilities_sum / self.n_samples
     marginal_entropy = losses.label_ent(probabilities=probabilities_marginal)
-    return (1 / self.n_samples *
-            (self.nn_loss_sum + self.extended_nn_loss_sum) - marginal_entropy)
+    return (
+        1 / self.n_samples * (self.nn_loss_sum + self.extended_nn_loss_sum)
+        - marginal_entropy
+    )
 
 
 @flax.struct.dataclass
@@ -121,7 +128,6 @@ class NRCMultiLoss(clu_metrics.Metric):
       label_mask: jnp.ndarray,
       **_,
   ) -> "NRCMultiLoss":
-
     if label_mask is not None:
       # probabilities have not been masked but nn_probability has been, so we
       # pad the latter to bring it to the same dimensionality as the former.
@@ -132,41 +138,61 @@ class NRCMultiLoss(clu_metrics.Metric):
       num_classes_total = reference_mask.shape[0]
       padded_nn_prob = jnp.zeros((batch_size, num_classes_total))
       col_index = jnp.tile(
-          jnp.nonzero(reference_mask, size=num_classes_used)[0], batch_size)
+          jnp.nonzero(reference_mask, size=num_classes_used)[0], batch_size
+      )
       row_index = jnp.repeat(jnp.arange(batch_size), num_classes_used)
       nn_probability_flatter = padded_nn_prob.at[(row_index, col_index)].set(
-          nn_probability_flatter.flatten())
+          nn_probability_flatter.flatten()
+      )
       nn_probability = nn_probability_flatter.reshape(
-          (-1, num_nn, num_classes_total))
+          (-1, num_nn, num_classes_total)
+      )
 
       _, num_nn, num_enn, num_classes_used = extended_nn_probability.shape
       enn_probability_flatter = extended_nn_probability.reshape(
-          (-1, num_classes_used))
+          (-1, num_classes_used)
+      )
       batch_size = enn_probability_flatter.shape[0]
       padded_enn_prob = jnp.zeros((batch_size, num_classes_total))
       col_index = jnp.tile(
-          jnp.nonzero(reference_mask, size=num_classes_used)[0], batch_size)
+          jnp.nonzero(reference_mask, size=num_classes_used)[0], batch_size
+      )
       row_index = jnp.repeat(jnp.arange(batch_size), num_classes_used)
       enn_probability_flatter = padded_enn_prob.at[(row_index, col_index)].set(
-          enn_probability_flatter.flatten())
+          enn_probability_flatter.flatten()
+      )
       extended_nn_probability = enn_probability_flatter.reshape(
-          (-1, num_nn, num_enn, num_classes_total))
+          (-1, num_nn, num_enn, num_classes_total)
+      )
 
     def dot_product(probability_a, probability_b):
       return probability_a * probability_b + (1 - probability_a) * (
-          1 - probability_b)
+          1 - probability_b
+      )
 
     nn_loss = -(
-        label_mask * (
+        label_mask
+        * (
             nn_weight[..., None]  # [batch_size, nn, 1]
-            * (dot_product(probabilities[:, None, :], nn_probability))).sum(
-                axis=1)).sum(-1) / label_mask.sum(-1)  # [batch_size]
+            * (dot_product(probabilities[:, None, :], nn_probability))
+        ).sum(axis=1)
+    ).sum(-1) / label_mask.sum(
+        -1
+    )  # [batch_size]
 
     extended_nn_loss = -(
-        label_mask *
-        (extended_nn_weight *
-         (dot_product(probabilities[:, None, None, :], extended_nn_probability))
-        ).sum(axis=[1, 2])).sum(-1) / label_mask.sum(-1)  # [batch_size]
+        label_mask
+        * (
+            extended_nn_weight
+            * (
+                dot_product(
+                    probabilities[:, None, None, :], extended_nn_probability
+                )
+            )
+        ).sum(axis=[1, 2])
+    ).sum(-1) / label_mask.sum(
+        -1
+    )  # [batch_size]
 
     probabilities_sum = probabilities.sum(axis=0)  # [num classes]
 
@@ -182,8 +208,8 @@ class NRCMultiLoss(clu_metrics.Metric):
     return type(self)(
         probabilities_sum=self.probabilities_sum + other.probabilities_sum,
         nn_loss_sum=self.nn_loss_sum + other.nn_loss_sum,
-        extended_nn_loss_sum=self.extended_nn_loss_sum +
-        other.extended_nn_loss_sum,
+        extended_nn_loss_sum=self.extended_nn_loss_sum
+        + other.extended_nn_loss_sum,
         n_samples=self.n_samples + other.n_samples,
         label_mask=other.label_mask,
     )
@@ -191,9 +217,12 @@ class NRCMultiLoss(clu_metrics.Metric):
   def compute(self):
     probabilities_marginal = self.probabilities_sum / self.n_samples
     marginal_entropy = losses.label_binary_ent(
-        probabilities=probabilities_marginal, label_mask=self.label_mask[0])
-    return (1 / self.n_samples *
-            (self.nn_loss_sum + self.extended_nn_loss_sum) - marginal_entropy)
+        probabilities=probabilities_marginal, label_mask=self.label_mask[0]
+    )
+    return (
+        1 / self.n_samples * (self.nn_loss_sum + self.extended_nn_loss_sum)
+        - marginal_entropy
+    )
 
 
 class NRC(adapt.SFDAMethod):
@@ -202,7 +231,8 @@ class NRC(adapt.SFDAMethod):
   _CITATION = (
       "Yang, Shiqi, et al. 'Exploiting the intrinsic neighborhood structure"
       "for source-free domain adaptation.' Advances in Neural Information"
-      "Processing Systems 34 (2021): 29393-29405.")
+      "Processing Systems 34 (2021): 29393-29405."
+  )
 
   @staticmethod
   def compute_nearest_neighbors(
@@ -232,12 +262,14 @@ class NRC(adapt.SFDAMethod):
     batch_shape = batch_feature.shape
     dataset_shape = dataset_feature.shape
 
-    if batch_feature.ndim != dataset_feature.ndim or (batch_shape[-1] !=
-                                                      dataset_shape[-1]):
+    if batch_feature.ndim != dataset_feature.ndim or (
+        batch_shape[-1] != dataset_shape[-1]
+    ):
       raise ValueError(
           "Batch features and dataset features' shapes are not consistent."
           f"Currently batch_feature: {batch_shape} and dataset_feature:"
-          f"{dataset_shape}")
+          f"{dataset_shape}"
+      )
 
     # Compute the nearest-neighbors
     neighbors = min(dataset_shape[0], nn + 1)
@@ -249,18 +281,21 @@ class NRC(adapt.SFDAMethod):
       nn_indices = []
       for sample_feature in batch_feature:
         pairwise_distances = method_utils.jax_cdist(
-            jnp.expand_dims(sample_feature, 0),
-            dataset_feature)  # [1, dataset_size]
+            jnp.expand_dims(sample_feature, 0), dataset_feature
+        )  # [1, dataset_size]
         nn_indices.append(
-            jax.lax.top_k(-pairwise_distances,
-                          neighbors)[1][:, 1:])  # [1, neighbors]
+            jax.lax.top_k(-pairwise_distances, neighbors)[1][:, 1:]
+        )  # [1, neighbors]
       nn_indices = jnp.concatenate(
-          nn_indices, axis=0)  # [batch_size, neighbors]
+          nn_indices, axis=0
+      )  # [batch_size, neighbors]
     else:
-      pairwise_distances = method_utils.jax_cdist(batch_feature,
-                                                  dataset_feature)
-      nn_indices = jax.lax.top_k(-pairwise_distances,
-                                 neighbors)[1][:, 1:]  # [batch_size, neighbors]
+      pairwise_distances = method_utils.jax_cdist(
+          batch_feature, dataset_feature
+      )
+      nn_indices = jax.lax.top_k(-pairwise_distances, neighbors)[1][
+          :, 1:
+      ]  # [batch_size, neighbors]
 
     return nn_indices
 
@@ -344,7 +379,8 @@ class NRC(adapt.SFDAMethod):
     method_state = flax_utils.unreplicate(adaptation_state.method_state)
     id2index = method_state["id2index"]
     batch_indices = np.array(
-        [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])])
+        [id2index[x] for x in flax_utils.unreplicate(batch["tfds_id"])]
+    )
     reference_label_mask = method_utils.get_label_mask(batch)
 
     # Obtain the model's output for the current batch.
@@ -386,41 +422,48 @@ class NRC(adapt.SFDAMethod):
 
     # Get nearest-neighbors and extended nearest-neighbors' probability.
     nn_probability = method_state["dataset_probability"][
-        nn_indices]  # [batch_size, nn, num_classes]
+        nn_indices
+    ]  # [batch_size, nn, num_classes]
     extended_nn_probability = method_state["dataset_probability"][
-        extended_nn_indices]  # [batch_size, nn, extended_nn, num_classes]
+        extended_nn_indices
+    ]  # [batch_size, nn, extended_nn, num_classes]
 
     # Compute weights for nearest-neighbors and extended nearest-neighbors.
     # Those indicate the importance of each (extended) nearest-neighbor in
     # the loss.
-    match = ((extended_nn_indices == batch_indices[:, None, None]).sum(-1)
-            )  # [batch_size, nn]
+    match = (extended_nn_indices == batch_indices[:, None, None]).sum(
+        -1
+    )  # [batch_size, nn]
     assert match.ndim == 2
 
-    nn_weight = jnp.where(match > 0, match,
-                          method_kwargs["base_affinity"])  # [batch_size, nn]
+    nn_weight = jnp.where(
+        match > 0, match, method_kwargs["base_affinity"]
+    )  # [batch_size, nn]
     extended_nn_weight = jnp.array([method_kwargs["base_affinity"]])
 
     # Update banks
     method_state["dataset_feature"] = (
-        method_state["dataset_feature"].at[batch_indices].set(
-            model_outputs.embedding))
+        method_state["dataset_feature"]
+        .at[batch_indices]
+        .set(model_outputs.embedding)
+    )
     method_state["dataset_probability"] = (
-        method_state["dataset_probability"].at[batch_indices].set(
-            logit2proba(model_outputs.label)))
+        method_state["dataset_probability"]
+        .at[batch_indices]
+        .set(logit2proba(model_outputs.label))
+    )
     return adaptation_state, {
-        "nn_weight":
-            flax_utils.replicate(nn_weight),
-        "extended_nn_weight":
-            flax_utils.replicate(extended_nn_weight),
-        "nn_probability":
-            flax_utils.replicate(nn_probability),
-        "extended_nn_probability":
-            flax_utils.replicate(extended_nn_probability),
+        "nn_weight": flax_utils.replicate(nn_weight),
+        "extended_nn_weight": flax_utils.replicate(extended_nn_weight),
+        "nn_probability": flax_utils.replicate(nn_probability),
+        "extended_nn_probability": flax_utils.replicate(
+            extended_nn_probability
+        ),
     }
 
-  def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> type[clu_metrics.Collection]:
+  def get_adaptation_metrics(
+      self, supervised: bool, multi_label: bool, **method_kwargs
+  ) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation.
 
     Args:
@@ -433,8 +476,8 @@ class NRC(adapt.SFDAMethod):
       A collection of metrics.
     """
     metrics_dict = vars(
-        adapt.get_common_metrics(
-            supervised=supervised, multi_label=multi_label))["__annotations__"]
+        adapt.get_common_metrics(supervised=supervised, multi_label=multi_label)
+    )["__annotations__"]
 
     if multi_label:
       metrics_dict["main_loss"] = NRCMultiLoss

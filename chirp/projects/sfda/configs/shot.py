@@ -20,17 +20,16 @@ from ml_collections import config_dict
 
 
 def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-function-docstring
-
   # Configure adaptation
   image_config = config_dict.ConfigDict()
 
   optimizer_cfg = config_dict.ConfigDict()
   optimizer_cfg.optimizer = "adam"
   optimizer_cfg.opt_kwargs = {"momentum": 0.9, "nesterov": True}
-  optimizer_cfg.weight_decay = 0.
+  optimizer_cfg.weight_decay = 0.0
   optimizer_cfg.learning_rate = 1e-4
   optimizer_cfg.learning_rate_decay = model_utils.LearningRateDecay.COSINE
-  optimizer_cfg.mult_learning_rate_resnet_base = 1.
+  optimizer_cfg.mult_learning_rate_resnet_base = 1.0
   optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
   image_config.optimizer_config = optimizer_cfg
 
@@ -45,22 +44,21 @@ def get_image_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
 
 
 def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-function-docstring
-
   # Configure adaptation
   audio_config = config_dict.ConfigDict()
 
   optimizer_cfg = config_dict.ConfigDict()
   optimizer_cfg.optimizer = "adam"
   optimizer_cfg.opt_kwargs = {"momentum": 0.9, "nesterov": True}
-  optimizer_cfg.weight_decay = 0.
+  optimizer_cfg.weight_decay = 0.0
   optimizer_cfg.learning_rate = 1e-5
   optimizer_cfg.learning_rate_decay = model_utils.LearningRateDecay.COSINE
-  optimizer_cfg.mult_learning_rate_resnet_base = 1.
+  optimizer_cfg.mult_learning_rate_resnet_base = 1.0
   optimizer_cfg.trainable_params_strategy = model_utils.TrainableParams.BN
   audio_config.optimizer_config = optimizer_cfg
 
   # Method-specifc hparam
-  audio_config.beta = 0.
+  audio_config.beta = 0.0
 
   # Forward options
   audio_config.num_epochs = 10
@@ -70,7 +68,6 @@ def get_audio_config() -> config_dict.ConfigDict:  # pylint: disable=missing-fun
 
 
 def get_config() -> config_dict.ConfigDict:
-
   method_config = config_dict.ConfigDict()
   method_config.sfda_method = config_utils.callable_config("shot.SHOT")
   method_config.audio = get_audio_config()

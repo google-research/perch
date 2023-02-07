@@ -46,6 +46,7 @@ class TrainableParams(enum.Enum):
       and controlled by the 'update_bn_statistics' option, in each method's
       config file.
   """
+
   ALL = "all"
   BN = "batch_norm"
 
@@ -58,10 +59,11 @@ class LearningRateDecay(enum.Enum):
   NONE = "none"
 
 
-def mask_parameters(params: flax.core.scope.VariableDict,
-                    strategy: TrainableParams,
-                    model: Union[image_model.ImageModel,
-                                 taxonomy_model.TaxonomyModel]):
+def mask_parameters(
+    params: flax.core.scope.VariableDict,
+    strategy: TrainableParams,
+    model: Union[image_model.ImageModel, taxonomy_model.TaxonomyModel],
+):
   """Creates the mask of parameters to which zero_grad() will be applied.
 
   Args:
@@ -85,11 +87,13 @@ def mask_parameters(params: flax.core.scope.VariableDict,
   frozen_parameters = [p for p, masked in mask.items() if masked]
   trainable_parameters = [p for p, masked in mask.items() if not masked]
   logging.info(
-      "The following parameters will be kept frozen during adaptation:"
-      " %s", frozen_parameters)
+      "The following parameters will be kept frozen during adaptation: %s",
+      frozen_parameters,
+  )
   logging.info(
-      "The following parameters will be trained during adaptation:"
-      " %s", trainable_parameters)
+      "The following parameters will be trained during adaptation: %s",
+      trainable_parameters,
+  )
   return flax.traverse_util.unflatten_dict(mask)
 
 
@@ -101,6 +105,7 @@ class ModelBundle:
     model: The model used for adaptation.
     optimizer: The optimizer used for adaptation.
   """
+
   model: nn.Module
   optimizer: Optional[optax.GradientTransformation]
 
@@ -118,27 +123,33 @@ def prepare_learning_rates(optimizer_config, total_steps):
     if mult_lr_base != 1:
       learning_rate_base_resnet = optax.cosine_decay_schedule(
           init_value=optimizer_config.learning_rate * mult_lr_base,
-          decay_steps=total_steps)
+          decay_steps=total_steps,
+      )
       learning_rate_top = optax.cosine_decay_schedule(
-          init_value=optimizer_config.learning_rate, decay_steps=total_steps)
+          init_value=optimizer_config.learning_rate, decay_steps=total_steps
+      )
     else:
       learning_rate = optax.cosine_decay_schedule(
-          optimizer_config.learning_rate, decay_steps=total_steps)
+          optimizer_config.learning_rate, decay_steps=total_steps
+      )
   elif optimizer_config.learning_rate_decay == LearningRateDecay.NRC:
     if mult_lr_base != 1:
       learning_rate_base_resnet = nrc_schedule(
           init_value=optimizer_config.learning_rate * mult_lr_base,
           power=0.75,
-          transition_steps=total_steps)
+          transition_steps=total_steps,
+      )
       learning_rate_top = nrc_schedule(
           init_value=optimizer_config.learning_rate,
           power=0.75,
-          transition_steps=total_steps)
+          transition_steps=total_steps,
+      )
     else:
       learning_rate = nrc_schedule(
           init_value=optimizer_config.learning_rate,
           power=0.75,
-          transition_steps=total_steps)
+          transition_steps=total_steps,
+      )
   elif optimizer_config.learning_rate_decay == LearningRateDecay.NONE:
     if mult_lr_base != 1:
       learning_rate_base_resnet = optimizer_config.learning_rate * mult_lr_base
@@ -156,8 +167,9 @@ def prepare_learning_rates(optimizer_config, total_steps):
 def prepare_optimizer(optimizer_config, total_steps, params):
   """Prepare the optimizer."""
   mult_lr_base = optimizer_config.mult_learning_rate_resnet_base
-  (learning_rate, learning_rate_base_resnet,
-   learning_rate_top) = prepare_learning_rates(optimizer_config, total_steps)
+  (learning_rate, learning_rate_base_resnet, learning_rate_top) = (
+      prepare_learning_rates(optimizer_config, total_steps)
+  )
   opt = getattr(optax, optimizer_config.optimizer)
 
   def get_opt_kwarg(key, default):
@@ -207,8 +219,9 @@ def prepare_optimizer(optimizer_config, total_steps, params):
         if not isinstance(v, dict) and not isinstance(v, FrozenDict):
           renamed_params[prefix + k] = v
         else:
-          renamed_params[prefix + k] = rename_params(v, renamed_params,
-                                                     prefix + "{}/".format(k))
+          renamed_params[prefix + k] = rename_params(
+              v, renamed_params, prefix + "{}/".format(k)
+          )
       return renamed_params
 
     def inverse_rename_params(renamed_params):
@@ -220,13 +233,13 @@ def prepare_optimizer(optimizer_config, total_steps, params):
           if k.rfind("/") == -1:
             params[k] = v
           else:
-            k_base = k[k.rfind("/") + 1:]
+            k_base = k[k.rfind("/") + 1 :]
             params[k_base] = v
         else:
           if k.rfind("/") == -1:
             k_base = k
           else:
-            k_base = k[k.rfind("/") + 1:]
+            k_base = k[k.rfind("/") + 1 :]
           params[k_base] = inverse_rename_params(v)
       return params
 
@@ -244,8 +257,11 @@ def prepare_optimizer(optimizer_config, total_steps, params):
     leaves = get_all_leaves(label_fn(renamed_params))
     params_to_opt = {}
     for leaf in leaves:
-      if ("BottleneckResNetBlock" in leaf or "conv_init" in leaf or
-          "bn_init" in leaf):
+      if (
+          "BottleneckResNetBlock" in leaf
+          or "conv_init" in leaf
+          or "bn_init" in leaf
+      ):
         params_to_opt[leaf] = optimizer_base_resnet
       else:
         params_to_opt[leaf] = optimizer_top
@@ -254,8 +270,9 @@ def prepare_optimizer(optimizer_config, total_steps, params):
   return optimizer, rename_params, inverse_rename_params
 
 
-def nrc_schedule(init_value: chex.Scalar, power: chex.Scalar,
-                 transition_steps: chex.Scalar) -> optax.Schedule:
+def nrc_schedule(
+    init_value: chex.Scalar, power: chex.Scalar, transition_steps: chex.Scalar
+) -> optax.Schedule:
   """Constructs a schedule identical to that of NRC.
 
   Args:
@@ -270,7 +287,7 @@ def nrc_schedule(init_value: chex.Scalar, power: chex.Scalar,
   def schedule(count):
     count = jnp.clip(count, 0, transition_steps)
     frac = count / transition_steps
-    return init_value / ((1 + 10 * frac)**power)
+    return init_value / ((1 + 10 * frac) ** power)
 
   return schedule
 
@@ -280,8 +297,11 @@ def map_nested_fn(fn):
 
   def map_fn(nested_dict):
     return {
-        k: (map_fn(v)
-            if isinstance(v, dict) or isinstance(v, FrozenDict) else fn(k, v))
+        k: (
+            map_fn(v)
+            if isinstance(v, dict) or isinstance(v, FrozenDict)
+            else fn(k, v)
+        )
         for k, v in nested_dict.items()
     }
 
@@ -296,9 +316,14 @@ def prepare_audio_model(
     rng_seed: int,
     input_shape: tuple[int, ...],
     target_class_list: str,
-) -> tuple[ModelBundle, scope.VariableDict, scope.FrozenVariableDict,
-           Optional[scope.FrozenVariableDict], Callable[
-               [Any, Any, str], Any], Callable[[Any], Any]]:
+) -> tuple[
+    ModelBundle,
+    scope.VariableDict,
+    scope.FrozenVariableDict,
+    Optional[scope.FrozenVariableDict],
+    Callable[[Any, Any, str], Any],
+    Callable[[Any], Any],
+]:
   """Loads the taxonomic classifier's and optimizer's params and states.
 
   Args:
@@ -327,13 +352,15 @@ def prepare_audio_model(
   """
   # Define the main model
   class_lists = class_utils.get_class_lists(
-      target_class_list, add_taxonomic_labels=False)
+      target_class_list, add_taxonomic_labels=False
+  )
   num_classes = {k: v.size for (k, v) in class_lists.items()}
   model = taxonomy_model.TaxonomyModel(
       num_classes=num_classes,
       encoder=model_config.encoder,
       frontend=model_config.frontend,
-      taxonomy_loss_weight=0.)
+      taxonomy_loss_weight=0.0,
+  )
 
   if pretrained:
     # Load main classification model from pretrained checkpoint
@@ -346,17 +373,17 @@ def prepare_audio_model(
         model_config=model_config,
         rng_seed=rng_seed,
         input_shape=input_shape,
-        learning_rate=0.,
+        learning_rate=0.0,
         workdir=ckpt_dir,
-        target_class_list=target_class_list)
+        target_class_list=target_class_list,
+    )
     train_state = model_bundle.ckpt.restore(train_state)
     params = train_state.params
     model_state = train_state.model_state
   else:
     variables = model.init(
-        jax.random.PRNGKey(rng_seed),
-        jnp.zeros((1,) + input_shape),
-        train=False)
+        jax.random.PRNGKey(rng_seed), jnp.zeros((1,) + input_shape), train=False
+    )
     model_state, params = variables.pop("params")
     params = params.unfreeze()
 
@@ -369,40 +396,63 @@ def prepare_audio_model(
   else:
     std_to_fwhm = jnp.sqrt(2 * jnp.log(2)) / jnp.pi
     optimizer, rename_params, inverse_rename_params = prepare_optimizer(
-        optimizer_config, total_steps, params)
+        optimizer_config, total_steps, params
+    )
     optimizer = optax.chain(
         optimizer,
         optax.masked(
             classifier.project(0.0, 1.0),
-            classifier.mask_by_name("spcen_smoothing_coef", params)),
+            classifier.mask_by_name("spcen_smoothing_coef", params),
+        ),
         optax.masked(
             classifier.project(0.0, jnp.pi),
-            classifier.mask_by_name("gabor_mean", params)),
+            classifier.mask_by_name("gabor_mean", params),
+        ),
         optax.masked(
             classifier.project(0.0, jnp.pi),
-            classifier.mask_by_name("gabor_mean", params)),
+            classifier.mask_by_name("gabor_mean", params),
+        ),
         optax.masked(
-            classifier.project(4 * std_to_fwhm,
-                               model.frontend.kernel_size * std_to_fwhm),
-            classifier.mask_by_name("gabor_std", params)),
+            classifier.project(
+                4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm
+            ),
+            classifier.mask_by_name("gabor_std", params),
+        ),
         optax.masked(
             zero_grads(),
-            mask_parameters(params, optimizer_config.trainable_params_strategy,
-                            model)),
+            mask_parameters(
+                params, optimizer_config.trainable_params_strategy, model
+            ),
+        ),
     )
     opt_state = optimizer.init(params)
   model_bundle = ModelBundle(model, optimizer)
-  return (model_bundle, params, model_state, opt_state, rename_params,
-          inverse_rename_params)
+  return (
+      model_bundle,
+      params,
+      model_state,
+      opt_state,
+      rename_params,
+      inverse_rename_params,
+  )
 
 
 def prepare_image_model(
     model_config: config_dict.ConfigDict,
-    optimizer_config: Optional[config_dict.ConfigDict], total_steps: int,
-    rng_seed: int, pretrained: bool, target_class_list: str, **_
-) -> tuple[ModelBundle, scope.VariableDict, scope.FrozenVariableDict,
-           Optional[scope.FrozenVariableDict], Callable[
-               [Any, Any, str], Any], Callable[[Any], Any]]:
+    optimizer_config: Optional[config_dict.ConfigDict],
+    total_steps: int,
+    rng_seed: int,
+    pretrained: bool,
+    target_class_list: str,
+    **_,
+) -> tuple[
+    ModelBundle,
+    scope.VariableDict,
+    scope.FrozenVariableDict,
+    Optional[scope.FrozenVariableDict],
+    Callable[[Any, Any, str], Any],
+    Callable[[Any], Any],
+]:
   """Prepare an image model for source-free domain adaptation.
 
   Args:
@@ -429,21 +479,29 @@ def prepare_image_model(
   """
   data_info = data_utils.get_metadata(target_class_list)
   model = models.MODEL_REGISTRY[model_config.encoder](
-      num_classes=data_info["num_classes"])
-  if (optimizer_config is not None and
-      optimizer_config.mult_learning_rate_resnet_base != 1 and
-      model_config.encoder != models.ImageModelName.NRC_RESNET):
-    raise ValueError("Setting `mult_learning_rate_resnet_base` in "
-                     "`optimizer_config` to be != 1 is only supported for "
-                     "the `nrc_resnet` encoder but the current "
-                     "encoder is {}.".format(model_config.encoder))
+      num_classes=data_info["num_classes"]
+  )
+  if (
+      optimizer_config is not None
+      and optimizer_config.mult_learning_rate_resnet_base != 1
+      and model_config.encoder != models.ImageModelName.NRC_RESNET
+  ):
+    raise ValueError(
+        "Setting `mult_learning_rate_resnet_base` in "
+        "`optimizer_config` to be != 1 is only supported for "
+        "the `nrc_resnet` encoder but the current "
+        "encoder is {}.".format(model_config.encoder)
+    )
   if pretrained:
     variables = model.load_ckpt(target_class_list)
   else:
     input_shape = (data_info["resolution"], data_info["resolution"], 3)
     variables = model.init(
-        jax.random.PRNGKey(rng_seed), jnp.zeros((1,) + input_shape), False,
-        False)
+        jax.random.PRNGKey(rng_seed),
+        jnp.zeros((1,) + input_shape),
+        False,
+        False,
+    )
   model_state, params = variables.pop("params")
   params = params.unfreeze()
 
@@ -455,18 +513,30 @@ def prepare_image_model(
     inverse_rename_params = identity_rename
   else:
     optimizer, rename_params, inverse_rename_params = prepare_optimizer(
-        optimizer_config, total_steps, params)
+        optimizer_config, total_steps, params
+    )
     renamed_params = rename_params(params, {}, "")
     optimizer = optax.chain(
         optimizer,
         optax.masked(
             zero_grads(),
-            mask_parameters(renamed_params,
-                            optimizer_config.trainable_params_strategy, model)))
+            mask_parameters(
+                renamed_params,
+                optimizer_config.trainable_params_strategy,
+                model,
+            ),
+        ),
+    )
     opt_state = optimizer.init(renamed_params)
   model_bundle = ModelBundle(model, optimizer)
-  return (model_bundle, params, model_state, opt_state, rename_params,
-          inverse_rename_params)
+  return (
+      model_bundle,
+      params,
+      model_state,
+      opt_state,
+      rename_params,
+      inverse_rename_params,
+  )
 
 
 def zero_grads() -> optax.GradientTransformation:

@@ -28,6 +28,7 @@ from jax import numpy as jnp
 
 class EfficientNetModel(enum.Enum):
   """Different variants of EfficientNet."""
+
   B0 = "b0"
   B1 = "b1"
   B2 = "b2"
@@ -42,6 +43,7 @@ class EfficientNetModel(enum.Enum):
 
 class EfficientNetStage(NamedTuple):
   """Definition of a single stage in EfficientNet."""
+
   num_blocks: int
   features: int
   kernel_size: tuple[int, int]
@@ -68,6 +70,7 @@ REDUCTION_RATIO = 4
 
 class EfficientNetScaling(NamedTuple):
   """Scaling for different model variants."""
+
   width_coefficient: float
   depth_coefficient: float
   dropout_rate: float
@@ -87,14 +90,15 @@ SCALINGS = {
 }
 
 
-def round_features(features: int,
-                   width_coefficient: float,
-                   depth_divisor: int = 8) -> int:
+def round_features(
+    features: int, width_coefficient: float, depth_divisor: int = 8
+) -> int:
   """Round number of filters based on width multiplier."""
   features *= width_coefficient
   new_features = max(
       depth_divisor,
-      int(features + depth_divisor / 2) // depth_divisor * depth_divisor)
+      int(features + depth_divisor / 2) // depth_divisor * depth_divisor,
+  )
   if new_features < 0.9 * features:
     new_features += depth_divisor
   return int(new_features)
@@ -114,11 +118,13 @@ class Stem(nn.Module):
   Attributes:
     features: The number of filters.
   """
+
   features: int
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray,
-               use_running_average: bool) -> jnp.ndarray:
+  def __call__(
+      self, inputs: jnp.ndarray, use_running_average: bool
+  ) -> jnp.ndarray:
     """Applies the first step of EfficientNet to the inputs.
 
     Args:
@@ -134,8 +140,8 @@ class Stem(nn.Module):
         kernel_size=(3, 3),
         strides=2,
         use_bias=False,
-        padding="VALID")(
-            inputs)
+        padding="VALID",
+    )(inputs)
     x = nn.BatchNorm(use_running_average=use_running_average)(x)
     x = nn.swish(x)
     return x
@@ -150,11 +156,13 @@ class Head(nn.Module):
   Attributes:
     features: The number of filters.
   """
+
   features: int
 
   @nn.compact
-  def __call__(self, inputs: jnp.ndarray,
-               use_running_average: bool) -> jnp.ndarray:
+  def __call__(
+      self, inputs: jnp.ndarray, use_running_average: bool
+  ) -> jnp.ndarray:
     """Applies the last step of EfficientNet to the inputs.
 
     Args:
@@ -166,8 +174,8 @@ class Head(nn.Module):
       A JAX array of `(batch size, height, width, features)`.
     """
     x = nn.Conv(
-        features=self.features, kernel_size=(1, 1), strides=1, use_bias=False)(
-            inputs)
+        features=self.features, kernel_size=(1, 1), strides=1, use_bias=False
+    )(inputs)
     x = nn.BatchNorm(use_running_average=use_running_average)(x)
     x = nn.swish(x)
     return x
@@ -185,6 +193,7 @@ class EfficientNet(nn.Module):
     head: Optional Flax module to use as custom head.
     stem: Optional Flax module to use as custom stem.
   """
+
   model: EfficientNetModel
   include_top: bool = True
   survival_probability: float = 0.8
@@ -192,10 +201,12 @@ class EfficientNet(nn.Module):
   stem: Optional[nn.Module] = None
 
   @nn.compact
-  def __call__(self,
-               inputs: jnp.ndarray,
-               train: bool,
-               use_running_average: Optional[bool] = None) -> jnp.ndarray:
+  def __call__(
+      self,
+      inputs: jnp.ndarray,
+      train: bool,
+      use_running_average: Optional[bool] = None,
+  ) -> jnp.ndarray:
     """Applies EfficientNet to the inputs.
 
     Note that this model does not include the final pooling and fully connected
@@ -239,7 +250,8 @@ class EfficientNet(nn.Module):
             kernel_size=stage.kernel_size,
             activation=nn.swish,
             batch_norm=True,
-            reduction_ratio=REDUCTION_RATIO)
+            reduction_ratio=REDUCTION_RATIO,
+        )
         y = mbconv(x, use_running_average=use_running_average)
 
         # Stochastic depth
@@ -247,8 +259,8 @@ class EfficientNet(nn.Module):
           y = nn.Dropout(
               1 - self.survival_probability,
               broadcast_dims=(1, 2, 3),
-              deterministic=not train)(
-                  y)
+              deterministic=not train,
+          )(y)
 
         # Skip connections
         x = y if block == 0 else y + x

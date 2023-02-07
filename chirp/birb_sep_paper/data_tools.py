@@ -37,8 +37,10 @@ def LoadAudio(audio_path, target_sr):
     raise Exception('wrong file format, please use .wav')
 
   if sr != target_sr:
-    raise Exception('got wrong sample rate (%s vs %s) from converted file: %s' %
-                    (sr, target_sr, audio_path))
+    raise Exception(
+        'got wrong sample rate (%s vs %s) from converted file: %s'
+        % (sr, target_sr, audio_path)
+    )
   return audio, metadata
 
 
@@ -50,7 +52,7 @@ def CenteredRepeatPad(audio, target_length):
     padded = np.concatenate([audio, padded, audio])
   midpoint = padded.shape[0] // 2
   start = midpoint - target_length // 2
-  padded = padded[start:start + target_length]
+  padded = padded[start : start + target_length]
   return padded
 
 

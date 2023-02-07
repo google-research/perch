@@ -49,18 +49,29 @@ class VisDaC(tfds.core.GeneratorBasedBuilder):
         builder=self,
         description=_DESCRIPTION,
         features=tfds.features.FeaturesDict({
-            'image':
-                tfds.features.Image(),
-            'label':
-                tfds.features.ClassLabel(names=[
-                    'aeroplane', 'bicycle', 'bus', 'car', 'horse', 'knife',
-                    'motorcycle', 'person', 'plant', 'skateboard', 'train',
-                    'truck'
-                ]),
+            'image': tfds.features.Image(),
+            'label': tfds.features.ClassLabel(
+                names=[
+                    'aeroplane',
+                    'bicycle',
+                    'bus',
+                    'car',
+                    'horse',
+                    'knife',
+                    'motorcycle',
+                    'person',
+                    'plant',
+                    'skateboard',
+                    'train',
+                    'truck',
+                ]
+            ),
         }),
         supervised_keys=('image', 'label'),
-        homepage=('https://github.com/VisionLearningGroup/taskcv-2017-public/'
-                  'tree/master/classification'),
+        homepage=(
+            'https://github.com/VisionLearningGroup/taskcv-2017-public/'
+            'tree/master/classification'
+        ),
         citation=_CITATION,
     )
 
@@ -70,11 +81,10 @@ class VisDaC(tfds.core.GeneratorBasedBuilder):
         'validation': self.VALIDATION_DATA_URL,
     })
     return {
-        'train':
-            self._generate_examples(data_path=paths['train'] / 'train'),
-        'validation':
-            self._generate_examples(data_path=paths['validation'] / 'validation'
-                                   ),
+        'train': self._generate_examples(data_path=paths['train'] / 'train'),
+        'validation': self._generate_examples(
+            data_path=paths['validation'] / 'validation'
+        ),
     }
 
   def _generate_examples(self, data_path):

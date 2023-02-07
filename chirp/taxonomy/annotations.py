@@ -34,6 +34,7 @@ class TimeWindowAnnotation:
     namespace: The namespace of the classes in this annotation.
     label: List of classes present in the audio segment.
   """
+
   filename: str
   start_time_s: float
   end_time_s: float
@@ -42,9 +43,11 @@ class TimeWindowAnnotation:
 
 
 def annotations_to_dataframe(
-    annotations: Sequence[TimeWindowAnnotation]) -> pd.DataFrame:
+    annotations: Sequence[TimeWindowAnnotation],
+) -> pd.DataFrame:
   return pd.DataFrame.from_records(
-      [dataclasses.asdict(anno) for anno in annotations])
+      [dataclasses.asdict(anno) for anno in annotations]
+  )
 
 
 def write_annotations_csv(filepath, annotations):
@@ -67,7 +70,8 @@ def read_dataset_annotations_csvs(
     start_time_fn: Callable[[dict[str, str]], float],
     end_time_fn: Callable[[dict[str, str]], float],
     filter_fn: Optional[Callable[[dict[str, str]], bool]] = None,
-    delimiter: str = ',') -> Sequence[TimeWindowAnnotation]:
+    delimiter: str = ',',
+) -> Sequence[TimeWindowAnnotation]:
   """Create annotations from a random CSV.
 
   Args:
@@ -98,5 +102,6 @@ def read_dataset_annotations_csvs(
         end = end_time_fn(row)
         classes = class_fn(row)
         annotations.append(
-            TimeWindowAnnotation(filename, start, end, namespace, classes))
+            TimeWindowAnnotation(filename, start, end, namespace, classes)
+        )
   return annotations

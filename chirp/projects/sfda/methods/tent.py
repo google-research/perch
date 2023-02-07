@@ -22,16 +22,19 @@ from clu import metrics as clu_metrics
 class Tent(adapt.SFDAMethod):
   """Test-time entropy minimization method."""
 
-  _CITATION = ('Wang, Dequan, et al. "Tent: Fully test-time adaptation by '
-               'entropy minimization." ICLR (2021).')
+  _CITATION = (
+      'Wang, Dequan, et al. "Tent: Fully test-time adaptation by '
+      'entropy minimization." ICLR (2021).'
+  )
 
-  def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> type[clu_metrics.Collection]:
+  def get_adaptation_metrics(
+      self, supervised: bool, multi_label: bool, **method_kwargs
+  ) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation."""
 
     metrics_dict = vars(
-        adapt.get_common_metrics(
-            supervised=supervised, multi_label=multi_label))['__annotations__']
+        adapt.get_common_metrics(supervised=supervised, multi_label=multi_label)
+    )['__annotations__']
     if multi_label:
       entropy_fn = losses.label_binary_ent
     else:

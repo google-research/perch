@@ -35,14 +35,19 @@ class PseudoLabel(adapt.SFDAMethod):
   _CITATION = (
       "Lee, Dong-Hyun. 'Pseudo-label: The simple and efficient semi-supervised"
       " learning method for deep neural networks.' Workshop on challenges in "
-      "representation learning, ICML. Vol. 3. No. 2. 2013.")
+      "representation learning, ICML. Vol. 3. No. 2. 2013."
+  )
 
   def before_iter(
-      self, key: jax.random.PRNGKeyArray, batch: dict[str, np.ndarray],
+      self,
+      key: jax.random.PRNGKeyArray,
+      batch: dict[str, np.ndarray],
       adaptation_state: adapt.AdaptationState,
-      model_bundle: model_utils.ModelBundle, modality: adapt.Modality,
+      model_bundle: model_utils.ModelBundle,
+      modality: adapt.Modality,
       multi_label: bool,
-      **method_kwargs) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
+      **method_kwargs
+  ) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
     """Compute the pseudo-labels for the current batch.
 
     Low-confidence samples are masked out when computing the loss. We hereby
@@ -75,15 +80,18 @@ class PseudoLabel(adapt.SFDAMethod):
     )
     logit2proba = nn.sigmoid if multi_label else nn.softmax
     probabilities = logit2proba(
-        model_output.label)  # [1, batch_size, num_classes]
+        model_output.label
+    )  # [1, batch_size, num_classes]
     if multi_label:
       # In the multi-label case, given that each class is treated indepently,
       # we perform masking at a "class level", meaning that within one sample,
       # all class probabilities above a certain threshold will contribute to
       # the loss.
-      pseudo_label = (probabilities >
-                      method_kwargs["confidence_threshold"]).astype(
-                          jnp.float32)  # [batch_size, num_classes]
+      pseudo_label = (
+          probabilities > method_kwargs["confidence_threshold"]
+      ).astype(
+          jnp.float32
+      )  # [batch_size, num_classes]
       pseudo_label_mask = pseudo_label
     else:
       # In the single-label case, we perform masking at a "sample level",
@@ -94,33 +102,39 @@ class PseudoLabel(adapt.SFDAMethod):
       )  # [batch_size]
       num_classes = probabilities.shape[-1]
       pseudo_label = nn.one_hot(
-          jnp.argmax(probabilities, axis=-1), num_classes, axis=-1)
+          jnp.argmax(probabilities, axis=-1), num_classes, axis=-1
+      )
 
     return adaptation_state, {
         "pseudo_label": pseudo_label,
-        "pseudo_label_mask": pseudo_label_mask
+        "pseudo_label_mask": pseudo_label_mask,
     }
 
-  def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> type[clu_metrics.Collection]:
+  def get_adaptation_metrics(
+      self, supervised: bool, multi_label: bool, **method_kwargs
+  ) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation."""
     metrics_dict = vars(
-        adapt.get_common_metrics(
-            supervised=supervised, multi_label=multi_label))["__annotations__"]
+        adapt.get_common_metrics(supervised=supervised, multi_label=multi_label)
+    )["__annotations__"]
 
-    def single_label_loss_fn(probabilities, pseudo_label, pseudo_label_mask,
-                             **_):
+    def single_label_loss_fn(
+        probabilities, pseudo_label, pseudo_label_mask, **_
+    ):
       pl_xent = losses.label_xent(
           probabilities=probabilities,
           label=pseudo_label,
-          sample_mask=pseudo_label_mask)
+          sample_mask=pseudo_label_mask,
+      )
       return pl_xent
 
-    def multi_label_loss_fn(probabilities: jnp.ndarray,
-                            pseudo_label: jnp.ndarray,
-                            pseudo_label_mask: jnp.ndarray,
-                            label_mask: jnp.ndarray, **_):
-
+    def multi_label_loss_fn(
+        probabilities: jnp.ndarray,
+        pseudo_label: jnp.ndarray,
+        pseudo_label_mask: jnp.ndarray,
+        label_mask: jnp.ndarray,
+        **_
+    ):
       # Sample's probabilities that end up contributing to the final computation
       # are those left unmasked by label_mask (defined by the target domain and
       # restricting the set of possible species) and are confident enough (

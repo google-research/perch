@@ -51,7 +51,9 @@ class WNDense(nn.Dense):
       kernel_g = super().param('kernel_g', init_fn, *(param_shape, param_dtype))
       scale = jnp.sqrt(
           jnp.square(kernel_v).sum(
-              tuple(range(kernel_v.ndim - 1)), keepdims=True))
+              tuple(range(kernel_v.ndim - 1)), keepdims=True
+          )
+      )
       return kernel_g * kernel_v / scale
     else:
       return super().param(name, init_fn, *init_args)
@@ -64,7 +66,6 @@ class NRCResNet(resnet.ResNet):
 
   @nn.compact
   def __call__(self, x, train: bool, use_running_average: bool):
-
     # There *is* a computational difference between using padding='SAME' and
     # padding=1 for strided 3x3 convolutions, and to maintain compatibility
     # with the PyTorch implementation of ResNet we need to pass padding=1 rather
@@ -72,7 +73,8 @@ class NRCResNet(resnet.ResNet):
     def conv(*args, **kwargs):
       if args[1] == (3, 3):
         fn = functools.partial(
-            self.conv, use_bias=False, padding=1, dtype=self.dtype)
+            self.conv, use_bias=False, padding=1, dtype=self.dtype
+        )
       else:
         fn = functools.partial(self.conv, use_bias=False, dtype=self.dtype)
       return fn(*args, **kwargs)
@@ -82,13 +84,16 @@ class NRCResNet(resnet.ResNet):
         use_running_average=use_running_average,
         momentum=0.9,
         epsilon=1e-5,
-        dtype=self.dtype)
+        dtype=self.dtype,
+    )
 
     x = conv(
-        self.num_filters, (7, 7), (2, 2),
+        self.num_filters,
+        (7, 7),
+        (2, 2),
         padding=[(3, 3), (3, 3)],
-        name='conv_init')(
-            x)
+        name='conv_init',
+    )(x)
     x = norm(name='bn_init')(x)
     x = nn.relu(x)
     x = nn.max_pool(x, (3, 3), strides=(2, 2), padding=((1, 1), (1, 1)))
@@ -100,8 +105,8 @@ class NRCResNet(resnet.ResNet):
             strides=strides,
             conv=conv,
             norm=norm,
-            act=self.act)(
-                x)
+            act=self.act,
+        )(x)
     x = jnp.mean(x, axis=(1, 2))
 
     x = nn.Dense(self.bottleneck_width, name='bottleneck_dense')(x)
@@ -141,12 +146,14 @@ class NRCResNet(resnet.ResNet):
       # just created.
       return epath.Path('')
     else:
-      raise NotImplementedError('No pretrained checkpoint available for '
-                                f'dataset {dataset_name}.')
+      raise NotImplementedError(
+          f'No pretrained checkpoint available for dataset {dataset_name}.'
+      )
 
   @staticmethod
-  def get_input_pipeline(data_builder: tfds.core.DatasetBuilder, split: str,
-                         **kwargs) -> tf.data.Dataset:
+  def get_input_pipeline(
+      data_builder: tfds.core.DatasetBuilder, split: str, **kwargs
+  ) -> tf.data.Dataset:
     image_size = kwargs['image_size']
     padded_image_size = image_size + resnet.CROP_PADDING
     dtype = tf.float32
@@ -157,19 +164,24 @@ class NRCResNet(resnet.ResNet):
 
       # Resize and crop.
       image = example['image']
-      image = tf.image.resize([image], [padded_image_size, padded_image_size],
-                              method=tf.image.ResizeMethod.BILINEAR)[0]
+      image = tf.image.resize(
+          [image],
+          [padded_image_size, padded_image_size],
+          method=tf.image.ResizeMethod.BILINEAR,
+      )[0]
       image = tf.image.central_crop(image, image_size / padded_image_size)
 
       # Reshape and normalize.
       image = tf.reshape(image, [image_size, image_size, 3])
       image -= tf.constant(resnet.MEAN_RGB, shape=[1, 1, 3], dtype=image.dtype)
       image /= tf.constant(
-          resnet.STDDEV_RGB, shape=[1, 1, 3], dtype=image.dtype)
+          resnet.STDDEV_RGB, shape=[1, 1, 3], dtype=image.dtype
+      )
       image = tf.image.convert_image_dtype(image, dtype=dtype)
 
-      label = tf.one_hot(example['label'],
-                         data_builder.info.features['label'].num_classes)
+      label = tf.one_hot(
+          example['label'], data_builder.info.features['label'].num_classes
+      )
 
       return {'image': image, 'label': label, 'tfds_id': example['tfds_id']}
 
@@ -179,13 +191,15 @@ class NRCResNet(resnet.ResNet):
     dataset = dataset.with_options(options)
 
     dataset = dataset.map(
-        process_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        process_example, num_parallel_calls=tf.data.experimental.AUTOTUNE
+    )
 
     return dataset
 
 
-def _to_variables(state_dict: dict[str, np.ndarray],
-                  dataset_name: str) -> flax.core.scope.FrozenVariableDict:
+def _to_variables(
+    state_dict: dict[str, np.ndarray], dataset_name: str
+) -> flax.core.scope.FrozenVariableDict:
   """Translates a PyTorch-style state dictionnary into a FrozenVariableDict.
 
   Args:
@@ -213,42 +227,48 @@ def _to_variables(state_dict: dict[str, np.ndarray],
   renames = [
       # Groups and blocks
       functools.partial(
-          re.compile(r'^F\.layer(\d*)\.(\d*)\.').sub,
-          repl=_match_to_block_name),
+          re.compile(r'^F\.layer(\d*)\.(\d*)\.').sub, repl=_match_to_block_name
+      ),
       # Initial convolution
       functools.partial(re.compile(r'^F\.conv1').sub, repl=r'conv_init'),
       # Initial normalization
       functools.partial(re.compile(r'^F\.bn1').sub, repl=r'bn_init'),
       # Bottleneck
       functools.partial(
-          re.compile(r'^B\.bottleneck').sub, repl=r'bottleneck_dense'),
+          re.compile(r'^B\.bottleneck').sub, repl=r'bottleneck_dense'
+      ),
       functools.partial(re.compile(r'^B\.bn').sub, repl=r'bottleneck_bn'),
       # Output layer
       functools.partial(re.compile(r'^C\.fc').sub, repl=r'WNDense_0'),
       # Convolutional layers
       functools.partial(
           re.compile(r'conv(\d)').sub,
-          repl=lambda m: f'Conv_{int(m.group(1)) - 1}'),
+          repl=lambda m: f'Conv_{int(m.group(1)) - 1}',
+      ),
       # Normalization layers
       functools.partial(
           re.compile(r'bn(\d)').sub,
-          repl=lambda m: f'BatchNorm_{int(m.group(1)) - 1}'),
+          repl=lambda m: f'BatchNorm_{int(m.group(1)) - 1}',
+      ),
       # Downsampling layers
       functools.partial(
           re.compile(r'downsample\.(\d)').sub,
-          repl=lambda m: 'norm_proj' if int(m.group(1)) else 'conv_proj'),
+          repl=lambda m: 'norm_proj' if int(m.group(1)) else 'conv_proj',
+      ),
       # Normalization scaling coefficients. All other renamings of 'weight' map
       # to 'kernel', so we perform this renaming first.
       functools.partial(
-          re.compile(r'BatchNorm_(\d)\.weight').sub,
-          repl=r'BatchNorm_\1.scale'),
+          re.compile(r'BatchNorm_(\d)\.weight').sub, repl=r'BatchNorm_\1.scale'
+      ),
       functools.partial(
-          re.compile(r'bn_init\.weight').sub, repl=r'bn_init.scale'),
+          re.compile(r'bn_init\.weight').sub, repl=r'bn_init.scale'
+      ),
       functools.partial(
-          re.compile(r'norm_proj\.weight').sub, repl=r'norm_proj.scale'),
+          re.compile(r'norm_proj\.weight').sub, repl=r'norm_proj.scale'
+      ),
       functools.partial(
-          re.compile(r'bottleneck_bn\.weight').sub,
-          repl=r'bottleneck_bn.scale'),
+          re.compile(r'bottleneck_bn\.weight').sub, repl=r'bottleneck_bn.scale'
+      ),
       # Convolutional kernels
       functools.partial(re.compile(r'weight').sub, repl=r'kernel'),
       # Batch statistics
@@ -279,7 +299,8 @@ def _to_variables(state_dict: dict[str, np.ndarray],
     # strings, which we take advantage of by splitting the keys by the '.'
     # character.
     flat_dict = (
-        flat_batch_stats if 'mean' in key or 'var' in key else flat_params)
+        flat_batch_stats if 'mean' in key or 'var' in key else flat_params
+    )
     flat_dict[tuple(key.split('.'))] = value
 
   return flax.core.freeze({
@@ -289,6 +310,5 @@ def _to_variables(state_dict: dict[str, np.ndarray],
 
 
 NRCResNet101 = functools.partial(
-    NRCResNet,
-    stage_sizes=[3, 4, 23, 3],
-    block_cls=resnet.BottleneckResNetBlock)
+    NRCResNet, stage_sizes=[3, 4, 23, 3], block_cls=resnet.BottleneckResNetBlock
+)

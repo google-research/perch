@@ -24,6 +24,7 @@ from chirp.projects.sfda.models.wideresnet import WideResNet2810
 
 class ImageModelName(enum.Enum):
   """Supported model architectures for image experiments."""
+
   RESNET = "resnet"
   NRC_RESNET = "nrc_resnet"
   WIDERESNET = "wideresnet"

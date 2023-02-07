@@ -63,18 +63,21 @@ def _swap_initial_and_time_axes(tensor):
     return tf.transpose(tensor, perm)
 
   return tf.cond(
-      rank < 3, true_fn=return_original_tensor, false_fn=return_permuted_tensor)
+      rank < 3, true_fn=return_original_tensor, false_fn=return_permuted_tensor
+  )
 
 
-def fixed_pcen(filterbank_energy,
-               alpha,
-               smooth_coef,
-               delta=2.0,
-               root=2.0,
-               floor=1e-6,
-               name=None,
-               streaming=False,
-               state=None):
+def fixed_pcen(
+    filterbank_energy,
+    alpha,
+    smooth_coef,
+    delta=2.0,
+    root=2.0,
+    floor=1e-6,
+    name=None,
+    streaming=False,
+    state=None,
+):
   """Per-Channel Energy Normalization (PCEN) with fixed parameters.
 
   See https://arxiv.org/abs/1607.05666 for details.
@@ -109,7 +112,8 @@ def fixed_pcen(filterbank_energy,
     alpha = tf.convert_to_tensor(alpha, filterbank_energy.dtype, name='alpha')
     alpha.shape.with_rank_at_most(1)
     smooth_coef = tf.convert_to_tensor(
-        smooth_coef, filterbank_energy.dtype, name='smoothing_coefficient')
+        smooth_coef, filterbank_energy.dtype, name='smoothing_coefficient'
+    )
     smooth_coef.shape.assert_has_rank(0)
     delta = tf.convert_to_tensor(delta, filterbank_energy.dtype, name='delta')
     delta.shape.with_rank_at_most(1)
@@ -122,7 +126,8 @@ def fixed_pcen(filterbank_energy,
     transposed_energy = _swap_initial_and_time_axes(filterbank_energy)
     timesteps = tf.shape(transposed_energy)[0]
     filterbank_energy_ta = tf.TensorArray(
-        filterbank_energy.dtype, size=timesteps, clear_after_read=False)
+        filterbank_energy.dtype, size=timesteps, clear_after_read=False
+    )
     filterbank_energy_ta = filterbank_energy_ta.unstack(transposed_energy)
 
     def compute_smoother():
@@ -137,25 +142,28 @@ def fixed_pcen(filterbank_energy,
         return t < timesteps
 
       def _body(t, smoother_ta, prev_ret):
-        cur_ret = ((1.0 - smooth_coef) * prev_ret +
-                   smooth_coef * filterbank_energy_ta.read(t))
+        cur_ret = (
+            1.0 - smooth_coef
+        ) * prev_ret + smooth_coef * filterbank_energy_ta.read(t)
         smoother_ta = smoother_ta.write(t, cur_ret)
         return t + 1, smoother_ta, cur_ret
 
       smoother_ta = tf.TensorArray(
-          filterbank_energy.dtype, timesteps, clear_after_read=False)
+          filterbank_energy.dtype, timesteps, clear_after_read=False
+      )
       _, smoother_ta, final_smoother = tf.while_loop(
           _cond,
           _body,
-          loop_vars=[tf.constant(0, tf.int32), smoother_ta, init_smoother])
+          loop_vars=[tf.constant(0, tf.int32), smoother_ta, init_smoother],
+      )
       return _swap_initial_and_time_axes(smoother_ta.stack()), final_smoother
 
     smoother, final_state = compute_smoother()
 
-    one_over_root = 1. / root
-    pcen = ((filterbank_energy /
-             (floor + smoother)**alpha + delta)**one_over_root -
-            delta**one_over_root)
+    one_over_root = 1.0 / root
+    pcen = (
+        filterbank_energy / (floor + smoother) ** alpha + delta
+    ) ** one_over_root - delta**one_over_root
 
     if streaming:
       return pcen, final_state

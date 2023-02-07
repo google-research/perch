@@ -33,7 +33,8 @@ class PoolingTest(absltest.TestCase):
 
     inputs = jnp.reshape(
         jnp.arange(num_channels * num_steps, dtype=jnp.float32),
-        (num_channels, num_steps))
+        (num_channels, num_steps),
+    )
     inputs = inputs.T[jnp.newaxis]
 
     window_pool = pooling.WindowPool(
@@ -41,7 +42,8 @@ class PoolingTest(absltest.TestCase):
         window_size=window_size,
         window_init=functools.partial(pooling.gaussian_init, std=5.0),
         stride=window_size,
-        padding="VALID")
+        padding="VALID",
+    )
 
     rng = random.PRNGKey(0)
     variables = window_pool.init(rng, inputs)

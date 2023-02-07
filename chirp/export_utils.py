@@ -27,13 +27,15 @@ import tensorflow as tf
 class Jax2TfModelWrapper(tf.Module):
   """Wrapper for Jax models for exporting with variable input shape."""
 
-  def __init__(self,
-               infer_fn,
-               jax_params,
-               input_shape: Sequence[Optional[int]],
-               enable_xla: bool = False,
-               coord_ids: str = 'bt',
-               name=None):
+  def __init__(
+      self,
+      infer_fn,
+      jax_params,
+      input_shape: Sequence[Optional[int]],
+      enable_xla: bool = False,
+      coord_ids: str = 'bt',
+      name=None,
+  ):
     """Initialize the wrapper.
 
     Args:
@@ -68,13 +70,16 @@ class Jax2TfModelWrapper(tf.Module):
         infer_fn,
         enable_xla=enable_xla,
         with_gradient=False,
-        polymorphic_shapes=[jp_shape, None])
+        polymorphic_shapes=[jp_shape, None],
+    )
     infer_partial = lambda inputs: converted_infer_fn(  # pylint:disable=g-long-lambda
-        inputs, self._structured_variables)
+        inputs, self._structured_variables
+    )
     self.infer_tf = tf.function(
         infer_partial,
         jit_compile=True,
-        input_signature=[tf.TensorSpec(input_shape)])
+        input_signature=[tf.TensorSpec(input_shape)],
+    )
     logging.info('Jax2TfModelWrapper initialized.')
 
   def __call__(self, inputs):
@@ -95,7 +100,8 @@ class Jax2TfModelWrapper(tf.Module):
       workdir: str,
       train_step: int,
       class_lists: Optional[dict[str, namespace.ClassList]] = None,
-      export_tf_lite: bool = True):
+      export_tf_lite: bool = True,
+  ):
     """Export converted TF models."""
     fake_inputs = self.get_tf_zero_inputs()
     logging.info('Creating concrete function...')
@@ -103,9 +109,11 @@ class Jax2TfModelWrapper(tf.Module):
 
     logging.info('Saving TF SavedModel...')
     tf.saved_model.save(
-        self, os.path.join(workdir, 'savedmodel'), signatures=concrete_fn)
+        self, os.path.join(workdir, 'savedmodel'), signatures=concrete_fn
+    )
     with tf.io.gfile.GFile(
-        os.path.join(workdir, 'savedmodel', 'ckpt.txt'), 'w') as f:
+        os.path.join(workdir, 'savedmodel', 'ckpt.txt'), 'w'
+    ) as f:
       f.write(f'train_state.step: {train_step}\n')
 
     logging.info('Writing class lists...')
@@ -120,8 +128,9 @@ class Jax2TfModelWrapper(tf.Module):
       return
     # Export TFLite model.
     logging.info('Converting to TFLite...')
-    converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_fn],
-                                                                self)
+    converter = tf.lite.TFLiteConverter.from_concrete_functions(
+        [concrete_fn], self
+    )
 
     converter.target_spec.supported_ops = [
         tf.lite.OpsSet.TFLITE_BUILTINS,  # enable TensorFlow Lite ops.

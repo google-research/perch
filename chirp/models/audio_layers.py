@@ -30,13 +30,14 @@ class RandomLowPassFilter(nn.Module):
     rate: The rate at which random low-pass filters are applied.
     deterministic: If true, no low-pass filters are applied.
   """
+
   rate: float
   deterministic: Optional[bool] = None
 
   @nn.compact
-  def __call__(self,
-               inputs: jnp.ndarray,
-               deterministic: Optional[bool] = None) -> jnp.ndarray:
+  def __call__(
+      self, inputs: jnp.ndarray, deterministic: Optional[bool] = None
+  ) -> jnp.ndarray:
     """Applies a random low-pass filter to a mel-spectrogram.
 
     Args:
@@ -48,15 +49,18 @@ class RandomLowPassFilter(nn.Module):
       Aspectrogram with the same size as the input, possibly with a random
       low-pass filter applied.
     """
-    deterministic = nn.merge_param('deterministic', self.deterministic,
-                                   deterministic)
-    if self.rate == 0. or deterministic:
+    deterministic = nn.merge_param(
+        'deterministic', self.deterministic, deterministic
+    )
+    if self.rate == 0.0 or deterministic:
       return inputs
     rng = self.make_rng('low_pass')
     rate_key, low_pass_key = random.split(rng)
     x = lax.cond(
         random.uniform(rate_key) < self.rate,
         functools.partial(audio_utils.random_low_pass_filter, low_pass_key),
-        lambda x: x, inputs)
+        lambda x: x,
+        inputs,
+    )
 
     return x

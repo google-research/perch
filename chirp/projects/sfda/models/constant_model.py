@@ -23,14 +23,14 @@ import jax.numpy as jnp
 class ConstantEncoderModel(image_model.ImageModel):
   """A toy model, used for testing/debugging purposes only.
 
-    The model contains a trainable head. The encoder part simply returns the
-    raw images, after spatial average-pooling.
+  The model contains a trainable head. The encoder part simply returns the
+  raw images, after spatial average-pooling.
   """
+
   num_classes: int
 
   @nn.compact
   def __call__(self, x, train: bool, use_running_average: bool):
-
     x = jnp.mean(x, axis=(1, 2))
     model_outputs = {}
     model_outputs['embedding'] = x

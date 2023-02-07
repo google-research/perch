@@ -40,17 +40,21 @@ def get_config() -> config_dict.ConfigDict:
       ops=[
           _c("pipeline.Shuffle", shuffle_buffer_size=512),
           _c("pipeline.OnlyJaxTypes"),
-          _c("pipeline.ConvertBirdTaxonomyLabels",
-             source_namespace="ebird2021",
-             target_class_list=target_class_list,
-             add_taxonomic_labels=add_taxonomic_labels),
+          _c(
+              "pipeline.ConvertBirdTaxonomyLabels",
+              source_namespace="ebird2021",
+              target_class_list=target_class_list,
+              add_taxonomic_labels=add_taxonomic_labels,
+          ),
           _c("pipeline.MixAudio", mixin_prob=0.75),
-          _c("pipeline.Batch", batch_size=batch_size,
-             split_across_devices=True),
+          _c(
+              "pipeline.Batch", batch_size=batch_size, split_across_devices=True
+          ),
           _c("pipeline.RandomSlice", window_size=window_size_s),
           _c("pipeline.RandomNormalizeAudio", min_gain=0.15, max_gain=0.25),
           _c("pipeline.Repeat"),
-      ])
+      ],
+  )
   train_dataset_config.split = "train"
   config.train_dataset_config = train_dataset_config
 
@@ -59,15 +63,19 @@ def get_config() -> config_dict.ConfigDict:
       "pipeline.Pipeline",
       ops=[
           _c("pipeline.OnlyJaxTypes"),
-          _c("pipeline.ConvertBirdTaxonomyLabels",
-             source_namespace="ebird2021",
-             target_class_list=target_class_list,
-             add_taxonomic_labels=add_taxonomic_labels),
-          _c("pipeline.Batch", batch_size=batch_size,
-             split_across_devices=True),
+          _c(
+              "pipeline.ConvertBirdTaxonomyLabels",
+              source_namespace="ebird2021",
+              target_class_list=target_class_list,
+              add_taxonomic_labels=add_taxonomic_labels,
+          ),
+          _c(
+              "pipeline.Batch", batch_size=batch_size, split_across_devices=True
+          ),
           _c("pipeline.Slice", window_size=window_size_s, start=0.0),
           _c("pipeline.NormalizeAudio", target_gain=0.2),
-      ])
+      ],
+  )
   eval_dataset_config.split = "train"
   config.eval_dataset_config = eval_dataset_config
 
@@ -91,7 +99,7 @@ def get_config() -> config_dict.ConfigDict:
   conformer_config.ffn_dim_multiplier = 4
   conformer_config.atten_num_heads = 8
   conformer_config.layer_order = "mhsa_before_conv"
-  conformer_config.dropout_prob = 0.
+  conformer_config.dropout_prob = 0.0
   conformer_config.conv_residual_dropout = None
   conformer_config.atten_residual_dropout = None
   conformer_config.ffn_residual_dropout = None
@@ -102,11 +110,12 @@ def get_config() -> config_dict.ConfigDict:
   conformer_config.skip_layer_norm = True
   model_config = config_dict.ConfigDict()
   model_config.late_feature_extractor = config_utils.callable_config(
-      "conformer.Conformer", conformer_config)
+      "conformer.Conformer", conformer_config
+  )
 
   early_fs_config = config_dict.ConfigDict()
   early_fs_config.omit_earlyfs = False
-  early_fs_config.dropout_prob = 0.
+  early_fs_config.dropout_prob = 0.0
   early_fs_config.activation = config_utils.object_config("nn.gelu")
   early_fs_config.num_frames = 500
   early_fs_config.deprecated_group_conv = False
@@ -152,7 +161,8 @@ def get_config() -> config_dict.ConfigDict:
   frontend_config.sample_rate = sample_rate_hz
   frontend_config.freq_range = (60, 10_000)
   frontend_config.scaling_config = config_utils.callable_config(
-      "frontend.PCENScalingConfig")
+      "frontend.PCENScalingConfig"
+  )
   frontend_config.omit_frontend = False
   init_config.frontend_config = frontend_config
 
@@ -160,7 +170,7 @@ def get_config() -> config_dict.ConfigDict:
   model_config.final_dim = 64  # the dim to project *each feature section* (PQ)
   model_config.logit_temp = 0.1
   model_config.alpha = 1.0
-  model_config.taxonomy_loss_weight = 0.
+  model_config.taxonomy_loss_weight = 0.0
   model_config.readout_points = [0, 2, 4, 6, 8, 10, 11]
   model_config.quantizer_points = (6,)
   model_config.stop_gradient_earlyfs = False

@@ -41,7 +41,6 @@ class FakeImageDataset(tfds.core.GeneratorBasedBuilder):
     )
 
   def _generate_examples(self, num_examples):
-
     for i in range(num_examples):
       yield i, {
           'image': np.zeros((12, 12, 3)).astype(np.uint8),

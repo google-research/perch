@@ -35,7 +35,7 @@ _DEPRECATED2NEW = {
 
 def load_birdclef_metadata(
     root: epath.Path,
-    metadata_feature_info: dict[str, soundscapes_lib.MetadataFeature]
+    metadata_feature_info: dict[str, soundscapes_lib.MetadataFeature],
 ) -> pd.DataFrame:
   """The `metadata_load_fn` for Birdclef2019-based configs.
 
@@ -63,27 +63,30 @@ def load_birdclef_metadata(
 def birdclef_metadata_features() -> dict[str, soundscapes_lib.MetadataFeature]:
   """Metadata features to join with BirdClef data."""
   feature_types = {
-      'filename':
-          soundscapes_lib.MetadataFeature('FileName', 'filename', str,
-                                          tfds.features.Text()),
-      'country':
-          soundscapes_lib.MetadataFeature('Country', 'country', str,
-                                          tfds.features.Text()),
-      'longitude':
-          soundscapes_lib.MetadataFeature(
-              'Longitude', 'longitude', float,
-              tfds.features.Scalar(dtype=tf.float32)),
-      'latitude':
-          soundscapes_lib.MetadataFeature(
-              'Latitude', 'latitude', float,
-              tfds.features.Scalar(dtype=tf.float32)),
-      'elevation':
-          soundscapes_lib.MetadataFeature(
-              'Elevation', 'elevation', float,
-              tfds.features.Scalar(dtype=tf.float32)),
-      'recordist':
-          soundscapes_lib.MetadataFeature('AuthorID', 'recordist', str,
-                                          tfds.features.Text()),
+      'filename': soundscapes_lib.MetadataFeature(
+          'FileName', 'filename', str, tfds.features.Text()
+      ),
+      'country': soundscapes_lib.MetadataFeature(
+          'Country', 'country', str, tfds.features.Text()
+      ),
+      'longitude': soundscapes_lib.MetadataFeature(
+          'Longitude',
+          'longitude',
+          float,
+          tfds.features.Scalar(dtype=tf.float32),
+      ),
+      'latitude': soundscapes_lib.MetadataFeature(
+          'Latitude', 'latitude', float, tfds.features.Scalar(dtype=tf.float32)
+      ),
+      'elevation': soundscapes_lib.MetadataFeature(
+          'Elevation',
+          'elevation',
+          float,
+          tfds.features.Scalar(dtype=tf.float32),
+      ),
+      'recordist': soundscapes_lib.MetadataFeature(
+          'AuthorID', 'recordist', str, tfds.features.Text()
+      ),
   }
   return feature_types
 
@@ -103,13 +106,15 @@ def load_caples_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   # Get rid of the one bad label in the dataset...
   filter_fn = lambda row: 'comros' in row['ebird_codes']
   class_fn = lambda row: row['ebird_codes'].split(' ')
-  annos = annotations.read_dataset_annotations_csvs([annotations_path],
-                                                    filename_fn=filename_fn,
-                                                    namespace='ebird2021',
-                                                    class_fn=class_fn,
-                                                    start_time_fn=start_time_fn,
-                                                    end_time_fn=end_time_fn,
-                                                    filter_fn=filter_fn)
+  annos = annotations.read_dataset_annotations_csvs(
+      [annotations_path],
+      filename_fn=filename_fn,
+      namespace='ebird2021',
+      class_fn=class_fn,
+      start_time_fn=start_time_fn,
+      end_time_fn=end_time_fn,
+      filter_fn=filter_fn,
+  )
   segments = annotations.annotations_to_dataframe(annos)
   return segments
 
@@ -124,13 +129,15 @@ def load_birdclef_annotations(annotations_path: epath.Path) -> pd.DataFrame:
       sp.strip().replace('rufant1', 'rufant7')
       for sp in row['ebird_codes'].split(' ')
   ]
-  annos = annotations.read_dataset_annotations_csvs([annotations_path],
-                                                    filename_fn=filename_fn,
-                                                    namespace='ebird2021',
-                                                    class_fn=class_fn,
-                                                    start_time_fn=start_time_fn,
-                                                    end_time_fn=end_time_fn,
-                                                    filter_fn=filter_fn)
+  annos = annotations.read_dataset_annotations_csvs(
+      [annotations_path],
+      filename_fn=filename_fn,
+      namespace='ebird2021',
+      class_fn=class_fn,
+      start_time_fn=start_time_fn,
+      end_time_fn=end_time_fn,
+      filter_fn=filter_fn,
+  )
   segments = annotations.annotations_to_dataframe(annos)
   return segments
 
@@ -146,19 +153,22 @@ def load_ssw_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   ]
   filename_fn = lambda filepath, row: row['Filename'].strip()
 
-  annos = annotations.read_dataset_annotations_csvs([annotations_path],
-                                                    filename_fn=filename_fn,
-                                                    namespace='ebird2021',
-                                                    class_fn=class_fn,
-                                                    start_time_fn=start_time_fn,
-                                                    end_time_fn=end_time_fn,
-                                                    filter_fn=filter_fn)
+  annos = annotations.read_dataset_annotations_csvs(
+      [annotations_path],
+      filename_fn=filename_fn,
+      namespace='ebird2021',
+      class_fn=class_fn,
+      start_time_fn=start_time_fn,
+      end_time_fn=end_time_fn,
+      filter_fn=filter_fn,
+  )
   segments = annotations.annotations_to_dataframe(annos)
   return segments
 
 
-def combine_hawaii_annotations(dataset_path: epath.Path,
-                               output_filepath: epath.Path) -> None:
+def combine_hawaii_annotations(
+    dataset_path: epath.Path, output_filepath: epath.Path
+) -> None:
   """Combine all Hawaii dataset annotations into a single csv."""
   tables = dataset_path.glob('*/*.txt')
   rows = {}
@@ -203,7 +213,8 @@ def load_hawaii_annotations(annotations_path: epath.Path) -> pd.DataFrame:
       class_fn=class_fn,
       start_time_fn=start_time_fn,
       end_time_fn=end_time_fn,
-      filter_fn=filter_fn)
+      filter_fn=filter_fn,
+  )
   segments = annotations.annotations_to_dataframe(annos)
   return segments
 
@@ -218,13 +229,15 @@ def load_sierras_kahl_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   ]
 
   filename_fn = lambda filepath, row: row['Filename'].strip()
-  annos = annotations.read_dataset_annotations_csvs([annotations_path],
-                                                    filename_fn=filename_fn,
-                                                    namespace='ebird2021',
-                                                    class_fn=class_fn,
-                                                    start_time_fn=start_time_fn,
-                                                    end_time_fn=end_time_fn,
-                                                    filter_fn=filter_fn)
+  annos = annotations.read_dataset_annotations_csvs(
+      [annotations_path],
+      filename_fn=filename_fn,
+      namespace='ebird2021',
+      class_fn=class_fn,
+      start_time_fn=start_time_fn,
+      end_time_fn=end_time_fn,
+      filter_fn=filter_fn,
+  )
   segments = annotations.annotations_to_dataframe(annos)
   return segments
 
@@ -238,13 +251,15 @@ def load_peru_annotations(annotations_path: epath.Path) -> pd.DataFrame:
       row['Species eBird Code'].strip().replace('????', 'unknown')
   ]
   filename_fn = lambda filepath, row: row['Filename'].strip()
-  annos = annotations.read_dataset_annotations_csvs([annotations_path],
-                                                    filename_fn=filename_fn,
-                                                    namespace='ebird2021',
-                                                    class_fn=class_fn,
-                                                    start_time_fn=start_time_fn,
-                                                    end_time_fn=end_time_fn,
-                                                    filter_fn=filter_fn)
+  annos = annotations.read_dataset_annotations_csvs(
+      [annotations_path],
+      filename_fn=filename_fn,
+      namespace='ebird2021',
+      class_fn=class_fn,
+      start_time_fn=start_time_fn,
+      end_time_fn=end_time_fn,
+      filter_fn=filter_fn,
+  )
   segments = annotations.annotations_to_dataframe(annos)
   return segments
 
@@ -252,13 +267,20 @@ def load_peru_annotations(annotations_path: epath.Path) -> pd.DataFrame:
 # TODO(tomdenton): Eliminate these 'combine' functions.
 # Reading directly from the set of annotation files will be more direct and
 # less error prone when updating datasets.
-def combine_powdermill_annotations(dataset_path: epath.Path,
-                                   output_filepath: epath.Path) -> None:
+def combine_powdermill_annotations(
+    dataset_path: epath.Path, output_filepath: epath.Path
+) -> None:
   """Combine all Powdermill dataset annotations into a single csv."""
   tables = dataset_path.glob('*/*.txt')
   fieldnames = [
-      'Selection', 'View', 'Channel', 'Begin Time (s)', 'End Time (s)',
-      'High Freq (Hz)', 'Low Freq (Hz)', 'Species'
+      'Selection',
+      'View',
+      'Channel',
+      'Begin Time (s)',
+      'End Time (s)',
+      'High Freq (Hz)',
+      'Low Freq (Hz)',
+      'Species',
   ]
   rows = []
   for table_fp in tables:
@@ -305,6 +327,7 @@ def load_powdermill_annotations(annotations_path: epath.Path) -> pd.DataFrame:
       class_fn=class_fn,
       start_time_fn=start_time_fn,
       end_time_fn=end_time_fn,
-      filter_fn=filter_fn)
+      filter_fn=filter_fn,
+  )
   segments = annotations.annotations_to_dataframe(annos)
   return segments

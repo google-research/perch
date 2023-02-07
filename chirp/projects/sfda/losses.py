@@ -30,14 +30,14 @@ class ReduceStrategy(enum.Enum):
       NONE: No reduction
       AVERAGE: Average reduction
   """
+
   NONE = "none"
   AVERAGE = "average"
 
 
-def label_kl(probabilities: jnp.ndarray,
-             label: jnp.ndarray,
-             eps: float = 1e-10,
-             **_) -> jnp.ndarray:
+def label_kl(
+    probabilities: jnp.ndarray, label: jnp.ndarray, eps: float = 1e-10, **_
+) -> jnp.ndarray:
   """Kulback-Leibler divergence for single-class classification settings.
 
   Args:
@@ -52,9 +52,9 @@ def label_kl(probabilities: jnp.ndarray,
   return label_xent(probabilities, label, eps) - label_ent(probabilities, eps)
 
 
-def label_binary_kl(probabilities: jnp.ndarray,
-                    label: jnp.ndarray,
-                    **_) -> jnp.ndarray:
+def label_binary_kl(
+    probabilities: jnp.ndarray, label: jnp.ndarray, **_
+) -> jnp.ndarray:
   """Kulback-Leibler divergence for multi-class classification settings.
 
   Args:
@@ -65,16 +65,18 @@ def label_binary_kl(probabilities: jnp.ndarray,
     Multi-class Kulback-Leibler divergence between probabilities and label.
     Shape [*, num_classes].
   """
-  return (label_binary_xent(
-      probabilities, label, class_reduce=ReduceStrategy.NONE) -
-          label_binary_ent(probabilities, class_reduce=ReduceStrategy.NONE))
+  return label_binary_xent(
+      probabilities, label, class_reduce=ReduceStrategy.NONE
+  ) - label_binary_ent(probabilities, class_reduce=ReduceStrategy.NONE)
 
 
-def label_xent(probabilities: jnp.ndarray,
-               label: jnp.ndarray,
-               sample_mask: Optional[jnp.ndarray] = None,
-               eps: float = 1e-10,
-               **_) -> jnp.ndarray:
+def label_xent(
+    probabilities: jnp.ndarray,
+    label: jnp.ndarray,
+    sample_mask: Optional[jnp.ndarray] = None,
+    eps: float = 1e-10,
+    **_,
+) -> jnp.ndarray:
   """Cross entropy for single-label classification settings.
 
   Args:
@@ -93,9 +95,9 @@ def label_xent(probabilities: jnp.ndarray,
   return sample_mask * xent
 
 
-def label_ent(probabilities: jnp.ndarray,
-              eps: float = 1e-10,
-              **_) -> jnp.ndarray:
+def label_ent(
+    probabilities: jnp.ndarray, eps: float = 1e-10, **_
+) -> jnp.ndarray:
   """Standard entropy used for single-label classification settings.
 
   Args:
@@ -108,11 +110,13 @@ def label_ent(probabilities: jnp.ndarray,
   return -(probabilities * jnp.log(probabilities + eps)).sum(-1)
 
 
-def label_binary_ent(probabilities: jnp.ndarray,
-                     label_mask: Optional[jnp.ndarray] = None,
-                     eps: float = 1e-10,
-                     class_reduce: ReduceStrategy = ReduceStrategy.AVERAGE,
-                     **_) -> jnp.ndarray:
+def label_binary_ent(
+    probabilities: jnp.ndarray,
+    label_mask: Optional[jnp.ndarray] = None,
+    eps: float = 1e-10,
+    class_reduce: ReduceStrategy = ReduceStrategy.AVERAGE,
+    **_,
+) -> jnp.ndarray:
   """Computes averaged classwise binary entropy.
 
   Args:
@@ -131,26 +135,32 @@ def label_binary_ent(probabilities: jnp.ndarray,
   """
   if label_mask is None:
     label_mask = jnp.ones_like(probabilities)
-  assert probabilities.shape == label_mask.shape, (probabilities.shape,
-                                                   label_mask.shape)
-  binary_entropies = -(probabilities * jnp.log(probabilities + eps) +
-                       (1 - probabilities) * jnp.log((1 - probabilities) + eps)
-                      )  # [..., num_classes]
+  assert probabilities.shape == label_mask.shape, (
+      probabilities.shape,
+      label_mask.shape,
+  )
+  binary_entropies = -(
+      probabilities * jnp.log(probabilities + eps)
+      + (1 - probabilities) * jnp.log((1 - probabilities) + eps)
+  )  # [..., num_classes]
   if class_reduce == ReduceStrategy.AVERAGE:
     return (label_mask * binary_entropies).sum(axis=-1) / (
-        label_mask.sum(axis=-1) + eps)
+        label_mask.sum(axis=-1) + eps
+    )
   elif class_reduce == ReduceStrategy.NONE:
     return label_mask * binary_entropies
   else:
     raise ValueError(f"Unknown reduce strategy {class_reduce} used.")
 
 
-def label_binary_xent(probabilities: jnp.ndarray,
-                      label: jnp.ndarray,
-                      label_mask: Optional[jnp.ndarray] = None,
-                      eps: float = 1e-10,
-                      class_reduce: ReduceStrategy = ReduceStrategy.AVERAGE,
-                      **_) -> jnp.ndarray:
+def label_binary_xent(
+    probabilities: jnp.ndarray,
+    label: jnp.ndarray,
+    label_mask: Optional[jnp.ndarray] = None,
+    eps: float = 1e-10,
+    class_reduce: ReduceStrategy = ReduceStrategy.AVERAGE,
+    **_,
+) -> jnp.ndarray:
   """Computes averaged classwise binary cross-entropy.
 
   Args:
@@ -169,13 +179,18 @@ def label_binary_xent(probabilities: jnp.ndarray,
   if label_mask is None:
     label_mask = jnp.ones_like(probabilities)
   assert probabilities.shape == label_mask.shape == label_mask.shape, (
-      probabilities.shape, label_mask.shape, label_mask.shape)
-  binary_entropies = -(label * jnp.log(probabilities + eps) +
-                       (1 - label) * jnp.log((1 - probabilities) + eps)
-                      )  # [..., num_classes]
+      probabilities.shape,
+      label_mask.shape,
+      label_mask.shape,
+  )
+  binary_entropies = -(
+      label * jnp.log(probabilities + eps)
+      + (1 - label) * jnp.log((1 - probabilities) + eps)
+  )  # [..., num_classes]
   if class_reduce == ReduceStrategy.AVERAGE:
     return (label_mask * binary_entropies).sum(axis=-1) / (
-        label_mask.sum(axis=-1) + eps)
+        label_mask.sum(axis=-1) + eps
+    )
   elif class_reduce == ReduceStrategy.NONE:
     return label_mask * binary_entropies
   else:
@@ -184,7 +199,7 @@ def label_binary_xent(probabilities: jnp.ndarray,
 
 def l2_loss(params: flax.core.scope.VariableDict):
   """Used to simulate weight decay."""
-  loss = 0.
+  loss = 0.0
   for p in jax.tree_util.tree_leaves(params):
     loss += (p**2).sum()
   return loss

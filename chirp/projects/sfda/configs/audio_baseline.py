@@ -50,16 +50,21 @@ def get_config() -> config_dict.ConfigDict:
   adaptation_data_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
-          _c("pipeline.ConvertBirdTaxonomyLabels",
-             source_namespace=namespace,
-             target_class_list=target_class_list,
-             add_taxonomic_labels=add_taxonomic_labels),
+          _c(
+              "pipeline.ConvertBirdTaxonomyLabels",
+              source_namespace=namespace,
+              target_class_list=target_class_list,
+              add_taxonomic_labels=add_taxonomic_labels,
+          ),
           _c("pipeline.Shuffle", shuffle_buffer_size=512, seed=seed),
-          _c("sfda_pipeline.Batch",
-             batch_size=batch_size,
-             split_across_devices=True),
+          _c(
+              "sfda_pipeline.Batch",
+              batch_size=batch_size,
+              split_across_devices=True,
+          ),
           _c("pipeline.NormalizeAudio", target_gain=0.2),
-      ])
+      ],
+  )
   adaptation_data_config.split = "[(0, 75)]"
   adaptation_data_config.tfds_data_dir = tfds_data_dir
   adaptation_data_config.dataset_directory = "soundscapes/high_sierras:1.0.1"
@@ -69,17 +74,20 @@ def get_config() -> config_dict.ConfigDict:
   eval_data_config.pipeline = _c(
       "pipeline.Pipeline",
       ops=[
-          _c("pipeline.ConvertBirdTaxonomyLabels",
-             source_namespace=namespace,
-             target_class_list=target_class_list,
-             add_taxonomic_labels=add_taxonomic_labels),
+          _c(
+              "pipeline.ConvertBirdTaxonomyLabels",
+              source_namespace=namespace,
+              target_class_list=target_class_list,
+              add_taxonomic_labels=add_taxonomic_labels,
+          ),
           _c(
               "sfda_pipeline.Batch",
               batch_size=batch_size,
               split_across_devices=True,
           ),
           _c("pipeline.NormalizeAudio", target_gain=0.2),
-      ])
+      ],
+  )
   eval_data_config.split = "[(75, 100)]"
   eval_data_config.tfds_data_dir = tfds_data_dir
   eval_data_config.dataset_directory = "soundscapes/high_sierras:1.0.1"

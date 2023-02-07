@@ -45,18 +45,21 @@ class MetadataFeature:
       (For example, to convert strings in a CSV file to floats.)
     feature_type: TFDS feature type, which is used in the TFDS FeatureDict.
   """
+
   source_key: str
   target_key: str
   convert_fn: Callable[[str], Any]
   feature_type: tfds.features.tensor_feature.Tensor
 
 
-MetadataLoaderType = Callable[[epath.Path, dict[str, MetadataFeature]],
-                              pd.DataFrame]
+MetadataLoaderType = Callable[
+    [epath.Path, dict[str, MetadataFeature]], pd.DataFrame
+]
 
 
-def load_class_list(class_list_name: str,
-                    keep_unknown_annotation: bool) -> namespace.ClassList:
+def load_class_list(
+    class_list_name: str, keep_unknown_annotation: bool
+) -> namespace.ClassList:
   """Loads the target class list, possibly adding an unknown label.
 
   Args:
@@ -69,21 +72,27 @@ def load_class_list(class_list_name: str,
   db = namespace_db.NamespaceDatabase.load_csvs()
   dataset_class_list = db.class_lists[class_list_name]
 
-  if (keep_unknown_annotation and
-      UNKNOWN_LABEL not in dataset_class_list.classes):
+  if (
+      keep_unknown_annotation
+      and UNKNOWN_LABEL not in dataset_class_list.classes
+  ):
     # Create a new class list which includes the 'unknown' class.
     dataset_class_list = namespace.ClassList(
         dataset_class_list.name + '_' + UNKNOWN_LABEL,
         dataset_class_list.namespace,
-        [UNKNOWN_LABEL] + list(dataset_class_list.classes))
+        [UNKNOWN_LABEL] + list(dataset_class_list.classes),
+    )
   return dataset_class_list
 
 
 def create_segments_df(
     all_audio_filepaths: Iterator[epath.Path],
-    annotations_df: Optional[pd.DataFrame], supervised: bool,
-    metadata_dir: epath.Path, metadata_fields: dict[str, MetadataFeature],
-    metadata_load_fn: Optional[MetadataLoaderType]) -> pd.DataFrame:
+    annotations_df: Optional[pd.DataFrame],
+    supervised: bool,
+    metadata_dir: epath.Path,
+    metadata_fields: dict[str, MetadataFeature],
+    metadata_load_fn: Optional[MetadataLoaderType],
+) -> pd.DataFrame:
   """Create the dataframe of segments with annotations and audio urls.
 
   Args:
@@ -100,9 +109,9 @@ def create_segments_df(
   """
   if supervised:
     # Combine segments with additional metadata (e.g Country).
-    segments = combine_annotations_with_metadata(annotations_df, metadata_dir,
-                                                 metadata_fields,
-                                                 metadata_load_fn)
+    segments = combine_annotations_with_metadata(
+        annotations_df, metadata_dir, metadata_fields, metadata_load_fn
+    )
     logging.info('starting with %d annotations...', len(segments))
     segments = add_annotated_urls(segments, all_audio_filepaths)
   else:
@@ -127,7 +136,8 @@ def combine_annotations_with_metadata(
     metadata_dir: epath.Path,
     metadata_fields: dict[str, MetadataFeature],
     metadata_load_fn: Optional[MetadataLoaderType],
-    metadata_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    metadata_df: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
   """Combine segments with whatever metadata is available for this dataset.
 
   Args:
@@ -164,15 +174,16 @@ def combine_annotations_with_metadata(
         # filename is special and we don't want to overwrite it.
         continue
       segment[field.target_key] = field.convert_fn(
-          segment_metadata[field.target_key].iloc[0])
+          segment_metadata[field.target_key].iloc[0]
+      )
     combined_segments.append(segment)
   concat_segments = pd.concat(combined_segments, axis=1).T
   return concat_segments
 
 
 def add_annotated_urls(
-    segments: pd.DataFrame,
-    all_audio_filepaths: Iterator[epath.Path]) -> pd.DataFrame:
+    segments: pd.DataFrame, all_audio_filepaths: Iterator[epath.Path]
+) -> pd.DataFrame:
   """Creates URLs for annotated segments, matching them to audio files.
 
   Args:
@@ -192,25 +203,33 @@ def add_annotated_urls(
   for fp in all_audio_filepaths:
     stem = fp.stem.split('.')[0]
     if stem in stem_to_filepath:
-      raise ValueError('Found two files (%s vs %s) with the same stem.' %
-                       (fp, stem_to_filepath[stem]))
+      raise ValueError(
+          'Found two files (%s vs %s) with the same stem.'
+          % (fp, stem_to_filepath[stem])
+      )
     stem_to_filepath[stem] = fp
 
   segments['stem'] = segments['filename'].apply(
-      lambda filename: os.path.basename(filename).split('.')[0])
+      lambda filename: os.path.basename(filename).split('.')[0]
+  )
   # Log all segments that could not be matched to an actual audio file.
-  audio_not_found = segments[segments['stem'].apply(
-      lambda stem: stem not in stem_to_filepath)]
-  logging.info('Audios that could not be found: %s.',
-               audio_not_found['stem'].unique())
+  audio_not_found = segments[
+      segments['stem'].apply(lambda stem: stem not in stem_to_filepath)
+  ]
+  logging.info(
+      'Audios that could not be found: %s.', audio_not_found['stem'].unique()
+  )
 
   segments['url'] = segments.apply(
-      lambda rec: stem_to_filepath.get(rec['stem'], ''), axis=1)
+      lambda rec: stem_to_filepath.get(rec['stem'], ''), axis=1
+  )
   # Filter segments without urls.
   segments = segments[segments['url'].apply(lambda url: url != '')]  # pylint: disable=g-explicit-bool-comparison
   if segments.empty:
-    raise ValueError('No segments found. Likely a problem matching '
-                     'annotation filenames to audio.')
+    raise ValueError(
+        'No segments found. Likely a problem matching '
+        'annotation filenames to audio.'
+    )
   segments = segments.drop('stem', axis=1)
   return segments
 
@@ -265,13 +284,19 @@ def get_full_length_annotations(
   # Discard malformed segments, i.e., segments for which the end time is
   # anterior to the start time.
   malformed_segment = (
-      annotations['annotation_end'] < annotations['annotation_start'])
+      annotations['annotation_end'] < annotations['annotation_start']
+  )
   if malformed_segment.sum() > 0:
     logging.warning(
-        'Skipping %d annotated segment(s) because end time is anterior '
-        'to start time.', malformed_segment.sum())
+        (
+            'Skipping %d annotated segment(s) because end time is anterior '
+            'to start time.'
+        ),
+        malformed_segment.sum(),
+    )
     beam.metrics.Metrics.counter('soundscapes', 'dropped_malformed').inc(
-        malformed_segment.sum())
+        malformed_segment.sum()
+    )
 
   # Split multi-label annotations into multiple single-label annotations.
   annotations = annotations.explode(column='label')
@@ -280,8 +305,12 @@ def get_full_length_annotations(
   is_in_class_list = annotations['label'].isin(class_list.classes)
   if (~is_in_class_list).sum() > 0:
     logging.info(
-        'Skipping %d annotated segment(s) because the corresponding label is '
-        'not in the class list.', (~is_in_class_list).sum())
+        (
+            'Skipping %d annotated segment(s) because the corresponding label'
+            ' is not in the class list.'
+        ),
+        (~is_in_class_list).sum(),
+    )
     for label in annotations[~is_in_class_list]['label']:
       beam.metrics.Metrics.counter('soundscapes', f'dropped_{label}').inc()
 
@@ -302,9 +331,11 @@ def get_full_length_annotations(
     prefix_annotation['start_time_s'] = annotations['end_time_s'].max()
     prefix_annotation['end_time_s'] = audio.shape[-1] / sample_rate_hz
 
-    annotations = pd.concat([prefix_annotation, annotations, suffix_annotation],
-                            axis='rows',
-                            ignore_index=True)
+    annotations = pd.concat(
+        [prefix_annotation, annotations, suffix_annotation],
+        axis='rows',
+        ignore_index=True,
+    )
 
   return annotations
 
@@ -347,8 +378,12 @@ def get_labeled_intervals(
 
   # Slice the audio into intervals
   # Returns `interval_length_s` long intervals.
-  audio_intervals = [(int(st), int(end)) for (st, end) in localization_fn(
-      audio, sample_rate_hz, interval_length_s, MAX_INTERVALS_PER_FILE)]
+  audio_intervals = [
+      (int(st), int(end))
+      for (st, end) in localization_fn(
+          audio, sample_rate_hz, interval_length_s, MAX_INTERVALS_PER_FILE
+      )
+  ]
   interval_timestamps = sorted(audio_intervals)
 
   def _start_end_key(seg):
@@ -359,7 +394,8 @@ def get_labeled_intervals(
       if seg['end_time_s'] < seg['start_time_s']:
         logging.warning(
             'Skipping annotated segment because end time is anterior to start '
-            'time.')
+            'time.'
+        )
         return ()
     return (int(sample_rate_hz * seg['start_time_s']), end)
 
@@ -370,12 +406,15 @@ def get_labeled_intervals(
       if _start_end_key(seg)
   }
   labeled_intervals = {}
-  for (st, end) in interval_timestamps:
+  for st, end in interval_timestamps:
     interval_labels = set([])
-    for (current_annotation_start,
-         currrent_annotation_end), seg in segments_by_timestamp.items():
-      if not _has_overlap(st, end, current_annotation_start,
-                          currrent_annotation_end):
+    for (
+        current_annotation_start,
+        currrent_annotation_end,
+    ), seg in segments_by_timestamp.items():
+      if not _has_overlap(
+          st, end, current_annotation_start, currrent_annotation_end
+      ):
         continue
       # found an overlap!
       for label in seg['label']:
@@ -390,11 +429,13 @@ def get_labeled_intervals(
       continue
     if drop_unknown_segments and UNKNOWN_LABEL in interval_labels:
       beam.metrics.Metrics.counter('soundscapes', 'skipped_unknown').inc()
-      logging.info('skipping unknown segment with labels %s',
-                   str(interval_labels))
+      logging.info(
+          'skipping unknown segment with labels %s', str(interval_labels)
+      )
       continue
     beam.metrics.Metrics.counter('soundscapes', 'labeled_intervals').inc()
-    beam.metrics.Metrics.counter('soundscapes',
-                                 'total_labls').inc(len(interval_labels))
+    beam.metrics.Metrics.counter('soundscapes', 'total_labls').inc(
+        len(interval_labels)
+    )
     labeled_intervals[(st, end)] = interval_labels
   return labeled_intervals

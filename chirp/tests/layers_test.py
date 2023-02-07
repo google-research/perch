@@ -28,19 +28,22 @@ class LayersTest(absltest.TestCase):
   def test_mbconv(self):
     # See table 2 in the MobileNetV2 paper
     mbconv = layers.MBConv(
-        features=24, kernel_size=(3, 3), strides=2, expand_ratio=6)
+        features=24, kernel_size=(3, 3), strides=2, expand_ratio=6
+    )
     key = random.PRNGKey(0)
     inputs = jnp.ones((1, 112, 112, 16))
     outputs, variables = mbconv.init_with_output(
-        key, inputs, use_running_average=False)
+        key, inputs, use_running_average=False
+    )
     self.assertEqual(outputs.shape, (1, 56, 56, 24))
 
     num_parameters = tree_util.tree_reduce(
-        operator.add, tree_util.tree_map(jnp.size, variables["params"]))
+        operator.add, tree_util.tree_map(jnp.size, variables["params"])
+    )
     expected_num_parameters = (
-        16 * 6 * 16 +  # Expansion
-        3 * 3 * 6 * 16 +  # Depthwise separable convolution
-        16 * 6 * 24  # Reduction
+        16 * 6 * 16
+        + 3 * 3 * 6 * 16  # Expansion
+        + 16 * 6 * 24  # Depthwise separable convolution  # Reduction
     )
     self.assertEqual(num_parameters, expected_num_parameters)
 
@@ -52,10 +55,10 @@ class LayersTest(absltest.TestCase):
     self.assertEqual(outputs.shape, (1, 112, 112, 16))
 
     num_parameters = tree_util.tree_reduce(
-        operator.add, tree_util.tree_map(jnp.size, variables["params"]))
+        operator.add, tree_util.tree_map(jnp.size, variables["params"])
+    )
     expected_num_parameters = (
-        16 * 16 // 4 + 16 // 4 +  # Squeeze
-        16 // 4 * 16 + 16  # Excite
+        16 * 16 // 4 + 16 // 4 + 16 // 4 * 16 + 16  # Squeeze  # Excite
     )
     self.assertEqual(num_parameters, expected_num_parameters)
 

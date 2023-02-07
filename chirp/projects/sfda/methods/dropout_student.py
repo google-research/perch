@@ -42,13 +42,16 @@ class DropoutStudent(adapt.SFDAMethod):
   _CITATION = (
       "Xie, Qizhe, et al. 'Self-training with noisy student improves imagenet "
       "classification.' Proceedings of the IEEE/CVF conference on computer "
-      "vision and pattern recognition. 2020.")
+      "vision and pattern recognition. 2020."
+  )
 
-  def compute_pseudo_label(self,
-                           probabilities: jnp.ndarray,
-                           multi_label: bool,
-                           alpha: float,
-                           normalize_pseudo_labels: bool = True) -> jnp.ndarray:
+  def compute_pseudo_label(
+      self,
+      probabilities: jnp.ndarray,
+      multi_label: bool,
+      alpha: float,
+      normalize_pseudo_labels: bool = True,
+  ) -> jnp.ndarray:
     """Compute the pseudo-labels from the model's probabilities.
 
     Args:
@@ -65,20 +68,25 @@ class DropoutStudent(adapt.SFDAMethod):
     pseudo_labels = jax.lax.stop_gradient(probabilities)
     if multi_label:
       pseudo_labels = jnp.stack([1 - pseudo_labels, pseudo_labels], axis=-1)
-    pseudo_labels = pseudo_labels**(1 / alpha)
+    pseudo_labels = pseudo_labels ** (1 / alpha)
     if normalize_pseudo_labels:
       pseudo_labels /= pseudo_labels.sum(-1, keepdims=True)
     if multi_label:
       pseudo_labels = pseudo_labels[
-          ..., -1]  # we only keep the 'positive' probability
+          ..., -1
+      ]  # we only keep the 'positive' probability
     return pseudo_labels
 
-  def before_epoch(self, key: jax.random.PRNGKeyArray,
-                   model_bundle: model_utils.ModelBundle,
-                   adaptation_state: adapt.AdaptationState,
-                   adaptation_dataset: tf.data.Dataset,
-                   modality: adapt.Modality, multi_label: bool,
-                   **method_kwargs) -> adapt.AdaptationState:
+  def before_epoch(
+      self,
+      key: jax.random.PRNGKeyArray,
+      model_bundle: model_utils.ModelBundle,
+      adaptation_state: adapt.AdaptationState,
+      adaptation_dataset: tf.data.Dataset,
+      modality: adapt.Modality,
+      multi_label: bool,
+      **method_kwargs
+  ) -> adapt.AdaptationState:
     """Compute the pseudo-labels when used in 'offline mode'.
 
     Args:
@@ -94,7 +102,6 @@ class DropoutStudent(adapt.SFDAMethod):
       The adaptation state, with a potentially updated 'method_state' attribute.
     """
     if not method_kwargs["online_pl_updates"]:
-
       # Compute pseudo-labels that will be used during the next epoch of
       # adaptation.
       forward_result = method_utils.forward_dataset(
@@ -103,28 +110,32 @@ class DropoutStudent(adapt.SFDAMethod):
           model_bundle=model_bundle,
           modality=modality,
           multi_label=multi_label,
-          use_batch_statistics=method_kwargs["update_bn_statistics"])
+          use_batch_statistics=method_kwargs["update_bn_statistics"],
+      )
 
       sample_ids = forward_result["id"]
       method_state = {
-          "pseudo_label":
-              self.compute_pseudo_label(
-                  forward_result["proba"],
-                  multi_label=multi_label,
-                  alpha=method_kwargs["alpha"],
-                  normalize_pseudo_labels=method_kwargs[
-                      "normalize_pseudo_labels"]),
+          "pseudo_label": self.compute_pseudo_label(
+              forward_result["proba"],
+              multi_label=multi_label,
+              alpha=method_kwargs["alpha"],
+              normalize_pseudo_labels=method_kwargs["normalize_pseudo_labels"],
+          ),
           "id2index": {sample_ids[i]: i for i in range(len(sample_ids))},
       }
       adaptation_state = adaptation_state.replace(method_state=method_state)
     return adaptation_state
 
   def before_iter(
-      self, key: jax.random.PRNGKeyArray, batch: dict[str, np.ndarray],
+      self,
+      key: jax.random.PRNGKeyArray,
+      batch: dict[str, np.ndarray],
       adaptation_state: adapt.AdaptationState,
-      model_bundle: model_utils.ModelBundle, modality: adapt.Modality,
+      model_bundle: model_utils.ModelBundle,
+      modality: adapt.Modality,
       multi_label: bool,
-      **method_kwargs) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
+      **method_kwargs
+  ) -> tuple[adapt.AdaptationState, dict[str, jnp.ndarray]]:
     """Grab or compute the pseudo-labels for the current batch.
 
     In the offline mode, we only grab pre-computed pseudo-labels from the
@@ -148,7 +159,6 @@ class DropoutStudent(adapt.SFDAMethod):
     """
 
     if method_kwargs["online_pl_updates"]:
-
       # In the online version, we compute the pseudo-labels on-the-go.
       forward_step = self.cache_get_forward_step(
           model_bundle.model, modality, method_kwargs["update_bn_statistics"]
@@ -162,36 +172,46 @@ class DropoutStudent(adapt.SFDAMethod):
       model_outputs = flax_utils.unreplicate(model_outputs)
       logit2proba = nn.sigmoid if multi_label else nn.softmax
       pseudo_label = self.compute_pseudo_label(
-          logit2proba(model_outputs.label), multi_label, method_kwargs["alpha"],
-          method_kwargs["normalize_pseudo_labels"])
+          logit2proba(model_outputs.label),
+          multi_label,
+          method_kwargs["alpha"],
+          method_kwargs["normalize_pseudo_labels"],
+      )
     else:
       # In the offline version, we simply grab the pseudo-labels that were
       # computed before the epoch.
       method_state = flax_utils.unreplicate(adaptation_state.method_state)
-      batch_indexes = np.array([
-          method_state["id2index"][x]
-          for x in flax_utils.unreplicate(batch["tfds_id"])
-      ])
+      batch_indexes = np.array(
+          [
+              method_state["id2index"][x]
+              for x in flax_utils.unreplicate(batch["tfds_id"])
+          ]
+      )
       pseudo_label = method_state["pseudo_label"][batch_indexes]
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label)
     }
 
-  def get_adaptation_metrics(self, supervised: bool, multi_label: bool,
-                             **method_kwargs) -> type[clu_metrics.Collection]:
+  def get_adaptation_metrics(
+      self, supervised: bool, multi_label: bool, **method_kwargs
+  ) -> type[clu_metrics.Collection]:
     """Obtain metrics that will be monitored during adaptation."""
     metrics_dict = vars(
-        adapt.get_common_metrics(
-            supervised=supervised, multi_label=multi_label))["__annotations__"]
+        adapt.get_common_metrics(supervised=supervised, multi_label=multi_label)
+    )["__annotations__"]
 
     def single_label_loss_fn(probabilities, pseudo_label, **_):
       pl_xent = losses.label_xent(
-          probabilities=probabilities, label=pseudo_label)
+          probabilities=probabilities, label=pseudo_label
+      )
       return pl_xent
 
-    def multi_label_loss_fn(probabilities: jnp.ndarray,
-                            pseudo_label: jnp.ndarray, label_mask: jnp.ndarray,
-                            **_):
+    def multi_label_loss_fn(
+        probabilities: jnp.ndarray,
+        pseudo_label: jnp.ndarray,
+        label_mask: jnp.ndarray,
+        **_
+    ):
       pl_xent = losses.label_binary_xent(
           probabilities=probabilities,
           label=pseudo_label,

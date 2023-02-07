@@ -38,7 +38,8 @@ class AudioUtilsTest(parameterized.TestCase):
     cls.batch_dims = (2, 3)
     cls.signal = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, cls.num_frames))
     cls.noise = 0.5 * random.normal(
-        random.PRNGKey(0), cls.batch_dims + (cls.num_frames,))
+        random.PRNGKey(0), cls.batch_dims + (cls.num_frames,)
+    )
     cls.audio = cls.signal + cls.noise
 
     _, _, cls.spectrogram = jsp.signal.stft(cls.audio)
@@ -58,7 +59,8 @@ class AudioUtilsTest(parameterized.TestCase):
         smoothing_coef=smoothing_coef,
         bias=bias,
         root=root,
-        eps=eps)[0]
+        eps=eps,
+    )[0]
     librosa_out = spectrum.pcen(
         spec,
         b=smoothing_coef,
@@ -68,7 +70,8 @@ class AudioUtilsTest(parameterized.TestCase):
         eps=eps,
         # librosa starts with an initial state of (1 - s), we start with x[0]
         zi=(1 - smoothing_coef) * spec[..., 0:1, :],
-        axis=-2)
+        axis=-2,
+    )
 
     np.testing.assert_allclose(out, librosa_out, rtol=5e-2)
 
@@ -80,7 +83,8 @@ class AudioUtilsTest(parameterized.TestCase):
       # is a cuFFT restriction).
       nfft=(256, 301),
       boundary=("zeros", None),
-      padded=(True, False))
+      padded=(True, False),
+  )
   def test_stft_tf(self, nperseg, noverlap, nfft, boundary, padded):
     batch_size = 3
     sample_rate_hz = 22050
@@ -103,7 +107,8 @@ class AudioUtilsTest(parameterized.TestCase):
         noverlap=noverlap,
         nfft=nfft,
         boundary=boundary,
-        padded=padded)
+        padded=padded,
+    )
     stfts_tf = audio_utils.stft_tf(
         tf.constant(signal),
         fs=1 / sample_rate_hz,
@@ -112,17 +117,20 @@ class AudioUtilsTest(parameterized.TestCase):
         noverlap=noverlap,
         nfft=nfft,
         boundary=boundary,
-        padded=padded)
+        padded=padded,
+    )
 
     np.testing.assert_allclose(stfts, stfts_tf.numpy(), atol=1e-5)
 
   def test_pad_to_length_if_shorter(self):
     audio = jnp.asarray([-1, 0, 1, 0], dtype=jnp.float32)
     np.testing.assert_allclose(
-        audio_utils.pad_to_length_if_shorter(audio, 4), audio)
+        audio_utils.pad_to_length_if_shorter(audio, 4), audio
+    )
     np.testing.assert_allclose(
         audio_utils.pad_to_length_if_shorter(audio, 6),
-        jnp.asarray([0, -1, 0, 1, 0, -1], dtype=jnp.float32))
+        jnp.asarray([0, -1, 0, 1, 0, -1], dtype=jnp.float32),
+    )
 
 
 if __name__ == "__main__":

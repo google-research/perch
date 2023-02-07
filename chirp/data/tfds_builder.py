@@ -40,8 +40,8 @@ class WavDirectoryBuilderConfig(tfds.core.BuilderConfig):
 
 
 def _generate_context_windows(
-    wav_path: epath.Path,
-    config: WavDirectoryBuilderConfig) -> Iterable[tuple[str, dict[str, Any]]]:
+    wav_path: epath.Path, config: WavDirectoryBuilderConfig
+) -> Iterable[tuple[str, dict[str, Any]]]:
   """Generates audio context window feature dicts from a single mono WAV file.
 
   Args:
@@ -70,8 +70,9 @@ def _generate_context_windows(
   segment_starts = set()
   max_peaks = config.max_peaks
   if max_peaks:
-    peak_indices = audio_utils.find_peaks_from_audio(samples, sample_rate,
-                                                     max_peaks)
+    peak_indices = audio_utils.find_peaks_from_audio(
+        samples, sample_rate, max_peaks
+    )
     peak_indices = np.asarray(peak_indices)
     for midpoint in peak_indices:
       segment_start = max(0, midpoint - context_duration // 2)
@@ -117,13 +118,15 @@ class WavDirectoryBuilder(tfds.core.GeneratorBasedBuilder):
       # pylint: disable=unexpected-keyword-arg
       WavDirectoryBuilderConfig(
           name='unfiltered',
-          description=('Context windows covering the entire dataset with '
-                       'no overlap.'),
+          description=(
+              'Context windows covering the entire dataset with no overlap.'
+          ),
       ),
       WavDirectoryBuilderConfig(
           name='slice_peaked',
-          description=('Context windows filtered to five peaks per original '
-                       'file.'),
+          description=(
+              'Context windows filtered to five peaks per original file.'
+          ),
           max_peaks=5,
       )
       # pylint: enable=unexpected-keyword-arg
@@ -148,18 +151,14 @@ class WavDirectoryBuilder(tfds.core.GeneratorBasedBuilder):
         builder=self,
         description=self._description(),
         features=tfds.features.FeaturesDict({
-            'audio':
-                tfds_features.Int16AsFloatTensor(
-                    shape=[self.builder_config.context_duration_samples],
-                    sample_rate=self.builder_config.sample_rate_hz,
-                    encoding=tfds.features.Encoding.ZLIB,
-                ),
-            'segment_start':
-                tfds.features.Scalar(dtype=tf.uint64),
-            'segment_end':
-                tfds.features.Scalar(dtype=tf.uint64),
-            'filename':
-                tfds.features.Text(),
+            'audio': tfds_features.Int16AsFloatTensor(
+                shape=[self.builder_config.context_duration_samples],
+                sample_rate=self.builder_config.sample_rate_hz,
+                encoding=tfds.features.Encoding.ZLIB,
+            ),
+            'segment_start': tfds.features.Scalar(dtype=tf.uint64),
+            'segment_end': tfds.features.Scalar(dtype=tf.uint64),
+            'filename': tfds.features.Text(),
         }),
         supervised_keys=None,
         citation=self._citation(),
@@ -197,4 +196,5 @@ class WavDirectoryBuilder(tfds.core.GeneratorBasedBuilder):
     _walk(epath.Path(root_dir))
 
     return beam.Create(wav_paths) | beam.ParDo(
-        _generate_context_windows, config=self.builder_config)
+        _generate_context_windows, config=self.builder_config
+    )

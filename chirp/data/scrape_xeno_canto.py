@@ -29,17 +29,19 @@ _MODES = (
 )
 _MODE = flags.DEFINE_enum('mode', 'collect_info', _MODES, 'Operation mode.')
 _INCLUDE_ND_RECORDINGS = flags.DEFINE_boolean(
-    'include_nd_recordings', True, 'Whether to include ND-licensed recordings.')
+    'include_nd_recordings', True, 'Whether to include ND-licensed recordings.'
+)
 _OUTPUT_DIR = flags.DEFINE_string(
     'output_dir', '/tmp/xeno-canto',
     'Where to output the taxonomy info DataFrame.')
-_TAXONOMY_INFO_FILENAME = flags.DEFINE_string('taxonomy_info_filename',
-                                              'taxonomy_info.json',
-                                              'Taxonomy info filename.')
+_TAXONOMY_INFO_FILENAME = flags.DEFINE_string(
+    'taxonomy_info_filename', 'taxonomy_info.json', 'Taxonomy info filename.'
+)
 
 
-def collect_info(output_dir: str, taxonomy_info_filename: str,
-                 include_nd_recordings: bool) -> None:
+def collect_info(
+    output_dir: str, taxonomy_info_filename: str, include_nd_recordings: bool
+) -> None:
   """Scrapes the Xeno-Canto website for audio file IDs.
 
   Args:
@@ -48,9 +50,11 @@ def collect_info(output_dir: str, taxonomy_info_filename: str,
     include_nd_recordings: whether to include ND-licensed recordings.
   """
   taxonomy_info = xeno_canto.create_taxonomy_info(
-      xeno_canto.SpeciesMappingConfig(), output_dir)
+      xeno_canto.SpeciesMappingConfig(), output_dir
+  )
   taxonomy_info = xeno_canto.retrieve_recording_metadata(
-      taxonomy_info, include_nd_recordings)
+      taxonomy_info, include_nd_recordings
+  )
   with (epath.Path(output_dir) / taxonomy_info_filename).open('w') as f:
     taxonomy_info.to_json(f)
 
@@ -60,9 +64,9 @@ def main(argv: Sequence[str]) -> None:
     raise app.UsageError('Too many command-line arguments.')
 
   modes = {
-      'collect_info':
-          functools.partial(
-              collect_info, include_nd_recordings=_INCLUDE_ND_RECORDINGS.value),
+      'collect_info': functools.partial(
+          collect_info, include_nd_recordings=_INCLUDE_ND_RECORDINGS.value
+      ),
   }
   modes[_MODE.value](_OUTPUT_DIR.value, _TAXONOMY_INFO_FILENAME.value)
 

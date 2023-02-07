@@ -26,6 +26,7 @@ import numpy as np
 
 class Conformer(nn.Module):
   """Projection layer followed by a conformer layer."""
+
   model_dims: int = 512
   kernel_size: int = 32
   ff_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.swish
@@ -46,11 +47,13 @@ class Conformer(nn.Module):
   skip_layer_norm: bool = True
 
   @nn.compact
-  def __call__(self,
-               inputs: jnp.ndarray,
-               train: bool,
-               return_intermediate_list: bool,
-               use_running_average: Optional[bool] = None) -> jnp.ndarray:
+  def __call__(
+      self,
+      inputs: jnp.ndarray,
+      train: bool,
+      return_intermediate_list: bool,
+      use_running_average: Optional[bool] = None,
+  ) -> jnp.ndarray:
     """Projection followed by a conformer layer.
 
     Args:
@@ -76,9 +79,11 @@ class Conformer(nn.Module):
 
     if self.dropout_prob is not None:
       all_dropouts = [
-          self.atten_dropout, self.atten_residual_dropout,
-          self.conv_residual_dropout, self.ffn_residual_dropout,
-          self.ffn_relu_dropout
+          self.atten_dropout,
+          self.atten_residual_dropout,
+          self.conv_residual_dropout,
+          self.ffn_residual_dropout,
+          self.ffn_relu_dropout,
       ]
       for prob in all_dropouts:
         assert prob is None or prob == self.dropout_prob
@@ -142,6 +147,7 @@ class PositionalEmbedding(nn.Module):
       added signal.
     embedding_dims: Dimension of the embedding to be generated.
   """
+
   embedding_dims: int = 0
   min_timescale: int = 1
   max_timescale: int = 10_000
@@ -159,21 +165,25 @@ class PositionalEmbedding(nn.Module):
     """
     position = jnp.arange(seq_length, dtype=jnp.float32)[jnp.newaxis, :]
     num_timescales = self.embedding_dims // 2
-    log_timescale_increment = (
-        math.log(self.max_timescale / self.min_timescale) /
-        jnp.maximum(num_timescales - 1, 1.))
+    log_timescale_increment = math.log(
+        self.max_timescale / self.min_timescale
+    ) / jnp.maximum(num_timescales - 1, 1.0)
     inv_timescales = self.min_timescale * jnp.exp(
-        jnp.arange(num_timescales) * -log_timescale_increment)
+        jnp.arange(num_timescales) * -log_timescale_increment
+    )
     scaled_time = (
-        position[:, :, jnp.newaxis] *
-        inv_timescales[jnp.newaxis, jnp.newaxis, :])
+        position[:, :, jnp.newaxis]
+        * inv_timescales[jnp.newaxis, jnp.newaxis, :]
+    )
     signal = jnp.concatenate(
-        [jnp.sin(scaled_time), jnp.cos(scaled_time)], axis=2)
+        [jnp.sin(scaled_time), jnp.cos(scaled_time)], axis=2
+    )
     # Force usage of `np` rather than `jnp` to compute static values at trace
     # time.
     if self.embedding_dims != 0:
-      signal = jnp.pad(signal, [(0, 0), (0, 0),
-                                (0, np.mod(self.embedding_dims, 2))])
+      signal = jnp.pad(
+          signal, [(0, 0), (0, 0), (0, np.mod(self.embedding_dims, 2))]
+      )
     return signal
 
 
@@ -188,6 +198,7 @@ class ConvolutionalSubsampling(nn.Module):
   [1]: Gulati, Anmol, et al. "Conformer: Convolution-augmented transformer for
     speech recognition." arXiv preprint arXiv:2005.08100 (2020).
   """
+
   features: int
   kernel_size: tuple[int, int] = (3, 3)
   strides: tuple[int, int] = (2, 2)

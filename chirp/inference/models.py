@@ -37,6 +37,7 @@ class SeparateEmbedModel(interface.EmbeddingModel):
   Note: Use the separation model's sample rate. The embedding model's sample
   rate is used to resample prior to computing the embedding.
   """
+
   separation_model: interface.EmbeddingModel
   embedding_model: interface.EmbeddingModel
 
@@ -44,11 +45,14 @@ class SeparateEmbedModel(interface.EmbeddingModel):
     # Apply the separation model.
     separation_outputs = self.separation_model.embed(audio_array)
     if self.separation_model.sample_rate != self.embedding_model.sample_rate:
-      new_length = int(self.embedding_model.sample_rate /
-                       self.separation_model.sample_rate *
-                       separation_outputs.separated_audio.shape[-1])
+      new_length = int(
+          self.embedding_model.sample_rate
+          / self.separation_model.sample_rate
+          * separation_outputs.separated_audio.shape[-1]
+      )
       separated_audio = scipy.signal.resample(
-          separation_outputs.separated_audio, new_length, axis=-1)
+          separation_outputs.separated_audio, new_length, axis=-1
+      )
     else:
       separated_audio = separation_outputs.separated_audio
 
@@ -67,12 +71,14 @@ class SeparateEmbedModel(interface.EmbeddingModel):
     return interface.InferenceOutputs(
         embeddings=embeddings,
         logits=max_logits,
-        separated_audio=separation_outputs.separated_audio)
+        separated_audio=separation_outputs.separated_audio,
+    )
 
 
 @dataclasses.dataclass
 class BirbSepModelTF1(interface.EmbeddingModel):
   """Separation model from the Bird MixIT paper."""
+
   model_path: str
   window_size_s: float
   keep_raw_channel: bool
@@ -92,9 +98,11 @@ class BirbSepModelTF1(interface.EmbeddingModel):
       new_saver = tf1.train.import_meta_graph(metagraph_path_ns)
       new_saver.restore(sess_ns, checkpoint_path)
       self.input_placeholder_ns = graph_ns.get_tensor_by_name(
-          'input_audio/receiver_audio:0')
+          'input_audio/receiver_audio:0'
+      )
       self.output_tensor_ns = graph_ns.get_tensor_by_name(
-          'denoised_waveforms:0')
+          'denoised_waveforms:0'
+      )
     self.session = sess_ns
 
   def embed(self, audio_array: Any) -> interface.InferenceOutputs:
@@ -103,13 +111,14 @@ class BirbSepModelTF1(interface.EmbeddingModel):
     sep_chunks = []
     raw_chunks = []
     while start_sample <= audio_array.shape[0]:
-      audio_chunk = audio_array[start_sample:start_sample + window_size]
+      audio_chunk = audio_array[start_sample : start_sample + window_size]
       raw_chunks.append(audio_chunk)
       separated_audio = self.session.run(
           self.output_tensor_ns,
           feed_dict={
               self.input_placeholder_ns: audio_chunk[np.newaxis, np.newaxis, :]
-          })
+          },
+      )
       # Drop the extraneous batch dimension.
       separated_audio = np.squeeze(separated_audio, axis=0)
       sep_chunks.append(separated_audio)
@@ -118,8 +127,9 @@ class BirbSepModelTF1(interface.EmbeddingModel):
     raw_chunks = np.concatenate(raw_chunks, axis=0)
     sep_chunks = np.concatenate(sep_chunks, axis=-1)
     if self.keep_raw_channel:
-      sep_chunks = np.concatenate([sep_chunks, raw_chunks[np.newaxis, :]],
-                                  axis=0)
+      sep_chunks = np.concatenate(
+          [sep_chunks, raw_chunks[np.newaxis, :]], axis=0
+      )
     return interface.InferenceOutputs(separated_audio=sep_chunks)
 
 
@@ -136,6 +146,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     model: Loaded TF SavedModel.
     class_list: Loaded class_list for the model's output logits.
   """
+
   model_path: str
   window_size_s: float
   hop_size_s: float
@@ -156,8 +167,9 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     # Process one example at a time.
     # This should be fine on CPU, but may be somewhat inefficient for large
     # arrays on GPU or TPU.
-    framed_audio = self.frame_audio(audio_array, self.window_size_s,
-                                    self.hop_size_s)
+    framed_audio = self.frame_audio(
+        audio_array, self.window_size_s, self.hop_size_s
+    )
     all_logits, all_embeddings = self.model.infer_tf(framed_audio[:1])
     for window in framed_audio[1:]:
       logits, embeddings = self.model.infer_tf(window[np.newaxis, :])
@@ -165,11 +177,13 @@ class TaxonomyModelTF(interface.EmbeddingModel):
       all_embeddings = np.concatenate([all_embeddings, embeddings], axis=0)
     all_embeddings = all_embeddings[:, np.newaxis, :]
 
-    all_logits = self.convert_logits(all_logits, self.class_list,
-                                     self.target_class_list)
+    all_logits = self.convert_logits(
+        all_logits, self.class_list, self.target_class_list
+    )
 
-    return interface.InferenceOutputs(all_embeddings,
-                                      {self.class_list.name: all_logits}, None)
+    return interface.InferenceOutputs(
+        all_embeddings, {self.class_list.name: all_logits}, None
+    )
 
 
 @dataclasses.dataclass
@@ -186,6 +200,7 @@ class SeparatorModelTF(interface.EmbeddingModel):
     model: Loaded TF SavedModel.
     class_list: Loaded class_list for the model's output logits.
   """
+
   model_path: str
   frame_size: int
   window_size_s: Optional[float] = None
@@ -207,15 +222,21 @@ class SeparatorModelTF(interface.EmbeddingModel):
     excess_samples = audio_array.shape[0] % self.frame_size
     if excess_samples > 0:
       audio_array = audio_array[:-excess_samples]
-    framed_audio = self.frame_audio(audio_array, self.window_size_s,
-                                    self.window_size_s)
-    framed_audio = np.reshape(framed_audio, [
-        framed_audio.shape[0], framed_audio.shape[1] // self.frame_size,
-        self.frame_size
-    ])
+    framed_audio = self.frame_audio(
+        audio_array, self.window_size_s, self.window_size_s
+    )
+    framed_audio = np.reshape(
+        framed_audio,
+        [
+            framed_audio.shape[0],
+            framed_audio.shape[1] // self.frame_size,
+            self.frame_size,
+        ],
+    )
 
     sep_audio, all_logits, all_embeddings = self.model.infer_tf(
-        framed_audio[:1])
+        framed_audio[:1]
+    )
     for window in framed_audio[1:]:
       separated, logits, embeddings = self.model.infer_tf(window[np.newaxis, :])
       sep_audio = np.concatenate([sep_audio, separated], axis=0)
@@ -226,12 +247,13 @@ class SeparatorModelTF(interface.EmbeddingModel):
     # Recombine batch and time dimensions.
     sep_audio = np.reshape(sep_audio, [-1, sep_audio.shape[-1]])
     all_logits = np.reshape(all_logits, [-1, all_logits.shape[-1]])
-    all_logits = self.convert_logits(all_logits, self.class_list,
-                                     self.target_class_list)
+    all_logits = self.convert_logits(
+        all_logits, self.class_list, self.target_class_list
+    )
     all_embeddings = np.reshape(all_embeddings, [-1, all_embeddings.shape[-1]])
-    return interface.InferenceOutputs(all_embeddings,
-                                      {self.class_list.name: all_logits},
-                                      sep_audio)
+    return interface.InferenceOutputs(
+        all_embeddings, {self.class_list.name: all_logits}, sep_audio
+    )
 
 
 @dataclasses.dataclass
@@ -249,6 +271,7 @@ class BirdNet(interface.EmbeddingModel):
     tflite: Whether the model is a TFLite model.
     class_list: The loaded class list.
   """
+
   model_path: str
   class_list_name: str = 'birdnet_v2_1'
   window_size_s: float = 3.0
@@ -268,24 +291,28 @@ class BirdNet(interface.EmbeddingModel):
         model_file = epath.Path(self.model_path)
         model_file.copy(tmpf.name, overwrite=True)
         self.model = tf.lite.Interpreter(
-            tmpf.name, num_threads=self.num_tflite_threads)
+            tmpf.name, num_threads=self.num_tflite_threads
+        )
       self.model.allocate_tensors()
     else:
       self.tflite = False
       self.model = tf.saved_model.load(self.model_path)
 
-  def embed_saved_model(self,
-                        audio_array: np.ndarray) -> interface.InferenceOutputs:
+  def embed_saved_model(
+      self, audio_array: np.ndarray
+  ) -> interface.InferenceOutputs:
     """Get logits using the BirdNet SavedModel."""
     # Note that there is no easy way to get the embedding from the SavedModel.
     all_logits = self.model(audio_array[:1])
     for window in audio_array[1:]:
       logits = self.model(window[np.newaxis, :])
       all_logits = np.concatenate([all_logits, logits], axis=0)
-    all_logits = self.convert_logits(all_logits, self.class_list,
-                                     self.target_class_list)
-    return interface.InferenceOutputs(None, {self.class_list_name: all_logits},
-                                      None)
+    all_logits = self.convert_logits(
+        all_logits, self.class_list, self.target_class_list
+    )
+    return interface.InferenceOutputs(
+        None, {self.class_list_name: all_logits}, None
+    )
 
   def embed_tflite(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
     """Create an embedding and logits using the BirdNet TFLite model."""
@@ -295,22 +322,26 @@ class BirdNet(interface.EmbeddingModel):
     embeddings = []
     logits = []
     for audio in audio_array:
-      self.model.set_tensor(input_details['index'],
-                            np.float32(audio)[np.newaxis, :])
+      self.model.set_tensor(
+          input_details['index'], np.float32(audio)[np.newaxis, :]
+      )
       self.model.invoke()
       logits.append(self.model.get_tensor(output_details['index']))
       embeddings.append(self.model.get_tensor(embedding_idx))
     # Create [Batch, 1, Features]
     embeddings = np.array(embeddings)[:, np.newaxis, :]
     logits = np.array(logits)
-    logits = self.convert_logits(logits, self.class_list,
-                                 self.target_class_list)
-    return interface.InferenceOutputs(embeddings,
-                                      {self.class_list_name: logits}, None)
+    logits = self.convert_logits(
+        logits, self.class_list, self.target_class_list
+    )
+    return interface.InferenceOutputs(
+        embeddings, {self.class_list_name: logits}, None
+    )
 
   def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
-    framed_audio = self.frame_audio(audio_array, self.window_size_s,
-                                    self.hop_size_s)
+    framed_audio = self.frame_audio(
+        audio_array, self.window_size_s, self.hop_size_s
+    )
     if self.tflite:
       return self.embed_tflite(framed_audio)
     else:
@@ -320,6 +351,7 @@ class BirdNet(interface.EmbeddingModel):
 @dataclasses.dataclass
 class PlaceholderModel(interface.EmbeddingModel):
   """Test implementation of the EmbeddingModel interface."""
+
   embedding_size: int = 128
   make_embeddings: bool = True
   make_logits: bool = True
@@ -334,15 +366,18 @@ class PlaceholderModel(interface.EmbeddingModel):
     outputs = {}
     time_size = audio_array.shape[0] // self.sample_rate
     if self.make_embeddings:
-      outputs['embeddings'] = np.zeros([time_size, 1, self.embedding_size],
-                                       np.float32)
+      outputs['embeddings'] = np.zeros(
+          [time_size, 1, self.embedding_size], np.float32
+      )
     if self.make_logits:
       outputs['logits'] = {
           'label': np.zeros([time_size, self.class_list.size], np.float32),
       }
       outputs['logits']['label'] = self.convert_logits(
-          outputs['logits']['label'], self.class_list, self.target_class_list)
+          outputs['logits']['label'], self.class_list, self.target_class_list
+      )
     if self.make_separated_audio:
-      outputs['separated_audio'] = np.zeros([2, audio_array.shape[-1]],
-                                            np.float32)
+      outputs['separated_audio'] = np.zeros(
+          [2, audio_array.shape[-1]], np.float32
+      )
     return interface.InferenceOutputs(**outputs)

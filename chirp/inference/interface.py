@@ -37,6 +37,7 @@ class InferenceOutputs:
       logits array has shape [Time, L.size].
     separated_audio: Separated audio channels with shape [Channels, Samples].
   """
+
   embeddings: Optional[np.ndarray] = None
   logits: Optional[LogitType] = None
   separated_audio: Optional[np.ndarray] = None
@@ -49,6 +50,7 @@ class EmbeddingModel:
   Attributes:
     sample_rate: Sample rate in hz.
   """
+
   sample_rate: int
 
   def embed(self, audio_array: np.ndarray) -> InferenceOutputs:
@@ -76,7 +78,8 @@ class EmbeddingModel:
       batched_logits = {}
       for logit_key in outputs[0].logits:
         batched_logits[logit_key] = np.stack(
-            [x.logits[logit_key] for x in outputs], axis=0)
+            [x.logits[logit_key] for x in outputs], axis=0
+        )
     else:
       batched_logits = None
 
@@ -88,16 +91,21 @@ class EmbeddingModel:
     return InferenceOutputs(
         embeddings=embeddings,
         logits=batched_logits,
-        separated_audio=separated_audio)
+        separated_audio=separated_audio,
+    )
 
   def convert_logits(
-      self, logits: np.ndarray, source_class_list: namespace.ClassList,
-      target_class_list: Optional[namespace.ClassList]) -> np.ndarray:
+      self,
+      logits: np.ndarray,
+      source_class_list: namespace.ClassList,
+      target_class_list: Optional[namespace.ClassList],
+  ) -> np.ndarray:
     """Convert model logits to logits for a different class list."""
     if target_class_list is None:
       return logits
     sp_matrix, sp_mask = source_class_list.get_class_map_matrix(
-        target_class_list)
+        target_class_list
+    )
     # When we convert from ClassList A (used for training) to ClassList B
     # (for inference output) there may be labels in B which don't appear in A.
     # The `sp_mask` tells us which labels appear in both A and B. We set the
@@ -105,8 +113,12 @@ class EmbeddingModel:
     # very close to zero.
     return logits @ sp_matrix + NULL_LOGIT * (1 - sp_mask)
 
-  def frame_audio(self, audio_array: np.ndarray, window_size_s: Optional[float],
-                  hop_size_s: float) -> np.ndarray:
+  def frame_audio(
+      self,
+      audio_array: np.ndarray,
+      window_size_s: Optional[float],
+      hop_size_s: float,
+  ) -> np.ndarray:
     """Helper function for framing audio for inference."""
     if window_size_s is None or window_size_s < 0:
       return audio_array[np.newaxis, :]

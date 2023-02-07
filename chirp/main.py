@@ -39,16 +39,19 @@ TARGETS = {
 }
 
 _CONFIG = config_flags.DEFINE_config_file("config")
-_WORKDIR = flags.DEFINE_string("workdir", None,
-                               "Work unit checkpointing directory.")
-_TARGET = flags.DEFINE_enum("target", None, TARGETS.keys(),
-                            "The module to run.")
+_WORKDIR = flags.DEFINE_string(
+    "workdir", None, "Work unit checkpointing directory."
+)
+_TARGET = flags.DEFINE_enum(
+    "target", None, TARGETS.keys(), "The module to run."
+)
 _MODE = flags.DEFINE_string("mode", None, "The mode to run.")
 _TF_DATA_SERVICE_ADDRESS = flags.DEFINE_string(
     "tf_data_service_address",
     "",
     "The dispatcher's address.",
-    allow_override_cpp=True)
+    allow_override_cpp=True,
+)
 flags.mark_flags_as_required(["config", "workdir", "target", "mode"])
 
 
@@ -57,11 +60,13 @@ def main(argv: Sequence[str]) -> None:
     raise app.UsageError("Too many command-line arguments.")
   logging.info(_CONFIG.value)
   tf.config.experimental.set_visible_devices([], "GPU")
-  config = config_utils.parse_config(_CONFIG.value,
-                                     config_globals.get_globals())
+  config = config_utils.parse_config(
+      _CONFIG.value, config_globals.get_globals()
+  )
 
-  TARGETS[_TARGET.value].run(_MODE.value, config, _WORKDIR.value,
-                             _TF_DATA_SERVICE_ADDRESS.value)
+  TARGETS[_TARGET.value].run(
+      _MODE.value, config, _WORKDIR.value, _TF_DATA_SERVICE_ADDRESS.value
+  )
 
 
 if __name__ == "__main__":

@@ -51,7 +51,7 @@ class ConstantEncoder(nn.Module):
       self,
       inputs: jnp.ndarray,
       train: bool,  # pylint: disable=redefined-outer-name
-      use_running_average: bool
+      use_running_average: bool,
   ) -> jnp.ndarray:
     return jnp.zeros([inputs.shape[0], self.output_dim])
 
@@ -71,7 +71,8 @@ class TrainTest(parameterized.TestCase):
     ds, dataset_info = pipeline.get_dataset(
         "train",
         dataset_directory=self.builder.data_dir,
-        pipeline=config.train_dataset_config.pipeline)
+        pipeline=config.train_dataset_config.pipeline,
+    )
     return ds, dataset_info
 
   def _get_test_config(self, config_module=baseline) -> config_dict.ConfigDict:
@@ -86,25 +87,32 @@ class TrainTest(parameterized.TestCase):
     config.eval_config.eval_steps_per_checkpoint = 1
     config = config_utils.parse_config(config, config_globals.get_globals())
 
-    config.train_dataset_config.pipeline = pipeline.Pipeline(ops=[
-        pipeline.OnlyJaxTypes(),
-        pipeline.ConvertBirdTaxonomyLabels(
-            source_namespace="ebird2021",
-            target_class_list="xenocanto",
-            add_taxonomic_labels=True),
-        pipeline.MixAudio(mixin_prob=0.0),
-        pipeline.Batch(batch_size=1, split_across_devices=True),
-        pipeline.RandomSlice(window_size=TEST_WINDOW_S),
-        pipeline.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
-    ])
+    config.train_dataset_config.pipeline = pipeline.Pipeline(
+        ops=[
+            pipeline.OnlyJaxTypes(),
+            pipeline.ConvertBirdTaxonomyLabels(
+                source_namespace="ebird2021",
+                target_class_list="xenocanto",
+                add_taxonomic_labels=True,
+            ),
+            pipeline.MixAudio(mixin_prob=0.0),
+            pipeline.Batch(batch_size=1, split_across_devices=True),
+            pipeline.RandomSlice(window_size=TEST_WINDOW_S),
+            pipeline.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
+        ]
+    )
 
-    config.eval_dataset_config.pipeline = pipeline.Pipeline(ops=[
-        pipeline.OnlyJaxTypes(),
-        pipeline.MultiHot(),
-        pipeline.Batch(batch_size=1, split_across_devices=True),
-        pipeline.Slice(window_size=TEST_WINDOW_S, start=0.5, names=("audio",)),
-        pipeline.NormalizeAudio(target_gain=0.2, names=("audio",)),
-    ])
+    config.eval_dataset_config.pipeline = pipeline.Pipeline(
+        ops=[
+            pipeline.OnlyJaxTypes(),
+            pipeline.MultiHot(),
+            pipeline.Batch(batch_size=1, split_across_devices=True),
+            pipeline.Slice(
+                window_size=TEST_WINDOW_S, start=0.5, names=("audio",)
+            ),
+            pipeline.NormalizeAudio(target_gain=0.2, names=("audio",)),
+        ]
+    )
 
     return config
 
@@ -114,7 +122,8 @@ class TrainTest(parameterized.TestCase):
 
   def _add_b0_model_config(self, config):
     config.init_config.model_config.encoder = efficientnet.EfficientNet(
-        efficientnet.EfficientNetModel.B0)
+        efficientnet.EfficientNetModel.B0
+    )
     return config
 
   def _add_pcen_melspec_frontend(self, config):
@@ -124,7 +133,8 @@ class TrainTest(parameterized.TestCase):
         kernel_size=2_560,
         sample_rate=32_000,
         freq_range=(60, 10_000),
-        scaling_config=frontend.PCENScalingConfig(conv_width=256))
+        scaling_config=frontend.PCENScalingConfig(conv_width=256),
+    )
     return config
 
   def test_config_structure(self):
@@ -132,8 +142,9 @@ class TrainTest(parameterized.TestCase):
     # This helps ensure that the test configs don't drift too far from the
     # actual configs we use for training.
     raw_config = baseline.get_config()
-    parsed_config = config_utils.parse_config(raw_config,
-                                              config_globals.get_globals())
+    parsed_config = config_utils.parse_config(
+        raw_config, config_globals.get_globals()
+    )
     test_config = self._get_test_config()
     test_config = self._add_pcen_melspec_frontend(test_config)
     test_config = self._add_b0_model_config(test_config)
@@ -141,7 +152,8 @@ class TrainTest(parameterized.TestCase):
     print(jax.tree_util.tree_structure(test_config.to_dict()))
     self.assertEqual(
         jax.tree_util.tree_structure(parsed_config.to_dict()),
-        jax.tree_util.tree_structure(test_config.to_dict()))
+        jax.tree_util.tree_structure(test_config.to_dict()),
+    )
 
   def test_export_model(self):
     # NOTE: This test might fail when run on a machine that has a GPU but when
@@ -152,17 +164,26 @@ class TrainTest(parameterized.TestCase):
     config = self._add_pcen_melspec_frontend(config)
 
     model_bundle, train_state = classifier.initialize_model(
-        workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config
+    )
 
-    classifier.export_tf(model_bundle, train_state, self.train_dir,
-                         config.init_config.input_shape)
+    classifier.export_tf(
+        model_bundle,
+        train_state,
+        self.train_dir,
+        config.init_config.input_shape,
+    )
     self.assertTrue(
-        tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite")))
+        tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite"))
+    )
     self.assertTrue(
-        tf.io.gfile.exists(os.path.join(self.train_dir, "label.csv")))
+        tf.io.gfile.exists(os.path.join(self.train_dir, "label.csv"))
+    )
     self.assertTrue(
         tf.io.gfile.exists(
-            os.path.join(self.train_dir, "savedmodel/saved_model.pb")))
+            os.path.join(self.train_dir, "savedmodel/saved_model.pb")
+        )
+    )
 
     # Check that saved_model inference doesn't crash.
     # Currently lax.scan (used in the non-convolutional PCEN) fails.
@@ -181,11 +202,13 @@ class TrainTest(parameterized.TestCase):
     # Ensure that we can initialize the model with the each config.
     config = self._get_test_config(config_module)
     # Check that field reference for num_train_steps propogated appropriately.
-    self.assertEqual(config.train_config.num_train_steps,
-                     config.eval_config.num_train_steps)
+    self.assertEqual(
+        config.train_config.num_train_steps, config.eval_config.num_train_steps
+    )
 
     model_bundle, train_state = classifier.initialize_model(
-        workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config
+    )
     self.assertIsNotNone(model_bundle)
     self.assertIsNotNone(train_state)
 
@@ -195,14 +218,16 @@ class TrainTest(parameterized.TestCase):
     config = self._add_pcen_melspec_frontend(config)
     ds, _ = self._get_test_dataset(config)
     model_bundle, train_state = classifier.initialize_model(
-        workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config
+    )
 
     classifier.train(
         model_bundle=model_bundle,
         train_state=train_state,
         train_dataset=ds,
         logdir=self.train_dir,
-        **config.train_config)
+        **config.train_config,
+    )
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)
     self.assertIsNotNone(ckpt.latest_checkpoint)
 
@@ -212,7 +237,8 @@ class TrainTest(parameterized.TestCase):
     config = self._add_pcen_melspec_frontend(config)
     ds, _ = self._get_test_dataset(config)
     model_bundle, train_state = classifier.initialize_model(
-        workdir=self.train_dir, **config.init_config)
+        workdir=self.train_dir, **config.init_config
+    )
     # Write a checkpoint, or else the eval will hang.
     model_bundle.ckpt.save(train_state)
 
@@ -224,7 +250,8 @@ class TrainTest(parameterized.TestCase):
         workdir=self.train_dir,
         logdir=self.train_dir,
         eval_sleep_s=0,
-        **config.eval_config)
+        **config.eval_config,
+    )
     ckpt = checkpoint.MultihostCheckpoint(self.train_dir)
     self.assertIsNotNone(ckpt.latest_checkpoint)
 

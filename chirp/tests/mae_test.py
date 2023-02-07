@@ -43,18 +43,17 @@ class MaeTest(absltest.TestCase):
         num_heads=8,
         patch_size=patch_size,
         mask_rate=mask_rate,
-        hidden_size=hidden_size)
+        hidden_size=hidden_size,
+    )
     (encoded_patches, unmasked, masked), _ = encoder.init_with_output(
-        {
-            "params": params_rng,
-            "patch_mask": mask_rng,
-            "dropout": dropout_rng
-        },
+        {"params": params_rng, "patch_mask": mask_rng, "dropout": dropout_rng},
         inputs,
-        train=True)
+        train=True,
+    )
 
-    self.assertEqual(encoded_patches.shape,
-                     (batch_size, num_patches, hidden_size))
+    self.assertEqual(
+        encoded_patches.shape, (batch_size, num_patches, hidden_size)
+    )
     self.assertEqual(unmasked.shape, (batch_size, num_patches))
     self.assertEqual(masked.shape, (batch_size, h * w - num_patches))
 
@@ -63,17 +62,18 @@ class MaeTest(absltest.TestCase):
         patch_size=patch_size,
         mlp_dim=32,
         num_layers=2,
-        num_heads=8)
+        num_heads=8,
+    )
     decoded_patches, _ = decoder.init_with_output(
-        {
-            "params": params_rng,
-            "dropout": dropout_rng
-        },
+        {"params": params_rng, "dropout": dropout_rng},
         encoded_patches,
         unmasked,
-        train=True)
-    self.assertEqual(decoded_patches.shape,
-                     (batch_size, h * w, patch_size[0] * patch_size[1] * c))
+        train=True,
+    )
+    self.assertEqual(
+        decoded_patches.shape,
+        (batch_size, h * w, patch_size[0] * patch_size[1] * c),
+    )
 
 
 if __name__ == "__main__":

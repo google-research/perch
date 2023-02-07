@@ -29,13 +29,22 @@ import tensorflow
 tf = tensorflow.compat.v1
 tf2 = tensorflow.compat.v2
 
-ClassifierState = collections.namedtuple('ClassifierState', [
-    'session', 'audio_placeholder', 'melspec_placeholder', 'hints_placeholder',
-    'melspec_output', 'logits', 'all_outputs'
-])
+ClassifierState = collections.namedtuple(
+    'ClassifierState',
+    [
+        'session',
+        'audio_placeholder',
+        'melspec_placeholder',
+        'hints_placeholder',
+        'melspec_output',
+        'logits',
+        'all_outputs',
+    ],
+)
 
 SeparatorState = collections.namedtuple(
-    'SeparatorState', ['session', 'audio_placeholder', 'output_tensor'])
+    'SeparatorState', ['session', 'audio_placeholder', 'output_tensor']
+)
 
 
 def load_params_from_json(model_dir, filename='hyper_params.json'):
@@ -53,13 +62,15 @@ def load_params_from_json(model_dir, filename='hyper_params.json'):
   return config_dict.ConfigDict(params_dict)
 
 
-def audio_to_input_fn(audio,
-                      dataset_params,
-                      interval_s=4,
-                      sample_rate_hz=44100,
-                      max_intervals=10,
-                      batch_size=None,
-                      hints=None):
+def audio_to_input_fn(
+    audio,
+    dataset_params,
+    interval_s=4,
+    sample_rate_hz=44100,
+    max_intervals=10,
+    batch_size=None,
+    hints=None,
+):
   """Perform peak-finding segmentation, batch segments."""
   if batch_size is None:
     batch_size = 4
@@ -67,18 +78,22 @@ def audio_to_input_fn(audio,
       audio,
       sample_rate_hz=sample_rate_hz,
       interval_s=interval_s,
-      max_intervals=max_intervals)
+      max_intervals=max_intervals,
+  )
   audio_batch = np.concatenate(
-      [np.expand_dims(v, 0) for v in intervals.values()], axis=0)
+      [np.expand_dims(v, 0) for v in intervals.values()], axis=0
+  )
   if hints is None:
     hints = np.ones([batch_size, dataset_params.n_classes])
 
   def _map_features(features):
-    ms = audio_ops.GetAugmentedMelspec(features['audio'],
-                                       dataset_params.sample_rate_hz,
-                                       dataset_params.melspec_params,
-                                       dataset_params.feature_cleaning,
-                                       dataset_params.filter_augment)
+    ms = audio_ops.GetAugmentedMelspec(
+        features['audio'],
+        dataset_params.sample_rate_hz,
+        dataset_params.melspec_params,
+        dataset_params.feature_cleaning,
+        dataset_params.filter_augment,
+    )
     return {
         'audio': features['audio'],
         'melspec': ms,
@@ -102,7 +117,8 @@ def build_optimizer(learning_rate, use_tpu):
   print('Defining optimizer...')
   with tf.variable_scope('optimizer'):
     optimizer = tf.train.AdamOptimizer(
-        learning_rate=learning_rate, beta1=0.9, beta2=0.999, epsilon=0.01)
+        learning_rate=learning_rate, beta1=0.9, beta2=0.999, epsilon=0.01
+    )
     # Importing contrib_estimator now fails.
     # if clip_gradient > 0:
     #   optimizer = contrib_estimator.clip_gradients_by_norm(
@@ -126,13 +142,16 @@ def map_k(labels_onehot, logits, k=1, name=''):
   # Need to convert one_hot labels to class ids.
   labels_onehot = tf.cast(labels_onehot, tf.int64)
   class_ids = tf.expand_dims(
-      tf.range(labels_onehot.shape[-1], dtype=tf.int64), 0)
+      tf.range(labels_onehot.shape[-1], dtype=tf.int64), 0
+  )
   masked_class_ids = labels_onehot * class_ids
   # Set the false labels to -1, since the zero label is allowed.
-  masked_class_ids += (labels_onehot - 1) * tf.ones(labels_onehot.shape,
-                                                    tf.int64)
+  masked_class_ids += (labels_onehot - 1) * tf.ones(
+      labels_onehot.shape, tf.int64
+  )
   final_map_k, map_k_update_op = tf.metrics.average_precision_at_k(
-      masked_class_ids, logits, k, name=name)
+      masked_class_ids, logits, k, name=name
+  )
   tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, map_k_update_op)
   return final_map_k
 
@@ -147,7 +166,8 @@ def load_separation_model(model_path):
     new_saver = tf.train.import_meta_graph(metagraph_path_ns)
     new_saver.restore(sess_ns, checkpoint_path)
     input_placeholder_ns = graph_ns.get_tensor_by_name(
-        'input_audio/receiver_audio:0')
+        'input_audio/receiver_audio:0'
+    )
     output_tensor_ns = graph_ns.get_tensor_by_name('denoised_waveforms:0')
   return SeparatorState(sess_ns, input_placeholder_ns, output_tensor_ns)
 
@@ -169,7 +189,8 @@ def load_saved_model(sess, model_dir, inference_subdir='inference'):
 
   meta_graph_def = tf.saved_model.load(sess, [tf.saved_model.SERVING], load_dir)
   signature_def = meta_graph_def.signature_def[
-      tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY]
+      tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY
+  ]
   return signature_def
 
 
@@ -184,15 +205,15 @@ def load_classifier_state(model_path, sample_rate=22050):
     melspec_params = {
         'melspec_frequency': 100,
         'upper_edge_hertz': 10000.0,
-        'scaling': 'pcen'
+        'scaling': 'pcen',
     }
     feature_cleaning = {
         'strategy': 'whiten',
         'clean_thresh': 1.0,
     }
-    cl_melspec = audio_ops.GetAugmentedMelspec(audio_placeholder, sample_rate,
-                                               melspec_params, feature_cleaning,
-                                               None)
+    cl_melspec = audio_ops.GetAugmentedMelspec(
+        audio_placeholder, sample_rate, melspec_params, feature_cleaning, None
+    )
 
     signature_def = load_saved_model(cl_sess, model_path)
     saved_model_melspec_input = signature_def.inputs['melspec_input'].name
@@ -204,8 +225,15 @@ def load_classifier_state(model_path, sample_rate=22050):
     all_outputs = {
         k: signature_def.outputs[k].name for k in signature_def.outputs
     }
-  return ClassifierState(cl_sess, audio_placeholder, saved_model_melspec_input,
-                         hints_input, cl_melspec, output_logits, all_outputs)
+  return ClassifierState(
+      cl_sess,
+      audio_placeholder,
+      saved_model_melspec_input,
+      hints_input,
+      cl_melspec,
+      output_logits,
+      all_outputs,
+  )
 
 
 def load_classifier_ensemble(model_path, sample_rate=22050, max_runs=5):
@@ -224,10 +252,9 @@ def load_classifier_ensemble(model_path, sample_rate=22050, max_runs=5):
   return classifiers
 
 
-def ensemble_classify(audio_batch,
-                      classifier_states,
-                      hints=None,
-                      logits_key=None):
+def ensemble_classify(
+    audio_batch, classifier_states, hints=None, logits_key=None
+):
   """Classify a batch of audio with the given set of classifiers."""
   all_logits = None
   if hints is not None and len(hints.shape) == 1:
@@ -237,7 +264,8 @@ def ensemble_classify(audio_batch,
 
   cl0 = list(classifier_states.values())[0]
   melspec = cl0.session.run(
-      cl0.melspec_output, feed_dict={cl0.audio_placeholder: audio_batch})
+      cl0.melspec_output, feed_dict={cl0.audio_placeholder: audio_batch}
+  )
 
   for cl_state in classifier_states.values():
     if logits_key is None:
@@ -249,11 +277,13 @@ def ensemble_classify(audio_batch,
           target,
           feed_dict={
               cl_state.melspec_placeholder: melspec,
-              cl_state.hints_placeholder: hints
-          })
+              cl_state.hints_placeholder: hints,
+          },
+      )
     else:
       got_logits = cl_state.session.run(
-          target, feed_dict={cl_state.melspec_placeholder: melspec})
+          target, feed_dict={cl_state.melspec_placeholder: melspec}
+      )
 
     got_logits = got_logits[:, np.newaxis]
     if all_logits is None:
@@ -263,10 +293,9 @@ def ensemble_classify(audio_batch,
   return melspec, all_logits
 
 
-def model_embed(audio_batch,
-                classifier_state,
-                hints=None,
-                output_key='pooled_embedding'):
+def model_embed(
+    audio_batch, classifier_state, hints=None, output_key='pooled_embedding'
+):
   """Use ClassifierState to compute an audio embedding."""
   if hints is not None and len(hints.shape) == 1:
     # tile the hints.
@@ -274,18 +303,21 @@ def model_embed(audio_batch,
     hints = np.tile(hints, [audio_batch.shape[0], 1])
   melspec = classifier_state.session.run(
       classifier_state.melspec_output,
-      feed_dict={classifier_state.audio_placeholder: audio_batch})
+      feed_dict={classifier_state.audio_placeholder: audio_batch},
+  )
   if classifier_state.hints_placeholder is not None:
     embedding = classifier_state.session.run(
         classifier_state.all_outputs[output_key],
         feed_dict={
             classifier_state.melspec_placeholder: melspec,
-            classifier_state.hints_placeholder: hints
-        })
+            classifier_state.hints_placeholder: hints,
+        },
+    )
   else:
     embedding = classifier_state.session.run(
         classifier_state.logits,
-        feed_dict={classifier_state.melspec_placeholder: melspec})
+        feed_dict={classifier_state.melspec_placeholder: melspec},
+    )
   return embedding
 
 
@@ -305,18 +337,17 @@ def progress_dot(i, verbose=True, div=1):
     print('.', end='')
 
 
-def ensemble_classify_batched(audios,
-                              classifier_states,
-                              hints=None,
-                              batch_size=32,
-                              verbose=True):
+def ensemble_classify_batched(
+    audios, classifier_states, hints=None, batch_size=32, verbose=True
+):
   """Ensemble classify by batching input audio."""
   logits = None
   mels = None
   ds = tf.data.Dataset.from_tensor_slices(audios).batch(batch_size)
   for i, batch in enumerate(ds):
-    new_mels, new_logits = ensemble_classify(batch.numpy(), classifier_states,
-                                             hints)
+    new_mels, new_logits = ensemble_classify(
+        batch.numpy(), classifier_states, hints
+    )
     if logits is None:
       logits = new_logits
       mels = new_mels
@@ -327,11 +358,9 @@ def ensemble_classify_batched(audios,
   return mels, logits
 
 
-def separate_windowed(audio,
-                      separator_state,
-                      hop_size_s=2.5,
-                      window_size_s=5,
-                      sample_rate=22050):
+def separate_windowed(
+    audio, separator_state, hop_size_s=2.5, window_size_s=5, sample_rate=22050
+):
   """Separate a large audio file in windowed chunks."""
   start_sample = 0
   window_size = int(window_size_s * sample_rate)
@@ -340,15 +369,17 @@ def separate_windowed(audio,
   # Separate audio.
   sep_chunks = []
   raw_chunks = []
-  while (start_sample + window_size <= audio.shape[0] or not raw_chunks):
-    audio_chunk = audio[start_sample:start_sample + window_size]
+  while start_sample + window_size <= audio.shape[0] or not raw_chunks:
+    audio_chunk = audio[start_sample : start_sample + window_size]
     raw_chunks.append(audio_chunk[np.newaxis, :])
     separated_audio = separator_state.session.run(
         separator_state.output_tensor,
         feed_dict={
-            separator_state.audio_placeholder:
-                audio_chunk[np.newaxis, np.newaxis, :]
-        })
+            separator_state.audio_placeholder: audio_chunk[
+                np.newaxis, np.newaxis, :
+            ]
+        },
+    )
     sep_chunks.append(separated_audio)
     start_sample += hop_size
   if not raw_chunks:
@@ -358,44 +389,60 @@ def separate_windowed(audio,
   return sep_chunks, raw_chunks
 
 
-def separate_classify(audio,
-                      classifier_states,
-                      separator_state,
-                      hints=None,
-                      batch_size=4,
-                      hop_size_s=2.5,
-                      window_size_s=5,
-                      sample_rate=22050,
-                      verbose=False):
+def separate_classify(
+    audio,
+    classifier_states,
+    separator_state,
+    hints=None,
+    batch_size=4,
+    hop_size_s=2.5,
+    window_size_s=5,
+    sample_rate=22050,
+    verbose=False,
+):
   """Separate and classify an audio array."""
-  sep_chunks, raw_chunks = separate_windowed(audio, separator_state, hop_size_s,
-                                             window_size_s, sample_rate)
+  sep_chunks, raw_chunks = separate_windowed(
+      audio, separator_state, hop_size_s, window_size_s, sample_rate
+  )
   if raw_chunks is None:
     return None, None
 
   # Run classifiers on chunks.
-  big_batch = np.reshape(sep_chunks,
-                         [sep_chunks.shape[0] * sep_chunks.shape[1], -1])
+  big_batch = np.reshape(
+      sep_chunks, [sep_chunks.shape[0] * sep_chunks.shape[1], -1]
+  )
   sep_mels, sep_logits = ensemble_classify_batched(
       big_batch,
       classifier_states,
       hints=hints,
       batch_size=batch_size,
-      verbose=verbose)
-  sep_mels = np.reshape(sep_mels, [
-      sep_chunks.shape[0], sep_chunks.shape[1], sep_mels.shape[-2],
-      sep_mels.shape[-1]
-  ])
-  sep_logits = np.reshape(sep_logits, [
-      sep_chunks.shape[0], sep_chunks.shape[1],
-      len(classifier_states), sep_logits.shape[-1]
-  ])
+      verbose=verbose,
+  )
+  sep_mels = np.reshape(
+      sep_mels,
+      [
+          sep_chunks.shape[0],
+          sep_chunks.shape[1],
+          sep_mels.shape[-2],
+          sep_mels.shape[-1],
+      ],
+  )
+  sep_logits = np.reshape(
+      sep_logits,
+      [
+          sep_chunks.shape[0],
+          sep_chunks.shape[1],
+          len(classifier_states),
+          sep_logits.shape[-1],
+      ],
+  )
   raw_mels, raw_logits = ensemble_classify_batched(
       raw_chunks,
       classifier_states,
       hints=hints,
       batch_size=batch_size,
-      verbose=verbose)
+      verbose=verbose,
+  )
   raw_logits = raw_logits[:, np.newaxis, :]
 
   stacked_mels = np.concatenate([raw_mels[:, np.newaxis], sep_mels], axis=1)
@@ -420,7 +467,8 @@ def saved_model_prediction(model_dir, mels, hints=None, batch_size=8):
       # Handle species hinting inputs.
       if use_hints:
         n_classes = (
-            signature_def.inputs['hints_input'].tensor_shape.dim[-1].size)
+            signature_def.inputs['hints_input'].tensor_shape.dim[-1].size
+        )
         hints = np.ones([n_classes], np.float32)
 
       dataset_dict = {
@@ -437,8 +485,9 @@ def saved_model_prediction(model_dir, mels, hints=None, batch_size=8):
         feed = {ms_name: features['melspec']}
         if use_hints:
           hint_name = signature_def.inputs['hints_input'].name
-          batch_hints = np.tile(hints[np.newaxis, :],
-                                [features['melspec'].shape[0], 1])
+          batch_hints = np.tile(
+              hints[np.newaxis, :], [features['melspec'].shape[0], 1]
+          )
           feed[hint_name] = batch_hints
 
         pred = sess.run(output_name, feed_dict=feed)
@@ -467,7 +516,8 @@ def make_eval_metrics(mode_key, model_dir, eval_dict):
   """Create an eval metrics map."""
   tensor_map = {k: tf.expand_dims(v, 0) for k, v in eval_dict.items()}
   tensor_map['global_step'] = tf.expand_dims(
-      tf.train.get_or_create_global_step(), 0)
+      tf.train.get_or_create_global_step(), 0
+  )
   summary_path = os.path.join(model_dir, mode_key)
   tf.logging.info('eval_metrics summary path: %s', summary_path)
 
@@ -478,7 +528,7 @@ def make_eval_metrics(mode_key, model_dir, eval_dict):
     eval_metric_ops = {}
 
     with writer.as_default():
-      for (name, tensor) in tensor_map.items():
+      for name, tensor in tensor_map.items():
         if name == 'global_step':
           continue
         eval_metric_ops[name] = tf.metrics.mean(tensor)

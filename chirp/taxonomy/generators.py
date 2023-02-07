@@ -36,9 +36,11 @@ class GeneratorOutput:
   class_lists: List[namespace.ClassList]
 
   def union(self, other: 'GeneratorOutput'):
-    return GeneratorOutput(self.namespaces + other.namespaces,
-                           self.mappings + other.mappings,
-                           self.class_lists + other.class_lists)
+    return GeneratorOutput(
+        self.namespaces + other.namespaces,
+        self.mappings + other.mappings,
+        self.class_lists + other.class_lists,
+    )
 
 
 @functools.lru_cache(maxsize=1)
@@ -66,8 +68,10 @@ def load_ebird2021_dict():
     if r['CATEGORY'].lower() == 'spuh':
       spuh_rollup = r['SCI_NAME'].split(' ')[0].lower()
       spuh_data = codes_dict[r['SPECIES_CODE']]
-      if (spuh_rollup == spuh_data['order'] or
-          spuh_rollup == spuh_data['family']):
+      if (
+          spuh_rollup == spuh_data['order']
+          or spuh_rollup == spuh_data['family']
+      ):
         spuh_data['genus'] = ''
 
   return codes_dict
@@ -97,7 +101,8 @@ def generate_ebird2021():
     return set([data[key] for data in codes_dict.values() if data[key]])
 
   species = sorted(
-      [k for (k, v) in codes_dict.items() if v['category'] == 'species'])
+      [k for (k, v) in codes_dict.items() if v['category'] == 'species']
+  )
 
   # Namespaces
   ebird_all = namespace.Namespace('ebird2021', set(codes_dict.keys()))
@@ -121,10 +126,12 @@ def generate_ebird2021():
   # In theory we could do something for hybrids, as the scientific name
   # seems parseable in the taxonomy file (of the form: 'genus sp1 x sp2')
   # but it'll take a lot of work.
-  ebird_all_to_species = namespace.Mapping.from_dict('ebird2021_to_species',
-                                                     'ebird2021',
-                                                     'ebird2021_species',
-                                                     ebird_all_to_species)
+  ebird_all_to_species = namespace.Mapping.from_dict(
+      'ebird2021_to_species',
+      'ebird2021',
+      'ebird2021_species',
+      ebird_all_to_species,
+  )
 
   def get_ebird_all_taxon_mapping(key, target_namespace):
     mapping_dict = {}
@@ -134,8 +141,9 @@ def generate_ebird2021():
       elif not v[key]:
         # Some 'spuh' classes roll up to Order and thus have no family.
         mapping_dict[k] = 'unknown'
-    mapping = namespace.Mapping.from_dict(f'ebird2021_to_{key}', 'ebird2021',
-                                          target_namespace.name, mapping_dict)
+    mapping = namespace.Mapping.from_dict(
+        f'ebird2021_to_{key}', 'ebird2021', target_namespace.name, mapping_dict
+    )
     return mapping
 
   ebird_all_to_genus = get_ebird_all_taxon_mapping('genus', ebird_genera)
@@ -148,8 +156,11 @@ def generate_ebird2021():
       if v['category'] == 'issf'
   }
   issf_to_species = namespace.Mapping(
-      'ebird2021_issf_to_ebird2021_species', 'ebird2021_issf',
-      'ebird2021_species', [(k, v) for (k, v) in sorted(issf_dict.items())])
+      'ebird2021_issf_to_ebird2021_species',
+      'ebird2021_issf',
+      'ebird2021_species',
+      [(k, v) for (k, v) in sorted(issf_dict.items())],
+  )
 
   def get_ebird_species_mapping(key, target_namespace):
     mapping_dict = {
@@ -157,33 +168,40 @@ def generate_ebird2021():
         for sp in species
         if codes_dict[sp][key] in target_namespace.classes
     }
-    mapping = namespace.Mapping.from_dict(f'ebird2021_species_to_{key}',
-                                          'ebird2021_species',
-                                          target_namespace.name, mapping_dict)
+    mapping = namespace.Mapping.from_dict(
+        f'ebird2021_species_to_{key}',
+        'ebird2021_species',
+        target_namespace.name,
+        mapping_dict,
+    )
     return mapping
 
   species_to_genus = get_ebird_species_mapping('genus', ebird_genera)
   species_to_family = get_ebird_species_mapping('family', ebird_families)
   species_to_order = get_ebird_species_mapping('order', ebird_orders)
 
-  return GeneratorOutput([
-      clements_namespace,
-      ebird_species,
-      ebird_genera,
-      ebird_families,
-      ebird_orders,
-      ebird_issf,
-      ebird_all,
-  ], [
-      species_to_genus,
-      species_to_family,
-      species_to_order,
-      issf_to_species,
-      ebird_all_to_species,
-      ebird_all_to_genus,
-      ebird_all_to_family,
-      ebird_all_to_order,
-  ], [])
+  return GeneratorOutput(
+      [
+          clements_namespace,
+          ebird_species,
+          ebird_genera,
+          ebird_families,
+          ebird_orders,
+          ebird_issf,
+          ebird_all,
+      ],
+      [
+          species_to_genus,
+          species_to_family,
+          species_to_order,
+          issf_to_species,
+          ebird_all_to_species,
+          ebird_all_to_genus,
+          ebird_all_to_family,
+          ebird_all_to_order,
+      ],
+      [],
+  )
 
 
 def load_audioset_dict():

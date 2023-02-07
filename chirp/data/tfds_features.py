@@ -28,6 +28,7 @@ class Int16AsFloatTensor(tfds.features.Audio):
   tensors in the [-1, 1) range (1 is excluded because we divide the
   [-2**15, 2**15 - 1] interval by 2**15).
   """
+
   INT16_SCALE = float(1 << 15)
   ALIASES = ['chirp.data.bird_taxonomy.bird_taxonomy.Int16AsFloatTensor']
 
@@ -38,14 +39,17 @@ class Int16AsFloatTensor(tfds.features.Audio):
       shape: tfds.typing.Shape,
       dtype: tf.dtypes.DType = tf.float32,
       sample_rate: tfds.typing.Dim,
-      encoding: Union[str,
-                      tfds.features.Encoding] = tfds.features.Encoding.NONE,
-      doc: tfds.features.DocArg = None):
+      encoding: Union[
+          str, tfds.features.Encoding
+      ] = tfds.features.Encoding.NONE,
+      doc: tfds.features.DocArg = None
+  ):
     del file_format
     del dtype
 
     self._int16_tensor_feature = tfds.features.Tensor(
-        shape=shape, dtype=tf.int16, encoding=encoding)
+        shape=shape, dtype=tf.int16, encoding=encoding
+    )
 
     super().__init__(
         file_format=None,
@@ -53,7 +57,8 @@ class Int16AsFloatTensor(tfds.features.Audio):
         dtype=tf.float32,
         sample_rate=sample_rate,
         encoding=encoding,
-        doc=doc)
+        doc=doc,
+    )
 
   def get_serialized_info(self):
     return self._int16_tensor_feature.get_serialized_info()
@@ -63,14 +68,17 @@ class Int16AsFloatTensor(tfds.features.Audio):
       example_data = np.array(example_data, dtype=np.float32)
     if example_data.dtype != np.float32:
       raise ValueError('dtype should be float32')
-    if (example_data.min() < -1.0 or
-        example_data.max() > 1.0 - (1.0 / self.INT16_SCALE)):
+    if example_data.min() < -1.0 or example_data.max() > 1.0 - (
+        1.0 / self.INT16_SCALE
+    ):
       raise ValueError('values should be in [-1, 1)')
     return self._int16_tensor_feature.encode_example(
-        (example_data * self.INT16_SCALE).astype(np.int16))
+        (example_data * self.INT16_SCALE).astype(np.int16)
+    )
 
   def decode_example(self, tfexample_data):
     int16_scale = tf.constant(self.INT16_SCALE, dtype=tf.float32)
     decoded_data = tf.cast(
-        self._int16_tensor_feature.decode_example(tfexample_data), tf.float32)
+        self._int16_tensor_feature.decode_example(tfexample_data), tf.float32
+    )
     return decoded_data / int16_scale

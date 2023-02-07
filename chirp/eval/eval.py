@@ -33,38 +33,50 @@ def main(argv: Sequence[str]) -> None:
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
   logging.info(_CONFIG.value)
-  config = config_utils.parse_config(_CONFIG.value,
-                                     config_globals.get_globals())
+  config = config_utils.parse_config(
+      _CONFIG.value, config_globals.get_globals()
+  )
 
   # Check that the required user-specified fields are set in the config.
   if config.create_species_query is None:
-    raise ValueError('eval.py requires `config.create_species_query` to be set '
-                     'to a boolean value (True or False) in the passed config. '
-                     'Please update your config file and run again.')
+    raise ValueError(
+        'eval.py requires `config.create_species_query` to be set '
+        'to a boolean value (True or False) in the passed config. '
+        'Please update your config file and run again.'
+    )
   if config.score_search is None:
-    raise ValueError('eval.py requires `config.score_search` to be set to a '
-                     'boolean value (True or False) in the passed config. '
-                     'Please update your config file and run again.')
+    raise ValueError(
+        'eval.py requires `config.score_search` to be set to a '
+        'boolean value (True or False) in the passed config. '
+        'Please update your config file and run again.'
+    )
   if config.sort_descending is None:
-    raise ValueError('eval.py requires `sort_descending` to be set to a '
-                     'boolean value (True or False) in the passed config. '
-                     'Please update your config file and run again.')
+    raise ValueError(
+        'eval.py requires `sort_descending` to be set to a '
+        'boolean value (True or False) in the passed config. '
+        'Please update your config file and run again.'
+    )
 
   eval_datasets = eval_lib.load_eval_datasets(config)
   embedded_datasets = dict()
   for dataset_name, dataset in eval_datasets.items():
     logging.info('%s:\n%s', dataset_name, dataset)
     embedded_datasets[dataset_name] = eval_lib.get_embeddings(
-        dataset, config.model_callback, config.batch_size)
+        dataset, config.model_callback, config.batch_size
+    )
 
   eval_set_search_results = dict()
   for eval_set_name, eval_set_generator in eval_lib.prepare_eval_sets(
-      config, embedded_datasets):
+      config, embedded_datasets
+  ):
     logging.info(eval_set_name)
 
     search_results = eval_lib.search(
-        eval_set_generator, config.model_callback.learned_representations,
-        config.create_species_query, config.score_search)
+        eval_set_generator,
+        config.model_callback.learned_representations,
+        config.create_species_query,
+        config.score_search,
+    )
 
     eval_set_search_results[eval_set_name] = search_results
 
@@ -72,8 +84,10 @@ def main(argv: Sequence[str]) -> None:
   eval_metrics = [('eval_species', 'average_precision', 'eval_set_name')]
   for eval_set_name, eval_set_results in eval_set_search_results.items():
     eval_metrics.extend(
-        eval_lib.compute_metrics(eval_set_name, eval_set_results,
-                                 config.sort_descending))
+        eval_lib.compute_metrics(
+            eval_set_name, eval_set_results, config.sort_descending
+        )
+    )
 
   eval_lib.write_results_to_csv(eval_metrics, config.write_results_dir)
 

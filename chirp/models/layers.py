@@ -16,6 +16,7 @@
 """Model layers.
 
 Building blocks and layers to construct networks, implemented as Flax modules.
+
 """
 from typing import Callable, Optional
 
@@ -38,6 +39,7 @@ class SqueezeAndExcitation(nn.Module):
       as `r` in the paper.
     activation: The activation to apply after squeezing.
   """
+
   reduction_ratio: int = 4
   activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
 
@@ -53,7 +55,8 @@ class SqueezeAndExcitation(nn.Module):
     """
     if inputs.ndim != 4:
       raise ValueError(
-          "Inputs should in shape of `[batch size, height, width, features]`")
+          "Inputs should in shape of `[batch size, height, width, features]`"
+      )
 
     # Squeeze
     x = jnp.mean(inputs, axis=(1, 2))
@@ -93,6 +96,7 @@ class MBConv(nn.Module):
       that this reduction ratio is relative to the number of input channels,
       i.e., it scales with `expand_ratio`.
   """
+
   features: int
   strides: int
   expand_ratio: int
@@ -102,9 +106,9 @@ class MBConv(nn.Module):
   reduction_ratio: Optional[int] = None
 
   @nn.compact
-  def __call__(self,
-               inputs: jnp.ndarray,
-               use_running_average: bool = None) -> jnp.ndarray:
+  def __call__(
+      self, inputs: jnp.ndarray, use_running_average: bool = None
+  ) -> jnp.ndarray:
     """Applies an inverted bottleneck block to the inputs.
 
     Args:
@@ -124,12 +128,12 @@ class MBConv(nn.Module):
           kernel_size=(1, 1),
           strides=(1, 1),
           use_bias=False,
-          name="ExpandConv")(
-              x)
+          name="ExpandConv",
+      )(x)
       if self.batch_norm:
         x = nn.BatchNorm(
-            use_running_average=use_running_average, name="ExpandBatchNorm")(
-                x)
+            use_running_average=use_running_average, name="ExpandBatchNorm"
+        )(x)
       x = self.activation(x)
 
     if self.strides == 2:
@@ -138,8 +142,10 @@ class MBConv(nn.Module):
         """Calculate padding required to halve input with stride 2."""
         return (kernel_size // 2) - (1 - input_size % 2), kernel_size // 2
 
-      padding = (_pad_width(x.shape[1], self.kernel_size[0]),
-                 _pad_width(x.shape[2], self.kernel_size[1]))
+      padding = (
+          _pad_width(x.shape[1], self.kernel_size[0]),
+          _pad_width(x.shape[2], self.kernel_size[1]),
+      )
     else:
       padding = "SAME"
 
@@ -150,30 +156,30 @@ class MBConv(nn.Module):
         padding=padding,
         feature_group_count=features,
         use_bias=False,
-        name="DepthwiseConv")(
-            x)
+        name="DepthwiseConv",
+    )(x)
     if self.batch_norm:
       x = nn.BatchNorm(
-          use_running_average=use_running_average, name="DepthwiseBatchNorm")(
-              x)
+          use_running_average=use_running_average, name="DepthwiseBatchNorm"
+      )(x)
     x = self.activation(x)
 
     if self.reduction_ratio is not None:
       x = SqueezeAndExcitation(
           reduction_ratio=self.reduction_ratio * self.expand_ratio,
-          activation=self.activation)(
-              x)
+          activation=self.activation,
+      )(x)
     x = nn.Conv(
         features=self.features,
         kernel_size=(1, 1),
         strides=1,
         use_bias=False,
-        name="ProjectConv")(
-            x)
+        name="ProjectConv",
+    )(x)
     if self.batch_norm:
       x = nn.BatchNorm(
-          use_running_average=use_running_average, name="ProjectBatchNorm")(
-              x)
+          use_running_average=use_running_average, name="ProjectBatchNorm"
+      )(x)
 
     return x
 
@@ -203,6 +209,7 @@ class FeedForward(nn.Module):
     output_dims: Depth of the output.
     activation: The activation to apply after the linear layer.
   """
+
   output_dims: int = 0
   activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
 
@@ -236,6 +243,7 @@ class TransformerFeedForward(nn.Module):
     residual_weight: Weight of the residual connection. Output = fn(x) *
       residual_weight + x.
   """
+
   input_dims: int = 0
   hidden_dims: int = 0
   activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
@@ -246,27 +254,28 @@ class TransformerFeedForward(nn.Module):
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool) -> jnp.ndarray:
-
     output_dims = self.input_dims
     inputs_normalized = nn.LayerNorm(name="layer_norm")(inputs)
 
     # Apply first FFN layer
     projected_inputs = FeedForward(
-        output_dims=self.hidden_dims, activation=self.activation)(
-            inputs_normalized)
+        output_dims=self.hidden_dims, activation=self.activation
+    )(inputs_normalized)
 
     # Apply RELU dropout
     projected_inputs = nn.Dropout(self.relu_dropout_prob)(
-        projected_inputs, deterministic=not train)
+        projected_inputs, deterministic=not train
+    )
 
     # Apply second FFN layer
     projected_inputs = FeedForward(
-        output_dims=output_dims, activation=Identity())(
-            projected_inputs)
+        output_dims=output_dims, activation=Identity()
+    )(projected_inputs)
 
     # Apply residual dropout
     projected_inputs = nn.Dropout(self.residual_dropout_prob)(
-        projected_inputs, deterministic=not train)
+        projected_inputs, deterministic=not train
+    )
 
     # Apply skip connection
     if self.add_skip_connection:
@@ -298,10 +307,12 @@ class LightConv1D(nn.Module):
   downsample: bool = True
 
   @nn.compact
-  def __call__(self,
-               inputs: jnp.ndarray,
-               train: bool,
-               use_running_average: Optional[bool] = None) -> jnp.ndarray:
+  def __call__(
+      self,
+      inputs: jnp.ndarray,
+      train: bool,
+      use_running_average: Optional[bool] = None,
+  ) -> jnp.ndarray:
     """Lightweight conv layer.
 
     Args:
@@ -322,11 +333,11 @@ class LightConv1D(nn.Module):
 
     inputs = nn.LayerNorm(name="ln")(inputs)
     act_inputs = FeedForward(
-        output_dims=self.input_dims, activation=Identity())(
-            inputs)
+        output_dims=self.input_dims, activation=Identity()
+    )(inputs)
     gated_inputs = FeedForward(
-        output_dims=self.input_dims, activation=Identity())(
-            inputs)
+        output_dims=self.input_dims, activation=Identity()
+    )(inputs)
     inputs = act_inputs * jax.nn.sigmoid(gated_inputs)
 
     inputs = nn.Conv(
@@ -338,25 +349,26 @@ class LightConv1D(nn.Module):
         kernel_dilation=1,
         feature_group_count=self.input_dims,
         use_bias=False,
-    )(
-        inputs)
+    )(inputs)
 
     inputs = nn.BatchNorm()(inputs, use_running_average=use_running_average)
     inputs = self.conv_activation(inputs)
 
-    inputs = FeedForward(
-        output_dims=self.input_dims, activation=Identity())(
-            inputs)
+    inputs = FeedForward(output_dims=self.input_dims, activation=Identity())(
+        inputs
+    )
     inputs = nn.Dropout(self.dropout_prob)(inputs, deterministic=not train)
 
     if self.downsample:
       unnormalized_inputs = nn.avg_pool(
-          unnormalized_inputs, (2,), (2,), padding="SAME")
+          unnormalized_inputs, (2,), (2,), padding="SAME"
+      )
       # If downsampling happened, the dimensions might also have changed, which
       # means we need to project the inputs for the residual connection
       if unnormalized_inputs.shape[-1] != self.input_dims:
         unnormalized_inputs = nn.Dense(features=self.input_dims)(
-            unnormalized_inputs)
+            unnormalized_inputs
+        )
 
     output = inputs + unnormalized_inputs
     return output
@@ -382,6 +394,7 @@ class SelfAttentionWithNormAndResidual(nn.Module):
     residual_dropout_prob: Probability at which we apply dropout to the residual
       layers, such that, residual(x, y) = (x + dropout(y)).
   """
+
   residual_weight: float = 1.0
   input_weight: float = 1.0
   pre_layer_norm: bool = True
@@ -390,73 +403,78 @@ class SelfAttentionWithNormAndResidual(nn.Module):
   num_heads: int = 1
 
   @nn.compact
-  def __call__(self,
-               inputs: jnp.ndarray,
-               train: bool,
-               atten_mask: Optional[JTensor] = None) -> jnp.ndarray:
-
+  def __call__(
+      self,
+      inputs: jnp.ndarray,
+      train: bool,
+      atten_mask: Optional[JTensor] = None,
+  ) -> jnp.ndarray:
     unnormalized_inputs = inputs
 
     if self.pre_layer_norm:
       inputs = nn.LayerNorm()(inputs)
 
     self_atten = nn.MultiHeadDotProductAttention(
-        num_heads=self.num_heads, dropout_rate=self.atten_dropout_prob)
+        num_heads=self.num_heads, dropout_rate=self.atten_dropout_prob
+    )
     result = self_atten(
         inputs_q=inputs,
         inputs_kv=inputs,
         mask=atten_mask,
-        deterministic=not train)
+        deterministic=not train,
+    )
 
     if not self.pre_layer_norm:
       result = nn.LayerNorm()(result)
 
     dropout = nn.Dropout(self.residual_dropout_prob, name="residual_dropout")
     result = (
-        dropout(result, deterministic=not train) * self.residual_weight +
-        unnormalized_inputs * self.input_weight)
+        dropout(result, deterministic=not train) * self.residual_weight
+        + unnormalized_inputs * self.input_weight
+    )
     return result
 
 
 class Conformer(nn.Module):
   """Conformer layer as in https://arxiv.org/abs/2005.08100.
 
-    Canonical version (with default params.)
-      x = x + 1/2 * FFN(x)
-      x = x + MHSA(x)
-      x = x + Lconv(x)
-      x = x + 1/2 * FFN(x)
-      y = ln(x)
+  Canonical version (with default params.)
+    x = x + 1/2 * FFN(x)
+    x = x + MHSA(x)
+    x = x + Lconv(x)
+    x = x + 1/2 * FFN(x)
+    y = ln(x)
 
-    Residual connections are implemented inside each individual block:
-      FFN, MHSA, LConv.
-    Optionally one can change the order of MHSA and conv.
+  Residual connections are implemented inside each individual block:
+    FFN, MHSA, LConv.
+  Optionally one can change the order of MHSA and conv.
 
-    Attributes:
-      model_dims: Encoder model dimension.
-      kernel_size: Conv kernel size.
-      ff_activation: Activation function used in the feedforward network.
-      ff_residual_weight: Residual weight used in the fflayer.
-      ffn_dim_multiplier: Feed forward hidden dimension will be
-        ffn_dim_multiplier * model_dims.
-      atten_num_heads: Number of attention heads.
-      layer_order: Only mhsa, conv, mhsa_before_conv or conv_before_mhsa are
-        supported
-      dropout_prob: Dropout prob of inner components.
-      conv_residual_dropout: Conv block residual dropout. Will be overwritten by
-        p.dropout if it is not None.
-      atten_residual_dropout: Attention block residual dropout. Will be
-        overwritten by p.dropout if it is not None.
-      ffn_residual_dropout: Feed forward block residual dropout. Will be
-        overwritten by p.dropout if it is not None.
-      atten_dropout: Dropout in Attention layer. Will be overwritten by
-        p.dropout if it is not None.
-      ffn_relu_dropout: Post activation dropout in Feed-forward layer. Will be
-        overwritten by p.dropout if it is not None.
-      fflayer_weight_sharing: If True, will ignore `fflayer_end_tpl`, and will
-        make the fflayer_end layer as a weight-shared copy of the fflayer_start
-        layer.
+  Attributes:
+    model_dims: Encoder model dimension.
+    kernel_size: Conv kernel size.
+    ff_activation: Activation function used in the feedforward network.
+    ff_residual_weight: Residual weight used in the fflayer.
+    ffn_dim_multiplier: Feed forward hidden dimension will be ffn_dim_multiplier
+      * model_dims.
+    atten_num_heads: Number of attention heads.
+    layer_order: Only mhsa, conv, mhsa_before_conv or conv_before_mhsa are
+      supported
+    dropout_prob: Dropout prob of inner components.
+    conv_residual_dropout: Conv block residual dropout. Will be overwritten by
+      p.dropout if it is not None.
+    atten_residual_dropout: Attention block residual dropout. Will be
+      overwritten by p.dropout if it is not None.
+    ffn_residual_dropout: Feed forward block residual dropout. Will be
+      overwritten by p.dropout if it is not None.
+    atten_dropout: Dropout in Attention layer. Will be overwritten by p.dropout
+      if it is not None.
+    ffn_relu_dropout: Post activation dropout in Feed-forward layer. Will be
+      overwritten by p.dropout if it is not None.
+    fflayer_weight_sharing: If True, will ignore `fflayer_end_tpl`, and will
+      make the fflayer_end layer as a weight-shared copy of the fflayer_start
+      layer.
   """
+
   model_dims: int = 512
   kernel_size: int = 32
   ff_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.swish
@@ -475,11 +493,13 @@ class Conformer(nn.Module):
   skip_layer_norm: bool = True
 
   @nn.compact
-  def __call__(self,
-               inputs: jnp.ndarray,
-               train: bool,
-               use_running_average: Optional[bool] = None,
-               atten_mask: Optional[jnp.ndarray] = None) -> jnp.ndarray:
+  def __call__(
+      self,
+      inputs: jnp.ndarray,
+      train: bool,
+      use_running_average: Optional[bool] = None,
+      atten_mask: Optional[jnp.ndarray] = None,
+  ) -> jnp.ndarray:
     """Conformer layer.
 
     Args:
@@ -504,7 +524,8 @@ class Conformer(nn.Module):
     layer_order_set = ["mhsa", "conv", "mhsa_before_conv", "conv_before_mhsa"]
     if self.layer_order not in layer_order_set:
       raise ValueError(
-          f"`self.layer_order` must be within `{layer_order_set}`.")
+          f"`self.layer_order` must be within `{layer_order_set}`."
+      )
 
     input_dims = inputs.shape[-1]
 
@@ -516,7 +537,8 @@ class Conformer(nn.Module):
         hidden_dims=input_dims * self.ffn_dim_multiplier,
         residual_weight=self.ff_residual_weight,
         residual_dropout_prob=self.ffn_residual_dropout,
-        relu_dropout_prob=self.ffn_relu_dropout)
+        relu_dropout_prob=self.ffn_relu_dropout,
+    )
 
     # Set up the last ff layer.
     fflayer_end = TransformerFeedForward(
@@ -526,21 +548,24 @@ class Conformer(nn.Module):
         hidden_dims=self.model_dims * self.ffn_dim_multiplier,
         residual_weight=self.ff_residual_weight,
         residual_dropout_prob=self.ffn_residual_dropout,
-        relu_dropout_prob=self.ffn_relu_dropout)
+        relu_dropout_prob=self.ffn_relu_dropout,
+    )
 
     # Setup attention layer.
     if "mhsa" in self.layer_order:
       trans_atten = SelfAttentionWithNormAndResidual(
           residual_dropout_prob=self.atten_residual_dropout,
           atten_dropout_prob=self.atten_dropout,
-          num_heads=self.atten_num_heads)
+          num_heads=self.atten_num_heads,
+      )
 
     # Setup convolution layer.
     lconv = LightConv1D(
         input_dims=self.model_dims,
         kernel_size=self.kernel_size,
         dropout_prob=self.conv_residual_dropout,
-        downsample=self.downsample)
+        downsample=self.downsample,
+    )
 
     if not self.skip_layer_norm:
       final_ln = nn.LayerNorm(name="final_ln")
@@ -554,7 +579,8 @@ class Conformer(nn.Module):
       inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)
     elif self.layer_order == "conv":
       inputs = lconv(
-          inputs, train=train, use_running_average=use_running_average)
+          inputs, train=train, use_running_average=use_running_average
+      )
     elif self.layer_order == "mhsa_before_conv":
       inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)
       inputs = lconv(inputs, train)
@@ -579,6 +605,7 @@ class StridedAutopool(nn.Module):
   See https://arxiv.org/abs/1804.10070 for basic Autopool derivation.
   This implementation applies autopool to strided time windows.
   """
+
   alpha_0: float
   pool_width: int
   pool_stride: int
@@ -587,14 +614,16 @@ class StridedAutopool(nn.Module):
   @nn.compact
   def __call__(self, inputs):
     alpha_shape = [1] * (len(inputs.shape) - 1) + [inputs.shape[-1]]
-    alpha = self.param("alpha", nn.initializers.constant(self.alpha_0),
-                       alpha_shape)
+    alpha = self.param(
+        "alpha", nn.initializers.constant(self.alpha_0), alpha_shape
+    )
 
     pool_fn = lambda x: nn.pooling.avg_pool(  # pylint: disable=g-long-lambda
         x,
         window_shape=(self.pool_width,),
         strides=(self.pool_stride,),
-        padding=self.padding)
+        padding=self.padding,
+    )
     exp_inputs = jnp.exp(alpha * inputs)
     auto_pooled = pool_fn(exp_inputs * inputs) / pool_fn(exp_inputs)
     return auto_pooled
@@ -618,8 +647,9 @@ class EarlyFeatureExtractor(nn.Module):
         (which used grouped convolutions), for compatibility with old
         experiments. This option will be removed in the future.
   """
+
   conv_layer_tuples: tuple[tuple[int, int, int], ...]
-  dropout_prob: float = 0.
+  dropout_prob: float = 0.0
   activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu
   deprecated_group_conv: bool = False
 
@@ -649,8 +679,8 @@ class EarlyFeatureExtractor(nn.Module):
           strides=(stride,),
           feature_group_count=dim if self.deprecated_group_conv else 1,
           use_bias=False,
-          name="conv_layer_{}".format(i))(
-              inputs)
+          name="conv_layer_{}".format(i),
+      )(inputs)
 
       inputs = nn.Dropout(self.dropout_prob)(inputs, deterministic=not train)
 

@@ -69,9 +69,9 @@ def filter_loss(loss, keep_inds):
   return loss_filtered
 
 
-def filtered_hubert_loss_from_outputs(outputs: hubert.HubertOutput,
-                                      keep_inds: jnp.ndarray,
-                                      **unused_kwargs) -> jnp.ndarray:
+def filtered_hubert_loss_from_outputs(
+    outputs: hubert.HubertOutput, keep_inds: jnp.ndarray, **unused_kwargs
+) -> jnp.ndarray:
   """Cross entropy from model outputs for the given subset of `keep_inds`."""
   logits = outputs.logits
   targets = outputs.targets
@@ -92,20 +92,24 @@ def filtered_hubert_loss_from_outputs(outputs: hubert.HubertOutput,
   return losses
 
 
-def hubert_loss_from_outputs(outputs: hubert.HubertOutput, alpha: float,
-                             **unused_kwargs) -> jnp.ndarray:
+def hubert_loss_from_outputs(
+    outputs: hubert.HubertOutput, alpha: float, **unused_kwargs
+) -> jnp.ndarray:
   """Cross entropy computed from model outputs."""
   mask_idc = outputs.mask_idc
   # Compute the loss on the unmasked and masked frames separately.
-  loss_u = filtered_hubert_loss_from_outputs(outputs,
-                                             jnp.where(mask_idc, False, True))
-  loss_m = filtered_hubert_loss_from_outputs(outputs,
-                                             jnp.where(mask_idc, True, False))
+  loss_u = filtered_hubert_loss_from_outputs(
+      outputs, jnp.where(mask_idc, False, True)
+  )
+  loss_m = filtered_hubert_loss_from_outputs(
+      outputs, jnp.where(mask_idc, True, False)
+  )
   return alpha * loss_m + (1 - alpha) * loss_u
 
 
-def quantizer_loss(outputs: hubert.HubertOutput, quant_loss_mult: float,
-                   **unused_kwargs) -> jnp.ndarray:
+def quantizer_loss(
+    outputs: hubert.HubertOutput, quant_loss_mult: float, **unused_kwargs
+) -> jnp.ndarray:
   """Get quantization loss from model outputs."""
   del unused_kwargs
   # [bsz, sz, csz] or [bsz, sz, 1] (depending on the quantizer).
@@ -115,10 +119,15 @@ def quantizer_loss(outputs: hubert.HubertOutput, quant_loss_mult: float,
   return quant_loss * quant_loss_mult
 
 
-def taxonomy_cross_entropy(outputs: hubert.HubertOutput, label: jnp.ndarray,
-                           genus: jnp.ndarray, family: jnp.ndarray,
-                           order: jnp.ndarray, taxonomy_loss_weight: float,
-                           **unused_kwargs) -> jnp.ndarray:
+def taxonomy_cross_entropy(
+    outputs: hubert.HubertOutput,
+    label: jnp.ndarray,
+    genus: jnp.ndarray,
+    family: jnp.ndarray,
+    order: jnp.ndarray,
+    taxonomy_loss_weight: float,
+    **unused_kwargs,
+) -> jnp.ndarray:
   """Computes mean cross entropy across taxonomic labels."""
 
   def aggregate_losses(preds, target):
@@ -126,7 +135,8 @@ def taxonomy_cross_entropy(outputs: hubert.HubertOutput, label: jnp.ndarray,
     losses = []
     for l in preds:
       losses.append(
-          jnp.mean(optax.sigmoid_binary_cross_entropy(l, target), axis=-1))
+          jnp.mean(optax.sigmoid_binary_cross_entropy(l, target), axis=-1)
+      )
     return jnp.sum(jnp.stack(losses, axis=0), axis=0)
 
   mean = aggregate_losses(outputs.label, label)
@@ -138,45 +148,55 @@ def taxonomy_cross_entropy(outputs: hubert.HubertOutput, label: jnp.ndarray,
   return mean
 
 
-def supervised_loss(outputs: hubert.HubertOutput, label: jnp.ndarray,
-                    genus: jnp.ndarray, family: jnp.ndarray, order: jnp.ndarray,
-                    taxonomy_loss_weight: float, readout_loss_mult: float,
-                    **unused_kwargs) -> jnp.ndarray:
+def supervised_loss(
+    outputs: hubert.HubertOutput,
+    label: jnp.ndarray,
+    genus: jnp.ndarray,
+    family: jnp.ndarray,
+    order: jnp.ndarray,
+    taxonomy_loss_weight: float,
+    readout_loss_mult: float,
+    **unused_kwargs,
+) -> jnp.ndarray:
   """Compute classification loss for all taxonomy heads."""
   del unused_kwargs
-  loss = taxonomy_cross_entropy(outputs, label, genus, family, order,
-                                taxonomy_loss_weight)  # [bsz].
+  loss = taxonomy_cross_entropy(
+      outputs, label, genus, family, order, taxonomy_loss_weight
+  )  # [bsz].
   # Make it [bsz, sz] so that it can be element-wise added to other losses.
   sz = outputs.logits[0].shape[-2]
   loss = jnp.repeat(jnp.expand_dims(loss, axis=-1), axis=-1, repeats=sz)
   return loss * readout_loss_mult
 
 
-def keyed_cross_entropy(key: str,
-                        outputs: hubert.HubertOutput,
-                        readout_index: int = 0,
-                        **kwargs) -> Optional[jnp.ndarray]:
+def keyed_cross_entropy(
+    key: str, outputs: hubert.HubertOutput, readout_index: int = 0, **kwargs
+) -> Optional[jnp.ndarray]:
   """Cross entropy for the specified taxonomic label set."""
   outputs = getattr(outputs, key)
   outputs = outputs[readout_index]
   mean = jnp.mean(
-      optax.sigmoid_binary_cross_entropy(outputs, kwargs[key]), axis=-1)
+      optax.sigmoid_binary_cross_entropy(outputs, kwargs[key]), axis=-1
+  )
   return mean
 
 
-def keyed_map(key: str,
-              outputs: hubert.HubertOutput,
-              readout_index: int = 0,
-              **kwargs) -> Optional[jnp.ndarray]:
+def keyed_map(
+    key: str, outputs: hubert.HubertOutput, readout_index: int = 0, **kwargs
+) -> Optional[jnp.ndarray]:
   outputs = getattr(outputs, key)
   outputs = outputs[readout_index]
   return metrics.average_precision(scores=outputs, labels=kwargs[key])
 
 
-def final_loss(outputs: hubert.HubertOutput, alpha: float,
-               quant_loss_mult: float, readout_loss_mult: float,
-               hubert_loss_mult: float,
-               **kwargs_for_supervised) -> Optional[jnp.ndarray]:
+def final_loss(
+    outputs: hubert.HubertOutput,
+    alpha: float,
+    quant_loss_mult: float,
+    readout_loss_mult: float,
+    hubert_loss_mult: float,
+    **kwargs_for_supervised,
+) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
   # [bsz, sz].
   quant_loss = quantizer_loss(outputs, quant_loss_mult)
@@ -185,7 +205,8 @@ def final_loss(outputs: hubert.HubertOutput, alpha: float,
 
   # [bsz, sz].
   readout_loss = supervised_loss(
-      outputs, readout_loss_mult=readout_loss_mult, **kwargs_for_supervised)
+      outputs, readout_loss_mult=readout_loss_mult, **kwargs_for_supervised
+  )
 
   # [nq, ns, bsz, sz].
   hubert_loss = hubert_loss_from_outputs(outputs, alpha)
@@ -200,12 +221,18 @@ def final_loss(outputs: hubert.HubertOutput, alpha: float,
   return quant_loss + hubert_loss + readout_loss
 
 
-def cluster_targets_metrics(outputs: hubert.HubertOutput, key: str,
-                            **unused_kwargs) -> Optional[jnp.ndarray]:
+def cluster_targets_metrics(
+    outputs: hubert.HubertOutput, key: str, **unused_kwargs
+) -> Optional[jnp.ndarray]:
   """Get the final loss to use for training."""
   del unused_kwargs
-  assert key.startswith(("n_masked_per_sample", "n_per_cluster",
-                         "max_per_cluster", "min_per_cluster", "h_diversity"))
+  assert key.startswith((
+      "n_masked_per_sample",
+      "n_per_cluster",
+      "max_per_cluster",
+      "min_per_cluster",
+      "h_diversity",
+  ))
   # A list of [ns, bsz, sz, nc].
   all_targets = outputs.targets
   mask_idc = outputs.mask_idc
@@ -223,82 +250,94 @@ def cluster_targets_metrics(outputs: hubert.HubertOutput, key: str,
         "n_per_cluster_{}".format(i): n_per_cluster,
         "max_per_cluster_{}".format(i): max_per_cluster,
         "min_per_cluster_{}".format(i): min_per_cluster,
-        "h_diversity_{}".format(i): h_diversity
+        "h_diversity_{}".format(i): h_diversity,
     })
   return ret[key]
 
 
-def make_metrics_collection(prefix: str, alpha: float, quant_loss_mult: float,
-                            readout_loss_mult: float, hubert_loss_mult: float,
-                            readout_points: list[int],
-                            quantizer_points: list[int],
-                            learning_rate_schedule: optax.Schedule):
+def make_metrics_collection(
+    prefix: str,
+    alpha: float,
+    quant_loss_mult: float,
+    readout_loss_mult: float,
+    hubert_loss_mult: float,
+    readout_points: list[int],
+    quantizer_points: list[int],
+    learning_rate_schedule: optax.Schedule,
+):
   """Create metrics collection."""
   metrics_dict = {
-      "learning_rate":
-          clu_metrics.Average.from_fun(
-              (lambda step, **kwargs: learning_rate_schedule(step))),
-      "hubert_loss":
-          clu_metrics.Average.from_fun(
-              functools.partial(hubert_loss_from_outputs, alpha=alpha)),
-      "quantizer_loss":
-          clu_metrics.Average.from_fun(
-              functools.partial(
-                  quantizer_loss, quant_loss_mult=quant_loss_mult)),
-      "supervised_loss":
-          clu_metrics.Average.from_fun(
-              functools.partial(
-                  supervised_loss, readout_loss_mult=readout_loss_mult)),
-      "loss":
-          clu_metrics.Average.from_fun(
-              functools.partial(
-                  final_loss,
-                  alpha=alpha,
-                  quant_loss_mult=quant_loss_mult,
-                  readout_loss_mult=readout_loss_mult,
-                  hubert_loss_mult=hubert_loss_mult)),
+      "learning_rate": clu_metrics.Average.from_fun(
+          (lambda step, **kwargs: learning_rate_schedule(step))
+      ),
+      "hubert_loss": clu_metrics.Average.from_fun(
+          functools.partial(hubert_loss_from_outputs, alpha=alpha)
+      ),
+      "quantizer_loss": clu_metrics.Average.from_fun(
+          functools.partial(quantizer_loss, quant_loss_mult=quant_loss_mult)
+      ),
+      "supervised_loss": clu_metrics.Average.from_fun(
+          functools.partial(
+              supervised_loss, readout_loss_mult=readout_loss_mult
+          )
+      ),
+      "loss": clu_metrics.Average.from_fun(
+          functools.partial(
+              final_loss,
+              alpha=alpha,
+              quant_loss_mult=quant_loss_mult,
+              readout_loss_mult=readout_loss_mult,
+              hubert_loss_mult=hubert_loss_mult,
+          )
+      ),
   }
 
-  metrics_dict.update({
-      "n_masked_per_sample":
-          clu_metrics.Average.from_fun(
+  metrics_dict.update(
+      {
+          "n_masked_per_sample": clu_metrics.Average.from_fun(
               functools.partial(
-                  cluster_targets_metrics, key="n_masked_per_sample")),
-  })
+                  cluster_targets_metrics, key="n_masked_per_sample"
+              )
+          ),
+      }
+  )
   for i, block_ind in enumerate(quantizer_points):
     block_name = "late_fs_{}".format(block_ind) if block_ind >= 0 else "earlyfs"
     metrics_dict.update({
-        "n_per_cluster_{}".format(block_name):
-            clu_metrics.Average.from_fun(
-                functools.partial(
-                    cluster_targets_metrics, key="n_per_cluster_{}".format(i))),
-        "max_per_cluster_{}".format(block_name):
-            clu_metrics.Average.from_fun(
-                functools.partial(
-                    cluster_targets_metrics,
-                    key="max_per_cluster_{}".format(i))),
-        "min_per_cluster_{}".format(block_name):
-            clu_metrics.Average.from_fun(
-                functools.partial(
-                    cluster_targets_metrics,
-                    key="min_per_cluster_{}".format(i))),
-        "h_diversity_{}".format(block_name):
-            clu_metrics.Average.from_fun(
-                functools.partial(
-                    cluster_targets_metrics, key="h_diversity_{}".format(i))),
+        "n_per_cluster_{}".format(block_name): clu_metrics.Average.from_fun(
+            functools.partial(
+                cluster_targets_metrics, key="n_per_cluster_{}".format(i)
+            )
+        ),
+        "max_per_cluster_{}".format(block_name): clu_metrics.Average.from_fun(
+            functools.partial(
+                cluster_targets_metrics, key="max_per_cluster_{}".format(i)
+            )
+        ),
+        "min_per_cluster_{}".format(block_name): clu_metrics.Average.from_fun(
+            functools.partial(
+                cluster_targets_metrics, key="min_per_cluster_{}".format(i)
+            )
+        ),
+        "h_diversity_{}".format(block_name): clu_metrics.Average.from_fun(
+            functools.partial(
+                cluster_targets_metrics, key="h_diversity_{}".format(i)
+            )
+        ),
     })
 
   taxo_keys = ["label", "genus", "family", "order"]
   for i, block_ind in enumerate(readout_points):
     for key in taxo_keys:
       metrics_dict.update({
-          key + "_{}_xentropy".format(block_ind):
-              clu_metrics.Average.from_fun(
-                  functools.partial(
-                      keyed_cross_entropy, key=key, readout_index=i)),
-          key + "_{}_map".format(block_ind):
-              clu_metrics.Average.from_fun(
-                  functools.partial(keyed_map, key=key, readout_index=i)),
+          key
+          + "_{}_xentropy".format(block_ind): clu_metrics.Average.from_fun(
+              functools.partial(keyed_cross_entropy, key=key, readout_index=i)
+          ),
+          key
+          + "_{}_map".format(block_ind): clu_metrics.Average.from_fun(
+              functools.partial(keyed_map, key=key, readout_index=i)
+          ),
       })
   metrics_dict = {prefix + k: v for k, v in metrics_dict.items()}
   return clu_metrics.Collection.create(**metrics_dict)
@@ -308,26 +347,31 @@ def make_cmap_metrics_dict(label_names, readout_points):
   """Create a dict of empty cmap_metrics."""
   metrics_dict = {}
   for block_ind in readout_points:
-    metrics_dict.update({
-        label + "_{}".format(block_ind): cmap.CMAP.empty()
-        for label in label_names
-    })
+    metrics_dict.update(
+        {
+            label + "_{}".format(block_ind): cmap.CMAP.empty()
+            for label in label_names
+        }
+    )
   return metrics_dict
 
 
-def update_cmap_metrics_dict(label_names, cmap_metrics, model_outputs, batch,
-                             readout_points):
+def update_cmap_metrics_dict(
+    label_names, cmap_metrics, model_outputs, batch, readout_points
+):
   """Update a dict of cmap_metrics from model_outputs and a batch."""
   for label_name in label_names:
     for i, block_ind in enumerate(readout_points):
       label_name_i = label_name + "_{}".format(block_ind)
       cmap_metrics[label_name_i] = cmap_metrics[label_name_i].merge(
-          cmap.CMAP(getattr(model_outputs, label_name)[i], batch[label_name]))
+          cmap.CMAP(getattr(model_outputs, label_name)[i], batch[label_name])
+      )
   return cmap_metrics
 
 
 class LearningRateSchedule(enum.Enum):
   """A point in the architecture to add a quantizer."""
+
   PIECEWISE_LINEAR = "piecewise_linear"
   PIECEWISE_COSINE = "piecewise_cosine"
   COSINE_DECAY = "cosine_decay"
@@ -346,7 +390,8 @@ def project(min_value: float, max_value: float) -> optax.GradientTransformation:
 
   def clip_value(updates, params):
     return tree_util.tree_map(
-        lambda p, u: jnp.clip(p + u, min_value, max_value) - p, params, updates)
+        lambda p, u: jnp.clip(p + u, min_value, max_value) - p, params, updates
+    )
 
   return optax.stateless(clip_value)
 
@@ -369,7 +414,8 @@ def initialize_model(
     reload_hubert_omit_quantizers: bool,
     target_class_list: str,
     early_fs_class: Optional[Callable] = layers.EarlyFeatureExtractor,
-    **unused_kwargs):
+    **unused_kwargs,
+):
   """Creates model for training, eval, or inference."""
   del unused_kwargs
   # Initialize random number generator
@@ -396,15 +442,19 @@ def initialize_model(
     quantizer_class = quantizers.VectorQuantizer
   quantizer_list = []
   for _ in range(len(model_config.quantizer_points)):
-    if (quantizer_config.strategy ==
-        quantizers.QuantizationStrategy.PRODUCT_QUANTIZATION.value):
+    if (
+        quantizer_config.strategy
+        == quantizers.QuantizationStrategy.PRODUCT_QUANTIZATION.value
+    ):
       base_quantizers = [
           quantizer_class(**kwargs)
           for _ in range(quantizer_config.num_sections)
       ]
       quantizer = quantizers.ProductQuantizer(base_quantizers=base_quantizers)
-    elif (quantizer_config.strategy ==
-          quantizers.QuantizationStrategy.RESIDUAL_QUANTIZATION.value):
+    elif (
+        quantizer_config.strategy
+        == quantizers.QuantizationStrategy.RESIDUAL_QUANTIZATION.value
+    ):
       base_quantizers = [
           quantizer_class(**kwargs)
           for _ in range(quantizer_config.num_sections)
@@ -421,27 +471,41 @@ def initialize_model(
         kernel_size=frontend_config.kernel_size,
         sample_rate=frontend_config.sample_rate,
         freq_range=frontend_config.freq_range,
-        scaling_config=frontend_config.scaling_config)
+        scaling_config=frontend_config.scaling_config,
+    )
 
   # Initialize the early feature extractor.
   if model_config.use_raw_audio:
     if early_fs_config.omit_earlyfs:
-      raise ValueError("Expected the early feature extractor to be provided if "
-                       "using raw audio.")
-    if (hubert.QuantizerPoints.FRONTEND.value in model_config.quantizer_points
-        and frontend is None):
-      raise ValueError("Expected frontend to be provided in order to "
-                       "perform quantization on the frontend outputs.")
+      raise ValueError(
+          "Expected the early feature extractor to be provided if "
+          "using raw audio."
+      )
+    if (
+        hubert.QuantizerPoints.FRONTEND.value in model_config.quantizer_points
+        and frontend is None
+    ):
+      raise ValueError(
+          "Expected frontend to be provided in order to "
+          "perform quantization on the frontend outputs."
+      )
 
     # The original architecture, from wav2vec, which leads to 500 frames.
-    conv_layer_tuples = tuple([(512, 10, 5), (512, 3, 2), (512, 3, 2),
-                               (512, 3, 2), (512, 3, 2), (512, 2, 2),
-                               (512, 2, 2)])
+    conv_layer_tuples = tuple([
+        (512, 10, 5),
+        (512, 3, 2),
+        (512, 3, 2),
+        (512, 3, 2),
+        (512, 3, 2),
+        (512, 2, 2),
+        (512, 2, 2),
+    ])
     early_fs = early_fs_class(
         dropout_prob=early_fs_config.dropout_prob,
         activation=early_fs_config.activation,
         conv_layer_tuples=conv_layer_tuples,
-        deprecated_group_conv=early_fs_config.deprecated_group_conv)
+        deprecated_group_conv=early_fs_config.deprecated_group_conv,
+    )
 
   else:
     if early_fs_config.omit_earlyfs:
@@ -449,40 +513,74 @@ def initialize_model(
     else:
       if early_fs_config.num_frames not in [125, 63, 32, 16]:
         raise ValueError(
-            "Expected early_fs_config.num_frames to be 125, 63, 32 or 16.")
+            "Expected early_fs_config.num_frames to be 125, 63, 32 or 16."
+        )
 
       if frontend is None:
         # Their original architecture led to 500 frames which caused OOM.
         # Added 2 additional conv layers with stride 2 which makes it 125.
         # Still was getting OOM with this with batch size 128, so reduced to 64.
-        conv_layer_tuples = tuple([(512, 10, 5), (512, 3, 2), (512, 3, 2),
-                                   (512, 3, 2), (512, 3, 2), (512, 2, 2),
-                                   (512, 2, 2), (512, 2, 2), (512, 2, 2)])
+        conv_layer_tuples = tuple([
+            (512, 10, 5),
+            (512, 3, 2),
+            (512, 3, 2),
+            (512, 3, 2),
+            (512, 3, 2),
+            (512, 2, 2),
+            (512, 2, 2),
+            (512, 2, 2),
+            (512, 2, 2),
+        ])
       else:
         nf = 512
         if early_fs_config.num_frames == 125:
           # With this configuration, the number of frames is reduced from 500 to
           # 125 and the framerate is reduced from 100Hz (which the frontend
           # outputs) 25Hz.
-          conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 1),
-                                     (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
-                                     (nf, 2, 1)])
+          conv_layer_tuples = tuple([
+              (nf, 10, 2),
+              (nf, 3, 2),
+              (nf, 3, 1),
+              (nf, 3, 1),
+              (nf, 3, 1),
+              (nf, 2, 1),
+              (nf, 2, 1),
+          ])
         elif early_fs_config.num_frames == 63:
-          conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
-                                     (nf, 3, 1), (nf, 3, 1), (nf, 2, 1),
-                                     (nf, 2, 1)])
+          conv_layer_tuples = tuple([
+              (nf, 10, 2),
+              (nf, 3, 2),
+              (nf, 3, 2),
+              (nf, 3, 1),
+              (nf, 3, 1),
+              (nf, 2, 1),
+              (nf, 2, 1),
+          ])
         elif early_fs_config.num_frames == 32:
-          conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
-                                     (nf, 3, 2), (nf, 3, 1), (nf, 2, 1),
-                                     (nf, 2, 1)])
+          conv_layer_tuples = tuple([
+              (nf, 10, 2),
+              (nf, 3, 2),
+              (nf, 3, 2),
+              (nf, 3, 2),
+              (nf, 3, 1),
+              (nf, 2, 1),
+              (nf, 2, 1),
+          ])
         elif early_fs_config.num_frames == 16:
-          conv_layer_tuples = tuple([(nf, 10, 2), (nf, 3, 2), (nf, 3, 2),
-                                     (nf, 3, 2), (nf, 3, 2), (nf, 2, 1),
-                                     (nf, 2, 1)])
+          conv_layer_tuples = tuple([
+              (nf, 10, 2),
+              (nf, 3, 2),
+              (nf, 3, 2),
+              (nf, 3, 2),
+              (nf, 3, 2),
+              (nf, 2, 1),
+              (nf, 2, 1),
+          ])
       early_fs = early_fs_class(
           dropout_prob=early_fs_config.dropout_prob,
           activation=early_fs_config.activation,
-          conv_layer_tuples=conv_layer_tuples)
+          conv_layer_tuples=conv_layer_tuples,
+      )
 
   # Now set up the HuBERT model.
   model = hubert.HuBERTModel(
@@ -490,12 +588,11 @@ def initialize_model(
       quantizer=quantizer_list,
       frontend=frontend,
       early_feature_extractor=early_fs,
-      **model_config)
+      **model_config,
+  )
   variables = model.init(
-      model_init_key,
-      jnp.zeros((1, input_size)),
-      train=False,
-      mask_key=mask_key)
+      model_init_key, jnp.zeros((1, input_size)), train=False, mask_key=mask_key
+  )
   model_state, params = variables.pop("params")
 
   # NOTE: https://github.com/deepmind/optax/issues/160
@@ -512,8 +609,9 @@ def initialize_model(
         init_value=start_learning_rate,
         boundaries_and_scales={
             int(0.08 * num_train_steps): peak_scaling_factor,
-            num_train_steps: start_learning_rate
-        })
+            num_train_steps: start_learning_rate,
+        },
+    )
   elif learning_rate_schedule is LearningRateSchedule.COSINE_DECAY:
     # only `start_learning_rate` and `num_train_steps` are used in this case.
     learning_rate = optax.cosine_decay_schedule(
@@ -529,17 +627,21 @@ def initialize_model(
     optimizer = optax.chain(
         optax.adam(learning_rate=learning_rate),
         optax.masked(
-            project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)),
+            project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)
+        ),
         optax.masked(project(0.0, jnp.pi), mask_by_name("gabor_mean", params)),
         optax.masked(
             project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
-            mask_by_name("gabor_std", params)))
+            mask_by_name("gabor_std", params),
+        ),
+    )
   opt_state = optimizer.init(params)
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
   train_state = utils.TrainState(
-      step=0, params=params, opt_state=opt_state, model_state=model_state)
+      step=0, params=params, opt_state=opt_state, model_state=model_state
+  )
 
   did_reload = False
   num_attempts = 0
@@ -550,12 +652,17 @@ def initialize_model(
       break
     except tf.errors.NotFoundError:
       logging.warning(
-          "Reloading from %s failed. Taking a nap and will try again.", workdir)
+          "Reloading from %s failed. Taking a nap and will try again.", workdir
+      )
       time.sleep(5)
     except:  # pylint: disable=bare-except
       logging.warning(
-          "Reloading from %s failed for some unexpected reason. Taking a nap "
-          "and will try again.", workdir)
+          (
+              "Reloading from %s failed for some unexpected reason. Taking a"
+              " nap and will try again."
+          ),
+          workdir,
+      )
       time.sleep(5)
     num_attempts += 1
 
@@ -571,7 +678,8 @@ def initialize_model(
       except tf.errors.NotFoundError:
         logging.warning(
             "Reloading from %s failed. Taking a nap and will try again.",
-            reload_quantizer_from)
+            reload_quantizer_from,
+        )
         time.sleep(5)
       num_attempts += 1
     if "quantizer" in reloaded_quantizer["params"].keys():
@@ -582,9 +690,11 @@ def initialize_model(
       raise RuntimeError(
           "Unsure which parameters correspond to the quantizer, "
           "so unable to reload it. The reloaded params do not contain a key "
-          "'quantizer' nor 'quantizer_0'.")
+          "'quantizer' nor 'quantizer_0'."
+      )
     train_state.params[quantizer_key] = reloaded_quantizer["params"][  # pytype: disable=unsupported-operands  # py310-upgrade
-        quantizer_key]
+        quantizer_key
+    ]
 
   if reload_hubert_from:
     ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_hubert_from)
@@ -598,40 +708,51 @@ def initialize_model(
       except tf.errors.NotFoundError:
         logging.warning(
             "Reloading from %s failed. Taking a nap and will try again.",
-            reload_hubert_from)
+            reload_hubert_from,
+        )
         time.sleep(5)
       num_attempts += 1
-    logging.info("Reloaded HuBERT params with keys %s",
-                 reloaded_hubert["params"].keys())
+    logging.info(
+        "Reloaded HuBERT params with keys %s", reloaded_hubert["params"].keys()
+    )
     for k, v in reloaded_hubert["params"].items():
       # Since this reloading is done for continuing to train HuBERT with a new
       # quantizer (in a different space), we assume it's best to re-initialize
       # the projections between the features and these new codes.
-      if reload_hubert_omit_quantizers and (k.startswith("codes_proj") or
-                                            k.startswith("final_proj") or
-                                            k.startswith("quantizer")):
+      if reload_hubert_omit_quantizers and (
+          k.startswith("codes_proj")
+          or k.startswith("final_proj")
+          or k.startswith("quantizer")
+      ):
         logging.info("Ignoring HuBERT parameters for key %s.", k)
         continue
-      train_state.params[k] = v  # pytype: disable=unsupported-operands  # py310-upgrade
+      train_state.params[k] = (
+          v  # pytype: disable=unsupported-operands  # py310-upgrade
+      )
       logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
 
-  return utils.ModelBundle(model, optimizer, key,
-                           ckpt), train_state, learning_rate
+  return (
+      utils.ModelBundle(model, optimizer, key, ckpt),
+      train_state,
+      learning_rate,
+  )
 
 
-def train(model_bundle,
-          train_state,
-          learning_rate_schedule,
-          train_dataset,
-          num_train_steps: int,
-          logdir: str,
-          log_every_steps: int,
-          checkpoint_every_steps: int,
-          num_quantizer_pretrain_steps: int,
-          quant_loss_mult: float,
-          readout_loss_mult: float,
-          hubert_loss_mult: float,
-          reload_quantizer=False) -> None:
+def train(
+    model_bundle,
+    train_state,
+    learning_rate_schedule,
+    train_dataset,
+    num_train_steps: int,
+    logdir: str,
+    log_every_steps: int,
+    checkpoint_every_steps: int,
+    num_quantizer_pretrain_steps: int,
+    quant_loss_mult: float,
+    readout_loss_mult: float,
+    hubert_loss_mult: float,
+    reload_quantizer=False,
+) -> None:
   """Train a model.
 
   Args:
@@ -655,8 +776,10 @@ def train(model_bundle,
       case, it is kept frozen.
   """
   if reload_quantizer and num_quantizer_pretrain_steps:
-    raise ValueError("Cannot have both num_quantizer_steps being nonzero and "
-                     "reload_quantizer being True.")
+    raise ValueError(
+        "Cannot have both num_quantizer_steps being nonzero and "
+        "reload_quantizer being True."
+    )
 
   train_iterator = train_dataset.as_numpy_iterator()
   train_metrics_collection = make_metrics_collection(
@@ -667,13 +790,12 @@ def train(model_bundle,
       hubert_loss_mult,
       model_bundle.model.readout_points,
       model_bundle.model.quantizer_points,
-      learning_rate_schedule=learning_rate_schedule)
+      learning_rate_schedule=learning_rate_schedule,
+  )
 
   def get_update_step(loss_key="train___loss"):
-
     @functools.partial(jax.pmap, axis_name="batch")
     def update_step(key, batch, train_state, mask_key):
-
       dropout_key, low_pass_key = random.split(key)
 
       def step(params, model_state):
@@ -688,7 +810,8 @@ def train(model_bundle,
             rngs={
                 "dropout": dropout_key,
                 "low_pass": low_pass_key,
-            })
+            },
+        )
         train_metrics = train_metrics_collection.gather_from_model_output(
             outputs=model_outputs,
             label=batch["label"],
@@ -696,17 +819,20 @@ def train(model_bundle,
             family=batch["family"],
             order=batch["order"],
             taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
-            step=train_state.step).compute()
+            step=train_state.step,
+        ).compute()
         loss = train_metrics[loss_key]
         return loss, (train_metrics, model_state)
 
       # model_state has only the batch_norm stats which only appear in the
       # late feature extractor (conformer).
       (_, (train_metrics, model_state)), grads = jax.value_and_grad(
-          step, has_aux=True)(train_state.params, train_state.model_state)
+          step, has_aux=True
+      )(train_state.params, train_state.model_state)
       grads = jax.lax.pmean(grads, axis_name="batch")
       updates, opt_state = model_bundle.optimizer.update(
-          grads, train_state.opt_state, train_state.params)
+          grads, train_state.opt_state, train_state.params
+      )
 
       params_after_update = optax.apply_updates(train_state.params, updates)
 
@@ -714,7 +840,8 @@ def train(model_bundle,
           step=train_state.step + 1,
           params=params_after_update,
           opt_state=opt_state,
-          model_state=model_state)
+          model_state=model_state,
+      )
       return train_metrics, train_state
 
     return update_step
@@ -729,7 +856,8 @@ def train(model_bundle,
   # Logging
   writer = metric_writers.create_default_writer(logdir)
   reporter = periodic_actions.ReportProgress(
-      num_train_steps=num_train_steps, writer=writer)
+      num_train_steps=num_train_steps, writer=writer
+  )
 
   # Training and evaluation loop
   key = model_bundle.key
@@ -745,12 +873,14 @@ def train(model_bundle,
 
       if step < num_quantizer_pretrain_steps:
         # Train only the quantizer.
-        train_metrics, train_state = quantizer_step(step_key, batch,
-                                                    train_state, mask_key)
+        train_metrics, train_state = quantizer_step(
+            step_key, batch, train_state, mask_key
+        )
       else:
         # Joint training.
-        train_metrics, train_state = joint_step(step_key, batch, train_state,
-                                                mask_key)
+        train_metrics, train_state = joint_step(
+            step_key, batch, train_state, mask_key
+        )
 
       train_metrics = flax_utils.unreplicate(train_metrics)
 
@@ -767,13 +897,15 @@ def train(model_bundle,
   writer.close()
 
 
-def evaluate(model_bundle: utils.ModelBundle,
-             train_state: utils.TrainState,
-             learning_rate_schedule: optax.Schedule,
-             valid_dataset: tf.data.Dataset,
-             writer: metric_writers.MetricWriter,
-             reporter: periodic_actions.ReportProgress,
-             eval_steps_per_checkpoint: Optional[int] = None):
+def evaluate(
+    model_bundle: utils.ModelBundle,
+    train_state: utils.TrainState,
+    learning_rate_schedule: optax.Schedule,
+    valid_dataset: tf.data.Dataset,
+    writer: metric_writers.MetricWriter,
+    reporter: periodic_actions.ReportProgress,
+    eval_steps_per_checkpoint: Optional[int] = None,
+):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
   valid_metrics = make_metrics_collection(
@@ -784,13 +916,15 @@ def evaluate(model_bundle: utils.ModelBundle,
       hubert_loss_mult,
       model_bundle.model.readout_points,
       model_bundle.model.quantizer_points,
-      learning_rate_schedule=learning_rate_schedule)
+      learning_rate_schedule=learning_rate_schedule,
+  )
 
   @functools.partial(jax.pmap, axis_name="batch")
   def update_metrics(valid_metrics, batch, train_state):
     variables = {"params": train_state.params, **train_state.model_state}
     model_outputs = model_bundle.model.apply(
-        variables, batch["audio"], train=False, mask_key=None)
+        variables, batch["audio"], train=False, mask_key=None
+    )
     return model_outputs, valid_metrics.merge(
         valid_metrics.gather_from_model_output(
             outputs=model_outputs,
@@ -800,22 +934,33 @@ def evaluate(model_bundle: utils.ModelBundle,
             order=batch["order"],
             taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
             step=train_state.step,
-            axis_name="batch"))
+            axis_name="batch",
+        )
+    )
 
   step = int(flax_utils.unreplicate(train_state.step))
   label_names = ("label", "genus", "family", "order")
-  cmap_metrics = make_cmap_metrics_dict(label_names,
-                                        model_bundle.model.readout_points)
+  cmap_metrics = make_cmap_metrics_dict(
+      label_names, model_bundle.model.readout_points
+  )
   with reporter.timed("eval"):
     valid_metrics = flax_utils.replicate(valid_metrics.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
-      model_outputs, valid_metrics = update_metrics(valid_metrics, batch,
-                                                    train_state)
-      cmap_metrics = update_cmap_metrics_dict(label_names, cmap_metrics,
-                                              model_outputs, batch,
-                                              model_bundle.model.readout_points)
-      if eval_steps_per_checkpoint is not None and s >= eval_steps_per_checkpoint:
+      model_outputs, valid_metrics = update_metrics(
+          valid_metrics, batch, train_state
+      )
+      cmap_metrics = update_cmap_metrics_dict(
+          label_names,
+          cmap_metrics,
+          model_outputs,
+          batch,
+          model_bundle.model.readout_points,
+      )
+      if (
+          eval_steps_per_checkpoint is not None
+          and s >= eval_steps_per_checkpoint
+      ):
         break
 
     # Log validation loss
@@ -829,21 +974,24 @@ def evaluate(model_bundle: utils.ModelBundle,
   writer.flush()
 
 
-def evaluate_loop(model_bundle: utils.ModelBundle,
-                  train_state: utils.TrainState,
-                  learning_rate_schedule: optax.Schedule,
-                  valid_dataset: tf.data.Dataset,
-                  workdir: str,
-                  logdir: str,
-                  num_train_steps: int,
-                  eval_steps_per_checkpoint: Optional[int] = None,
-                  tflite_export: bool = False,
-                  input_size: Optional[int] = None,
-                  eval_sleep_s: int = EVAL_LOOP_SLEEP_S):
+def evaluate_loop(
+    model_bundle: utils.ModelBundle,
+    train_state: utils.TrainState,
+    learning_rate_schedule: optax.Schedule,
+    valid_dataset: tf.data.Dataset,
+    workdir: str,
+    logdir: str,
+    num_train_steps: int,
+    eval_steps_per_checkpoint: Optional[int] = None,
+    tflite_export: bool = False,
+    input_size: Optional[int] = None,
+    eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
+):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
   reporter = periodic_actions.ReportProgress(
-      num_train_steps=num_train_steps, writer=writer)
+      num_train_steps=num_train_steps, writer=writer
+  )
   # Initialize last_step to zero so we always run at least one eval.
   last_step = -1
   last_ckpt = ""
@@ -857,29 +1005,42 @@ def evaluate_loop(model_bundle: utils.ModelBundle,
     try:
       train_state = ckpt.restore(train_state, next_ckpt)
     except tf.errors.NotFoundError:
-      logging.warning("Checkpoint %s not found in workdir %s",
-                      ckpt.latest_checkpoint, workdir)
+      logging.warning(
+          "Checkpoint %s not found in workdir %s",
+          ckpt.latest_checkpoint,
+          workdir,
+      )
       time.sleep(eval_sleep_s)
       continue
 
-    evaluate(model_bundle, flax_utils.replicate(train_state),
-             learning_rate_schedule, valid_dataset, writer, reporter,
-             eval_steps_per_checkpoint)
+    evaluate(
+        model_bundle,
+        flax_utils.replicate(train_state),
+        learning_rate_schedule,
+        valid_dataset,
+        writer,
+        reporter,
+        eval_steps_per_checkpoint,
+    )
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_size)
     last_step = int(train_state.step)
     last_ckpt = next_ckpt
 
 
-def export_tf_lite(model_bundle: utils.ModelBundle,
-                   train_state: utils.TrainState, workdir: str,
-                   input_size: int):
+def export_tf_lite(
+    model_bundle: utils.ModelBundle,
+    train_state: utils.TrainState,
+    workdir: str,
+    input_size: int,
+):
   """Write a TFLite flatbuffer."""
   variables = {"params": train_state.params, **train_state.model_state}
 
   def infer_fn(audio_batch):
     model_outputs = model_bundle.model.apply(
-        variables, audio_batch, train=False)
+        variables, audio_batch, train=False
+    )
     return model_outputs.label
 
   tf_predict = tf.function(
@@ -887,14 +1048,16 @@ def export_tf_lite(model_bundle: utils.ModelBundle,
       input_signature=[
           tf.TensorSpec(shape=[1, input_size], dtype=tf.float32, name="input")
       ],
-      autograph=False)
+      autograph=False,
+  )
 
   converter = tf.lite.TFLiteConverter.from_concrete_functions(
-      [tf_predict.get_concrete_function()], tf_predict)
+      [tf_predict.get_concrete_function()], tf_predict
+  )
 
   converter.target_spec.supported_ops = [
       tf.lite.OpsSet.TFLITE_BUILTINS,  # enable TensorFlow Lite ops.
-      tf.lite.OpsSet.SELECT_TF_OPS  # enable TensorFlow ops.
+      tf.lite.OpsSet.SELECT_TF_OPS,  # enable TensorFlow ops.
   ]
   tflite_float_model = converter.convert()
 
@@ -904,22 +1067,30 @@ def export_tf_lite(model_bundle: utils.ModelBundle,
     f.write(tflite_float_model)
 
 
-def run(mode: str, config: config_dict.ConfigDict, workdir: str,
-        tf_data_service_address: str) -> None:
+def run(
+    mode: str,
+    config: config_dict.ConfigDict,
+    workdir: str,
+    tf_data_service_address: str,
+) -> None:
   """Run the experiment."""
   if mode == "train":
     train_dataset, dataset_info = pipeline.get_dataset(
         is_train=True,
         tf_data_service_address=tf_data_service_address,
-        **config.train_dataset_config)
+        **config.train_dataset_config,
+    )
   elif mode == "eval":
     valid_dataset, dataset_info = pipeline.get_dataset(
-        **config.eval_dataset_config)
+        **config.eval_dataset_config
+    )
   if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
     raise ValueError(
         "Dataset sample rate must match config sample rate. To address this, "
         "need to set the sample rate in the config to {}.".format(
-            dataset_info.features["audio"].sample_rate))
+            dataset_info.features["audio"].sample_rate
+        )
+    )
 
   reload_quantizer = False
   if config.init_config.reload_quantizer_from:
@@ -936,7 +1107,8 @@ def run(mode: str, config: config_dict.ConfigDict, workdir: str,
   model_bundle, train_state, learning_rate_schedule = initialize_model(
       workdir=workdir,
       num_train_steps=config.train_config.num_train_steps,
-      **config.init_config)
+      **config.init_config,
+  )
   if mode == "train":
     train(
         model_bundle,
@@ -948,11 +1120,11 @@ def run(mode: str, config: config_dict.ConfigDict, workdir: str,
         num_train_steps=config.train_config.num_train_steps,
         log_every_steps=config.train_config.log_every_steps,
         checkpoint_every_steps=config.train_config.checkpoint_every_steps,
-        num_quantizer_pretrain_steps=config.train_config
-        .num_quantizer_pretrain_steps,
+        num_quantizer_pretrain_steps=config.train_config.num_quantizer_pretrain_steps,
         quant_loss_mult=quant_loss_mult,
         readout_loss_mult=config.train_config.readout_loss_mult,
-        hubert_loss_mult=config.train_config.hubert_loss_mult)
+        hubert_loss_mult=config.train_config.hubert_loss_mult,
+    )
 
   elif mode == "eval":
     evaluate_loop(
@@ -962,4 +1134,5 @@ def run(mode: str, config: config_dict.ConfigDict, workdir: str,
         valid_dataset,
         workdir=workdir,
         logdir=workdir,
-        **config.eval_config)
+        **config.eval_config,
+    )

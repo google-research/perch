@@ -35,6 +35,7 @@ class SeparableResnetBlock(nn.Module):
     residual_scalar: Scalar multiplier for residual connection.
     padding: Padding style.
   """
+
   num_hidden_filters: int
   kernel_width: int = 3
   dilation: int = 1
@@ -59,8 +60,8 @@ class SeparableResnetBlock(nn.Module):
         kernel_dilation=self.dilation,
         use_bias=True,
         feature_group_count=input_dim,
-        padding=self.padding)(
-            x)
+        padding=self.padding,
+    )(x)
     x = nn.swish(x)
     x = nn.Conv(
         features=input_dim,
@@ -68,8 +69,8 @@ class SeparableResnetBlock(nn.Module):
         strides=1,
         use_bias=True,
         feature_group_count=self.groups,
-        padding=self.padding)(
-            x)
+        padding=self.padding,
+    )(x)
     return x + self.residual_scalar * inputs
 
 
@@ -88,6 +89,7 @@ class SeparatorBlock(nn.Module):
     residual_scalar: Scaling constant for residual connections.
     padding: Padding style.
   """
+
   is_encoder: bool
   stride: int
   feature_mult: int
@@ -113,8 +115,8 @@ class SeparatorBlock(nn.Module):
           kernel_size=(self.stride * 2,),
           strides=(self.stride,),
           use_bias=True,
-          padding=self.padding)(
-              x)
+          padding=self.padding,
+      )(x)
 
     for idx in range(self.num_residual_layers):
       x = SeparableResnetBlock(
@@ -123,7 +125,8 @@ class SeparatorBlock(nn.Module):
           dilation=self.residual_kernel_width**idx,
           groups=self.groups,
           residual_scalar=self.residual_scalar,
-          padding=self.padding)(x, train)
+          padding=self.padding,
+      )(x, train)
     x = nn.normalization.LayerNorm(reduction_axes=(-2, -1))(x)
     x = nn.swish(x)
 
@@ -134,8 +137,8 @@ class SeparatorBlock(nn.Module):
           strides=(self.stride,),
           use_bias=True,
           feature_group_count=self.groups,
-          padding=self.padding)(
-              x)
+          padding=self.padding,
+      )(x)
     return x
 
 
@@ -187,15 +190,16 @@ class SoundstreamUNet(nn.Module):
         kernel_size=(self.input_kernel_width,),
         strides=1,
         use_bias=True,
-        padding=self.padding)(
-            inputs)
+        padding=self.padding,
+    )(inputs)
     x = nn.normalization.LayerNorm(reduction_axes=(-2, -1))(x)
     x = nn.swish(x)
 
     # Encoder!
     encoder_outputs = []
-    for stride, mult, num_groups in zip(self.strides, self.feature_mults,
-                                        self.groups):
+    for stride, mult, num_groups in zip(
+        self.strides, self.feature_mults, self.groups
+    ):
       x = SeparatorBlock(
           is_encoder=True,
           stride=stride,
@@ -205,7 +209,8 @@ class SoundstreamUNet(nn.Module):
           num_residual_filters=self.residual_hidden_filters,
           residual_kernel_width=self.residual_kernel_width,
           residual_scalar=self.residual_scalar,
-          padding=self.padding)(x, train)
+          padding=self.padding,
+      )(x, train)
       encoder_outputs.append(x)
 
     # Bottleneck!
@@ -215,8 +220,8 @@ class SoundstreamUNet(nn.Module):
         kernel_size=(self.bottleneck_kernel_width,),
         strides=1,
         use_bias=True,
-        padding=self.padding)(
-            x)
+        padding=self.padding,
+    )(x)
 
     # Normally this is where one would apply quantization for a codec.
     bottleneck_features = x
@@ -227,14 +232,16 @@ class SoundstreamUNet(nn.Module):
         kernel_size=(self.bottleneck_kernel_width,),
         strides=1,
         use_bias=True,
-        padding=self.padding)(
-            x)
+        padding=self.padding,
+    )(x)
 
     # Decode!
-    for stride, mult, num_groups, unet_features in zip(self.strides[::-1],
-                                                       self.feature_mults[::-1],
-                                                       self.groups[::-1],
-                                                       encoder_outputs[::-1]):
+    for stride, mult, num_groups, unet_features in zip(
+        self.strides[::-1],
+        self.feature_mults[::-1],
+        self.groups[::-1],
+        encoder_outputs[::-1],
+    ):
       x = self.unet_scalar * unet_features + x
       x = SeparatorBlock(
           is_encoder=False,
@@ -245,7 +252,8 @@ class SoundstreamUNet(nn.Module):
           num_residual_filters=self.residual_hidden_filters,
           residual_kernel_width=self.residual_kernel_width,
           residual_scalar=self.residual_scalar,
-          padding=self.padding)(x, train)
+          padding=self.padding,
+      )(x, train)
 
     # Head!
     x = nn.Conv(
@@ -253,7 +261,7 @@ class SoundstreamUNet(nn.Module):
         kernel_size=(self.output_kernel_width,),
         strides=1,
         use_bias=True,
-        padding=self.padding)(
-            x)
+        padding=self.padding,
+    )(x)
 
     return x, bottleneck_features

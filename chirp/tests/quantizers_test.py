@@ -33,7 +33,8 @@ class QuantizersTest(absltest.TestCase):
         commitment_loss=0.0,
         ema_decay=0.99,
         demean=True,
-        rescale=True)
+        rescale=True,
+    )
     key = jax.random.PRNGKey(17)
     rngs = {}
     rngs['params'], key = jax.random.split(key)
@@ -41,8 +42,9 @@ class QuantizersTest(absltest.TestCase):
     inputs = jnp.ones([2, 4, embedding_dim])
     params = vq.init(rngs, inputs, train=False, mutable=True)
     # Check that the cluster assignment counts are all 1's at init time.
-    np.testing.assert_allclose(params['quantizer']['cluster_counts'],
-                               jnp.ones([num_centroids]))
+    np.testing.assert_allclose(
+        params['quantizer']['cluster_counts'], jnp.ones([num_centroids])
+    )
 
     # Update a few times.
     for _ in range(5):
@@ -50,17 +52,19 @@ class QuantizersTest(absltest.TestCase):
     # We have quantized the same zero vector over five batches, eight times in
     # each batch. Check that we have correct EMA estimates of the assignment
     # counts and feature mean.
-    expected = jnp.array([1., 1.])
+    expected = jnp.array([1.0, 1.0])
     expected_means = jnp.zeros([embedding_dim])
     for _ in range(5):
-      expected = 0.99 * expected + 0.01 * jnp.array([8., 0.])
+      expected = 0.99 * expected + 0.01 * jnp.array([8.0, 0.0])
       expected_means = 0.99 * expected_means + 0.01 * jnp.ones([embedding_dim])
 
     np.testing.assert_allclose(params['quantizer']['cluster_counts'], expected)
-    np.testing.assert_allclose(params['quantizer']['feature_means'],
-                               expected_means)
     np.testing.assert_allclose(
-        params['quantizer']['feature_stdev'], 0.0, atol=1e-6)
+        params['quantizer']['feature_means'], expected_means
+    )
+    np.testing.assert_allclose(
+        params['quantizer']['feature_stdev'], 0.0, atol=1e-6
+    )
 
   def test_refresh_codebooks(self):
     num_centroids = 2
@@ -69,7 +73,8 @@ class QuantizersTest(absltest.TestCase):
         num_centroids=num_centroids,
         commitment_loss=0.0,
         ema_decay=0.99,
-        demean=True)
+        demean=True,
+    )
     key = jax.random.PRNGKey(17)
     rngs = {}
     rngs['params'], key = jax.random.split(key)
@@ -80,7 +85,8 @@ class QuantizersTest(absltest.TestCase):
 
     # Refresh with threshold 0.0, which should leave the params unchanged.
     updated_params, updated_state = quantizers.refresh_codebooks(
-        model_params, model_state, key, 0.0)
+        model_params, model_state, key, 0.0
+    )
     flat_params = flax.traverse_util.flatten_dict(model_params)
     flat_updated_params = flax.traverse_util.flatten_dict(updated_params)
     flat_state = flax.traverse_util.flatten_dict(model_state)
@@ -96,7 +102,8 @@ class QuantizersTest(absltest.TestCase):
     # to update.
     model_state, model_params = params.pop('params')
     updated_params, updated_state = quantizers.refresh_codebooks(
-        model_params, model_state, key, 2.0)
+        model_params, model_state, key, 2.0
+    )
     flat_params = flax.traverse_util.flatten_dict(model_params)
     flat_updated_params = flax.traverse_util.flatten_dict(updated_params)
     flat_state = flax.traverse_util.flatten_dict(model_state)
@@ -114,7 +121,9 @@ class QuantizersTest(absltest.TestCase):
             num_centroids=num_centroids,
             commitment_loss=0.0,
             ema_decay=0.99,
-            demean=True) for _ in range(num_sections)
+            demean=True,
+        )
+        for _ in range(num_sections)
     ]
     pvq = quantizers.ProductQuantizer(base_quantizers, pca_dim=8)
     key = jax.random.PRNGKey(17)
@@ -129,8 +138,9 @@ class QuantizersTest(absltest.TestCase):
     # [batch size, num frames, num clusters].
     self.assertLen(quantizer_outputs.quantization_loss.shape, 3)
     self.assertSequenceEqual(quantizer_outputs.quantized.shape, inputs.shape)
-    self.assertSequenceEqual(quantizer_outputs.nn_idx.shape,
-                             [num_sections, 2, 4])
+    self.assertSequenceEqual(
+        quantizer_outputs.nn_idx.shape, [num_sections, 2, 4]
+    )
 
   def test_residual_quantizer(self):
     num_centroids = 2
@@ -141,7 +151,9 @@ class QuantizersTest(absltest.TestCase):
             num_centroids=num_centroids,
             commitment_loss=0.0,
             ema_decay=0.99,
-            demean=True) for _ in range(num_sections)
+            demean=True,
+        )
+        for _ in range(num_sections)
     ]
     rvq = quantizers.ResidualQuantizer(base_quantizers)
     key = jax.random.PRNGKey(17)
@@ -156,8 +168,9 @@ class QuantizersTest(absltest.TestCase):
     # [batch size, num frames, num clusters].
     self.assertLen(quantizer_outputs.quantization_loss.shape, 3)
     self.assertSequenceEqual(quantizer_outputs.quantized.shape, inputs.shape)
-    self.assertSequenceEqual(quantizer_outputs.nn_idx.shape,
-                             [num_sections, 2, 4])
+    self.assertSequenceEqual(
+        quantizer_outputs.nn_idx.shape, [num_sections, 2, 4]
+    )
 
 
 if __name__ == '__main__':
