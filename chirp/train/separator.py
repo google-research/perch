@@ -17,7 +17,7 @@
 
 import functools
 import time
-from typing import Optional
+
 
 from absl import logging
 from chirp import export_utils
@@ -125,7 +125,7 @@ def taxonomy_cross_entropy(
 
 def keyed_cross_entropy(
     key: str, outputs: separation_model.SeparatorOutput, **kwargs
-) -> Optional[jnp.ndarray]:
+) -> jnp.ndarray | None:
   """Cross entropy for the specified taxonomic label set."""
   if getattr(outputs, key) is None:
     return 0
@@ -138,7 +138,7 @@ def keyed_cross_entropy(
 
 def keyed_map(
     key: str, outputs: separation_model.SeparatorOutput, **kwargs
-) -> Optional[jnp.ndarray]:
+) -> jnp.ndarray | None:
   if getattr(outputs, key) is None:
     return 0
   scores = getattr(outputs, key)
@@ -387,7 +387,7 @@ def evaluate_loop(
     num_train_steps: int,
     eval_steps_per_checkpoint: int,
     tflite_export: bool = False,
-    frame_size: Optional[int] = None,
+    frame_size: int | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
 ):
   """Run evaluation in a loop."""

@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Metric for Mean Class Accuracy (MCA)."""
-from typing import Any, Optional
+from typing import Any
 
 from clu import metrics as clu_metrics
 import flax
@@ -35,8 +35,8 @@ class MCA(clu_metrics.Metric):
     labels: Array of ground-truth labels with shape [batch, num_classes].
   """
 
-  counts_correct: Optional[jnp.array] = None
-  counts_total: Optional[jnp.array] = None
+  counts_correct: jnp.ndarray | None = None
+  counts_total: jnp.ndarray | None = None
 
   @classmethod
   def empty(cls) -> "MCA":

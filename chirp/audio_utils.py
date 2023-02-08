@@ -17,7 +17,7 @@
 
 General utilities for processing audio and spectrograms.
 """
-from typing import Optional, Sequence, Union
+from typing import Sequence
 
 from chirp import signal
 from jax import lax
@@ -113,8 +113,8 @@ def stft_tf(
 
 def ema(
     xs: jnp.ndarray,
-    gamma: Union[float, jnp.ndarray],
-    initial_state: Optional[jnp.ndarray] = None,
+    gamma: float | jnp.ndarray,
+    initial_state: jnp.ndarray | None = None,
     axis: int = 0,
 ) -> jnp.ndarray:
   """Computes the exponential moving average along one axis."""
@@ -138,7 +138,7 @@ def ema(
 
 
 def ema_conv1d(
-    xs: jnp.ndarray, gamma: Union[float, jnp.ndarray], conv_width: int
+    xs: jnp.ndarray, gamma: float | jnp.ndarray, conv_width: int
 ) -> jnp.ndarray:
   """Uses a depth-wise conv1d to approximate the EMA operation."""
   if conv_width == -1:
@@ -174,9 +174,9 @@ def pcen(
     bias: float = 2.0,
     root: float = 2.0,
     eps: float = 1e-6,
-    state: Optional[jnp.ndarray] = None,
+    state: jnp.ndarray | None = None,
     conv_width: int = 0,
-) -> tuple[jnp.ndarray, Optional[jnp.ndarray]]:
+) -> tuple[jnp.ndarray, jnp.ndarray | None]:
   """Per-Channel Energy Normalization (PCEN).
 
   See https://arxiv.org/abs/1607.05666 for details.

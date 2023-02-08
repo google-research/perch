@@ -16,7 +16,6 @@
 """NOisy TEacher-student with Laplacian Adjustment (NOTELA), our method."""
 
 import functools
-from typing import Optional, Union
 
 from absl import logging
 from chirp.projects.sfda import adapt
@@ -54,7 +53,7 @@ class NOTELA(adapt.SFDAMethod):
       knn: int,
       sparse_storage: bool,
       memory_efficient_computation: bool = False,
-  ) -> Union[jnp.ndarray, sparse.csr_matrix]:
+  ) -> jnp.ndarray | sparse.csr_matrix:
     """Compute batch_feature's nearest-neighbors among dataset_feature.
 
     Args:
@@ -132,7 +131,7 @@ class NOTELA(adapt.SFDAMethod):
   def teacher_step(
       batch_proba: jnp.ndarray,
       dataset_proba: jnp.ndarray,
-      nn_matrix: Union[jnp.ndarray, sparse.csr_matrix],
+      nn_matrix: jnp.ndarray | sparse.csr_matrix,
       lambda_: float,
       alpha: float = 1.0,
       normalize_pseudo_labels: bool = True,
@@ -455,7 +454,7 @@ class NOTELA(adapt.SFDAMethod):
       alpha: float,
       use_mutual_nn: bool,
       normalize_pseudo_labels: bool,
-      transpose_nn_matrix: Optional[sparse.csr_matrix] = None,
+      transpose_nn_matrix: sparse.csr_matrix | None = None,
   ) -> tuple[sparse.csr_matrix, jnp.ndarray]:
     """The pipeline for computing NOTELA's pseudo labels.
 

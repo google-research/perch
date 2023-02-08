@@ -15,7 +15,6 @@
 
 """Taxonomy model."""
 import dataclasses
-from typing import Optional, Union
 
 from chirp.models import conformer
 from chirp.models import frontend
@@ -46,17 +45,17 @@ class TaxonomyModel(nn.Module):
   num_classes: dict[str, int]
   encoder: nn.Module
   taxonomy_loss_weight: float
-  frontend: Optional[nn.Module] = None
-  hubert_feature_extractor: Optional[nn.Module] = None
+  frontend: nn.Module | None = None
+  hubert_feature_extractor: nn.Module | None = None
 
   @nn.compact
   def __call__(
       self,
       inputs: jnp.ndarray,
       train: bool,
-      use_running_average: Optional[bool] = None,
-      mask: Optional[jnp.ndarray] = None,
-  ) -> Union[output.ClassifierOutput, output.TaxonomyOutput]:
+      use_running_average: bool | None = None,
+      mask: jnp.ndarray | None = None,
+  ) -> output.ClassifierOutput | output.TaxonomyOutput:
     """Apply the taxonomy model.
 
     Args:
@@ -134,8 +133,8 @@ class ConformerModel(nn.Module):
       self,
       inputs: jnp.ndarray,
       train: bool,
-      use_running_average: Optional[bool] = None,
-      mask: Optional[jnp.ndarray] = None,
+      use_running_average: bool | None = None,
+      mask: jnp.ndarray | None = None,
   ) -> jnp.ndarray:
     # Subsample from (x, 160) to (x // 4, 40)
     x = conformer.ConvolutionalSubsampling(features=self.features)(

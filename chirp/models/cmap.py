@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Metric for Class Mean Average Precision (CMAP)."""
-from typing import Any, Optional
+from typing import Any
 
 from chirp.models import metrics
 from clu import metrics as clu_metrics
@@ -43,8 +43,8 @@ class CMAP(clu_metrics.Metric):
     labels: Array of ground-truth labels with shape [batch, num_classes].
   """
 
-  scores: Optional[jnp.array] = None
-  labels: Optional[jnp.array] = None
+  scores: jnp.ndarray | None = None
+  labels: jnp.ndarray | None = None
 
   @classmethod
   def empty(cls) -> "CMAP":

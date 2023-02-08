@@ -16,7 +16,7 @@
 """Common utilities for exporting SavedModels and TFLite models."""
 
 import os
-from typing import Optional, Sequence
+from typing import Sequence
 
 from absl import logging
 from chirp.taxonomy import namespace
@@ -31,7 +31,7 @@ class Jax2TfModelWrapper(tf.Module):
       self,
       infer_fn,
       jax_params,
-      input_shape: Sequence[Optional[int]],
+      input_shape: Sequence[int | None],
       enable_xla: bool = False,
       coord_ids: str = 'bt',
       name=None,
@@ -99,7 +99,7 @@ class Jax2TfModelWrapper(tf.Module):
       self,
       workdir: str,
       train_step: int,
-      class_lists: Optional[dict[str, namespace.ClassList]] = None,
+      class_lists: dict[str, namespace.ClassList] | None = None,
       export_tf_lite: bool = True,
   ):
     """Export converted TF models."""

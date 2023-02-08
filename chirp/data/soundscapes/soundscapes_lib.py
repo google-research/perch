@@ -17,7 +17,7 @@
 
 import dataclasses
 import os
-from typing import Any, Callable, Iterator, Optional, Sequence, Set
+from typing import Any, Callable, Iterator, Sequence, Set
 
 from absl import logging
 from chirp.taxonomy import namespace
@@ -87,11 +87,11 @@ def load_class_list(
 
 def create_segments_df(
     all_audio_filepaths: Iterator[epath.Path],
-    annotations_df: Optional[pd.DataFrame],
+    annotations_df: pd.DataFrame | None,
     supervised: bool,
     metadata_dir: epath.Path,
     metadata_fields: dict[str, MetadataFeature],
-    metadata_load_fn: Optional[MetadataLoaderType],
+    metadata_load_fn: MetadataLoaderType | None,
 ) -> pd.DataFrame:
   """Create the dataframe of segments with annotations and audio urls.
 
@@ -135,8 +135,8 @@ def combine_annotations_with_metadata(
     segments: pd.DataFrame,
     metadata_dir: epath.Path,
     metadata_fields: dict[str, MetadataFeature],
-    metadata_load_fn: Optional[MetadataLoaderType],
-    metadata_df: Optional[pd.DataFrame] = None,
+    metadata_load_fn: MetadataLoaderType | None,
+    metadata_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
   """Combine segments with whatever metadata is available for this dataset.
 

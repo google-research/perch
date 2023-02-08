@@ -15,7 +15,7 @@
 
 """HuBERT model."""
 import enum
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Sequence
 
 from chirp.models import conformer
 from chirp.models import layers
@@ -33,9 +33,9 @@ class HubertOutput:
   mask_idc: jnp.ndarray
   quantization_loss: list[jnp.ndarray]
   label: list[jnp.ndarray]
-  genus: Optional[list[jnp.ndarray]] = None
-  family: Optional[list[jnp.ndarray]] = None
-  order: Optional[list[jnp.ndarray]] = None
+  genus: list[jnp.ndarray] | None = None
+  family: list[jnp.ndarray] | None = None
+  order: list[jnp.ndarray] | None = None
 
 
 class QuantizerPoints(enum.Enum):
@@ -162,9 +162,9 @@ class HuBERTEval(nn.Module):
       feature extractor.
   """
 
-  early_feature_extractor: Union[nn.Module, None]
+  early_feature_extractor: nn.Module | None
   late_feature_extractor: nn.Module
-  frontend: Optional[nn.Module] = None
+  frontend: nn.Module | None = None
   use_raw_audio: bool = True
   add_positional_embeddings: bool = False
 
@@ -278,7 +278,7 @@ class HuBERTModel(nn.Module):
   """
 
   num_classes: dict[str, int]
-  early_feature_extractor: Union[nn.Module, None]
+  early_feature_extractor: nn.Module | None
   late_feature_extractor: nn.Module
   quantizer: list[nn.Module]
   frontend: nn.Module
@@ -292,7 +292,7 @@ class HuBERTModel(nn.Module):
   logit_temp: float = 0.1
   alpha: float = 1.0
   stop_gradient_earlyfs: bool = True
-  omit_classifier_stop_grads: Optional[Sequence[int]] = None
+  omit_classifier_stop_grads: Sequence[int] | None = None
   add_positional_embeddings: bool = False
 
   def classify(
@@ -489,7 +489,7 @@ class HuBERTModel(nn.Module):
 
   @nn.compact
   def __call__(
-      self, inputs: jnp.ndarray, train: bool, mask_key: Union[jnp.ndarray, None]
+      self, inputs: jnp.ndarray, train: bool, mask_key: jnp.ndarray | None
   ) -> HubertOutput:
     """Apply the HuBERT model.
 

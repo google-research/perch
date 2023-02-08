@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Chirp custom TFDS Features."""
-from typing import Optional, Union
+
 
 import numpy as np
 import tensorflow as tf
@@ -35,13 +35,11 @@ class Int16AsFloatTensor(tfds.features.Audio):
   def __init__(
       self,
       *,
-      file_format: Optional[str] = None,
+      file_format: str | None = None,
       shape: tfds.typing.Shape,
       dtype: tf.dtypes.DType = tf.float32,
       sample_rate: tfds.typing.Dim,
-      encoding: Union[
-          str, tfds.features.Encoding
-      ] = tfds.features.Encoding.NONE,
+      encoding: str | tfds.features.Encoding = tfds.features.Encoding.NONE,
       doc: tfds.features.DocArg = None
   ):
     del file_format

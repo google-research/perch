@@ -17,7 +17,7 @@
 
 import dataclasses
 import tempfile
-from typing import Any, Callable, Optional, Sequence, Tuple
+from typing import Any, Callable, Sequence, Tuple
 import warnings
 
 from absl import logging
@@ -86,8 +86,8 @@ class SoundeventsConfig(tfds.core.BuilderConfig):
 
   sample_rate_hz: int = 32_000
   resampling_method: str = 'polyphase'
-  localization_fn: Optional[LocalizationFn] = None
-  interval_length_s: Optional[float] = None
+  localization_fn: LocalizationFn | None = None
+  interval_length_s: float | None = None
   data_processing_query: fsu.QuerySequence = fsu.QuerySequence(queries=[])
   metadata_processing_query: fsu.QuerySequence = fsu.QuerySequence(queries=[])
   class_list_name: str = 'fsd50k'

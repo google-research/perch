@@ -16,7 +16,7 @@
 """Conformer layers."""
 import dataclasses
 import math
-from typing import Callable, Optional
+from typing import Callable
 
 from chirp.models import layers
 from flax import linen as nn
@@ -34,12 +34,12 @@ class Conformer(nn.Module):
   ffn_dim_multiplier: int = 4
   atten_num_heads: int = 8
   layer_order: str = 'mhsa_before_conv'
-  dropout_prob: Optional[float] = None
-  conv_residual_dropout: Optional[float] = None
-  atten_residual_dropout: Optional[float] = None
-  ffn_residual_dropout: Optional[float] = None
-  atten_dropout: Optional[float] = None
-  ffn_relu_dropout: Optional[float] = None
+  dropout_prob: float | None = None
+  conv_residual_dropout: float | None = None
+  atten_residual_dropout: float | None = None
+  ffn_residual_dropout: float | None = None
+  atten_dropout: float | None = None
+  ffn_relu_dropout: float | None = None
   fflayer_weight_sharing: bool = False
   num_blocks: int = 1
   # tuples of layer index and corresponding scaling of number of channels
@@ -52,7 +52,7 @@ class Conformer(nn.Module):
       inputs: jnp.ndarray,
       train: bool,
       return_intermediate_list: bool,
-      use_running_average: Optional[bool] = None,
+      use_running_average: bool | None = None,
   ) -> jnp.ndarray:
     """Projection followed by a conformer layer.
 

@@ -15,7 +15,7 @@
 
 """Some utils functions shared across methods."""
 
-from typing import Callable, Optional, Union
+from typing import Callable
 
 from absl import logging
 from chirp.models import output
@@ -36,7 +36,7 @@ ForwardStepType = Callable[
         dict[str, jnp.ndarray],
         flax.core.scope.FrozenVariableDict,
         flax.core.scope.VariableDict,
-        Optional[jax.random.PRNGKeyArray],
+        jax.random.PRNGKeyArray | None,
     ],
     output.ClassifierOutput,
 ]
@@ -89,8 +89,8 @@ def forward_dataset(
     multi_label: bool,
     use_batch_statistics: bool = False,
     train: bool = False,
-    key: Optional[jax.random.PRNGKeyArray] = None,
-) -> dict[str, Union[jnp.ndarray, np.ndarray]]:
+    key: jax.random.PRNGKeyArray | None = None,
+) -> dict[str, jnp.ndarray | np.ndarray]:
   """Fowards a dataset through a given model.
 
   Args:
@@ -204,7 +204,7 @@ def maybe_restrict_labels(
   return model_outputs
 
 
-def get_label_mask(batch) -> Optional[jnp.ndarray]:
+def get_label_mask(batch) -> jnp.ndarray | None:
   if "label_mask" in batch:
     label_mask = flax_utils.unreplicate(batch["label_mask"])
     reference_label_mask = label_mask[0]  # [num_classes]
@@ -218,7 +218,7 @@ def get_label_mask(batch) -> Optional[jnp.ndarray]:
 
 
 def pad_pseudo_label(
-    reference_label_mask: Optional[jnp.ndarray],
+    reference_label_mask: jnp.ndarray | None,
     pseudo_label: jnp.ndarray,
     adaptation_state: adapt.AdaptationState,
 ) -> jnp.ndarray:

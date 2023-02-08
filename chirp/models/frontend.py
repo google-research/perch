@@ -22,7 +22,7 @@ interchangeably.
 For some frontends it also defines inverses (e.g., for separation models).
 """
 import dataclasses
-from typing import Optional, Union
+
 
 from chirp import audio_utils
 from chirp import signal
@@ -54,7 +54,7 @@ class PCENScalingConfig:
   conv_width: int = 256
 
 
-ScalingConfig = Union[LogScalingConfig, PCENScalingConfig]
+ScalingConfig = LogScalingConfig | PCENScalingConfig
 
 
 def frames_mask(mask: jnp.ndarray, stride: int) -> jnp.ndarray:
@@ -155,8 +155,8 @@ class STFT(Frontend):
     scaling_config: The magnitude scaling configuration to use.
   """
 
-  power: Optional[float] = 2.0
-  scaling_config: Optional[ScalingConfig] = None
+  power: float | None = 2.0
+  scaling_config: ScalingConfig | None = None
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
@@ -240,7 +240,7 @@ class MelSpectrogram(Frontend):
   sample_rate: int
   freq_range: tuple[int, int]
   power: float = 2.0
-  scaling_config: Optional[ScalingConfig] = None
+  scaling_config: ScalingConfig | None = None
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
@@ -280,7 +280,7 @@ class LearnedFrontend(Frontend):
   """
 
   kernel_size: int
-  scaling_config: Optional[ScalingConfig] = None
+  scaling_config: ScalingConfig | None = None
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
@@ -345,7 +345,7 @@ class MorletWaveletTransform(Frontend):
   sample_rate: int
   freq_range: tuple[int, int]
   power: float = 2.0
-  scaling_config: Optional[ScalingConfig] = None
+  scaling_config: ScalingConfig | None = None
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:

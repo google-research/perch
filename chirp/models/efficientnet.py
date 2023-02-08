@@ -19,7 +19,7 @@ Implementation of the EfficientNet model in Flax.
 """
 import enum
 import math
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from chirp.models import layers
 from flax import linen as nn
@@ -197,15 +197,15 @@ class EfficientNet(nn.Module):
   model: EfficientNetModel
   include_top: bool = True
   survival_probability: float = 0.8
-  head: Optional[nn.Module] = None
-  stem: Optional[nn.Module] = None
+  head: nn.Module | None = None
+  stem: nn.Module | None = None
 
   @nn.compact
   def __call__(
       self,
       inputs: jnp.ndarray,
       train: bool,
-      use_running_average: Optional[bool] = None,
+      use_running_average: bool | None = None,
   ) -> jnp.ndarray:
     """Applies EfficientNet to the inputs.
 

@@ -18,7 +18,7 @@
 import bisect
 import collections
 import copy
-from typing import Optional
+
 
 from absl import logging
 import numpy as np
@@ -35,7 +35,7 @@ def sample_recordings_under_constraints(
     df: pd.DataFrame,
     target_fg: dict[str, int],
     target_bg: dict[str, int],
-    species_stats: Optional[dict[str, dict[str, int]]] = None,
+    species_stats: dict[str, dict[str, int]] | None = None,
 ):
   """Subsamples recordings from df under foreground/background constraints.
 
@@ -131,7 +131,7 @@ def find_valid_subset(
     chosen: list[_RECORDING],
     seen: dict[tuple[_RECORDING], bool],
     candidates: list[_RECORDING],
-) -> Optional[list[_RECORDING]]:
+) -> list[_RECORDING] | None:
   """Function that tries to find a valid solution to sampling under constraints.
 
   This function performs a DFS to find a subset of recordings that satisfies

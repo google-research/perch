@@ -18,7 +18,7 @@
 import abc
 import dataclasses
 import logging
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 from chirp import audio_utils
 from chirp.data import tfds_features
@@ -32,7 +32,7 @@ import tensorflow_datasets as tfds
 class WavDirectoryBuilderConfig(tfds.core.BuilderConfig):
   sample_rate_hz: int = 16_000
   interval_length_s: float = 6.0
-  max_peaks: Optional[int] = None
+  max_peaks: int | None = None
 
   @property
   def context_duration_samples(self) -> int:

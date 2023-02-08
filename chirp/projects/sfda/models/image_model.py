@@ -15,7 +15,6 @@
 
 """A template for any image model."""
 
-from typing import Optional
 
 from chirp.models import output
 from etils import epath
@@ -30,7 +29,7 @@ class ImageModel(nn.Module):
 
   @nn.compact
   def __call__(
-      self, x, train: bool, use_running_average: Optional[bool]
+      self, x, train: bool, use_running_average: bool | None
   ) -> output.ClassifierOutput:
     """Just like any standard nn.Module, defines the foward pass of the model.
 

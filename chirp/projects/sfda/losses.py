@@ -16,7 +16,7 @@
 """A set of common losses used by several SFDA methods."""
 
 import enum
-from typing import Optional
+
 
 import flax
 import jax
@@ -73,7 +73,7 @@ def label_binary_kl(
 def label_xent(
     probabilities: jnp.ndarray,
     label: jnp.ndarray,
-    sample_mask: Optional[jnp.ndarray] = None,
+    sample_mask: jnp.ndarray | None = None,
     eps: float = 1e-10,
     **_,
 ) -> jnp.ndarray:
@@ -112,7 +112,7 @@ def label_ent(
 
 def label_binary_ent(
     probabilities: jnp.ndarray,
-    label_mask: Optional[jnp.ndarray] = None,
+    label_mask: jnp.ndarray | None = None,
     eps: float = 1e-10,
     class_reduce: ReduceStrategy = ReduceStrategy.AVERAGE,
     **_,
@@ -156,7 +156,7 @@ def label_binary_ent(
 def label_binary_xent(
     probabilities: jnp.ndarray,
     label: jnp.ndarray,
-    label_mask: Optional[jnp.ndarray] = None,
+    label_mask: jnp.ndarray | None = None,
     eps: float = 1e-10,
     class_reduce: ReduceStrategy = ReduceStrategy.AVERAGE,
     **_,
