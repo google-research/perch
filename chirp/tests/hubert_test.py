@@ -177,6 +177,7 @@ class HuBERTTest(absltest.TestCase):
         inputs,
         train=True,
         mask_key=mask_key,
+        train_mode_quantizer=True,
         mutable=list(self.model_state.keys()),
         rngs={
             "dropout": dropout_key,
@@ -216,6 +217,7 @@ class HuBERTTest(absltest.TestCase):
           inputs,
           train=True,
           mask_key=mask_key,
+          train_mode_quantizer=True,
           mutable=list(model_state.keys()),
           rngs={
               "dropout": dropout_key,
@@ -224,7 +226,9 @@ class HuBERTTest(absltest.TestCase):
       )
 
       hubert_loss = jnp.mean(
-          hubert_train.hubert_loss_from_outputs(model_outputs, alpha=self.alpha)
+          hubert_train.hubert_loss_from_outputs(
+              model_outputs, alpha=self.alpha, hubert_loss_mult=1.0
+          )
       )
       return hubert_loss
 

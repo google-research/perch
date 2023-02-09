@@ -489,7 +489,11 @@ class HuBERTModel(nn.Module):
 
   @nn.compact
   def __call__(
-      self, inputs: jnp.ndarray, train: bool, mask_key: jnp.ndarray | None
+      self,
+      inputs: jnp.ndarray,
+      train: bool,
+      train_mode_quantizer: bool,
+      mask_key: jnp.ndarray | None,
   ) -> HubertOutput:
     """Apply the HuBERT model.
 
@@ -507,8 +511,9 @@ class HuBERTModel(nn.Module):
 
     Args:
       inputs: Audio of shape `(bsz, sz)`.
-      train: Whether we're in training mode (affects batch norm, dropout and
-        whether masking is applied).
+      train: Whether we're in training mode (affects batch norm and dropout).
+      train_mode_quantizer: Whether the quantizer is in train mode (affects EMA
+        counter for cluster utilization).
       mask_key: A jnp.array that serves as the key for sampling masks. It can be
         None if `train` is False since no mask is applied in that case.
 
@@ -516,9 +521,6 @@ class HuBERTModel(nn.Module):
       Logits for which cluster each timestep belongs to (per section of the
         product quantizer, if applicable).
     """
-    if train and mask_key is None:
-      raise ValueError("During training mode, `mask_key` should not be None.")
-
     if len(self.quantizer) != len(self.quantizer_points):
       raise ValueError(
           "The lengths of `quantizer` and `quantizer_points` "
@@ -563,11 +565,15 @@ class HuBERTModel(nn.Module):
 
     # Add quantizers on frontend and/or early fs, if requested.
     if QuantizerPoints.FRONTEND.value in self.quantizer_points:
-      quantizers = self.add_projected_quantizer(x_frontend, quantizers, train)
+      quantizers = self.add_projected_quantizer(
+          x_frontend, quantizers, train_mode_quantizer
+      )
 
     if QuantizerPoints.EARLY_FS.value in self.quantizer_points:
       # Add the first quantizer, directly on top of the "early features".
-      quantizers = self.add_projected_quantizer(x_earlyfs, quantizers, train)
+      quantizers = self.add_projected_quantizer(
+          x_earlyfs, quantizers, train_mode_quantizer
+      )
 
     bsz, sz, csz = x.shape
     if self.add_positional_embeddings:
@@ -589,7 +595,7 @@ class HuBERTModel(nn.Module):
     # masked embedding for the positions that are chosen to be masked, if we are
     # in training mode.
     mask_idc = jnp.zeros((bsz, sz))
-    if train:
+    if mask_key is not None:
       mask_idc = compute_mask_indices(
           mask_key, shape=(bsz, sz), **self.mask_config
       )
@@ -636,7 +642,7 @@ class HuBERTModel(nn.Module):
             "{} and len(x_list) is {}".format(point, len(x_list))
         )
       quantizers = self.add_projected_quantizer(
-          x_list[point], quantizers, train
+          x_list[point], quantizers, train_mode_quantizer
       )
 
     # Linear readouts for supervised classification on top of HuBERT embeddings.

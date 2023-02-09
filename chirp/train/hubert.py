@@ -93,7 +93,10 @@ def filtered_hubert_loss_from_outputs(
 
 
 def hubert_loss_from_outputs(
-    outputs: hubert.HubertOutput, alpha: float, **unused_kwargs
+    outputs: hubert.HubertOutput,
+    alpha: float,
+    hubert_loss_mult: float,
+    **unused_kwargs,
 ) -> jnp.ndarray:
   """Cross entropy computed from model outputs."""
   mask_idc = outputs.mask_idc
@@ -104,7 +107,7 @@ def hubert_loss_from_outputs(
   loss_m = filtered_hubert_loss_from_outputs(
       outputs, jnp.where(mask_idc, True, False)
   )
-  return alpha * loss_m + (1 - alpha) * loss_u
+  return hubert_loss_mult * (alpha * loss_m + (1 - alpha) * loss_u)
 
 
 def quantizer_loss(
@@ -160,6 +163,10 @@ def supervised_loss(
 ) -> jnp.ndarray:
   """Compute classification loss for all taxonomy heads."""
   del unused_kwargs
+  if not readout_loss_mult:
+    # Avoid computing the loss if not needed.
+    # [bsz, sz].
+    return jnp.zeros(outputs.logits[0].shape[:-1])
   loss = taxonomy_cross_entropy(
       outputs, label, genus, family, order, taxonomy_loss_weight
   )  # [bsz].
@@ -209,7 +216,9 @@ def final_loss(
   )
 
   # [nq, ns, bsz, sz].
-  hubert_loss = hubert_loss_from_outputs(outputs, alpha)
+  hubert_loss = hubert_loss_from_outputs(
+      outputs, alpha, hubert_loss_mult=hubert_loss_mult
+  )
 
   # Make the shapes match so that these losses can be added elementwise.
   nq, ns, _, _ = hubert_loss.shape
@@ -271,7 +280,11 @@ def make_metrics_collection(
           (lambda step, **kwargs: learning_rate_schedule(step))
       ),
       "hubert_loss": clu_metrics.Average.from_fun(
-          functools.partial(hubert_loss_from_outputs, alpha=alpha)
+          functools.partial(
+              hubert_loss_from_outputs,
+              alpha=alpha,
+              hubert_loss_mult=hubert_loss_mult,
+          )
       ),
       "quantizer_loss": clu_metrics.Average.from_fun(
           functools.partial(quantizer_loss, quant_loss_mult=quant_loss_mult)
@@ -591,7 +604,11 @@ def initialize_model(
       **model_config,
   )
   variables = model.init(
-      model_init_key, jnp.zeros((1, input_size)), train=False, mask_key=mask_key
+      model_init_key,
+      jnp.zeros((1, input_size)),
+      train=False,
+      mask_key=mask_key,
+      train_mode_quantizer=False,
   )
   model_state, params = variables.pop("params")
 
@@ -806,6 +823,7 @@ def train(
             x,
             train=True,
             mask_key=mask_key,
+            train_mode_quantizer=True,
             mutable=list(model_state.keys()),
             rngs={
                 "dropout": dropout_key,
@@ -905,6 +923,8 @@ def evaluate(
     writer: metric_writers.MetricWriter,
     reporter: periodic_actions.ReportProgress,
     eval_steps_per_checkpoint: int | None = None,
+    train_mode_at_eval: bool | None = False,
+    mask_at_eval: bool | None = False,
 ):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
@@ -920,11 +940,22 @@ def evaluate(
   )
 
   @functools.partial(jax.pmap, axis_name="batch")
-  def update_metrics(valid_metrics, batch, train_state):
+  def update_metrics(valid_metrics, batch, train_state, mask_key):
     variables = {"params": train_state.params, **train_state.model_state}
-    model_outputs = model_bundle.model.apply(
-        variables, batch["audio"], train=False, mask_key=None
+    mutable = (
+        list(train_state.model_state.keys()) if train_mode_at_eval else False
     )
+    model_outputs = model_bundle.model.apply(
+        variables,
+        batch["audio"],
+        train=train_mode_at_eval,
+        mask_key=mask_key,
+        train_mode_quantizer=False,
+        mutable=mutable,
+    )
+    if mutable:
+      # Both model outputs and state are returned if `mutable` was given.
+      model_outputs = model_outputs[0]
     return model_outputs, valid_metrics.merge(
         valid_metrics.gather_from_model_output(
             outputs=model_outputs,
@@ -943,12 +974,17 @@ def evaluate(
   cmap_metrics = make_cmap_metrics_dict(
       label_names, model_bundle.model.readout_points
   )
+  key = model_bundle.key
   with reporter.timed("eval"):
     valid_metrics = flax_utils.replicate(valid_metrics.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
+      mask_key = None
+      if mask_at_eval:
+        mask_key, key = random.split(key)
+        mask_key = random.split(mask_key, num=jax.local_device_count())
       model_outputs, valid_metrics = update_metrics(
-          valid_metrics, batch, train_state
+          valid_metrics, batch, train_state, mask_key
       )
       cmap_metrics = update_cmap_metrics_dict(
           label_names,
@@ -983,11 +1019,15 @@ def evaluate_loop(
     logdir: str,
     num_train_steps: int,
     eval_steps_per_checkpoint: int | None = None,
+    train_mode_at_eval: bool | None = False,
+    mask_at_eval: bool | None = False,
     tflite_export: bool = False,
     input_size: int | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
+    **unused_kwargs,
 ):
   """Run evaluation in a loop."""
+  del unused_kwargs
   writer = metric_writers.create_default_writer(logdir)
   reporter = periodic_actions.ReportProgress(
       num_train_steps=num_train_steps, writer=writer
@@ -1021,6 +1061,8 @@ def evaluate_loop(
         writer,
         reporter,
         eval_steps_per_checkpoint,
+        train_mode_at_eval,
+        mask_at_eval,
     )
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_size)
@@ -1080,7 +1122,7 @@ def run(
         tf_data_service_address=tf_data_service_address,
         **config.train_dataset_config,
     )
-  elif mode == "eval":
+  elif mode in ["eval", "tune_eval_hypers"]:
     valid_dataset, dataset_info = pipeline.get_dataset(
         **config.eval_dataset_config
     )
@@ -1104,11 +1146,19 @@ def run(
   quant_loss_mult *= config.train_config.quant_loss_mult
 
   # Initialize.
-  model_bundle, train_state, learning_rate_schedule = initialize_model(
-      workdir=workdir,
-      num_train_steps=config.train_config.num_train_steps,
-      **config.init_config,
-  )
+  if mode == "tune_eval_hypers":
+    # Here, workdir is provided in the init config.
+    model_bundle, train_state, learning_rate_schedule = initialize_model(
+        num_train_steps=config.train_config.num_train_steps,
+        **config.init_config,
+    )
+  else:
+    model_bundle, train_state, learning_rate_schedule = initialize_model(
+        workdir=workdir,
+        num_train_steps=config.train_config.num_train_steps,
+        **config.init_config,
+    )
+
   if mode == "train":
     train(
         model_bundle,
@@ -1124,6 +1174,25 @@ def run(
         quant_loss_mult=quant_loss_mult,
         readout_loss_mult=config.train_config.readout_loss_mult,
         hubert_loss_mult=config.train_config.hubert_loss_mult,
+    )
+
+  elif mode == "tune_eval_hypers":
+    # Running a single round of evaluation (as opposed to running eval in a
+    # loop whenever a new checkpoint is produced).
+    # This is used to tune HuBERT's evaluation hypers once.
+    train_state = model_bundle.ckpt.restore(train_state)
+
+    writer = metric_writers.create_default_writer(workdir)
+    reporter = periodic_actions.ReportProgress(num_train_steps=0, writer=writer)
+    evaluate(
+        model_bundle,
+        flax_utils.replicate(train_state),
+        learning_rate_schedule,
+        valid_dataset,
+        writer,
+        reporter,
+        train_mode_at_eval=config.eval_config.train_mode_at_eval,
+        mask_at_eval=config.eval_config.mask_at_eval,
     )
 
   elif mode == "eval":
