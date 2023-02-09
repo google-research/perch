@@ -27,6 +27,7 @@ from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 import jax
 from jax import numpy as jnp
+import pandas as pd
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -799,6 +800,53 @@ class OnlyKeep(FeaturesPreprocessOp):
         for name, feature in features.items()
         if name in self.names
     }
+
+
+@dataclasses.dataclass
+class FilterByFeature(DatasetPreprocessOp):
+  """Filters the dataset by feature values.
+
+  Attributes:
+    filtering_df_path: Path to a single-column, CSV-serialized DataFrame whose
+      column name represents the feature name used for the filtering operation
+      and whose rows contain the allowed feature values.
+    complement: Whether to perform the complement of the filtering operation,
+      i.e., swap which dataset elements are filtered and which are kept.
+  """
+
+  filtering_df_path: str
+  complement: bool = False
+
+  def __call__(
+      self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
+  ) -> tf.data.Dataset:
+    df = pd.read_csv(self.filtering_df_path)
+
+    if len(df.columns) != 1:
+      raise ValueError(
+          'filtering_df_path should point to a single-column DataFrame.'
+      )
+
+    (feature_name,) = df.columns
+    feature_dtype = df[feature_name].dtype
+    feature_values = df[feature_name].values
+
+    feature_values_table = tf.lookup.StaticHashTable(
+        initializer=tf.lookup.KeyValueTensorInitializer(
+            keys=tf.constant(feature_values, dtype=feature_dtype),
+            values=tf.range(len(feature_values), dtype=feature_dtype),
+        ),
+        default_value=-1,
+    )
+
+    def _predicate(features):
+      value = tf.cast(features[feature_name], feature_dtype)
+      should_include = feature_values_table.lookup(value) > -1
+      if self.complement:
+        should_include = ~should_include
+      return should_include
+
+    return dataset.filter(_predicate)
 
 
 @dataclasses.dataclass
