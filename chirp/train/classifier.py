@@ -306,10 +306,11 @@ def evaluate(
     writer: metric_writers.MetricWriter,
     reporter: periodic_actions.ReportProgress,
     eval_steps_per_checkpoint: int | None = None,
+    name: str = "valid",
 ):
   """Run evaluation."""
   valid_metrics = make_metrics_collection(
-      "valid___", model_bundle.model.taxonomy_loss_weight
+      f"{name}___", model_bundle.model.taxonomy_loss_weight
   )
 
   @functools.partial(jax.pmap, axis_name="batch")
@@ -357,7 +358,7 @@ def evaluate(
   valid_metrics = {k.replace("___", "/"): v for k, v in valid_metrics.items()}
   cmap_metrics = flax_utils.unreplicate(cmap_metrics)
   for key in cmap_metrics:
-    valid_metrics[f"valid/{key}_cmap"] = cmap_metrics[key].compute()
+    valid_metrics[f"{name}/{key}_cmap"] = cmap_metrics[key].compute()
   writer.write_scalars(step, valid_metrics)
   writer.flush()
 
@@ -373,6 +374,7 @@ def evaluate_loop(
     tflite_export: bool = False,
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
+    name: str = "valid",
 ):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -410,6 +412,7 @@ def evaluate_loop(
         writer,
         reporter,
         eval_steps_per_checkpoint,
+        name,
     )
     if tflite_export:
       export_tf(model_bundle, train_state, workdir, input_shape)
@@ -449,6 +452,12 @@ def run(
     tf_data_service_address: str,
 ) -> None:
   """Run the experiment."""
+  if mode.startswith("eval_"):
+    mode, name = mode.split("_", maxsplit=1)
+    config.eval_dataset_config = getattr(config.eval_dataset_config, name)
+  else:
+    name = "valid"
+
   if mode == "train":
     train_dataset, dataset_info = pipeline.get_dataset(
         is_train=True,
@@ -486,5 +495,6 @@ def run(
         valid_dataset,
         workdir=workdir,
         logdir=workdir,
+        name=name,
         **config.eval_config,
     )
