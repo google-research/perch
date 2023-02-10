@@ -82,7 +82,7 @@ def main(unused_argv: Sequence[str]) -> None:
     for source_file in epath.Path('').glob(pattern):
       source_files.append(source_file)
   output_dir = epath.Path(config.output_dir)
-  output_dir.parent.mkdir(exist_ok=True)
+  output_dir.parent.mkdir(exist_ok=True, parents=True)
   logging.info('Found %d source files.', len(source_files))
   if _DRY_RUN_ONLY.value:
     dry_run(config, source_files)
