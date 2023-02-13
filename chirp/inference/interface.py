@@ -42,6 +42,18 @@ class InferenceOutputs:
   logits: LogitType | None = None
   separated_audio: np.ndarray | None = None
 
+  def __post_init__(self):
+    # In some scenarios, we may be passed TF EagerTensors. We dereference these
+    # to numpy arrays for broad compatibility.
+    if hasattr(self.embeddings, 'numpy'):
+      self.embeddings = self.embeddings.numpy()
+    if self.logits is not None:
+      for k, v in self.logits.items():
+        if hasattr(v, 'numpy'):
+          self.logits[k] = v.numpy()
+    if hasattr(self.separated_audio, 'numpy'):
+      self.separated_audio = self.separated_audio.numpy()
+
 
 @dataclasses.dataclass
 class EmbeddingModel:
