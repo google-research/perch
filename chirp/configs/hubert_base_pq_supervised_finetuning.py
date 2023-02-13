@@ -189,10 +189,12 @@ def get_config() -> config_dict.ConfigDict:
   train_config.readout_loss_mult = 100
   train_config.hubert_loss_mult = 0
   train_config.quant_loss_mult = 0
+  train_config.add_class_wise_metrics = False
   config.train_config = train_config
 
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = num_train_steps
+  eval_config.add_class_wise_metrics = False
   config.eval_config = eval_config
 
   return config

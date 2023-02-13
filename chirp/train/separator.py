@@ -124,16 +124,21 @@ def taxonomy_cross_entropy(
 
 
 def keyed_cross_entropy(
-    key: str, outputs: separation_model.SeparatorOutput, **kwargs
+    key: str,
+    outputs: separation_model.SeparatorOutput,
+    class_index: int | None = None,
+    **kwargs,
 ) -> jnp.ndarray | None:
   """Cross entropy for the specified taxonomic label set."""
   if getattr(outputs, key) is None:
     return 0
   scores = getattr(outputs, key)
-  mean = jnp.mean(
-      optax.sigmoid_binary_cross_entropy(scores, kwargs[key]), axis=-1
-  )
-  return mean
+  ce = optax.sigmoid_binary_cross_entropy(scores, kwargs[key])
+  if class_index is not None:
+    ce = ce[:, class_index]
+  else:
+    ce = jnp.mean(ce, axis=-1)
+  return ce
 
 
 def keyed_map(
@@ -145,8 +150,16 @@ def keyed_map(
   return metrics.average_precision(scores=scores, labels=kwargs[key])
 
 
-def make_metrics_collection(prefix: str):
+def make_metrics_collection(
+    prefix: str,
+    add_class_wise_metrics: bool | None = False,
+    num_labels: dict[str, int] | None = None,
+):
   """Create metrics collection."""
+  if add_class_wise_metrics and num_labels is None:
+    raise ValueError(
+        '`num_labels` must not be None if `add_class_wise_metrics` is True.'
+    )
   metrics_dict = {
       'mixit_log_mse': clu_metrics.LastValue.from_fun(p_log_mse_loss),
       'mixit_neg_snr': clu_metrics.LastValue.from_fun(p_log_snr_loss),
@@ -163,6 +176,16 @@ def make_metrics_collection(prefix: str):
             functools.partial(keyed_map, key=key)
         ),
     })
+    if add_class_wise_metrics:
+      # This can be slow if the number of classes is large. It is implemented in
+      # this way because `clu_metrics.Average` expects a scalar loss.
+      for j in range(num_labels[key]):
+        class_wise_xentropy = clu_metrics.Average.from_fun(
+            functools.partial(keyed_cross_entropy, key=key, class_index=j)
+        )
+        metrics_dict.update(
+            {key + '_class_wise_xentropy_{}'.format(j): class_wise_xentropy}
+        )
   metrics_dict['taxo_loss'] = clu_metrics.Average.from_fun(
       taxonomy_cross_entropy
   )
@@ -220,10 +243,15 @@ def train(
     loss_max_snr: float,
     classify_bottleneck_weight: float,
     taxonomy_labels_weight: float,
+    add_class_wise_metrics: bool | None = False,
 ) -> None:
   """Train a model."""
   train_iterator = train_dataset.as_numpy_iterator()
-  train_metrics_collection = make_metrics_collection('train___')
+  train_metrics_collection = make_metrics_collection(
+      'train___',
+      add_class_wise_metrics=add_class_wise_metrics,
+      num_labels=model_bundle.model.num_classes,
+  )
   initial_step = int(train_state.step)
   train_state = flax.jax_utils.replicate(train_state)
   # Logging
@@ -314,9 +342,14 @@ def evaluate(
     writer: metric_writers.MetricWriter,
     reporter: periodic_actions.ReportProgress,
     eval_steps_per_checkpoint: int = -1,
+    add_class_wise_metrics: bool | None = False,
 ):
   """Run evaluation."""
-  valid_metrics = make_metrics_collection('valid___')
+  valid_metrics = make_metrics_collection(
+      'valid___',
+      add_class_wise_metrics=add_class_wise_metrics,
+      num_labels=model_bundle.model.num_classes,
+  )
 
   @functools.partial(jax.pmap, axis_name='batch')
   def evaluate_step(valid_metrics, batch, train_state):
@@ -389,6 +422,7 @@ def evaluate_loop(
     tflite_export: bool = False,
     frame_size: int | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
+    add_class_wise_metrics: bool | None = False,
 ):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -423,6 +457,7 @@ def evaluate_loop(
         writer,
         reporter,
         eval_steps_per_checkpoint,
+        add_class_wise_metrics=add_class_wise_metrics,
     )
     if tflite_export:
       export_tf(model_bundle, train_state, workdir, frame_size)

@@ -74,13 +74,15 @@ class CMAP(clu_metrics.Metric):
         labels=jnp.concatenate((self.labels, other.labels), axis=-2),
     )
 
-  def compute(self, sample_threshold: int = 0) -> Any:
+  def compute(self, class_wise=False, sample_threshold: int = 0) -> Any:
     """Compute cmap only using classes that have > sample_threshold samples."""
     # Compute average precision over the batch axis.
     class_av_prec = metrics.average_precision(self.scores.T, self.labels.T)
     class_counts = jnp.sum(self.labels, axis=0, keepdims=True)
     # Mask classes with no labels to avoid inflating the CMAP.
     class_av_prec *= class_counts > sample_threshold
+    if class_wise:
+      return jnp.squeeze(class_av_prec)
     return jnp.sum(class_av_prec) / jnp.sum(class_counts > sample_threshold)
 
 

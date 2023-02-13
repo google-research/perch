@@ -74,7 +74,10 @@ def taxonomy_cross_entropy(
 
 
 def keyed_cross_entropy(
-    key: str, outputs: output.AnyOutput, **kwargs
+    key: str,
+    outputs: output.AnyOutput,
+    class_index: int | None = None,
+    **kwargs,
 ) -> jnp.ndarray | None:
   """Cross entropy for the specified taxonomic label set."""
   cross_entropy = optax.sigmoid_binary_cross_entropy(
@@ -82,8 +85,11 @@ def keyed_cross_entropy(
   )
   label_mask = kwargs.get(key + "_mask", 1)
   cross_entropy = label_mask * cross_entropy
-  mean = jnp.mean(cross_entropy, axis=-1)
-  return mean
+  if class_index is not None:
+    cross_entropy = cross_entropy[:, class_index]
+  else:
+    cross_entropy = jnp.mean(cross_entropy, axis=-1)
+  return cross_entropy
 
 
 def keyed_map(
@@ -95,8 +101,17 @@ def keyed_map(
   )
 
 
-def make_metrics_collection(prefix: str, taxonomy_loss_weight: float):
+def make_metrics_collection(
+    prefix: str,
+    taxonomy_loss_weight: float,
+    add_class_wise_metrics: bool | None = False,
+    num_labels: dict[str, int] | None = None,
+):
   """Create metrics collection."""
+  if add_class_wise_metrics and num_labels is None:
+    raise ValueError(
+        "`num_labels` must not be None if `add_class_wise_metrics` is True."
+    )
   # pylint: disable=g-long-lambda
   metrics_dict = {}
   if taxonomy_loss_weight != 0.0:
@@ -115,6 +130,16 @@ def make_metrics_collection(prefix: str, taxonomy_loss_weight: float):
             functools.partial(keyed_map, key=key)
         ),
     })
+    if add_class_wise_metrics:
+      # This can be slow if the number of classes is large. It is implemented in
+      # this way because `clu_metrics.Average` expects a scalar loss.
+      for j in range(num_labels[key]):
+        class_wise_xentropy = clu_metrics.Average.from_fun(
+            functools.partial(keyed_cross_entropy, key=key, class_index=j)
+        )
+        metrics_dict.update(
+            {key + "_class_wise_xentropy_{}".format(j): class_wise_xentropy}
+        )
   if taxonomy_loss_weight != 0.0:
     metrics_dict["loss"] = clu_metrics.Average.from_fun(taxonomy_cross_entropy)
   else:
@@ -205,6 +230,7 @@ def train(
     logdir: str,
     log_every_steps: int,
     checkpoint_every_steps: int,
+    add_class_wise_metrics: bool | None = False,
 ) -> None:
   """Train a model.
 
@@ -216,10 +242,14 @@ def train(
     logdir: Directory to use for logging.
     log_every_steps: Write the training minibatch loss.
     checkpoint_every_steps: Checkpoint the model and training state.
+    add_class_wise_metrics: Whether to log class-wise metrics.
   """
   train_iterator = train_dataset.as_numpy_iterator()
   train_metrics_collection = make_metrics_collection(
-      "train___", model_bundle.model.taxonomy_loss_weight
+      "train___",
+      model_bundle.model.taxonomy_loss_weight,
+      add_class_wise_metrics=add_class_wise_metrics,
+      num_labels=model_bundle.model.num_classes,
   )
 
   # Forward pass and metrics
@@ -307,10 +337,14 @@ def evaluate(
     reporter: periodic_actions.ReportProgress,
     eval_steps_per_checkpoint: int | None = None,
     name: str = "valid",
+    add_class_wise_metrics: bool | None = False,
 ):
   """Run evaluation."""
   valid_metrics = make_metrics_collection(
-      f"{name}___", model_bundle.model.taxonomy_loss_weight
+      f"{name}___",
+      model_bundle.model.taxonomy_loss_weight,
+      add_class_wise_metrics=add_class_wise_metrics,
+      num_labels=model_bundle.model.num_classes,
   )
 
   @functools.partial(jax.pmap, axis_name="batch")
@@ -359,6 +393,10 @@ def evaluate(
   cmap_metrics = flax_utils.unreplicate(cmap_metrics)
   for key in cmap_metrics:
     valid_metrics[f"{name}/{key}_cmap"] = cmap_metrics[key].compute()
+    if add_class_wise_metrics:
+      classwise_cmap = cmap_metrics[key].compute(class_wise=True)
+      for i, ccmap in enumerate(classwise_cmap):
+        valid_metrics[f"{name}/{key}_cmap_{i}"] = ccmap
   writer.write_scalars(step, valid_metrics)
   writer.flush()
 
@@ -375,6 +413,7 @@ def evaluate_loop(
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     name: str = "valid",
+    add_class_wise_metrics: bool | None = False,
 ):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -413,6 +452,7 @@ def evaluate_loop(
         reporter,
         eval_steps_per_checkpoint,
         name,
+        add_class_wise_metrics=add_class_wise_metrics,
     )
     if tflite_export:
       export_tf(model_bundle, train_state, workdir, input_shape)

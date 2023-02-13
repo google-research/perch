@@ -177,15 +177,22 @@ def supervised_loss(
 
 
 def keyed_cross_entropy(
-    key: str, outputs: hubert.HubertOutput, readout_index: int = 0, **kwargs
+    key: str,
+    outputs: hubert.HubertOutput,
+    readout_index: int = 0,
+    class_index: int | None = None,
+    **kwargs,
 ) -> jnp.ndarray | None:
   """Cross entropy for the specified taxonomic label set."""
   outputs = getattr(outputs, key)
   outputs = outputs[readout_index]
-  mean = jnp.mean(
-      optax.sigmoid_binary_cross_entropy(outputs, kwargs[key]), axis=-1
-  )
-  return mean
+
+  ce = optax.sigmoid_binary_cross_entropy(outputs, kwargs[key])
+  if class_index is not None:
+    ce = ce[:, class_index]
+  else:
+    ce = jnp.mean(ce, axis=-1)
+  return ce
 
 
 def keyed_map(
@@ -266,6 +273,7 @@ def cluster_targets_metrics(
 
 def make_metrics_collection(
     prefix: str,
+    taxonomy_loss_weight: float,
     alpha: float,
     quant_loss_mult: float,
     readout_loss_mult: float,
@@ -273,8 +281,14 @@ def make_metrics_collection(
     readout_points: list[int],
     quantizer_points: list[int],
     learning_rate_schedule: optax.Schedule,
+    add_class_wise_metrics: bool | None = False,
+    num_labels: dict[str, int] | None = None,
 ):
   """Create metrics collection."""
+  if add_class_wise_metrics and num_labels is None:
+    raise ValueError(
+        "`num_labels` must not be None if `add_class_wise_metrics` is True."
+    )
   metrics_dict = {
       "learning_rate": clu_metrics.Average.from_fun(
           (lambda step, **kwargs: learning_rate_schedule(step))
@@ -339,7 +353,10 @@ def make_metrics_collection(
         ),
     })
 
-  taxo_keys = ["label", "genus", "family", "order"]
+  if taxonomy_loss_weight != 0.0:
+    taxo_keys = ["label", "genus", "family", "order"]
+  else:
+    taxo_keys = ["label"]
   for i, block_ind in enumerate(readout_points):
     for key in taxo_keys:
       metrics_dict.update({
@@ -352,6 +369,25 @@ def make_metrics_collection(
               functools.partial(keyed_map, key=key, readout_index=i)
           ),
       })
+
+      if add_class_wise_metrics:
+        # This can be slow if the number of classes is large. It is implemented
+        # in this way because `clu_metrics.Average` expects a scalar loss.
+        for j in range(num_labels[key]):
+          class_wise_xentropy = clu_metrics.Average.from_fun(
+              functools.partial(
+                  keyed_cross_entropy, key=key, class_index=j, readout_index=i
+              )
+          )
+          metrics_dict.update(
+              {
+                  key
+                  + "_{}_class_wise_xentropy_{}".format(
+                      block_ind, j
+                  ): class_wise_xentropy
+              }
+          )
+
   metrics_dict = {prefix + k: v for k, v in metrics_dict.items()}
   return clu_metrics.Collection.create(**metrics_dict)
 
@@ -769,6 +805,7 @@ def train(
     readout_loss_mult: float,
     hubert_loss_mult: float,
     reload_quantizer=False,
+    add_class_wise_metrics: bool | None = False,
 ) -> None:
   """Train a model.
 
@@ -791,6 +828,7 @@ def train(
       used for training.
     reload_quantizer: Whether to reload a pre-trained quantizer. If this is the
       case, it is kept frozen.
+    add_class_wise_metrics: Whether to log class-wise metrics.
   """
   if reload_quantizer and num_quantizer_pretrain_steps:
     raise ValueError(
@@ -801,6 +839,7 @@ def train(
   train_iterator = train_dataset.as_numpy_iterator()
   train_metrics_collection = make_metrics_collection(
       "train___",
+      model_bundle.model.taxonomy_loss_weight,
       model_bundle.model.alpha,
       quant_loss_mult,
       readout_loss_mult,
@@ -808,6 +847,8 @@ def train(
       model_bundle.model.readout_points,
       model_bundle.model.quantizer_points,
       learning_rate_schedule=learning_rate_schedule,
+      add_class_wise_metrics=add_class_wise_metrics,
+      num_labels=model_bundle.model.num_classes,
   )
 
   def get_update_step(loss_key="train___loss"):
@@ -925,11 +966,13 @@ def evaluate(
     eval_steps_per_checkpoint: int | None = None,
     train_mode_at_eval: bool | None = False,
     mask_at_eval: bool | None = False,
+    add_class_wise_metrics: bool | None = False,
 ):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
   valid_metrics = make_metrics_collection(
       "valid___",
+      model_bundle.model.taxonomy_loss_weight,
       model_bundle.model.alpha,
       quant_loss_mult,
       readout_loss_mult,
@@ -937,6 +980,8 @@ def evaluate(
       model_bundle.model.readout_points,
       model_bundle.model.quantizer_points,
       learning_rate_schedule=learning_rate_schedule,
+      add_class_wise_metrics=add_class_wise_metrics,
+      num_labels=model_bundle.model.num_classes,
   )
 
   @functools.partial(jax.pmap, axis_name="batch")
@@ -971,6 +1016,12 @@ def evaluate(
 
   step = int(flax_utils.unreplicate(train_state.step))
   label_names = ("label", "genus", "family", "order")
+
+  if model_bundle.model.taxonomy_loss_weight > 0:
+    label_names = ("label", "genus", "family", "order")
+  else:
+    label_names = ("label",)
+
   cmap_metrics = make_cmap_metrics_dict(
       label_names, model_bundle.model.readout_points
   )
@@ -986,6 +1037,7 @@ def evaluate(
       model_outputs, valid_metrics = update_metrics(
           valid_metrics, batch, train_state, mask_key
       )
+
       cmap_metrics = update_cmap_metrics_dict(
           label_names,
           cmap_metrics,
@@ -1006,6 +1058,10 @@ def evaluate(
   cmap_metrics = flax_utils.unreplicate(cmap_metrics)
   for key in cmap_metrics:
     valid_metrics[f"valid/{key}_cmap"] = cmap_metrics[key].compute()
+    if add_class_wise_metrics:
+      classwise_cmap = cmap_metrics[key].compute(class_wise=True)
+      for i, ccmap in enumerate(classwise_cmap):
+        valid_metrics[f"valid/{key}_cmap_{i}"] = ccmap
   writer.write_scalars(step, valid_metrics)
   writer.flush()
 
@@ -1024,6 +1080,7 @@ def evaluate_loop(
     tflite_export: bool = False,
     input_size: int | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
+    add_class_wise_metrics: bool | None = False,
     **unused_kwargs,
 ):
   """Run evaluation in a loop."""
@@ -1063,6 +1120,7 @@ def evaluate_loop(
         eval_steps_per_checkpoint,
         train_mode_at_eval,
         mask_at_eval,
+        add_class_wise_metrics=add_class_wise_metrics,
     )
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_size)
@@ -1174,6 +1232,7 @@ def run(
         quant_loss_mult=quant_loss_mult,
         readout_loss_mult=config.train_config.readout_loss_mult,
         hubert_loss_mult=config.train_config.hubert_loss_mult,
+        add_class_wise_metrics=config.train_config.add_class_wise_metrics,
     )
 
   elif mode == "tune_eval_hypers":
@@ -1193,6 +1252,7 @@ def run(
         reporter,
         train_mode_at_eval=config.eval_config.train_mode_at_eval,
         mask_at_eval=config.eval_config.mask_at_eval,
+        add_class_wise_metrics=config.eval_config.add_class_wise_metrics,
     )
 
   elif mode == "eval":
