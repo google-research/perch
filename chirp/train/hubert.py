@@ -448,7 +448,7 @@ def project(min_value: float, max_value: float) -> optax.GradientTransformation:
 def initialize_model(
     model_config: config_dict.ConfigDict,
     rng_seed: int,
-    input_size: int,
+    input_shape: tuple[int, ...],
     learning_rate: float,
     start_learning_rate: float,
     workdir: str,
@@ -641,7 +641,7 @@ def initialize_model(
   )
   variables = model.init(
       model_init_key,
-      jnp.zeros((1, input_size)),
+      jnp.zeros((1,) + input_shape),
       train=False,
       mask_key=mask_key,
       train_mode_quantizer=False,
@@ -1078,7 +1078,7 @@ def evaluate_loop(
     train_mode_at_eval: bool | None = False,
     mask_at_eval: bool | None = False,
     tflite_export: bool = False,
-    input_size: int | None = None,
+    input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     add_class_wise_metrics: bool | None = False,
     **unused_kwargs,
@@ -1092,6 +1092,9 @@ def evaluate_loop(
   # Initialize last_step to zero so we always run at least one eval.
   last_step = -1
   last_ckpt = ""
+
+  # Handle lazy computation
+  input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
 
   while last_step < num_train_steps:
     ckpt = checkpoint.MultihostCheckpoint(workdir)
@@ -1123,7 +1126,7 @@ def evaluate_loop(
         add_class_wise_metrics=add_class_wise_metrics,
     )
     if tflite_export:
-      export_tf_lite(model_bundle, train_state, workdir, input_size)
+      export_tf_lite(model_bundle, train_state, workdir, input_shape)
     last_step = int(train_state.step)
     last_ckpt = next_ckpt
 
@@ -1132,7 +1135,7 @@ def export_tf_lite(
     model_bundle: utils.ModelBundle,
     train_state: utils.TrainState,
     workdir: str,
-    input_size: int,
+    input_shape: tuple[int, ...],
 ):
   """Write a TFLite flatbuffer."""
   variables = {"params": train_state.params, **train_state.model_state}
@@ -1146,7 +1149,9 @@ def export_tf_lite(
   tf_predict = tf.function(
       jax2tf.convert(infer_fn, enable_xla=False),
       input_signature=[
-          tf.TensorSpec(shape=[1, input_size], dtype=tf.float32, name="input")
+          tf.TensorSpec(
+              shape=(1,) + input_shape, dtype=tf.float32, name="input"
+          )
       ],
       autograph=False,
   )
