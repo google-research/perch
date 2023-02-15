@@ -527,6 +527,50 @@ class MelSpectrogram(FeaturesPreprocessOp):
 
 
 @dataclasses.dataclass
+class MFCC(FeaturesPreprocessOp):
+  """Convert a spectrogram to MFC coefficients.
+
+  This op assumes that the audio has already been processed into a log-magnitude
+  mel-scale spectrogram.
+
+  Attributes:
+    num_coefficients: The number of MFC coefficients to retain.
+    aggregate_over_time: If True, aggregates the MFC coefficients over time into
+      four summary statistics: mean, standard deviation, min, and max, resulting
+      in four feature vectors of shape `num_coefficients` that are then
+      concatenated into a single feature vector. This mirrors the processing
+      done in the BEANS benchmark (Hagiwara et al., 2022).
+    name: The name of the feature to process.
+  """
+
+  num_coefficients: int
+  aggregate_over_time: bool = True
+  name: str = 'audio'
+
+  def __call__(
+      self, features: Features, dataset_info: tfds.core.DatasetInfo
+  ) -> Features:
+    del dataset_info
+    features = features.copy()
+    features[self.name] = tf.signal.mfccs_from_log_mel_spectrograms(
+        features[self.name]
+    )[..., : self.num_coefficients]
+    if self.aggregate_over_time:
+      mean, variance = tf.nn.moments(features[self.name], axes=[-2])
+      features[self.name] = tf.concat(
+          [
+              mean,
+              tf.sqrt(variance),
+              tf.reduce_min(features[self.name], axis=-2),
+              tf.reduce_max(features[self.name], axis=-2),
+          ],
+          axis=-1,
+      )
+
+    return features
+
+
+@dataclasses.dataclass
 class LabelsToString(FeaturesPreprocessOp):
   """Converts labels to a string representation.
 
@@ -1048,6 +1092,24 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
       return example
 
     return dataset.map(map_fn)
+
+
+@dataclasses.dataclass
+class Cache(DatasetPreprocessOp):
+  """Caches the dataset.
+
+  Attributes:
+    filename: Where to cache the dataset. If left empty, the dataset is cached
+      in memory.
+  """
+
+  filename: str = ''
+
+  def __call__(
+      self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
+  ) -> tf.data.Dataset:
+    del dataset_info
+    return dataset.cache(filename=self.filename)
 
 
 def get_dataset(
