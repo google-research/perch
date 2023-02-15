@@ -124,11 +124,11 @@ def quantizer_loss(
 
 def taxonomy_cross_entropy(
     outputs: hubert.HubertOutput,
-    label: jnp.ndarray,
-    genus: jnp.ndarray,
-    family: jnp.ndarray,
-    order: jnp.ndarray,
     taxonomy_loss_weight: float,
+    label: jnp.ndarray,
+    genus: jnp.ndarray | None = None,
+    family: jnp.ndarray | None = None,
+    order: jnp.ndarray | None = None,
     **unused_kwargs,
 ) -> jnp.ndarray:
   """Computes mean cross entropy across taxonomic labels."""
@@ -153,12 +153,12 @@ def taxonomy_cross_entropy(
 
 def supervised_loss(
     outputs: hubert.HubertOutput,
-    label: jnp.ndarray,
-    genus: jnp.ndarray,
-    family: jnp.ndarray,
-    order: jnp.ndarray,
     taxonomy_loss_weight: float,
     readout_loss_mult: float,
+    label: jnp.ndarray,
+    genus: jnp.ndarray | None = None,
+    family: jnp.ndarray | None = None,
+    order: jnp.ndarray | None = None,
     **unused_kwargs,
 ) -> jnp.ndarray:
   """Compute classification loss for all taxonomy heads."""
@@ -168,7 +168,7 @@ def supervised_loss(
     # [bsz, sz].
     return jnp.zeros(outputs.logits[0].shape[:-1])
   loss = taxonomy_cross_entropy(
-      outputs, label, genus, family, order, taxonomy_loss_weight
+      outputs, taxonomy_loss_weight, label, genus, family, order
   )  # [bsz].
   # Make it [bsz, sz] so that it can be element-wise added to other losses.
   sz = outputs.logits[0].shape[-2]
@@ -873,12 +873,9 @@ def train(
         )
         train_metrics = train_metrics_collection.gather_from_model_output(
             outputs=model_outputs,
-            label=batch["label"],
-            genus=batch["genus"],
-            family=batch["family"],
-            order=batch["order"],
             taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
             step=train_state.step,
+            **batch,
         ).compute()
         loss = train_metrics[loss_key]
         return loss, (train_metrics, model_state)
@@ -967,11 +964,12 @@ def evaluate(
     train_mode_at_eval: bool | None = False,
     mask_at_eval: bool | None = False,
     add_class_wise_metrics: bool | None = False,
+    name: str = "valid",
 ):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
   valid_metrics = make_metrics_collection(
-      "valid___",
+      f"{name}___",
       model_bundle.model.taxonomy_loss_weight,
       model_bundle.model.alpha,
       quant_loss_mult,
@@ -1004,13 +1002,10 @@ def evaluate(
     return model_outputs, valid_metrics.merge(
         valid_metrics.gather_from_model_output(
             outputs=model_outputs,
-            label=batch["label"],
-            genus=batch["genus"],
-            family=batch["family"],
-            order=batch["order"],
             taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
             step=train_state.step,
             axis_name="batch",
+            **batch,
         )
     )
 
@@ -1057,7 +1052,7 @@ def evaluate(
   valid_metrics = {k.replace("___", "/"): v for k, v in valid_metrics.items()}
   cmap_metrics = flax_utils.unreplicate(cmap_metrics)
   for key in cmap_metrics:
-    valid_metrics[f"valid/{key}_cmap"] = cmap_metrics[key].compute()
+    valid_metrics[f"{name}/{key}_cmap"] = cmap_metrics[key].compute()
     if add_class_wise_metrics:
       classwise_cmap = cmap_metrics[key].compute(class_wise=True)
       for i, ccmap in enumerate(classwise_cmap):
@@ -1081,6 +1076,7 @@ def evaluate_loop(
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     add_class_wise_metrics: bool | None = False,
+    name: str = "valid",
     **unused_kwargs,
 ):
   """Run evaluation in a loop."""
@@ -1124,6 +1120,7 @@ def evaluate_loop(
         train_mode_at_eval,
         mask_at_eval,
         add_class_wise_metrics=add_class_wise_metrics,
+        name=name,
     )
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_shape)
@@ -1179,6 +1176,12 @@ def run(
     tf_data_service_address: str,
 ) -> None:
   """Run the experiment."""
+  if mode.startswith("eval_"):
+    mode, name = mode.split("_", maxsplit=1)
+    config.eval_dataset_config = getattr(config.eval_dataset_config, name)
+  else:
+    name = "valid"
+
   if mode == "train":
     train_dataset, dataset_info = pipeline.get_dataset(
         is_train=True,
@@ -1258,6 +1261,7 @@ def run(
         train_mode_at_eval=config.eval_config.train_mode_at_eval,
         mask_at_eval=config.eval_config.mask_at_eval,
         add_class_wise_metrics=config.eval_config.add_class_wise_metrics,
+        name=name,
     )
 
   elif mode == "eval":
@@ -1268,5 +1272,6 @@ def run(
         valid_dataset,
         workdir=workdir,
         logdir=workdir,
+        name=name,
         **config.eval_config,
     )
