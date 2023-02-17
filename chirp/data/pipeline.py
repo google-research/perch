@@ -301,10 +301,14 @@ class MixAudio(DatasetPreprocessOp):
   """Mix audio samples.
 
   Attributes:
-    mixin_prob: The probability with which samples are mixed. Note that if we
-      mix, e.g., 50% of samples, the final ratio between mixed and unmixed
-      samples is 1:2. More formally, to get a fraction `p` of the samples to be
-      mixed, set `mixin_prob` to `2 * p / (p + 1)`.
+    mixin_prob: The probability of mixing a single example with a single other
+      example. For a probability p this results in an unnormalized target
+      distribution of (1 - p, p / 2). If this is given, target_dist cannot be
+      given and vice versa.
+    target_dist: The target distribution of mixtures containing 1, 2, ...
+      sources. Does not have to be normalized. For example, (1., 1.) will result
+      in half of the examples being raw examples, and the other half being
+      mixtures of two examples.
     name: The name of the featuere to be mixed.
     source_name: The unmixed channels will be stored in this feature.
     pad_names: These labels must be padded to zeros.
@@ -317,7 +321,8 @@ class MixAudio(DatasetPreprocessOp):
       devices).
   """
 
-  mixin_prob: float
+  mixin_prob: float | None = None
+  target_dist: tuple[float, ...] | None = None
   name: str = 'audio'
   source_name: str = 'source_audio'
   pad_names: tuple[str, ...] = (
@@ -341,26 +346,41 @@ class MixAudio(DatasetPreprocessOp):
   )
   axis: int = 0
 
+  def __post_init__(self):
+    if not (self.mixin_prob is None) ^ (self.target_dist is None):
+      raise ValueError('either mixin_prob or target_dist must be set')
+    if self.target_dist is None:
+      self.target_dist = (1 - self.mixin_prob, self.mixin_prob / 2)
+
   def __call__(
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
   ) -> tf.data.Dataset:
     del dataset_info  # Unused
     return dataset.group_by_window(
-        self._key_func, self._reduce_func, window_size=2
+        self._key_func, self._reduce_func, window_size_func=lambda i: i + 1
     )
 
   def _key_func(self, features: Features) -> tf.Tensor:
     del features
-    return tf.cast(tf.less(tf.random.uniform([]), self.mixin_prob), tf.int64)
+    target_dist = tf.constant(self.target_dist, dtype=tf.float32)
+    sample_dist = target_dist * (
+        tf.range(len(self.target_dist), dtype=tf.float32) + 1.0
+    )
+    return tf.squeeze(tf.random.categorical(tf.math.log([sample_dist]), 1))
 
   def _reduce_func(
       self, key: tf.Tensor, dataset: tf.data.Dataset
   ) -> tf.data.Dataset:
-    key = tf.equal(key, 0)
-    return tf.cond(
+    key = tf.cast(key, tf.int32)
+    # pylint: disable=g-long-lambda
+    return tf.switch_case(
         key,
-        lambda: dataset.batch(1, drop_remainder=True).map(self._mix_audio),
-        lambda: dataset.batch(2, drop_remainder=True).map(self._mix_audio),
+        [
+            lambda i=i: dataset.batch(i + 1, drop_remainder=True).map(
+                self._mix_audio
+            )
+            for i in range(len(self.target_dist))
+        ],
     )
 
   @staticmethod
@@ -382,8 +402,9 @@ class MixAudio(DatasetPreprocessOp):
     features[self.name] = tf.reduce_sum(source_audio, axis=0)
 
     # To enable batching we pad with zeros
-    if source_audio.shape[0] == 1:
-      source_audio = self._pad_along_axis(source_audio, [0, 1], axis=0)
+    if source_audio.shape[0] < len(self.target_dist):
+      p = len(self.target_dist) - source_audio.shape[0]
+      source_audio = self._pad_along_axis(source_audio, [0, p], axis=0)
       if self.axis:
         source_audio = tf.experimental.numpy.swapaxes(
             source_audio, 0, self.axis
@@ -391,7 +412,7 @@ class MixAudio(DatasetPreprocessOp):
       for name in self.pad_names:
         if name not in features:
           continue
-        features[name] = self._pad_along_axis(features[name], [0, 1], axis=0)
+        features[name] = self._pad_along_axis(features[name], [0, p], axis=0)
         if self.axis:
           features[name] = tf.experimental.numpy.swapaxes(
               features[name], 0, self.axis
