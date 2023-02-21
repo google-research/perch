@@ -266,6 +266,48 @@ class MelSpectrogram(Frontend):
     return self._magnitude_scale(mel_spectrograms)
 
 
+class MFCC(Frontend):
+  """MFC coefficients frontend.
+
+  This frontend begins by calculating the mel-spectrogram of the audio, then
+  computes its discrete cosine transform.
+
+  Attributes:
+    mel_spectrogram_frontend: Frontend used for computing mel-spectrograms out
+      of audio sequences.
+    num_coefficients: Number of MFC coefficients to keep.
+    aggregate_over_time: If True, aggregate the MFCs (of shape [..., num_frames,
+      num_coefficients]) over the time axis using mean, standard deviation, min,
+      and max operations. The result is four tensors of shape [...,
+      num_coefficients] that are then concatenated into a single output of shape
+      [..., 4 * num_coefficients]. This mirrors the processing done in the BEANS
+      benchmark (Hagiwara et al., 2022).
+  """
+
+  mel_spectrogram_frontend: MelSpectrogram
+  num_coefficients: int | None = None
+  aggregate_over_time: bool = True
+
+  @nn.compact
+  def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
+    mel_spectrograms = self.mel_spectrogram_frontend(inputs, train)
+    outputs = jsp.fft.dct(
+        mel_spectrograms, type=2, n=self.num_coefficients, axis=-1, norm="ortho"
+    )
+    if self.aggregate_over_time:
+      outputs = jnp.concatenate(
+          [
+              outputs.mean(axis=-2),
+              outputs.std(axis=-2),
+              outputs.min(axis=-2),
+              outputs.max(axis=-2),
+          ],
+          axis=-1,
+      )
+
+    return outputs
+
+
 class LearnedFrontend(Frontend):
   """Learned filters.
 
