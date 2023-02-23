@@ -159,9 +159,19 @@ class PipelineTest(parameterized.TestCase):
       self.assertNotIn(key, example)
 
   def test_get_dataset(self):
+    test_pipeline = pipeline.Pipeline([
+        pipeline.OnlyJaxTypes(),
+        pipeline.MultiHot(),
+        pipeline.MixAudio(mixin_prob=0.25),
+        pipeline.Batch(8),
+        pipeline.RandomSlice(window_size=5),
+        pipeline.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
+    ])
     for split in self._builder.info.splits.values():
       dataset, _ = pipeline.get_dataset(
-          split.name, dataset_directory=self._builder.data_dir
+          split.name,
+          dataset_directory=self._builder.data_dir,
+          pipeline=test_pipeline,
       )
 
       example = next(dataset.as_numpy_iterator())
@@ -180,6 +190,11 @@ class PipelineTest(parameterized.TestCase):
               'segment_id',
           },
       )
+      # Check error raising when getting last dataset split without a pipeline.
+      with self.assertRaises(ValueError):
+        pipeline.get_dataset(
+            split.name, dataset_directory=self._builder.data_dir
+        )
 
   def test_convert_bird_taxonomy_labels(self):
     db = namespace_db.NamespaceDatabase.load_csvs()

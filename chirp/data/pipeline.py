@@ -35,6 +35,7 @@ import tensorflow_datasets as tfds
 # Import bird_taxonomy and soundscapes to register the datasets with TFDS.
 _DEFAULT_DATASET_DIR = None
 _DEFAULT_TFDS_DATADIR = None
+_DEFAULT_PIPELINE = None
 
 Features = dict[str, tf.Tensor]
 
@@ -1139,7 +1140,7 @@ def get_dataset(
     dataset_directory: str | Iterable[str] = _DEFAULT_DATASET_DIR,
     tfds_data_dir: str | None = _DEFAULT_TFDS_DATADIR,
     tf_data_service_address: Any | None = None,
-    pipeline: Pipeline | None = None,
+    pipeline: Pipeline | None = _DEFAULT_PIPELINE,
 ) -> tuple[tf.data.Dataset, tfds.core.DatasetInfo]:
   """Returns the placeholder dataset.
 
@@ -1155,22 +1156,21 @@ def get_dataset(
       instead of using the tfds.builder_from_directory.
     tf_data_service_address: Address for TFDataService. Only used if is_train is
       set.
-    pipeline: The preprocessing pipeline to apply to the data.
+    pipeline: (required) A preprocessing pipeline to apply to the data.
 
   Returns:
     The placeholder dataset.
+  Raises:
+    ValueError: If no initialized Pipeline is passed.
   """
   if isinstance(dataset_directory, str):
     dataset_directory = [dataset_directory]
+
   if pipeline is None:
-    pipeline = Pipeline([
-        OnlyJaxTypes(),
-        MultiHot(),
-        MixAudio(mixin_prob=0.25),
-        Batch(8),
-        RandomSlice(window_size=5),
-        RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
-    ])
+    raise ValueError(
+        'pipeline.get_dataset() requires a valid initialized Pipeline object '
+        'to be specified.'
+    )
   read_config = tfds.ReadConfig(add_tfds_id=True)
 
   datasets = []

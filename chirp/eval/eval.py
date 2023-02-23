@@ -56,6 +56,16 @@ def main(argv: Sequence[str]) -> None:
         'boolean value (True or False) in the passed config. '
         'Please update your config file and run again.'
     )
+  # Ensure that every evaluation script includes an instantiation of a Pipeline
+  # object with any desired data processing ops.
+  for dataset_config in config.dataset_configs:
+    if dataset_config.pipeline is None:
+      raise ValueError(
+          'eval.py requires each dataset_config in `config.dataset_configs` to '
+          'have a `pipeline` attribute set to a '
+          '`config_utils.callable_config` object with any desired data '
+          'processing operations (ops).'
+      )
 
   eval_datasets = eval_lib.load_eval_datasets(config)
   embedded_datasets = dict()
