@@ -77,67 +77,38 @@ class SoundscapesLibTest(parameterized.TestCase):
       self.assertEqual(anno.namespace, 'ebird2021')
       self.assertEqual(anno.label, [expected_label])
 
-  def test_load_hawaii_annotations(self):
-    # Combine the Hawaii 'raw' annotations into a single csv.
-    csv_path = epath.Path(self.data_dir) / 'hawaii.csv'
-    dataset_fns.combine_hawaii_annotations(self.testdata_dir, csv_path)
-
-    # Then read from the combined csv.
-    annos = dataset_fns.load_hawaii_annotations(csv_path)
-    # Check that only six annotations are kept, dropping the 'Spectrogram' views
-    # which are redundant.
-    self.assertLen(annos, 7)
-    expected_labels = ['iiwi'] * 4 + ['omao', 'iiwi', 'unknown']
-    for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
-      self.assertEqual(anno.filename, 'hawaii/hawaii_example.wav')
-      self.assertEqual(anno.namespace, 'ebird2021')
-      self.assertEqual(anno.label, [expected_label])
-
-  def test_load_ssw_annotations(self):
-    annos_csv_path = path_utils.get_absolute_epath('tests/testdata/ssw.csv')
-    annos = dataset_fns.load_ssw_annotations(annos_csv_path)
-    self.assertLen(annos, 4)
-    expected_labels = ['cangoo', 'blujay', 'rewbla', 'cangoo']
-    for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
-      self.assertTrue(anno.filename.endswith('.flac'))
-      self.assertLen(anno.filename.split('.'), 2)
-      self.assertEqual(anno.namespace, 'ebird2021')
-      self.assertEqual(anno.label, [expected_label])
-
-  def test_load_birdclef_annotations(self):
-    annos_csv_path = path_utils.get_absolute_epath(
-        'tests/testdata/birdclef2019_colombia.csv'
-    )
-    annos = dataset_fns.load_birdclef_annotations(annos_csv_path)
-    self.assertLen(annos, 7)
-    # This includes an auto-conversion of rufant1 to rufant7.
-    expected_labels = [
-        'rufant7',
-        'kebtou1',
-        'stbwre2',
-        'stbwre2',
-        'yeofly1',
-        'bubwre1',
-        'fepowl',
-    ]
-    for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
-      self.assertTrue(anno.filename.endswith('.wav'))
-      self.assertLen(anno.filename.split('.'), 2)
-      self.assertEqual(anno.namespace, 'ebird2021')
-      self.assertEqual(anno.label, [expected_label])
-
-  def test_load_sierras_kahl_annotations(self):
-    annos_csv_path = path_utils.get_absolute_epath(
-        'tests/testdata/sierras_kahl.csv'
-    )
-    annos = dataset_fns.load_sierras_kahl_annotations(annos_csv_path)
-    self.assertLen(annos, 4)
-    expected_labels = [
-        'amerob',
-        'amerob',
-        'herthr',
-        'herthr',
-    ]
+  @parameterized.named_parameters([
+      ('_ssw', 'ssw.csv', ['cangoo', 'blujay', 'rewbla', 'cangoo']),
+      (
+          '_sierras_kahl',
+          'sierras_kahl.csv',
+          ['amerob', 'amerob', 'herthr', 'herthr'],
+      ),
+      (
+          '_peru',
+          'peru.csv',
+          ['blfant1', 'grasal3', 'greant1', 'butwoo1', 'unknown'],
+      ),
+      (
+          '_hawaii',
+          'hawaii.csv',
+          ['hawama', 'hawama', 'ercfra', 'jabwar', 'jabwar'],
+      ),
+      (
+          '_high_sierras',
+          'high_sierras.csv',
+          ['gcrfin', 'gcrfin', 'gcrfin', 'whcspa', 'whcspa', 'amepip'],
+      ),
+      (
+          '_coffee_farms',
+          'coffee_farms.csv',
+          ['compot1', 'compot1', 'compot1', 'compot1'],
+      ),
+  ])
+  def test_load_cornell_annotations(self, csv_name, expected_labels):
+    annos_csv_path = path_utils.get_absolute_epath('tests/testdata/' + csv_name)
+    annos = dataset_fns.load_cornell_annotations(annos_csv_path)
+    self.assertLen(annos, len(expected_labels))
     for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
       self.assertTrue(anno.filename.endswith('.flac'))
       self.assertLen(anno.filename.split('.'), 2)
@@ -174,65 +145,17 @@ class SoundscapesLibTest(parameterized.TestCase):
         self.assertEqual(anno.namespace, 'ebird2021')
         self.assertEqual(anno.label, [expected_label])
 
-  def test_load_peru_annotations(self):
-    annos_csv_path = path_utils.get_absolute_epath('tests/testdata/peru.csv')
-    annos = dataset_fns.load_sierras_kahl_annotations(annos_csv_path)
-    self.assertLen(annos, 5)
-    expected_labels = [
-        'blfant1',
-        'grasal3',
-        'greant1',
-        'butwoo1',
-        'unknown',  # Mapped from '????'
-    ]
-    for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
-      self.assertEqual(anno.filename, 'PER_001_S01_20190116_100007Z.flac')
-      self.assertLen(anno.filename.split('.'), 2)
-      self.assertEqual(anno.namespace, 'ebird2021')
-      self.assertEqual(anno.label, [expected_label])
-
-  def test_load_birdclef_metadata(self):
-    md_features = dataset_fns.birdclef_metadata_features()
-    metadata = dataset_fns.load_birdclef_metadata(
-        self.testdata_dir, md_features
-    )
-    # Two Colombia metadata files and one SSW file.
-    self.assertLen(metadata, 3)
-
-  def test_combine_annotations_with_metadata(self):
-    # Currently only birdclef data has metadata to combine. So test that.
-    md_features = dataset_fns.birdclef_metadata_features()
-    annos_csv_path = path_utils.get_absolute_epath(
-        'tests/testdata/birdclef2019_colombia.csv'
-    )
-    annos = dataset_fns.load_birdclef_annotations(annos_csv_path)
-    self.assertLen(annos, 7)
-
-    combined_segments = soundscapes_lib.combine_annotations_with_metadata(
-        annos,
-        self.testdata_dir,
-        md_features,
-        dataset_fns.load_birdclef_metadata,
-    )
-    self.assertLen(combined_segments, 7)
-    for feature in md_features.values():
-      self.assertIn(feature.target_key, combined_segments.columns.values)
-      self.assertNotIn(feature.source_key, combined_segments.columns.values)
-
-      # Check that encoding works.
-      for value in combined_segments[feature.target_key].values:
-        encoded = feature.feature_type.encode_example(value)
-        # These should all be scalar values.
-        self.assertEmpty(encoded.shape)
-
   @parameterized.named_parameters(
       dict(testcase_name='_' + bc.name, builder_config=bc)
       for bc in SUPERVISED_CONFIGS
   )
   def test_create_annotated_segments_df(self, builder_config):
-    filename = (
-        builder_config.annotation_filename or f'{builder_config.name}.csv'
-    )
+    if builder_config.annotation_filename == 'annotations.csv':
+      filename = f'{builder_config.name}.csv'.replace('_full_length', '')
+    elif builder_config.annotation_filename:
+      filename = builder_config.annotation_filename
+    else:
+      filename = f'{builder_config.name}.csv'
     annotations_path = self.testdata_dir / filename
     annos = builder_config.annotation_load_fn(annotations_path)
     if not builder_config.supervised:

@@ -119,108 +119,8 @@ def load_caples_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   return segments
 
 
-def load_birdclef_annotations(annotations_path: epath.Path) -> pd.DataFrame:
-  """Load the dataframe of all caples annotations from annotation CSV."""
-  filename_fn = lambda _, row: row['fid'].strip()
-  start_time_fn = lambda row: float(row['start_time_s'])
-  end_time_fn = lambda row: float(row['end_time_s'])
-  filter_fn = lambda row: row['end_time_s'] <= row['start_time_s']
-  class_fn = lambda row: [  # pylint: disable=g-long-lambda
-      sp.strip().replace('rufant1', 'rufant7')
-      for sp in row['ebird_codes'].split(' ')
-  ]
-  annos = annotations.read_dataset_annotations_csvs(
-      [annotations_path],
-      filename_fn=filename_fn,
-      namespace='ebird2021',
-      class_fn=class_fn,
-      start_time_fn=start_time_fn,
-      end_time_fn=end_time_fn,
-      filter_fn=filter_fn,
-  )
-  segments = annotations.annotations_to_dataframe(annos)
-  return segments
-
-
-def load_ssw_annotations(annotations_path: epath.Path) -> pd.DataFrame:
-  """Read annotations from Raven Selection Tables for the SSW dataset."""
-  start_time_fn = lambda row: float(row['Start Time (s)'])
-  end_time_fn = lambda row: float(row['End Time (s)'])
-  filter_fn = lambda row: False
-  # SSW data are already using ebird codes.
-  class_fn = lambda row: [  # pylint: disable=g-long-lambda
-      row['Species eBird Code'].strip().replace('????', 'unknown')
-  ]
-  filename_fn = lambda filepath, row: row['Filename'].strip()
-
-  annos = annotations.read_dataset_annotations_csvs(
-      [annotations_path],
-      filename_fn=filename_fn,
-      namespace='ebird2021',
-      class_fn=class_fn,
-      start_time_fn=start_time_fn,
-      end_time_fn=end_time_fn,
-      filter_fn=filter_fn,
-  )
-  segments = annotations.annotations_to_dataframe(annos)
-  return segments
-
-
-def combine_hawaii_annotations(
-    dataset_path: epath.Path, output_filepath: epath.Path
-) -> None:
-  """Combine all Hawaii dataset annotations into a single csv."""
-  tables = dataset_path.glob('*/*.txt')
-  rows = {}
-  for table_fp in tables:
-    with table_fp.open('r') as f:
-      reader = csv.DictReader(f, delimiter='\t')
-      for row in reader:
-        # The filename in the row doesn't include the file's directory.
-        folder_name = table_fp.parent.name
-        row['Begin File'] = os.path.join(folder_name, row['Begin File'])
-        # Many files contain redundant 'Waveform' and 'Spectrogram' views of
-        # the same annotation.
-        key = (row['Begin File'], row['Begin Time (s)'], row['Species'])
-        rows[key] = row
-  rows = list(rows.values())
-
-  with output_filepath.open('w') as f:
-    writer = csv.DictWriter(f, rows[0].keys())
-    writer.writeheader()
-    writer.writerows(rows)
-
-
-def load_hawaii_annotations(annotations_path: epath.Path) -> pd.DataFrame:
-  """Load the dataframe of all Hawaii annotations from annotation CSV."""
-  start_time_fn = lambda row: float(row['Begin Time (s)'])
-  end_time_fn = lambda row: float(row['End Time (s)'])
-  filter_fn = lambda row: False
-
-  # Convert dataset labels to ebird2021.
-  db = namespace_db.NamespaceDatabase.load_csvs()
-  ebird_mapping = db.mappings['hawaii_dataset_to_ebird2021']
-  ebird_mapping_dict = ebird_mapping.to_dict()
-  class_fn = lambda row: [  # pylint: disable=g-long-lambda
-      ebird_mapping_dict.get(row['Species'].strip(), 'unknown')
-  ]
-
-  filename_fn = lambda filepath, row: row['Begin File'].strip()
-  annos = annotations.read_dataset_annotations_csvs(
-      [annotations_path],
-      filename_fn=filename_fn,
-      namespace=ebird_mapping.target_namespace,
-      class_fn=class_fn,
-      start_time_fn=start_time_fn,
-      end_time_fn=end_time_fn,
-      filter_fn=filter_fn,
-  )
-  segments = annotations.annotations_to_dataframe(annos)
-  return segments
-
-
-def load_sierras_kahl_annotations(annotations_path: epath.Path) -> pd.DataFrame:
-  """Load the dataframe of all Sierras annotations from annotation CSV."""
+def load_cornell_annotations(annotations_path: epath.Path) -> pd.DataFrame:
+  """Load the annotations from a Cornell Zenodo dataset."""
   start_time_fn = lambda row: float(row['Start Time (s)'])
   end_time_fn = lambda row: float(row['End Time (s)'])
   filter_fn = lambda row: False
@@ -228,28 +128,6 @@ def load_sierras_kahl_annotations(annotations_path: epath.Path) -> pd.DataFrame:
       row['Species eBird Code'].strip().replace('????', 'unknown')
   ]
 
-  filename_fn = lambda filepath, row: row['Filename'].strip()
-  annos = annotations.read_dataset_annotations_csvs(
-      [annotations_path],
-      filename_fn=filename_fn,
-      namespace='ebird2021',
-      class_fn=class_fn,
-      start_time_fn=start_time_fn,
-      end_time_fn=end_time_fn,
-      filter_fn=filter_fn,
-  )
-  segments = annotations.annotations_to_dataframe(annos)
-  return segments
-
-
-def load_peru_annotations(annotations_path: epath.Path) -> pd.DataFrame:
-  """Load the dataframe of all Peru annotations from annotation CSV."""
-  start_time_fn = lambda row: float(row['Start Time (s)'])
-  end_time_fn = lambda row: float(row['End Time (s)'])
-  filter_fn = lambda row: False
-  class_fn = lambda row: [  # pylint: disable=g-long-lambda
-      row['Species eBird Code'].strip().replace('????', 'unknown')
-  ]
   filename_fn = lambda filepath, row: row['Filename'].strip()
   annos = annotations.read_dataset_annotations_csvs(
       [annotations_path],

@@ -99,7 +99,7 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
   """DatasetBuilder for soundscapes data."""
 
-  VERSION = tfds.core.Version('1.1.0')
+  VERSION = tfds.core.Version('1.3.0')
   RELEASE_NOTES = {
       '1.0.0': (
           'Initial release. The label set corresponds to the full '
@@ -126,6 +126,11 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       '1.0.7': 'Fix some dropped annotations in the Hawaii dataset.',
       '1.1.0': 'Adds full-length variants.',
       '1.2.0': 'Updated ebird2021 taxonomy.',
+      '1.3.0': (
+          'Switch to Zenodo versions of soundscape datasets from Cornell. '
+          'Add the Colombia+Costa Rica dataset, remove the Colombia-only '
+          'BirdCLEF dataset.'
+      ),
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
@@ -154,20 +159,28 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       ),
       SoundscapesConfig(
           name='hawaii',
-          audio_glob='hawaii/*/*.wav',
+          audio_glob='hawaii/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_hawaii_annotations,
-          description='Fully annotated Hawaii recordings.',
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
+          keep_unknown_annotation=True,
+          description=(
+              'Fully annotated Hawaii recordings. '
+              'https://zenodo.org/record/7078499'
+          ),
           class_list_name='hawaii',
       ),
       SoundscapesConfig(
           name='hawaii_full_length',
-          audio_glob='hawaii/*/*.wav',
-          annotation_filename='hawaii.csv',
-          annotation_load_fn=dataset_fns.load_hawaii_annotations,
+          audio_glob='hawaii/audio/*.flac',
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description='Full-length, fully annotated Hawaii recordings.',
+          description=(
+              'Full-length, fully annotated Hawaii recordings. '
+              'https://zenodo.org/record/7078499'
+          ),
           class_list_name='hawaii',
       ),
       SoundscapesConfig(
@@ -175,66 +188,75 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='ssw/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_ssw_annotations,
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
           description=(
               'Annotated Sapsucker Woods recordings. '
               'https://zenodo.org/record/7018484'
           ),
-          class_list_name='new_york',
+          class_list_name='ssw',
       ),
       SoundscapesConfig(
           name='ssw_full_length',
           audio_glob='ssw/audio/*.flac',
-          annotation_filename='ssw.csv',
-          annotation_load_fn=dataset_fns.load_ssw_annotations,
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
               'Full-length, annotated Sapsucker Woods recordings. '
               'https://zenodo.org/record/7018484'
           ),
-          class_list_name='new_york',
+          class_list_name='ssw',
       ),
       SoundscapesConfig(
-          name='birdclef2019_colombia',
-          audio_glob='birdclef2019/audio/*.wav',
-          metadata_load_fn=dataset_fns.load_birdclef_metadata,
-          metadata_fields=dataset_fns.birdclef_metadata_features(),
-          annotation_load_fn=dataset_fns.load_birdclef_annotations,
+          name='coffee_farms',
+          audio_glob='coffee_farms/audio/*.flac',
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          description='Colombian recordings from the Birdclef 2019 challenge.',
-          class_list_name='birdclef2019_colombia',
-      ),
-      SoundscapesConfig(
-          name='birdclef2019_colombia_full_length',
-          audio_glob='birdclef2019/audio/*.wav',
-          metadata_load_fn=dataset_fns.load_birdclef_metadata,
-          metadata_fields=dataset_fns.birdclef_metadata_features(),
-          annotation_filename='birdclef2019_colombia.csv',
-          annotation_load_fn=dataset_fns.load_birdclef_annotations,
           keep_unknown_annotation=True,
           description=(
-              'Full-length Colombian recordings from the Birdclef '
-              '2019 challenge.'
+              'Colombian and Costa Rican coffee farm recordings. '
+              'https://zenodo.org/record/7525349'
           ),
-          class_list_name='birdclef2019_colombia',
+          class_list_name='coffee_farms',
+      ),
+      SoundscapesConfig(
+          name='coffee_farms_full_length',
+          audio_glob='coffee_farms/audio/*.flac',
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
+          keep_unknown_annotation=True,
+          description=(
+              'Full-length Colombian and Costa Rican coffee farm recordings. '
+              'https://zenodo.org/record/7525349'
+          ),
+          class_list_name='coffee_farms',
       ),
       SoundscapesConfig(
           name='high_sierras',
-          audio_glob='high_sierras/audio/*.wav',
+          audio_glob='high_sierras/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_birdclef_annotations,
-          description='High Sierras recordings.',
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
+          keep_unknown_annotation=True,
+          description=(
+              'High Sierras recordings. https://zenodo.org/record/7525805'
+          ),
           class_list_name='high_sierras',
       ),
       SoundscapesConfig(
           name='high_sierras_full_length',
-          audio_glob='high_sierras/audio/*.wav',
-          annotation_filename='high_sierras.csv',
-          annotation_load_fn=dataset_fns.load_birdclef_annotations,
+          audio_glob='high_sierras/audio/*.flac',
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description='Full-length High Sierras recordings.',
+          description=(
+              'Full-length High Sierras recordings. '
+              'https://zenodo.org/record/7525805'
+          ),
           class_list_name='high_sierras',
       ),
       SoundscapesConfig(
@@ -242,7 +264,9 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='sierras_kahl/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_sierras_kahl_annotations,
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
+          keep_unknown_annotation=True,
           description=(
               'Sierra Nevada recordings. https://zenodo.org/record/7050014'
           ),
@@ -251,8 +275,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='sierras_kahl_full_length',
           audio_glob='sierras_kahl/audio/*.flac',
-          annotation_filename='sierras_kahl.csv',
-          annotation_load_fn=dataset_fns.load_sierras_kahl_annotations,
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
               'Full-length Sierra Nevada recordings. '
@@ -290,7 +314,9 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='peru/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_peru_annotations,
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
+          keep_unknown_annotation=True,
           description=(
               'Soundscapes from the SW Amazon basin. '
               'https://zenodo.org/record/7079124#.YypL8-xufhM'
@@ -300,8 +326,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='peru_full_length',
           audio_glob='peru/audio/*.flac',
-          annotation_filename='peru.csv',
-          annotation_load_fn=dataset_fns.load_peru_annotations,
+          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
               'Full-length soundscapes from the SW Amazon basin. '
@@ -320,14 +346,15 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         'Currently considering a total of %s species.', dataset_class_list.size
     )
     full_length = self.builder_config.localization_fn is None
-    audio_feature_shape = [
-        None
-        if full_length
-        else int(
-            self.builder_config.sample_rate_hz
-            * self.builder_config.interval_length_s
-        )
-    ]
+    if full_length:
+      audio_feature_shape = [None]
+    else:
+      audio_feature_shape = [
+          int(
+              self.builder_config.sample_rate_hz
+              * self.builder_config.interval_length_s
+          )
+      ]
     common_features = {
         'audio': tfds_features.Int16AsFloatTensor(
             shape=audio_feature_shape,
@@ -374,8 +401,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
     # Defined as part of the tfds API for dividing the dataset into splits.
     # https://www.tensorflow.org/datasets/add_dataset#specifying_dataset_splits
-    dl_manager._force_checksums_validation = (
-        False  # pylint: disable=protected-access
+    dl_manager._force_checksums_validation = (  # pylint: disable=protected-access
+        False
     )
 
     # Get the state from the dl_manager which we'll use to create segments.
@@ -386,15 +413,15 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       # For supervised data, we first grab the annotated segments.
       filename = (
           self.builder_config.annotation_filename
-          or f'{self.builder_config.name}.csv'
+          or f'{self.builder_config.class_list_name}.csv'
       )
-      annotations_path = dl_manager.download_and_extract(
-          {
-              'segments': (
-                  self.builder_config.audio_dir / 'metadata' / filename
-              ).as_posix(),
-          }
-      )['segments']
+      annotations_path = dl_manager.download_and_extract({
+          'segments': (
+              self.builder_config.audio_dir
+              / self.builder_config.class_list_name
+              / filename
+          ).as_posix(),
+      })['segments']
       annotations_df = self.builder_config.annotation_load_fn(annotations_path)
     else:
       annotations_df = None
