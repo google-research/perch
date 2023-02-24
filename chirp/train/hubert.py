@@ -14,11 +14,13 @@
 # limitations under the License.
 
 """Training loop."""
+
 import enum
 import functools
 import os
 import time
 from typing import Callable
+
 from absl import logging
 from chirp.data import pipeline
 from chirp.models import cmap
@@ -26,6 +28,7 @@ from chirp.models import frontend as frontend_models
 from chirp.models import hubert
 from chirp.models import layers
 from chirp.models import metrics
+from chirp.models import output
 from chirp.models import quantizers
 from chirp.taxonomy import class_utils
 from chirp.train import utils
@@ -33,6 +36,7 @@ from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
+import flax
 from flax import traverse_util
 import flax.jax_utils as flax_utils
 import jax
@@ -44,6 +48,7 @@ from ml_collections import config_dict
 import numpy as np
 import optax
 import tensorflow as tf
+
 
 EVAL_LOOP_SLEEP_S = 30
 
@@ -180,7 +185,6 @@ def keyed_cross_entropy(
     key: str,
     outputs: hubert.HubertOutput,
     readout_index: int = 0,
-    class_index: int | None = None,
     **kwargs,
 ) -> jnp.ndarray | None:
   """Cross entropy for the specified taxonomic label set."""
@@ -188,10 +192,6 @@ def keyed_cross_entropy(
   outputs = outputs[readout_index]
 
   ce = optax.sigmoid_binary_cross_entropy(outputs, kwargs[key])
-  if class_index is not None:
-    ce = ce[:, class_index]
-  else:
-    ce = jnp.mean(ce, axis=-1)
   return ce
 
 
@@ -273,26 +273,19 @@ def cluster_targets_metrics(
 
 def make_metrics_collection(
     prefix: str,
-    taxonomy_loss_weight: float,
+    keys: list[str],
+    num_labels: dict[str, int],
     alpha: float,
-    quant_loss_mult: float,
     readout_loss_mult: float,
     hubert_loss_mult: float,
-    readout_points: list[int],
     quantizer_points: list[int],
-    learning_rate_schedule: optax.Schedule,
-    add_class_wise_metrics: bool | None = False,
-    num_labels: dict[str, int] | None = None,
-):
-  """Create metrics collection."""
-  if add_class_wise_metrics and num_labels is None:
-    raise ValueError(
-        "`num_labels` must not be None if `add_class_wise_metrics` is True."
-    )
-  metrics_dict = {
-      "learning_rate": clu_metrics.Average.from_fun(
-          (lambda step, **kwargs: learning_rate_schedule(step))
-      ),
+    readout_points: list[int],
+) -> type[clu_metrics.Collection]:
+  """Create a collection of metrics with cross-entropy and average precision."""
+
+  metrics_ = {
+      "loss": clu_metrics.Average.from_output("loss"),
+      "learning_rate": clu_metrics.LastValue.from_output("learning_rate"),
       "hubert_loss": clu_metrics.Average.from_fun(
           functools.partial(
               hubert_loss_from_outputs,
@@ -300,37 +293,17 @@ def make_metrics_collection(
               hubert_loss_mult=hubert_loss_mult,
           )
       ),
-      "quantizer_loss": clu_metrics.Average.from_fun(
-          functools.partial(quantizer_loss, quant_loss_mult=quant_loss_mult)
-      ),
+      "quantizer_loss": clu_metrics.Average.from_output("quantizer_loss"),
       "supervised_loss": clu_metrics.Average.from_fun(
           functools.partial(
               supervised_loss, readout_loss_mult=readout_loss_mult
           )
       ),
-      "loss": clu_metrics.Average.from_fun(
-          functools.partial(
-              final_loss,
-              alpha=alpha,
-              quant_loss_mult=quant_loss_mult,
-              readout_loss_mult=readout_loss_mult,
-              hubert_loss_mult=hubert_loss_mult,
-          )
-      ),
   }
 
-  metrics_dict.update(
-      {
-          "n_masked_per_sample": clu_metrics.Average.from_fun(
-              functools.partial(
-                  cluster_targets_metrics, key="n_masked_per_sample"
-              )
-          ),
-      }
-  )
   for i, block_ind in enumerate(quantizer_points):
     block_name = "late_fs_{}".format(block_ind) if block_ind >= 0 else "earlyfs"
-    metrics_dict.update({
+    metrics_.update({
         "n_per_cluster_{}".format(block_name): clu_metrics.Average.from_fun(
             functools.partial(
                 cluster_targets_metrics, key="n_per_cluster_{}".format(i)
@@ -353,69 +326,21 @@ def make_metrics_collection(
         ),
     })
 
-  if taxonomy_loss_weight != 0.0:
-    taxo_keys = ["label", "genus", "family", "order"]
-  else:
-    taxo_keys = ["label"]
   for i, block_ind in enumerate(readout_points):
-    for key in taxo_keys:
-      metrics_dict.update({
-          key
-          + "_{}_xentropy".format(block_ind): clu_metrics.Average.from_fun(
+    for key in keys:
+      metrics_.update({
+          f"{key}_{block_ind}_xentropy": utils.MultiAverage.create(
+              num_labels[key]
+          ).from_fun(
               functools.partial(keyed_cross_entropy, key=key, readout_index=i)
           ),
-          key
-          + "_{}_map".format(block_ind): clu_metrics.Average.from_fun(
+          f"{key}_{block_ind}_map": clu_metrics.Average.from_fun(
               functools.partial(keyed_map, key=key, readout_index=i)
           ),
       })
 
-      if add_class_wise_metrics:
-        # This can be slow if the number of classes is large. It is implemented
-        # in this way because `clu_metrics.Average` expects a scalar loss.
-        for j in range(num_labels[key]):
-          class_wise_xentropy = clu_metrics.Average.from_fun(
-              functools.partial(
-                  keyed_cross_entropy, key=key, class_index=j, readout_index=i
-              )
-          )
-          metrics_dict.update(
-              {
-                  key
-                  + "_{}_class_wise_xentropy_{}".format(
-                      block_ind, j
-                  ): class_wise_xentropy
-              }
-          )
-
-  metrics_dict = {prefix + k: v for k, v in metrics_dict.items()}
-  return clu_metrics.Collection.create(**metrics_dict)
-
-
-def make_cmap_metrics_dict(label_names, readout_points):
-  """Create a dict of empty cmap_metrics."""
-  metrics_dict = {}
-  for block_ind in readout_points:
-    metrics_dict.update(
-        {
-            label + "_{}".format(block_ind): cmap.CMAP.empty()
-            for label in label_names
-        }
-    )
-  return metrics_dict
-
-
-def update_cmap_metrics_dict(
-    label_names, cmap_metrics, model_outputs, batch, readout_points
-):
-  """Update a dict of cmap_metrics from model_outputs and a batch."""
-  for label_name in label_names:
-    for i, block_ind in enumerate(readout_points):
-      label_name_i = label_name + "_{}".format(block_ind)
-      cmap_metrics[label_name_i] = cmap_metrics[label_name_i].merge(
-          cmap.CMAP(getattr(model_outputs, label_name)[i], batch[label_name])
-      )
-  return cmap_metrics
+  metrics_ = {f"{prefix}_{key}": value for key, value in metrics_.items()}
+  return clu_metrics.Collection.create(**metrics_)
 
 
 class LearningRateSchedule(enum.Enum):
@@ -671,23 +596,11 @@ def initialize_model(
         init_value=start_learning_rate,
         decay_steps=num_train_steps,
     )
+  else:
+    raise ValueError("unknown learning rate schedule")
 
   # Initialize optimizer and handle constraints
-  std_to_fwhm = jnp.sqrt(2 * jnp.log(2)) / jnp.pi
-  if frontend is None:
-    optimizer = optax.adam(learning_rate=learning_rate)
-  else:
-    optimizer = optax.chain(
-        optax.adam(learning_rate=learning_rate),
-        optax.masked(
-            project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)
-        ),
-        optax.masked(project(0.0, jnp.pi), mask_by_name("gabor_mean", params)),
-        optax.masked(
-            project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
-            mask_by_name("gabor_std", params),
-        ),
-    )
+  optimizer = optax.adam(learning_rate=learning_rate)
   opt_state = optimizer.init(params)
 
   # Load checkpoint
@@ -805,7 +718,6 @@ def train(
     readout_loss_mult: float,
     hubert_loss_mult: float,
     reload_quantizer=False,
-    add_class_wise_metrics: bool | None = False,
 ) -> None:
   """Train a model.
 
@@ -828,7 +740,6 @@ def train(
       used for training.
     reload_quantizer: Whether to reload a pre-trained quantizer. If this is the
       case, it is kept frozen.
-    add_class_wise_metrics: Whether to log class-wise metrics.
   """
   if reload_quantizer and num_quantizer_pretrain_steps:
     raise ValueError(
@@ -837,74 +748,84 @@ def train(
     )
 
   train_iterator = train_dataset.as_numpy_iterator()
+  taxonomy_keys = ["label"]
+  taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
+  if taxonomy_loss_weight != 0.0:
+    taxonomy_keys += utils.TAXONOMY_KEYS
   train_metrics_collection = make_metrics_collection(
-      "train___",
-      model_bundle.model.taxonomy_loss_weight,
-      model_bundle.model.alpha,
-      quant_loss_mult,
-      readout_loss_mult,
-      hubert_loss_mult,
-      model_bundle.model.readout_points,
-      model_bundle.model.quantizer_points,
-      learning_rate_schedule=learning_rate_schedule,
-      add_class_wise_metrics=add_class_wise_metrics,
-      num_labels=model_bundle.model.num_classes,
+      "train",
+      taxonomy_keys,
+      model_bundle.model.num_classes,
+      alpha=model_bundle.model.alpha,
+      readout_loss_mult=readout_loss_mult,
+      hubert_loss_mult=hubert_loss_mult,
+      quantizer_points=model_bundle.model.quantizer_points,
+      readout_points=model_bundle.model.readout_points,
   )
 
-  def get_update_step(loss_key="train___loss"):
-    @functools.partial(jax.pmap, axis_name="batch")
-    def update_step(key, batch, train_state, mask_key):
-      dropout_key, low_pass_key = random.split(key)
+  @functools.partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=0)
+  def update_step(quantizer_pretrain, key, batch, train_state, mask_key):
+    dropout_key, low_pass_key = random.split(key)
 
-      def step(params, model_state):
-        variables = {"params": params, **model_state}
-        x = jnp.squeeze(batch["audio"])
-        model_outputs, model_state = model_bundle.model.apply(
-            variables,
-            x,
-            train=True,
-            mask_key=mask_key,
-            train_mode_quantizer=True,
-            mutable=list(model_state.keys()),
-            rngs={
-                "dropout": dropout_key,
-                "low_pass": low_pass_key,
-            },
-        )
-        train_metrics = train_metrics_collection.gather_from_model_output(
-            outputs=model_outputs,
-            taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
-            step=train_state.step,
-            **batch,
-        ).compute()
-        loss = train_metrics[loss_key]
-        return loss, (train_metrics, model_state)
-
-      # model_state has only the batch_norm stats which only appear in the
-      # late feature extractor (conformer).
-      (_, (train_metrics, model_state)), grads = jax.value_and_grad(
-          step, has_aux=True
-      )(train_state.params, train_state.model_state)
-      grads = jax.lax.pmean(grads, axis_name="batch")
-      updates, opt_state = model_bundle.optimizer.update(
-          grads, train_state.opt_state, train_state.params
+    def step(params, model_state):
+      variables = {"params": params, **model_state}
+      x = jnp.squeeze(batch["audio"])
+      model_outputs, model_state = model_bundle.model.apply(
+          variables,
+          x,
+          train=True,
+          mask_key=mask_key,
+          train_mode_quantizer=True,
+          mutable=list(model_state.keys()),
+          rngs={
+              "dropout": dropout_key,
+              "low_pass": low_pass_key,
+          },
       )
-
-      params_after_update = optax.apply_updates(train_state.params, updates)
-
-      train_state = utils.TrainState(
-          step=train_state.step + 1,
-          params=params_after_update,
-          opt_state=opt_state,
-          model_state=model_state,
+      quantizer_loss_ = quantizer_loss(
+          model_outputs, quant_loss_mult=quant_loss_mult
       )
-      return train_metrics, train_state
+      final_loss_ = final_loss(
+          model_outputs,
+          taxonomy_loss_weight=taxonomy_loss_weight,
+          alpha=model_bundle.model.alpha,
+          quant_loss_mult=quant_loss_mult,
+          readout_loss_mult=readout_loss_mult,
+          hubert_loss_mult=hubert_loss_mult,
+          **batch,
+      )
+      train_metrics = train_metrics_collection.gather_from_model_output(
+          outputs=model_outputs,
+          loss=final_loss_,
+          quantizer_loss=quantizer_loss_,
+          learning_rate=learning_rate_schedule(train_state.step),
+          taxonomy_loss_weight=taxonomy_loss_weight,
+          **batch,
+          # CmAP expects logits to be passed as dict instead of dataclass
+          **output.logits(model_outputs),
+      )
+      loss = quantizer_loss_ if quantizer_pretrain else final_loss_
+      return jnp.mean(loss), (train_metrics, model_state)
 
-    return update_step
+    # model_state has only the batch_norm stats which only appear in the
+    # late feature extractor (conformer).
+    grads, (train_metrics, model_state) = jax.grad(step, has_aux=True)(
+        train_state.params, train_state.model_state
+    )
+    grads = jax.lax.pmean(grads, axis_name="batch")
+    updates, opt_state = model_bundle.optimizer.update(
+        grads, train_state.opt_state, train_state.params
+    )
 
-  if num_quantizer_pretrain_steps:
-    quantizer_step = get_update_step("train___quantizer_loss")
-  joint_step = get_update_step("train___loss")
+    params = optax.apply_updates(train_state.params, updates)
+
+    train_state = utils.TrainState(
+        step=train_state.step + 1,
+        params=params,
+        opt_state=opt_state,
+        model_state=model_state,
+    )
+    return train_metrics, train_state
 
   initial_step = int(train_state.step)
   train_state = flax_utils.replicate(train_state)
@@ -921,30 +842,19 @@ def train(
     with jax.profiler.StepTraceAnnotation("train", step_num=step):
       batch = next(train_iterator)
 
-      step_key, key = random.split(key)
-      mask_key, key = random.split(key)
+      step_key, mask_key, key = random.split(key, num=3)
 
       mask_key = random.split(mask_key, num=jax.local_device_count())
       step_key = random.split(step_key, num=jax.local_device_count())
 
-      if step < num_quantizer_pretrain_steps:
-        # Train only the quantizer.
-        train_metrics, train_state = quantizer_step(
-            step_key, batch, train_state, mask_key
-        )
-      else:
-        # Joint training.
-        train_metrics, train_state = joint_step(
-            step_key, batch, train_state, mask_key
-        )
-
-      train_metrics = flax_utils.unreplicate(train_metrics)
+      quantizer_pretrain = step < num_quantizer_pretrain_steps
+      train_metrics, train_state = update_step(
+          quantizer_pretrain, step_key, batch, train_state, mask_key
+      )
 
       if step % log_every_steps == 0:
-        train_metrics = {
-            k.replace("___", "/"): v for k, v in train_metrics.items()
-        }
-        writer.write_scalars(step, train_metrics)
+        train_metrics = flax_utils.unreplicate(train_metrics).compute()
+        writer.write_scalars(step, utils.flatten_dict(train_metrics))
       reporter(step)
 
     if (step + 1) % checkpoint_every_steps == 0 or step == num_train_steps:
@@ -963,27 +873,39 @@ def evaluate(
     eval_steps_per_checkpoint: int | None = None,
     train_mode_at_eval: bool | None = False,
     mask_at_eval: bool | None = False,
-    add_class_wise_metrics: bool | None = False,
     name: str = "valid",
 ):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
-  valid_metrics = make_metrics_collection(
-      f"{name}___",
-      model_bundle.model.taxonomy_loss_weight,
-      model_bundle.model.alpha,
-      quant_loss_mult,
-      readout_loss_mult,
-      hubert_loss_mult,
-      model_bundle.model.readout_points,
-      model_bundle.model.quantizer_points,
-      learning_rate_schedule=learning_rate_schedule,
-      add_class_wise_metrics=add_class_wise_metrics,
-      num_labels=model_bundle.model.num_classes,
+  taxonomy_keys = ["label"]
+  taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
+  if taxonomy_loss_weight != 0.0:
+    taxonomy_keys += utils.TAXONOMY_KEYS
+  base_metrics_collection = make_metrics_collection(
+      name,
+      taxonomy_keys,
+      model_bundle.model.num_classes,
+      alpha=model_bundle.model.alpha,
+      readout_loss_mult=readout_loss_mult,
+      hubert_loss_mult=hubert_loss_mult,
+      quantizer_points=model_bundle.model.quantizer_points,
+      readout_points=model_bundle.model.readout_points,
+  )
+  valid_metrics_collection = flax.struct.dataclass(
+      type(
+          "_ValidCollection",
+          (base_metrics_collection,),
+          {
+              "__annotations__": {
+                  f"{name}_cmap": cmap.CMAP,
+                  **base_metrics_collection.__annotations__,
+              }
+          },
+      )
   )
 
   @functools.partial(jax.pmap, axis_name="batch")
-  def update_metrics(valid_metrics, batch, train_state, mask_key):
+  def get_metrics(batch, train_state, mask_key):
     variables = {"params": train_state.params, **train_state.model_state}
     mutable = (
         list(train_state.model_state.keys()) if train_mode_at_eval else False
@@ -999,47 +921,38 @@ def evaluate(
     if mutable:
       # Both model outputs and state are returned if `mutable` was given.
       model_outputs = model_outputs[0]
-    return model_outputs, valid_metrics.merge(
-        valid_metrics.gather_from_model_output(
-            outputs=model_outputs,
-            taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
-            step=train_state.step,
-            axis_name="batch",
-            **batch,
-        )
+    loss = final_loss(
+        model_outputs,
+        taxonomy_loss_weight=taxonomy_loss_weight,
+        alpha=model_bundle.model.alpha,
+        quant_loss_mult=quant_loss_mult,
+        readout_loss_mult=readout_loss_mult,
+        hubert_loss_mult=hubert_loss_mult,
+        **batch,
+    )
+    return valid_metrics_collection.gather_from_model_output(
+        outputs=model_outputs,
+        loss=loss,
+        quantizer_loss=quantizer_loss(model_outputs, quant_loss_mult),
+        learning_rate=learning_rate_schedule(train_state.step),
+        taxonomy_loss_weight=taxonomy_loss_weight,
+        # TODO(bartvm): This only calculates CmAP over the first readout layer
+        label_logits=model_outputs.label[0],
+        **batch,
     )
 
   step = int(flax_utils.unreplicate(train_state.step))
-  label_names = ("label", "genus", "family", "order")
-
-  if model_bundle.model.taxonomy_loss_weight > 0:
-    label_names = ("label", "genus", "family", "order")
-  else:
-    label_names = ("label",)
-
-  cmap_metrics = make_cmap_metrics_dict(
-      label_names, model_bundle.model.readout_points
-  )
   key = model_bundle.key
   with reporter.timed("eval"):
-    valid_metrics = flax_utils.replicate(valid_metrics.empty())
+    valid_metrics = flax_utils.replicate(valid_metrics_collection.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
       mask_key = None
       if mask_at_eval:
         mask_key, key = random.split(key)
         mask_key = random.split(mask_key, num=jax.local_device_count())
-      model_outputs, valid_metrics = update_metrics(
-          valid_metrics, batch, train_state, mask_key
-      )
-
-      cmap_metrics = update_cmap_metrics_dict(
-          label_names,
-          cmap_metrics,
-          model_outputs,
-          batch,
-          model_bundle.model.readout_points,
-      )
+      new_valid_metrics = get_metrics(batch, train_state, mask_key)
+      valid_metrics = valid_metrics.merge(new_valid_metrics)
       if (
           eval_steps_per_checkpoint is not None
           and s >= eval_steps_per_checkpoint
@@ -1048,16 +961,7 @@ def evaluate(
 
     # Log validation loss
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
-
-  valid_metrics = {k.replace("___", "/"): v for k, v in valid_metrics.items()}
-  cmap_metrics = flax_utils.unreplicate(cmap_metrics)
-  for key in cmap_metrics:
-    valid_metrics[f"{name}/{key}_cmap"] = cmap_metrics[key].compute()
-    if add_class_wise_metrics:
-      classwise_cmap = cmap_metrics[key].compute(class_wise=True)
-      for i, ccmap in enumerate(classwise_cmap):
-        valid_metrics[f"valid/{key}_cmap_{i}"] = ccmap
-  writer.write_scalars(step, valid_metrics)
+  writer.write_scalars(step, utils.flatten_dict(valid_metrics))
   writer.flush()
 
 
@@ -1075,7 +979,6 @@ def evaluate_loop(
     tflite_export: bool = False,
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
-    add_class_wise_metrics: bool | None = False,
     name: str = "valid",
     **unused_kwargs,
 ):
@@ -1119,7 +1022,6 @@ def evaluate_loop(
         eval_steps_per_checkpoint,
         train_mode_at_eval,
         mask_at_eval,
-        add_class_wise_metrics=add_class_wise_metrics,
         name=name,
     )
     if tflite_export:
@@ -1240,7 +1142,6 @@ def run(
         quant_loss_mult=quant_loss_mult,
         readout_loss_mult=config.train_config.readout_loss_mult,
         hubert_loss_mult=config.train_config.hubert_loss_mult,
-        add_class_wise_metrics=config.train_config.add_class_wise_metrics,
     )
 
   elif mode == "tune_eval_hypers":
@@ -1260,7 +1161,6 @@ def run(
         reporter,
         train_mode_at_eval=config.eval_config.train_mode_at_eval,
         mask_at_eval=config.eval_config.mask_at_eval,
-        add_class_wise_metrics=config.eval_config.add_class_wise_metrics,
         name=name,
     )
 

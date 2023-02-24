@@ -127,8 +127,6 @@ class HuBERTTest(absltest.TestCase):
     config.init_config.frontend_config.stride = 80000  # yields 2 frames.
     config.init_config.frontend_config.sample_rate = self.sample_rate_hz
     config.init_config.input_size = self.window_size_s * self.sample_rate_hz
-    config.train_config.add_class_wise_metrics = False
-    config.eval_config.add_class_wise_metrics = False
 
     config = config_utils.parse_config(config, config_globals.get_globals())
 

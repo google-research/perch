@@ -14,15 +14,14 @@
 # limitations under the License.
 
 """Training loop."""
+
 import functools
 import time
-
 
 from absl import logging
 from chirp import export_utils
 from chirp.data import pipeline
 from chirp.models import cmap
-from chirp.models import frontend
 from chirp.models import metrics
 from chirp.models import output
 from chirp.models import taxonomy_model
@@ -32,12 +31,11 @@ from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
-from flax import traverse_util
+import flax
 import flax.jax_utils as flax_utils
 import jax
 from jax import numpy as jnp
 from jax import random
-from jax import tree_util
 from ml_collections import config_dict
 import numpy as np
 import optax
@@ -46,126 +44,27 @@ import tensorflow as tf
 EVAL_LOOP_SLEEP_S = 30
 
 
-# Metric and logging utilities
-def taxonomy_cross_entropy(
-    outputs: output.TaxonomicOutput,
-    label: jnp.ndarray,
-    genus: jnp.ndarray,
-    family: jnp.ndarray,
-    order: jnp.ndarray,
-    taxonomy_loss_weight: float,
-    **unused_kwargs,
-) -> jnp.ndarray:
-  """Computes mean cross entropy across taxonomic labels."""
-  mean = jnp.mean(
-      optax.sigmoid_binary_cross_entropy(outputs.label, label), axis=-1
-  )
-  if taxonomy_loss_weight != 0:
-    mean += taxonomy_loss_weight * jnp.mean(
-        optax.sigmoid_binary_cross_entropy(outputs.genus, genus), axis=-1
-    )
-    mean += taxonomy_loss_weight * jnp.mean(
-        optax.sigmoid_binary_cross_entropy(outputs.family, family), axis=-1
-    )
-    mean += taxonomy_loss_weight * jnp.mean(
-        optax.sigmoid_binary_cross_entropy(outputs.order, order), axis=-1
-    )
-  return mean
-
-
-def keyed_cross_entropy(
-    key: str,
-    outputs: output.AnyOutput,
-    class_index: int | None = None,
-    **kwargs,
-) -> jnp.ndarray | None:
-  """Cross entropy for the specified taxonomic label set."""
-  cross_entropy = optax.sigmoid_binary_cross_entropy(
-      getattr(outputs, key), kwargs[key]
-  )
-  label_mask = kwargs.get(key + "_mask", 1)
-  cross_entropy = label_mask * cross_entropy
-  if class_index is not None:
-    cross_entropy = cross_entropy[:, class_index]
-  else:
-    cross_entropy = jnp.mean(cross_entropy, axis=-1)
-  return cross_entropy
-
-
-def keyed_map(
-    key: str, outputs: output.AnyOutput, **kwargs
-) -> jnp.ndarray | None:
-  label_mask = kwargs.get(key + "_mask", None)
-  return metrics.average_precision(
-      scores=getattr(outputs, key), labels=kwargs[key], label_mask=label_mask
-  )
-
-
 def make_metrics_collection(
-    prefix: str,
-    taxonomy_loss_weight: float,
-    add_class_wise_metrics: bool | None = False,
-    num_labels: dict[str, int] | None = None,
-):
-  """Create metrics collection."""
-  if add_class_wise_metrics and num_labels is None:
-    raise ValueError(
-        "`num_labels` must not be None if `add_class_wise_metrics` is True."
-    )
-  # pylint: disable=g-long-lambda
-  metrics_dict = {}
-  if taxonomy_loss_weight != 0.0:
-    taxo_keys = ["label", "genus", "family", "order"]
-  else:
-    taxo_keys = ["label"]
+    prefix: str, keys: list[str], num_labels: dict[str, int]
+) -> type[clu_metrics.Collection]:
+  """Create a collection of metrics with cross-entropy and average precision."""
 
-  for key in taxo_keys:
-    metrics_dict.update({
-        key
-        + "_xentropy": clu_metrics.Average.from_fun(
-            functools.partial(keyed_cross_entropy, key=key)
-        ),
-        key
-        + "_map": clu_metrics.Average.from_fun(
-            functools.partial(keyed_map, key=key)
-        ),
-    })
-    if add_class_wise_metrics:
-      # This can be slow if the number of classes is large. It is implemented in
-      # this way because `clu_metrics.Average` expects a scalar loss.
-      for j in range(num_labels[key]):
-        class_wise_xentropy = clu_metrics.Average.from_fun(
-            functools.partial(keyed_cross_entropy, key=key, class_index=j)
-        )
-        metrics_dict.update(
-            {key + "_class_wise_xentropy_{}".format(j): class_wise_xentropy}
-        )
-  if taxonomy_loss_weight != 0.0:
-    metrics_dict["loss"] = clu_metrics.Average.from_fun(taxonomy_cross_entropy)
-  else:
-    metrics_dict["loss"] = metrics_dict["label_xentropy"]
-  metrics_dict = {prefix + k: v for k, v in metrics_dict.items()}
-  return clu_metrics.Collection.create(**metrics_dict)
-
-
-# Projected gradient descent utilities
-# TODO(bartvm): Move to separate file.
-def mask_by_name(name, pytree):
-  """Create a mask which is only true for leaves with the given name."""
-  flat_tree = traverse_util.flatten_dict(pytree)
-  mask = {k: k[-1] == name for k in flat_tree}
-  return traverse_util.unflatten_dict(mask)
-
-
-def project(min_value: float, max_value: float) -> optax.GradientTransformation:
-  """Optax gradient transformation that projects values within a range."""
-
-  def clip_value(updates, params):
-    return tree_util.tree_map(
-        lambda p, u: jnp.clip(p + u, min_value, max_value) - p, params, updates
+  def _map(**kwargs):
+    return metrics.average_precision(
+        scores=kwargs[f"{key}_logits"],
+        labels=kwargs[key],
+        label_mask=kwargs.get(f"{key}_mask", None),
     )
 
-  return optax.stateless(clip_value)
+  metrics_ = {"loss": clu_metrics.Average.from_output("loss")}
+  for key in keys:
+    metrics_[f"{key}_xentropy"] = utils.MultiAverage.create(
+        num_labels[key]
+    ).from_output(f"{key}_xentropy")
+    metrics_[f"{key}_map"] = clu_metrics.Average.from_fun(_map)
+
+  metrics_ = {f"{prefix}_{key}": value for key, value in metrics_.items()}
+  return clu_metrics.Collection.create(**metrics_)
 
 
 def initialize_model(
@@ -194,21 +93,7 @@ def initialize_model(
   params = params.unfreeze()
 
   # Initialize optimizer and handle constraints
-  std_to_fwhm = jnp.sqrt(2 * jnp.log(2)) / jnp.pi
-  if isinstance(model.frontend, frontend.MorletWaveletTransform):
-    optimizer = optax.chain(
-        optax.adam(learning_rate=learning_rate),
-        optax.masked(
-            project(0.0, 1.0), mask_by_name("spcen_smoothing_coef", params)
-        ),
-        optax.masked(project(0.0, jnp.pi), mask_by_name("gabor_mean", params)),
-        optax.masked(
-            project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
-            mask_by_name("gabor_std", params),
-        ),
-    )
-  else:
-    optimizer = optax.adam(learning_rate=learning_rate)
+  optimizer = optax.adam(learning_rate=learning_rate)
   opt_state = optimizer.init(params)
 
   # Load checkpoint
@@ -230,7 +115,6 @@ def train(
     logdir: str,
     log_every_steps: int,
     checkpoint_every_steps: int,
-    add_class_wise_metrics: bool | None = False,
 ) -> None:
   """Train a model.
 
@@ -242,21 +126,20 @@ def train(
     logdir: Directory to use for logging.
     log_every_steps: Write the training minibatch loss.
     checkpoint_every_steps: Checkpoint the model and training state.
-    add_class_wise_metrics: Whether to log class-wise metrics.
   """
   train_iterator = train_dataset.as_numpy_iterator()
+  taxonomy_keys = ["label"]
+  taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
+  if taxonomy_loss_weight != 0.0:
+    taxonomy_keys += utils.TAXONOMY_KEYS
   train_metrics_collection = make_metrics_collection(
-      "train___",
-      model_bundle.model.taxonomy_loss_weight,
-      add_class_wise_metrics=add_class_wise_metrics,
-      num_labels=model_bundle.model.num_classes,
+      "train", taxonomy_keys, model_bundle.model.num_classes
   )
 
   # Forward pass and metrics
   def forward(params, key, batch, model_state):
     dropout_key, low_pass_key, patch_mask_key = random.split(key, num=3)
     variables = {"params": params, **model_state}
-    kwargs = {"mask": batch["audio_mask"]} if "audio_mask" in batch else {}
     model_outputs, model_state = model_bundle.model.apply(
         variables,
         batch["audio"],
@@ -267,15 +150,18 @@ def train(
             "low_pass": low_pass_key,
             "patch_mask": patch_mask_key,
         },
-        **kwargs,
     )
-    taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
-    train_metrics = train_metrics_collection.gather_from_model_output(
+    xentropy = utils.taxonomy_cross_entropy(
         outputs=model_outputs,
         taxonomy_loss_weight=taxonomy_loss_weight,
         **batch,
-    ).compute()
-    return train_metrics["train___loss"], (train_metrics, model_state)
+    )
+    train_metrics = train_metrics_collection.gather_from_model_output(
+        **output.logits(model_outputs),
+        **xentropy,
+        **batch,
+    )
+    return jnp.mean(xentropy["loss"]), (train_metrics, model_state)
 
   # Define update step
   @functools.partial(jax.pmap, axis_name="batch")
@@ -314,13 +200,10 @@ def train(
       step_key, key = random.split(key)
       step_key = random.split(step_key, num=jax.local_device_count())
       train_metrics, train_state = update_step(step_key, batch, train_state)
-      train_metrics = flax_utils.unreplicate(train_metrics)
 
       if step % log_every_steps == 0:
-        train_metrics = {
-            k.replace("___", "/"): v for k, v in train_metrics.items()
-        }
-        writer.write_scalars(step, train_metrics)
+        train_metrics = flax_utils.unreplicate(train_metrics).compute()
+        writer.write_scalars(step, utils.flatten_dict(train_metrics))
       reporter(step)
 
     if (step + 1) % checkpoint_every_steps == 0 or step == num_train_steps:
@@ -337,49 +220,55 @@ def evaluate(
     reporter: periodic_actions.ReportProgress,
     eval_steps_per_checkpoint: int | None = None,
     name: str = "valid",
-    add_class_wise_metrics: bool | None = False,
 ):
   """Run evaluation."""
-  valid_metrics = make_metrics_collection(
-      f"{name}___",
-      model_bundle.model.taxonomy_loss_weight,
-      add_class_wise_metrics=add_class_wise_metrics,
-      num_labels=model_bundle.model.num_classes,
+  taxonomy_keys = ["label"]
+  taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
+  if taxonomy_loss_weight != 0.0:
+    taxonomy_keys += utils.TAXONOMY_KEYS
+
+  # The metrics are the same as for training, but with CmAP added
+  base_metrics_collection = make_metrics_collection(
+      name, taxonomy_keys, model_bundle.model.num_classes
+  )
+  valid_metrics_collection = flax.struct.dataclass(
+      type(
+          "_ValidCollection",
+          (base_metrics_collection,),
+          {
+              "__annotations__": {
+                  f"{name}_cmap": cmap.CMAP,
+                  **base_metrics_collection.__annotations__,
+              }
+          },
+      )
   )
 
   @functools.partial(jax.pmap, axis_name="batch")
-  def update_metrics(valid_metrics, batch, train_state):
+  def get_metrics(batch, train_state):
     variables = {"params": train_state.params, **train_state.model_state}
     kwargs = {"mask": batch["audio_mask"]} if "audio_mask" in batch else {}
     model_outputs = model_bundle.model.apply(
         variables, batch["audio"], train=False, **kwargs
     )
-    return model_outputs, valid_metrics.merge(
-        valid_metrics.gather_from_model_output(
-            outputs=model_outputs,
-            taxonomy_loss_weight=model_bundle.model.taxonomy_loss_weight,
-            axis_name="batch",
-            **batch,
-        )
+    xentropy = utils.taxonomy_cross_entropy(
+        outputs=model_outputs,
+        taxonomy_loss_weight=taxonomy_loss_weight,
+        **batch,
+    )
+    return valid_metrics_collection.gather_from_model_output(
+        **output.logits(model_outputs),
+        **batch,
+        **xentropy,
     )
 
   step = int(flax_utils.unreplicate(train_state.step))
-  if model_bundle.model.taxonomy_loss_weight > 0:
-    cmap_metrics = cmap.make_cmap_metrics_dict(
-        ("label", "genus", "family", "order")
-    )
-  else:
-    cmap_metrics = cmap.make_cmap_metrics_dict(("label",))
   with reporter.timed("eval"):
-    valid_metrics = flax_utils.replicate(valid_metrics.empty())
+    valid_metrics = flax_utils.replicate(valid_metrics_collection.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
-      model_outputs, valid_metrics = update_metrics(
-          valid_metrics, batch, train_state
-      )
-      cmap_metrics = cmap.update_cmap_metrics_dict(
-          cmap_metrics, model_outputs, batch
-      )
+      new_valid_metrics = get_metrics(batch, train_state)
+      valid_metrics = valid_metrics.merge(new_valid_metrics)
       if (
           eval_steps_per_checkpoint is not None
           and s >= eval_steps_per_checkpoint
@@ -388,16 +277,7 @@ def evaluate(
 
     # Log validation loss
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
-
-  valid_metrics = {k.replace("___", "/"): v for k, v in valid_metrics.items()}
-  cmap_metrics = flax_utils.unreplicate(cmap_metrics)
-  for key in cmap_metrics:
-    valid_metrics[f"{name}/{key}_cmap"] = cmap_metrics[key].compute()
-    if add_class_wise_metrics:
-      classwise_cmap = cmap_metrics[key].compute(class_wise=True)
-      for i, ccmap in enumerate(classwise_cmap):
-        valid_metrics[f"{name}/{key}_cmap_{i}"] = ccmap
-  writer.write_scalars(step, valid_metrics)
+  writer.write_scalars(step, utils.flatten_dict(valid_metrics))
   writer.flush()
 
 
@@ -413,7 +293,6 @@ def evaluate_loop(
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     name: str = "valid",
-    add_class_wise_metrics: bool | None = False,
 ):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -452,7 +331,6 @@ def evaluate_loop(
         reporter,
         eval_steps_per_checkpoint,
         name,
-        add_class_wise_metrics=add_class_wise_metrics,
     )
     if tflite_export:
       export_tf(model_bundle, train_state, workdir, input_shape)

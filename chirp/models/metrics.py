@@ -177,12 +177,12 @@ def average_precision(
   if interpolated:
     pr_curve = lax.cummax(pr_curve, reverse=True, axis=-1)
 
-  # In case of an empty row, assign precision = 1, and avoid dividing by zero.
-  mask = jnp.float32(jnp.sum(labels, axis=-1) == 0)
+  # In case of an empty row, assign precision = 0, and avoid dividing by zero.
+  mask = jnp.float32(jnp.sum(labels, axis=-1) != 0)
   raw_av_prec = jnp.sum(pr_curve * labels, axis=-1) / jnp.maximum(
       jnp.sum(labels, axis=-1), 1.0
   )
-  return mask + (1 - mask) * raw_av_prec
+  return mask * raw_av_prec
 
 
 def least_squares_solve_mix(matrix, rhs, diag_loading=1e-3):

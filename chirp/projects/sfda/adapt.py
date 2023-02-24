@@ -22,13 +22,12 @@ import time
 from typing import Any, Callable
 
 from absl import logging
-from chirp.models import cmap
+from chirp.models import metrics as chirp_metrics
 from chirp.models import output
 from chirp.projects.sfda import losses
 from chirp.projects.sfda import mca
 from chirp.projects.sfda import metrics
 from chirp.projects.sfda import model_utils
-from chirp.train import classifier
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
@@ -591,7 +590,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     valid_metrics = get_common_metrics(supervised=True, multi_label=multi_label)
     valid_metrics = flax_utils.replicate(valid_metrics.empty())
     cmap_metrics = (
-        cmap.make_cmap_metrics_dict(("label",)) if multi_label else {}
+        model_utils.make_cmap_metrics_dict(("label",)) if multi_label else {}
     )
     mca_metric = mca.make_mca_metric() if not multi_label else None
 
@@ -637,7 +636,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
           batch=keep_jax_types(batch),
           adaptation_state=flax_utils.replicate(adaptation_state),
       )
-      cmap_metrics = cmap.update_cmap_metrics_dict(
+      cmap_metrics = model_utils.update_cmap_metrics_dict(
           cmap_metrics, model_outputs, batch
       )
       if compute_mca:
@@ -813,6 +812,15 @@ def perform_adaptation(
   return adaptation_state
 
 
+def keyed_map(
+    key: str, outputs: output.AnyOutput, **kwargs
+) -> jnp.ndarray | None:
+  label_mask = kwargs.get(key + "_mask", None)
+  return chirp_metrics.average_precision(
+      scores=getattr(outputs, key), labels=kwargs[key], label_mask=label_mask
+  )
+
+
 def get_common_metrics(
     supervised: bool, multi_label: bool
 ) -> type[clu_metrics.Collection]:
@@ -830,7 +838,7 @@ def get_common_metrics(
   if supervised:
     if multi_label:
       metrics_dict["label_map"] = clu_metrics.Average.from_fun(
-          functools.partial(classifier.keyed_map, key="label")
+          functools.partial(keyed_map, key="label")
       )
       metrics_dict["supervised_loss"] = clu_metrics.Average.from_fun(
           losses.label_binary_xent

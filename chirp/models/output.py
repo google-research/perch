@@ -52,3 +52,11 @@ class TaxonomicOutput(Protocol):
   genus: jnp.ndarray
   family: jnp.ndarray
   order: jnp.ndarray
+
+
+def logits(output) -> dict[str, jnp.ndarray]:
+  return {
+      f'{key}_logits': getattr(output, key)
+      for key in ('label', 'genus', 'family', 'order')
+      if hasattr(output, key)
+  }

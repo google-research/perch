@@ -117,7 +117,6 @@ def get_config() -> config_dict.ConfigDict:
   config.train_config.loss_max_snr = 30.0
   config.train_config.classify_bottleneck_weight = 100.0
   config.train_config.taxonomy_labels_weight = 1.0
-  config.train_config.add_class_wise_metrics = False
 
   config.eval_config = presets.get_base_eval_config(config)
   config.eval_config.eval_steps_per_checkpoint = 100
@@ -126,6 +125,5 @@ def get_config() -> config_dict.ConfigDict:
   # frontend_config.stride=32, and soundstream_config.strides=[5, 2, 2]),
   # and classify_stride=50.
   config.eval_config.frame_size = 32000
-  config.eval_config.add_class_wise_metrics = False
 
   return config

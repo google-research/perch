@@ -123,14 +123,12 @@ def get_config() -> config_dict.ConfigDict:
   train_config.num_train_steps = num_train_steps
   train_config.log_every_steps = 250
   train_config.checkpoint_every_steps = 25_000
-  train_config.add_class_wise_metrics = False
   config.train_config = train_config
 
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = num_train_steps
   eval_config.eval_steps_per_checkpoint = 1000
   eval_config.input_shape = (640, 160, 1)
-  eval_config.add_class_wise_metrics = False
   config.eval_config = eval_config
 
   return config

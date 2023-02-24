@@ -93,7 +93,6 @@ def get_base_train_config(
   train_config.readout_loss_mult = 100
   train_config.hubert_loss_mult = 1
   train_config.quant_loss_mult = 1
-  train_config.add_class_wise_metrics = False
   train_config.update(**kwargs)
   return train_config
 
@@ -106,7 +105,6 @@ def get_base_eval_config(
   eval_config.num_train_steps = config.get_ref('num_train_steps')
   eval_config.train_mode_at_eval = False
   eval_config.mask_at_eval = False
-  eval_config.add_class_wise_metrics = False
   eval_config.update(**kwargs)
   return eval_config
 

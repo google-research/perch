@@ -88,7 +88,7 @@ class MetricsTest(absltest.TestCase):
     logits = jax.random.normal(key, [batch_size, num_classes])
     labels = jax.numpy.zeros_like(logits)
     av_prec = jax.numpy.mean(metrics.average_precision(logits, labels))
-    self.assertEqual(av_prec, 1.0)
+    self.assertEqual(av_prec, 0.0)
 
   def test_least_squares_mixit(self):
     # Create some genuinely interesting source signals...
@@ -150,31 +150,31 @@ class MetricsTest(absltest.TestCase):
         [0, 0, 0],
         [1, 0, 0],
     ])
-
-    full_cmap_metric = cmap.CMAP.from_model_output((scores, labels))
-    full_cmap_value = full_cmap_metric.compute()
+    full_cmap_value = cmap.CMAP.from_model_output(
+        label=labels, label_logits=scores
+    ).compute()["macro"]
     # Check against the manually verified outcome.
-    self.assertEqual(full_cmap_value, 0.49687502)
+    self.assertAlmostEqual(full_cmap_value, 0.49687502)
 
     batched_cmap_metric = cmap.CMAP.empty()
     batched_cmap_metric = batched_cmap_metric.merge(
-        cmap.CMAP.from_model_output((scores[:5], labels[:5]))
+        cmap.CMAP.from_model_output(label_logits=scores[:5], label=labels[:5])
     )
     batched_cmap_metric = batched_cmap_metric.merge(
-        cmap.CMAP.from_model_output((scores[5:], labels[5:]))
+        cmap.CMAP.from_model_output(label_logits=scores[5:], label=labels[5:])
     )
-    batched_cmap_value = batched_cmap_metric.compute()
+    batched_cmap_value = batched_cmap_metric.compute()["macro"]
     self.assertEqual(batched_cmap_value, full_cmap_value)
 
     # Check that when setting a threshold to 3, the cmap is only computed
     # taking into account column 1 (the only one with >3 samples).
-    full_cmap_metric = cmap.CMAP.from_model_output((scores, labels))
-    restricted_cmap_metric = cmap.CMAP.from_model_output(
-        (scores[:, 1:2], labels[:, 1:2])
-    )
     self.assertEqual(
-        full_cmap_metric.compute(sample_threshold=3),
-        restricted_cmap_metric.compute(),
+        cmap.CMAP.from_model_output(label_logits=scores, label=labels).compute(
+            sample_threshold=3
+        )["macro"],
+        cmap.CMAP.from_model_output(
+            label_logits=scores[:, 1:2], label=labels[:, 1:2]
+        ).compute()["macro"],
     )
 
 

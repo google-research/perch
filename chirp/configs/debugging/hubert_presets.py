@@ -68,7 +68,6 @@ def get_base_train_config(
   train_config.hubert_loss_mult = 1
   train_config.quant_loss_mult = 1
   train_config.update(**kwargs)
-  train_config.add_class_wise_metrics = True
   return train_config
 
 
@@ -78,7 +77,6 @@ def get_base_eval_config(
   eval_config = presets_debug.get_base_eval_config(config, **kwargs)
   eval_config.train_mode_at_eval = False
   eval_config.mask_at_eval = False
-  eval_config.add_class_wise_metrics = True
   eval_config.update(**kwargs)
   return eval_config
 
