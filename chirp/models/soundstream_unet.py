@@ -264,4 +264,4 @@ class SoundstreamUNet(nn.Module):
         padding=self.padding,
     )(x)
 
-    return x, bottleneck_features
+    return x, bottleneck_features  # pytype: disable=bad-return-type  # jax-ndarray

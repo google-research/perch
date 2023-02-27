@@ -363,7 +363,7 @@ class NOTELA(adapt.SFDAMethod):
       forward_step = self.cache_get_forward_step(
           model_bundle.model, modality, method_kwargs["update_bn_statistics"]
       )
-      model_outputs = forward_step(
+      model_outputs = forward_step(  # pytype: disable=wrong-arg-types  # jax-ndarray
           adapt.keep_jax_types(batch),
           adaptation_state.model_state,
           adaptation_state.model_params,
@@ -504,9 +504,9 @@ class NOTELA(adapt.SFDAMethod):
     # Potentially keep mutual nearest-neighbors only.
     if use_mutual_nn:
       if transpose_nn_matrix is None:
-        final_nn_matrix = nn_matrix.multiply(nn_matrix.T)
+        final_nn_matrix = nn_matrix.multiply(nn_matrix.T)  # pytype: disable=attribute-error  # jax-ndarray
       else:
-        final_nn_matrix = nn_matrix.multiply(transpose_nn_matrix)
+        final_nn_matrix = nn_matrix.multiply(transpose_nn_matrix)  # pytype: disable=attribute-error  # jax-ndarray
     else:
       final_nn_matrix = nn_matrix
 

@@ -137,7 +137,7 @@ class WideResnet(image_model.ImageModel):
   num_classes: int
 
   @nn.compact
-  def __call__(
+  def __call__(  # pytype: disable=signature-mismatch  # jax-ndarray
       self, x: jnp.ndarray, train: bool, use_running_average: bool
   ) -> jnp.ndarray:
     x = nn.Conv(16, (3, 3), padding=1, name='init_conv', use_bias=False)(x)
@@ -170,7 +170,7 @@ class WideResnet(image_model.ImageModel):
     outputs = nn.Dense(self.num_classes)(x)
 
     model_outputs['label'] = outputs.astype(jnp.float32)
-    return output.ClassifierOutput(**model_outputs)
+    return output.ClassifierOutput(**model_outputs)  # pytype: disable=bad-return-type  # jax-ndarray
 
   @staticmethod
   def load_ckpt(dataset_name: str) -> flax.core.frozen_dict.FrozenDict:

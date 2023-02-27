@@ -96,7 +96,7 @@ def keyed_cross_entropy(
 ) -> jnp.ndarray | None:
   """Cross entropy for the specified taxonomic label set."""
   if getattr(outputs, key) is None:
-    return 0
+    return 0  # pytype: disable=bad-return-type  # jax-ndarray
   scores = getattr(outputs, key)
   ce = optax.sigmoid_binary_cross_entropy(scores, kwargs[key])
   ce = jnp.mean(ce, axis=-1)
@@ -107,7 +107,7 @@ def keyed_map(
     key: str, outputs: separation_model.SeparatorOutput, **kwargs
 ) -> jnp.ndarray | None:
   if getattr(outputs, key) is None:
-    return 0
+    return 0  # pytype: disable=bad-return-type  # jax-ndarray
   scores = getattr(outputs, key)
   return metrics.average_precision(scores=scores, labels=kwargs[key])
 

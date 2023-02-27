@@ -146,7 +146,7 @@ def forward_dataset(
       # We will use the first sample's label_mask as a reference, and ensure
       # all label_masks are the same.
       reference_mask = flax_utils.unreplicate(batch["label_mask"])[0]
-    model_outputs = forward_step(
+    model_outputs = forward_step(  # pytype: disable=wrong-arg-types  # jax-ndarray
         adapt.keep_jax_types(batch), model_state, params, batch_key
     )
     if "label_mask" in batch and only_keep_unmasked_classes:

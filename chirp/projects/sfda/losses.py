@@ -49,7 +49,7 @@ def label_kl(
     Single-class Kulback-Leibler divergence between probabilities and label.
     Shape [*,].
   """
-  return label_xent(probabilities, label, eps) - label_ent(probabilities, eps)
+  return label_xent(probabilities, label, eps) - label_ent(probabilities, eps)  # pytype: disable=wrong-arg-types  # jax-ndarray
 
 
 def label_binary_kl(

@@ -182,7 +182,7 @@ class NRCMultiLoss(clu_metrics.Metric):
 
     extended_nn_loss = -(
         label_mask
-        * (
+        * (  # pytype: disable=wrong-arg-types  # jax-ndarray
             extended_nn_weight
             * (
                 dot_product(
@@ -387,7 +387,7 @@ class NRC(adapt.SFDAMethod):
     forward_step = self.cache_get_forward_step(
         model_bundle.model, modality, method_kwargs["update_bn_statistics"]
     )
-    model_outputs = forward_step(
+    model_outputs = forward_step(  # pytype: disable=wrong-arg-types  # jax-ndarray
         adapt.keep_jax_types(batch),
         adaptation_state.model_state,
         adaptation_state.model_params,

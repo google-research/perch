@@ -99,7 +99,7 @@ def main(argv: Sequence[str]) -> None:
         )
     )
 
-  eval_lib.write_results_to_csv(eval_metrics, config.write_results_dir)
+  eval_lib.write_results_to_csv(eval_metrics, config.write_results_dir)  # pytype: disable=wrong-arg-types  # jax-ndarray
 
 
 if __name__ == '__main__':

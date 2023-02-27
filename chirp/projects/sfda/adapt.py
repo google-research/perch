@@ -655,7 +655,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
       cmap_value = cmap_metrics[key].compute(sample_threshold=sample_threshold)
       valid_metrics[f"{key}_cmap"] = cmap_value
     if writer is not None:
-      writer.write_scalars(current_epoch, valid_metrics)
+      writer.write_scalars(current_epoch, valid_metrics)  # pytype: disable=attribute-error  # jax-ndarray
 
 
 def perform_adaptation(
@@ -744,7 +744,7 @@ def perform_adaptation(
     if epoch % eval_every == 0:
       compute_mca = (epoch % eval_mca_every == 0) and eval_mca_every >= 0
       st = time.time()
-      sfda_method.evaluate(
+      sfda_method.evaluate(  # pytype: disable=wrong-arg-types  # jax-ndarray
           model_bundle=model_bundle,
           adaptation_state=adaptation_state,
           eval_dataset=validation_dataset,
@@ -797,7 +797,7 @@ def perform_adaptation(
 
   # When adaptation is finished, we perform a final round of evaluation on the
   # validation set.
-  sfda_method.evaluate(
+  sfda_method.evaluate(  # pytype: disable=wrong-arg-types  # jax-ndarray
       model_bundle=model_bundle,
       adaptation_state=adaptation_state,
       eval_dataset=validation_dataset,

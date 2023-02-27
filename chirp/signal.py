@@ -98,8 +98,8 @@ def linear_to_mel_weight_matrix(
   # Accordingly, we divide [lower_edge_hertz, upper_edge_hertz] into
   # num_mel_bins + 2 pieces.
   band_edges_mel = jnp.linspace(
-      hertz_to_mel(lower_edge_hertz),
-      hertz_to_mel(upper_edge_hertz),
+      hertz_to_mel(lower_edge_hertz),  # pytype: disable=wrong-arg-types  # jax-ndarray
+      hertz_to_mel(upper_edge_hertz),  # pytype: disable=wrong-arg-types  # jax-ndarray
       num_mel_bins + 2,
   )
 
