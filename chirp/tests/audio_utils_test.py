@@ -15,6 +15,8 @@
 
 """Tests for audio utilities."""
 
+import os
+
 from chirp import audio_utils
 from jax import numpy as jnp
 from jax import random
@@ -43,6 +45,16 @@ class AudioUtilsTest(parameterized.TestCase):
     cls.audio = cls.signal + cls.noise
 
     _, _, cls.spectrogram = jsp.signal.stft(cls.audio)
+
+  def test_load_audio(self):
+    wav_path = os.path.join(
+        os.path.normpath(os.path.dirname(__file__)),
+        'testdata',
+        'tfds_builder_wav_directory_test',
+        'clap.wav',
+    )
+    audio = audio_utils.load_audio(wav_path, 32000)
+    self.assertLen(audio, 678240)
 
   def test_pcen(self):
     gain = 0.5
@@ -82,17 +94,17 @@ class AudioUtilsTest(parameterized.TestCase):
       # NOTE: FFT length must be factorizable into primes less than 127 (this
       # is a cuFFT restriction).
       nfft=(256, 301),
-      boundary=("zeros", None),
+      boundary=('zeros', None),
       padded=(True, False),
   )
   def test_stft_tf(self, nperseg, noverlap, nfft, boundary, padded):
     batch_size = 3
     sample_rate_hz = 22050
-    window = "hann"
+    window = 'hann'
     # NOTE: We don't test the Hamming window, since TensorFlow and SciPy have
     # different implementations, which leads to slightly different results.
     # To be precise, the difference is that:
-    # sp.signal.get_window("hamming", N) == tf.signal.hamming_window(N + 1)[:-1]
+    # sp.signal.get_window('hamming', N) == tf.signal.hamming_window(N + 1)[:-1]
 
     time_size = 5 * sample_rate_hz
     audio = jnp.sin(jnp.linspace(0.0, 440 * jnp.pi, time_size))
@@ -133,5 +145,5 @@ class AudioUtilsTest(parameterized.TestCase):
     )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
   absltest.main()

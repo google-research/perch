@@ -17,34 +17,63 @@
 
 General utilities for processing audio and spectrograms.
 """
+import os
+import tempfile
 from typing import Sequence
+import warnings
 
 from chirp import signal
+from etils import epath
 from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax import scipy as jsp
+import librosa
 from scipy import signal as scipy_signal
 import tensorflow as tf
 
 _WINDOW_FNS = {
-    "hann": tf.signal.hann_window,
-    "hamming": tf.signal.hamming_window,
+    'hann': tf.signal.hann_window,
+    'hamming': tf.signal.hamming_window,
 }
-_BOUNDARY_TO_PADDING_MODE = {"zeros": "CONSTANT"}
+_BOUNDARY_TO_PADDING_MODE = {'zeros': 'CONSTANT'}
+
+
+def load_audio(
+    filepath: str | epath.Path,
+    target_sample_rate: int,
+    resampling_type: str = 'polyphase',
+) -> jnp.ndarray:
+  """Read an audio file and resample it using librosa."""
+  filepath = epath.Path(filepath)
+  with tempfile.NamedTemporaryFile(
+      mode='w+b', suffix=os.path.splitext(filepath)[-1]
+  ) as f:
+    with filepath.open('rb') as sf:
+      f.write(sf.read())
+    # librosa outputs lots of warnings which we can safely ignore when
+    # processing all Xeno-Canto files and PySoundFile is unavailable.
+    with warnings.catch_warnings():
+      warnings.simplefilter('ignore')
+      audio, _ = librosa.load(
+          f.name,
+          sr=target_sample_rate,
+          res_type=resampling_type,
+      )
+      return audio
 
 
 # pylint: disable=g-doc-return-or-yield,g-doc-args,unused-argument
 def stft_tf(
     x,
     fs=1.0,
-    window="hann",
+    window='hann',
     nperseg=256,
     noverlap=None,
     nfft=None,
     detrend=False,
     return_onesided=True,
-    boundary="zeros",
+    boundary='zeros',
     padded=True,
 ) -> tf.Tensor:
   """Computes the Short Time Fourier Transform (STFT).
@@ -59,22 +88,25 @@ def stft_tf(
   noverlap = nperseg // 2 if noverlap is None else noverlap
   nstep = nperseg - noverlap
   if x.dtype.is_complex:
-    raise ValueError("tf.signal.stft only supports real signals")
+    raise ValueError('tf.signal.stft only supports real signals')
   if window not in _WINDOW_FNS:
     raise ValueError(
-        f"tf.signal.stft does not support window {window}, "
-        f"supported functions are {', '.join(_WINDOW_FNS)}"
+        (
+            f'tf.signal.stft does not support window {window}, '
+            'supported functions are {'
+        ),
+        '.join(_WINDOW_FNS)}',
     )
   if boundary is not None and boundary not in _BOUNDARY_TO_PADDING_MODE:
     raise ValueError(
-        "tf.signal.stft only supports boundary modes None and , ".join(
+        'tf.signal.stft only supports boundary modes None and , '.join(
             _BOUNDARY_TO_PADDING_MODE
         )
     )
   if detrend:
-    raise ValueError("tf.signal.stft only supports detrend = False")
+    raise ValueError('tf.signal.stft only supports detrend = False')
   if not return_onesided:
-    raise ValueError("tf.signal.stft only supports return_onesided = True")
+    raise ValueError('tf.signal.stft only supports return_onesided = True')
 
   input_length = tf.shape(x)[-1]
   # Put the time axis at the end and then put it back
@@ -160,9 +192,9 @@ def ema_conv1d(
       padded_inp,
       kernel,
       (1,),
-      padding="VALID",
+      padding='VALID',
       feature_group_count=xs.shape[-1],
-      dimension_numbers=("NTC", "IOT", "NTC"),
+      dimension_numbers=('NTC', 'IOT', 'NTC'),
   )
   return outp
 
@@ -206,17 +238,17 @@ def pcen(
     fixed_pcen.
   """
   if filterbank_energy.ndim < 2:
-    raise ValueError("Filterbank energy must have rank >= 2.")
+    raise ValueError('Filterbank energy must have rank >= 2.')
 
   for name, arr, max_rank in (
-      ("gain", gain, 1),
-      ("bias", bias, 1),
-      ("root", root, 1),
-      ("smoothing_coef", smoothing_coef, 1),
-      ("eps", eps, 0),
+      ('gain', gain, 1),
+      ('bias', bias, 1),
+      ('root', root, 1),
+      ('smoothing_coef', smoothing_coef, 1),
+      ('eps', eps, 0),
   ):
     if jnp.ndim(arr) > max_rank:
-      raise ValueError(f"{name} must have rank at most {max_rank}")
+      raise ValueError(f'{name} must have rank at most {max_rank}')
 
   if conv_width == 0:
     smoothed_energy, filter_state = ema(
@@ -227,7 +259,7 @@ def pcen(
     filter_state = None
   else:
     raise ValueError(
-        "Can only apply convolutional EMA to inputs with shape [B, T, D]."
+        'Can only apply convolutional EMA to inputs with shape [B, T, D].'
     )
   inv_root = 1.0 / root
   pcen_output = (
@@ -360,7 +392,7 @@ def pad_to_length_if_shorter(audio: jnp.ndarray, target_length: int):
     missing = target_length - audio.shape[0]
     pad_left = missing // 2
     pad_right = missing - pad_left
-    audio = jnp.pad(audio, [[pad_left, pad_right]], mode="wrap")
+    audio = jnp.pad(audio, [[pad_left, pad_right]], mode='wrap')
   return audio
 
 
