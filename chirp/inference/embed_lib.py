@@ -22,7 +22,9 @@ import warnings
 
 from absl import logging
 import apache_beam as beam
+from chirp.inference import interface
 from chirp.inference import models
+from etils import epath
 import librosa
 from ml_collections import config_dict
 import numpy as np
@@ -96,16 +98,30 @@ def get_feature_description(logit_names: Sequence[str] | None = None):
   return feature_description
 
 
-def create_source_infos(source_files, num_shards_per_file):
+def create_source_infos(
+    source_file_patterns: str, num_shards_per_file: int
+) -> Sequence[SourceInfo]:
+  """Expand source file patterns into a list of SourceInfos."""
+  source_files = []
+  for pattern in source_file_patterns:
+    for source_file in epath.Path('').glob(pattern):
+      source_files.append(source_file)
+
   source_file_splits = []
   for source in source_files:
     for i in range(num_shards_per_file):
-      source_file_splits.append(SourceInfo(source, i, num_shards_per_file))
+      source_file_splits.append(
+          SourceInfo(source.as_posix(), i, num_shards_per_file)
+      )
   return source_file_splits
 
 
 class EmbedFn(beam.DoFn):
-  """Beam worker function for creating audio embeddings."""
+  """Beam worker function for creating audio embeddings.
+
+  TODO(tomdenton): Move most of this functionality into the EmbeddingModel.
+  This will increase usability in non-beam contexts.
+  """
 
   def __init__(
       self,
@@ -116,6 +132,7 @@ class EmbedFn(beam.DoFn):
       model_key: str,
       model_config: config_dict.ConfigDict,
       crop_s: float = -1.0,
+      embedding_model: interface.EmbeddingModel | None = None,
   ):
     """Initialize the embedding DoFn.
 
@@ -125,8 +142,11 @@ class EmbedFn(beam.DoFn):
       write_separated_audio: Whether to write out separated audio tracks.
       write_raw_audio: If true, will add the original audio to the output.
       model_key: String indicating which model wrapper to use. See MODEL_KEYS.
-      model_config: Keyword arg dictionary for the model wrapper class.
+        Only used for setting up the embedding model.
+      model_config: Keyword arg dictionary for the model wrapper class. Only
+        used for setting up the embedding model.
       crop_s: If greater than zero, run on only the first crop_s seconds.
+      embedding_model: Pre-loaded embedding model.
     """
     self.model_key = model_key
     self.model_config = model_config
@@ -135,9 +155,15 @@ class EmbedFn(beam.DoFn):
     self.write_separated_audio = write_separated_audio
     self.write_raw_audio = write_raw_audio
     self.crop_s = crop_s
+    self.embedding_model = embedding_model
 
   def setup(self):
-    self.embedding_model = MODEL_CLASSES[self.model_key](**self.model_config)
+    if self.embedding_model is None:
+      self.embedding_model = MODEL_CLASSES[self.model_key](**self.model_config)
+    if hasattr(self, 'model_key'):
+      del self.model_key
+    if hasattr(self, 'model_config'):
+      del self.model_config
 
   def load_audio(self, filepath: str) -> np.ndarray | None:
     with warnings.catch_warnings():
@@ -161,8 +187,12 @@ class EmbedFn(beam.DoFn):
       return audio
 
   def maybe_frame_audio(self, audio: np.ndarray) -> np.ndarray:
-    window_size_s = self.embedding_model.window_size_s
-    if window_size_s < 0:
+    if hasattr(self.embedding_model, 'window_size_s'):
+      window_size_s = self.embedding_model.window_size_s
+    else:
+      return audio
+
+    if window_size_s <= 0:
       return audio
     frame_length = int(window_size_s * self.embedding_model.sample_rate)
     hop_length = int(self.hop_size_s * self.embedding_model.sample_rate)

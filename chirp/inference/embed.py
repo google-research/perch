@@ -44,18 +44,16 @@ _DRY_RUN_CROP_S = flags.DEFINE_float(
 )
 
 
-def dry_run(config, source_files):
+def dry_run(config, source_infos):
   """Perform a dry run: check that the model loads and can process a file."""
   test_embed_fn = embed_lib.EmbedFn(**config.embed_fn_config)
   print('starting dry run....')
   test_embed_fn.setup()
   print('   loaded test model....')
   start = time.time()
-  test_file = np.random.choice(source_files)
-  print(f'   processing test file {test_file}')
-  got = test_embed_fn.process(
-      embed_lib.SourceInfo(test_file, 0, 1), _DRY_RUN_CROP_S.value
-  )
+  test_source = np.random.choice(source_infos)
+  print(f'   processing test source {test_source}')
+  got = test_embed_fn.process(test_source, _DRY_RUN_CROP_S.value)
   elapsed = time.time() - start
   if not got:
     raise Exception('Something went wrong; no results found.')
@@ -77,21 +75,19 @@ def main(unused_argv: Sequence[str]) -> None:
   config = config_utils.parse_config(config, config_globals.get_globals())
 
   logging.info('Locating source files...')
-  source_files = []
-  for pattern in config.source_file_patterns:
-    for source_file in epath.Path('').glob(pattern):
-      source_files.append(source_file)
   output_dir = epath.Path(config.output_dir)
   output_dir.parent.mkdir(exist_ok=True, parents=True)
-  logging.info('Found %d source files.', len(source_files))
-  if _DRY_RUN_ONLY.value:
-    dry_run(config, source_files)
-    return
 
   # Create and run the beam pipeline.
   source_infos = embed_lib.create_source_infos(
-      source_files, config.num_shards_per_file
+      config.source_file_patterns, config.num_shards_per_file
   )
+  logging.info('Found %d source infos.', len(source_infos))
+
+  if _DRY_RUN_ONLY.value:
+    dry_run(config, source_infos)
+    return
+
   pipeline = beam.Pipeline()
   embed_fn = embed_lib.EmbedFn(**config.embed_fn_config)
   embed_lib.build_run_pipeline(

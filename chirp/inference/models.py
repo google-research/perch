@@ -151,6 +151,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   window_size_s: float
   hop_size_s: float
   target_class_list: namespace.ClassList | None = None
+  target_peak: float | None = 0.25
 
   # The following are populated during init.
   model: Any | None = None  # TF SavedModel
@@ -170,6 +171,8 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     framed_audio = self.frame_audio(
         audio_array, self.window_size_s, self.hop_size_s
     )
+    if self.target_peak is not None:
+      framed_audio = self.normalize_audio(framed_audio, self.target_peak)
     all_logits, all_embeddings = self.model.infer_tf(framed_audio[:1])
     for window in framed_audio[1:]:
       logits, embeddings = self.model.infer_tf(window[np.newaxis, :])

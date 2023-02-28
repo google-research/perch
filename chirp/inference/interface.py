@@ -139,3 +139,16 @@ class EmbeddingModel:
     # Librosa frames as [frame_length, batch], so need a transpose.
     framed_audio = librosa.util.frame(audio_array, frame_length, hop_length).T
     return framed_audio
+
+  def normalize_audio(
+      self,
+      framed_audio: np.ndarray,
+      target_peak: float,
+  ) -> np.ndarray:
+    """Normalizes audio to match the target_peak value."""
+    framed_audio = framed_audio.copy()
+    framed_audio -= np.mean(framed_audio, axis=1, keepdims=True)
+    peak_norm = np.max(np.abs(framed_audio), axis=1, keepdims=True)
+    framed_audio = np.divide(framed_audio, peak_norm, where=(peak_norm > 0.0))
+    framed_audio = framed_audio * target_peak
+    return framed_audio
