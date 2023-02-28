@@ -150,4 +150,4 @@ def taxonomy_cross_entropy(
         taxonomy_loss_weight * jnp.mean(xentropy[f"{key}_xentropy"], axis=-1)
         for key in TAXONOMY_KEYS
     )
-  return xentropy
+  return xentropy  # pytype: disable=bad-return-type  # jax-ndarray
