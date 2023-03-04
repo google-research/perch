@@ -76,6 +76,34 @@ class EmbeddingModel:
     """
     raise NotImplementedError
 
+  def embed_reduce_time(
+      self, audio_array: np.ndarray, pool_method: str
+  ) -> InferenceOutputs:
+    """Embed some aqudio and reduce the embeddings over the time dimension."""
+    outputs = self.embed(audio_array)
+    embeddings = outputs.embeddings
+    if pool_method == 'first':
+      outputs.embeddings = embeddings[:, 0, :]
+    elif pool_method == 'only':
+      # Like 'first' but throws an exception if more than one time step.
+      outputs.embeddings = embeddings.squeeze(axis=1)
+    elif pool_method == 'mean':
+      outputs.embeddings = embeddings.mean(axis=1)
+    elif pool_method == 'max':
+      outputs.embeddings = embeddings.max(axis=1)
+    elif pool_method == 'mid':
+      t = outputs.embeddings.shape[1] // 2
+      outputs.embeddings = embeddings[:, t]
+    elif pool_method == 'flatten':
+      depth = embeddings.shape[-1]
+      time_steps = embeddings.shape[1]
+      outputs.embeddings = embeddings.reshape(
+          [embeddings.shape[0], time_steps * depth]
+      )
+    else:
+      raise ValueError(f'Unrecognized pooling method {pool_method}.')
+    return outputs
+
   def batch_embed(self, audio_batch: np.ndarray) -> InferenceOutputs:
     """Embed a batch of audio."""
     outputs = []
