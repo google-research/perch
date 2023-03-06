@@ -38,7 +38,7 @@ def get_base_config(**kwargs):
   config.num_channels = 160
   config.batch_size = 256
   config.target_class_list = 'xenocanto'
-  config.num_train_steps = 1_000_000
+  config.num_train_steps = 200_000
   config.tfds_data_dir = ''
   config.update(kwargs)
   return config
@@ -109,33 +109,55 @@ def get_pcen_melspec_config(
 
 
 def get_supervised_train_pipeline(
-    config: config_dict.ConfigDict, train_dataset_dir: str
+    config: config_dict.ConfigDict,
+    train_dataset_dir: str,
+    mixup=False,
+    random_slice=False,
+    random_gain=False,
 ) -> config_dict.ConfigDict:
   """Create the supervised training data pipeline."""
+  if train_dataset_dir != 'bird_taxonomy/slice_peaked:1.4.0':
+    raise ValueError('we assume training on XC')
   train_dataset_config = config_dict.ConfigDict()
+  if random_slice:
+    slice_op = _c(
+        'pipeline.RandomSlice',
+        window_size=config.get_ref('train_window_size_s'),
+    )
+  else:
+    slice_op = _c(
+        'pipeline.Slice',
+        window_size=config.get_ref('train_window_size_s'),
+        start=0.5,
+    )
+  ops = [
+      _c('pipeline.Shuffle', shuffle_buffer_size=512),
+      _c('pipeline.OnlyJaxTypes'),
+      _c(
+          'pipeline.ConvertBirdTaxonomyLabels',
+          source_namespace='ebird2021',
+          target_class_list=config.get_ref('target_class_list'),
+          add_taxonomic_labels=False,
+      ),
+      _c(
+          'pipeline.MixAudio',
+          target_dist=(1.0, 0.5, 0.25, 0.25) if mixup else (1.0,),
+      ),
+      slice_op,
+      _c(
+          'pipeline.Batch',
+          batch_size=config.get_ref('batch_size'),
+          split_across_devices=True,
+      ),
+      _c('pipeline.Repeat'),
+  ]
+  if random_gain:
+    ops.append(
+        _c('pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25)
+    )
   train_dataset_config.pipeline = _c(
       'pipeline.Pipeline',
-      ops=[
-          _c('pipeline.Shuffle', shuffle_buffer_size=512),
-          _c('pipeline.OnlyJaxTypes'),
-          _c(
-              'pipeline.ConvertBirdTaxonomyLabels',
-              source_namespace='ebird2021',
-              target_class_list=config.get_ref('target_class_list'),
-              add_taxonomic_labels=False,
-          ),
-          _c(
-              'pipeline.Slice',
-              window_size=config.get_ref('train_window_size_s'),
-              start=0.5,
-          ),
-          _c(
-              'pipeline.Batch',
-              batch_size=config.get_ref('batch_size'),
-              split_across_devices=True,
-          ),
-          _c('pipeline.Repeat'),
-      ],
+      ops=ops,
   )
   train_dataset_config.split = 'train'
   train_dataset_config.tfds_data_dir = config.get_ref('tfds_data_dir')
@@ -144,38 +166,43 @@ def get_supervised_train_pipeline(
 
 
 def get_supervised_eval_pipeline(
-    config: config_dict.ConfigDict, eval_dataset_dir: str | dict[str, str]
+    config: config_dict.ConfigDict,
+    eval_dataset_dir: str | dict[str, str],
+    normalize=False,
 ) -> config_dict.ConfigDict:
   """Create Caples eval data pipeline."""
   if isinstance(eval_dataset_dir, dict):
     return config_dict.ConfigDict(
         {
-            name: get_supervised_eval_pipeline(config, dataset_dir)
+            name: get_supervised_eval_pipeline(config, dataset_dir, normalize)
             for name, dataset_dir in eval_dataset_dir.items()
         }
     )
   eval_dataset_config = config_dict.ConfigDict()
+  ops = [
+      _c('pipeline.OnlyJaxTypes'),
+      _c(
+          'pipeline.ConvertBirdTaxonomyLabels',
+          source_namespace='ebird2021',
+          target_class_list=config.get_ref('target_class_list'),
+          add_taxonomic_labels=False,
+      ),
+      _c(
+          'pipeline.Slice',
+          window_size=config.get_ref('eval_window_size_s'),
+          start=0.5,
+      ),
+      _c(
+          'pipeline.Batch',
+          batch_size=config.get_ref('batch_size'),
+          split_across_devices=True,
+      ),
+  ]
+  if normalize:
+    ops.append(_c('pipeline.NormalizeAudio', target_gain=0.2))
   eval_dataset_config.pipeline = _c(
       'pipeline.Pipeline',
-      ops=[
-          _c('pipeline.OnlyJaxTypes'),
-          _c(
-              'pipeline.ConvertBirdTaxonomyLabels',
-              source_namespace='ebird2021',
-              target_class_list=config.get_ref('target_class_list'),
-              add_taxonomic_labels=False,
-          ),
-          _c(
-              'pipeline.Slice',
-              window_size=config.get_ref('eval_window_size_s'),
-              start=0.5,
-          ),
-          _c(
-              'pipeline.Batch',
-              batch_size=config.get_ref('batch_size'),
-              split_across_devices=True,
-          ),
-      ],
+      ops=ops,
   )
   eval_dataset_config.split = 'train'
   eval_dataset_config.tfds_data_dir = config.get_ref('tfds_data_dir')
