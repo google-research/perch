@@ -34,14 +34,14 @@ def get_config() -> config_dict.ConfigDict:
   config.num_shards_per_file = 1
   config.embed_fn_config = {
       'write_embeddings': True,
-      'write_logits': True,
+      'write_logits': False,
       'write_separated_audio': False,
-      'write_raw_audio': True,
+      'write_raw_audio': False,
       'model_key': 'taxonomy_model_tf',
       'model_config': {
           'model_path': model_checkpoint_path,
           'window_size_s': 5.0,
-          'hop_size_s': 3.0,
+          'hop_size_s': 2.5,
           'sample_rate': 32000,
       },
   }

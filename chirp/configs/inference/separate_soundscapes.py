@@ -29,19 +29,29 @@ def get_config() -> config_dict.ConfigDict:
 
   config.output_dir = ''
   config.source_file_patterns = ['soundscapes/*.wav']
-  model_checkpoint_path = ''
+  sep_model_checkpoint_path = ''
+  emb_model_checkpoint_path = ''
 
   config.num_shards_per_file = 1
   config.embed_fn_config = {
       'write_embeddings': True,
-      'write_logits': True,
-      'write_separated_audio': True,
-      'write_raw_audio': True,
-      'model_key': 'separator_model_tf',
+      'write_logits': False,
+      'write_separated_audio': False,
+      'write_raw_audio': False,
+      'model_key': 'separate_embed_model',
       'model_config': {
-          'model_path': model_checkpoint_path,
           'sample_rate': 32000,
-          'frame_size': 32000,
+          'taxonomy_model_tf_config': {
+              'model_path': emb_model_checkpoint_path,
+              'window_size_s': 5.0,
+              'hop_size_s': 2.5,
+              'sample_rate': 32000,
+          },
+          'separator_model_tf_config': {
+              'model_path': sep_model_checkpoint_path,
+              'sample_rate': 32000,
+              'frame_size': 32000,
+          },
       },
   }
   return config

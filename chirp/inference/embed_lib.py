@@ -46,6 +46,7 @@ MODEL_CLASSES: dict[str, Any] = {
     'separator_model_tf': models.SeparatorModelTF,
     'birdnet': models.BirdNet,
     'placeholder_model': models.PlaceholderModel,
+    'separate_embed_model': models.SeparateEmbedModel,
 }
 
 

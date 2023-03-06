@@ -24,8 +24,8 @@ from chirp.inference import interface
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 from etils import epath
+from ml_collections import config_dict
 import numpy as np
-import scipy
 import tensorflow as tf
 import tensorflow.compat.v1 as tf1
 
@@ -36,42 +36,85 @@ class SeparateEmbedModel(interface.EmbeddingModel):
 
   Note: Use the separation model's sample rate. The embedding model's sample
   rate is used to resample prior to computing the embedding.
+
+  Attributes:
+    taxonomy_model_tf_config: Configuration for a TaxonomyModelTF.
+    separator_model_tf_config: Configuration for a SeparationModelTF.
+    embed_raw: If True, the outputs will include embeddings of the original
+      audio in addition to embeddings for the separated channels. The embeddings
+      will have shape [T, C+1, D], with the raw audio embedding on channel 0.
+    separation_model: SeparationModelTF, automatically populated during init.
+    embedding_model: TaxonomyModelTF, automatically populated during init.
   """
 
-  separation_model: interface.EmbeddingModel
-  embedding_model: interface.EmbeddingModel
+  taxonomy_model_tf_config: config_dict.ConfigDict
+  separator_model_tf_config: config_dict.ConfigDict
+  embed_raw: bool = True
+
+  # Populated during init.
+  separation_model: Any = None
+  embedding_model: Any = None
+
+  def __post_init__(self):
+    if self.separation_model is None:
+      self.separation_model = SeparatorModelTF(**self.separator_model_tf_config)
+      self.embedding_model = TaxonomyModelTF(**self.taxonomy_model_tf_config)
+    if self.separation_model.sample_rate != self.embedding_model.sample_rate:
+      raise ValueError(
+          'Separation and embedding models must have matching rates.'
+      )
 
   def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
-    # Apply the separation model.
-    separation_outputs = self.separation_model.embed(audio_array)
-    if self.separation_model.sample_rate != self.embedding_model.sample_rate:
-      new_length = int(
-          self.embedding_model.sample_rate
-          / self.separation_model.sample_rate
-          * separation_outputs.separated_audio.shape[-1]
+    # Frame the audio according to the embedding model's config.
+    # We then apply separation to each frame independently, and embed
+    # the separated audio.
+    framed_audio = self.frame_audio(
+        audio_array,
+        self.embedding_model.window_size_s,
+        self.embedding_model.hop_size_s,
+    )
+    # framed_audio has shape [Frames, Time]
+    separation_outputs = self.separation_model.batch_embed(framed_audio)
+    # separated_audio has shape [F, C, T]
+    separated_audio = separation_outputs.separated_audio
+
+    if self.embed_raw:
+      separated_audio = np.concatenate(
+          [
+              framed_audio[:, np.newaxis, : separated_audio.shape[-1]],
+              separated_audio,
+          ],
+          axis=1,
       )
-      separated_audio = scipy.signal.resample(
-          separation_outputs.separated_audio, new_length, axis=-1
-      )
-    else:
-      separated_audio = separation_outputs.separated_audio
+    num_frames = separated_audio.shape[0]
+    num_channels = separated_audio.shape[1]
+    num_samples = separated_audio.shape[2]
+    separated_audio = np.reshape(separated_audio, [-1, num_samples])
 
     embedding_outputs = self.embedding_model.batch_embed(separated_audio)
-    # embedding output has shape [C, T, 1, D]; rearrange to [T, C, D].
-    embeddings = embedding_outputs.embeddings.swapaxes(0, 2).squeeze(0)
+
+    # Batch embeddings have shape [Batch, Time, Channels, Features]
+    # Time is 1 because we have framed using the embedding model's window_size.
+    # The batch size is num_frames * num_channels.
+    embeddings = np.reshape(
+        embedding_outputs.embeddings, [num_frames, num_channels, -1]
+    )
 
     # Take the maximum logits over the channels dimension.
     if embedding_outputs.logits is not None:
       max_logits = {}
       for k, v in embedding_outputs.logits.items():
-        max_logits[k] = np.max(v, axis=0)
+        v = v.reshape([num_frames, num_channels, -1])
+        max_logits[k] = np.max(v, axis=1)
     else:
       max_logits = None
 
     return interface.InferenceOutputs(
         embeddings=embeddings,
         logits=max_logits,
-        separated_audio=separation_outputs.separated_audio,
+        # Because the separated audio is framed, it does not match the
+        # outputs interface, so we do not return it.
+        separated_audio=None,
     )
 
 
@@ -360,6 +403,8 @@ class PlaceholderModel(interface.EmbeddingModel):
   make_logits: bool = True
   make_separated_audio: bool = True
   target_class_list: namespace.ClassList | None = None
+  window_size_s: float = 1.0
+  hop_size_s: float = 1.0
 
   def __post_init__(self):
     db = namespace_db.load_db()
@@ -367,7 +412,9 @@ class PlaceholderModel(interface.EmbeddingModel):
 
   def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
     outputs = {}
-    time_size = audio_array.shape[0] // self.sample_rate
+    time_size = audio_array.shape[0] // int(
+        self.window_size_s * self.sample_rate
+    )
     if self.make_embeddings:
       outputs['embeddings'] = np.zeros(
           [time_size, 1, self.embedding_size], np.float32

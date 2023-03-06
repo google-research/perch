@@ -16,7 +16,6 @@
 """Configuration and init library for Search Bootstrap projects."""
 
 import dataclasses
-import functools
 import os
 from typing import Sequence
 

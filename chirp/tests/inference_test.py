@@ -15,6 +15,7 @@
 
 """Tests for inference library."""
 
+from ml_collections import config_dict
 import os
 import tempfile
 
@@ -125,26 +126,30 @@ class InferenceTest(parameterized.TestCase):
     target_class_list = db.class_lists['high_sierras']
 
     embeddor = models.PlaceholderModel(
-        sample_rate=32000,
+        sample_rate=22050,
         make_embeddings=True,
         make_logits=True,
         make_separated_audio=False,
         target_class_list=target_class_list,
     )
-    sep_embed = models.SeparateEmbedModel(22050, separator, embeddor)
+    fake_config = config_dict.ConfigDict()
+    sep_embed = models.SeparateEmbedModel(
+        sample_rate=22050,
+        taxonomy_model_tf_config=fake_config,
+        separator_model_tf_config=fake_config,
+        separation_model=separator,
+        embedding_model=embeddor,
+    )
     audio = np.zeros(5 * 22050, np.float32)
 
-    sep_outputs = separator.embed(audio)
     outputs = sep_embed.embed(audio)
-    self.assertSequenceEqual(
-        sep_outputs.separated_audio.shape, outputs.separated_audio.shape
-    )
     # The PlaceholderModel produces one embedding per second, and we have
-    # five seconds of audio, with two separated channels.
+    # five seconds of audio, with two separated channels, plus the channel
+    # for the raw audio.
     # Note that this checks that the sample-rate conversion between the
     # separation model and embedding model has worked correctly.
     self.assertSequenceEqual(
-        outputs.embeddings.shape, [5, 2, embeddor.embedding_size]
+        outputs.embeddings.shape, [5, 3, embeddor.embedding_size]
     )
     # The Sep+Embed model takes the max logits over the channel dimension.
     self.assertSequenceEqual(
