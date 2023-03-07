@@ -188,6 +188,100 @@ class EvalSetSpecification:
         num_representatives_per_class=num_representatives_per_class,
     )
 
+  @classmethod
+  def v2_specification(
+      cls: type[_T],
+      location: str,
+      corpus_type: str,
+      num_representatives_per_class: int,
+  ) -> _T:
+    """Instantiates an eval protocol v2 EvalSetSpecification.
+
+    Args:
+      location: Geographical location in {'ssw', 'colombia', 'hawaii'}.
+      corpus_type: Corpus type in {'xc_fg', 'xc_bg', 'birdclef'}.
+      num_representatives_per_class: Number of class representatives to sample.
+        If -1, all representatives are used.
+
+    Returns:
+      The EvalSetSpecification.
+    """
+    downstream_class_names = (
+        namespace_db.load_db().class_lists['downstream_species'].classes
+    )
+    # "At-risk" species are excluded from downstream data due to conservation
+    # status.
+    class_names = {
+        'ssw': (
+            namespace_db.load_db()
+            .class_lists['artificially_rare_species']
+            .classes
+        ),
+        'colombia': [
+            c
+            for c in namespace_db.load_db()
+            .class_lists['birdclef2019_colombia']
+            .classes
+            if c in downstream_class_names
+        ],
+        'hawaii': [
+            c
+            for c in namespace_db.load_db().class_lists['hawaii'].classes
+            if c in downstream_class_names
+        ],
+    }[location]
+
+    # The name of the dataset to draw embeddings from to form the corpus.
+    corpus_dataset_name = (
+        f'birdclef_{location}' if corpus_type == 'birdclef' else 'xc_downstream'
+    )
+    has_corpus_dataset_name = (
+        lambda df: df['dataset_name'] == corpus_dataset_name
+    )
+    # Only include embeddings in the searchcorpus which have foreground
+    # ('label') and/or background labels ('bg_labels') for some class in
+    # `class_names`, which are encoded as space-separated species IDs/codes.
+    has_some_fg_annotation = (
+        # `'|'.join(class_names)` is a regex which matches *any* class in
+        # `class_names`.
+        lambda df: df['label'].str.contains('|'.join(class_names))
+    )
+    has_some_bg_annotation = lambda df: df['bg_labels'].str.contains(
+        '|'.join(class_names)
+    )
+    has_some_annotation = lambda df: has_some_fg_annotation(
+        df
+    ) | has_some_bg_annotation(df)
+
+    class_representative_dataset_name = {
+        'ssw': 'xc_artificially_rare_class_reps',
+        'colombia': 'xc_downstream_class_reps',
+        'hawaii': 'xc_downstream_class_reps',
+    }[location]
+
+    return cls(
+        class_names=class_names,
+        search_corpus_global_mask_fn=(
+            lambda df: has_corpus_dataset_name(df) & has_some_annotation(df)
+        ),
+        # Ensure that target species' background vocalizations are not present
+        # in the 'xc_fg' corpus and vice versa.
+        search_corpus_classwise_mask_fn={
+            'xc_fg': lambda df, n: ~df['bg_labels'].str.contains(n),
+            'xc_bg': lambda df, n: ~df['label'].str.contains(n),
+            'birdclef': lambda df, _: df['label'].map(lambda s: True),
+        }[corpus_type],
+        # Class representatives are drawn from foreground-vocalizing species
+        # present in Xeno-Canto after applying peak-finding.
+        class_representative_global_mask_fn=(
+            lambda df: df['dataset_name'] == class_representative_dataset_name
+        ),
+        class_representative_classwise_mask_fn=(
+            lambda df, class_name: df['label'].str.contains(class_name)
+        ),
+        num_representatives_per_class=num_representatives_per_class,
+    )
+
 
 @dataclasses.dataclass
 class TaxonomyModelCallback:
@@ -580,6 +674,10 @@ def _get_search_corpus_df(
   search_corpus_df = embeddings_df[search_corpus_mask]
   # Make sure to drop any embeddings present in the class representatives
   # from the search corpus.
+  #
+  # Note that for eval v2, indices will not be dropped because class reps &
+  # search corpus examples are drawn from different datasets. For XC, there will
+  # be one match between the class rep & search corpus example for each species.
   return search_corpus_df.drop(
       class_representatives_df.index,
       # It's possible that the class representatives and the search corpus don't
