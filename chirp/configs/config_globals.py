@@ -28,6 +28,7 @@ from chirp.models import quantizers
 from chirp.models import soundstream_unet
 from chirp.models import taxonomy_model
 from flax import linen as nn
+import optax
 
 
 def get_globals() -> dict[str, Any]:
@@ -41,6 +42,7 @@ def get_globals() -> dict[str, Any]:
       "frontend": frontend,
       "layers": layers,
       "nn": nn,
+      "optax": optax,
       "pipeline": pipeline,
       "soundstream_unet": soundstream_unet,
       "taxonomy_model": taxonomy_model,

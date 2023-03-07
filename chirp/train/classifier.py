@@ -72,10 +72,16 @@ def initialize_model(
     rng_seed: int,
     input_shape: tuple[int, ...],
     learning_rate: float,
+    optimizer: optax.GradientTransformation,
     workdir: str,
     target_class_list: str,
 ) -> tuple[utils.ModelBundle, utils.TrainState]:
   """Creates model for training, eval, or inference."""
+  # learning_rate is unused (it's expected to be used in constructing the
+  # `optimizer` argument), but it's left part of the function signature for
+  # backwards compatibility with the config utils.
+  del learning_rate
+
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
 
@@ -93,7 +99,6 @@ def initialize_model(
   params = params.unfreeze()
 
   # Initialize optimizer and handle constraints
-  optimizer = optax.adam(learning_rate=learning_rate)
   opt_state = optimizer.init(params)
 
   # Load checkpoint

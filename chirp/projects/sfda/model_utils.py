@@ -475,6 +475,7 @@ def prepare_audio_model(
         rng_seed=rng_seed,
         input_shape=input_shape,
         learning_rate=0.0,
+        optimizer=optax.adam(learning_rate=0.0),
         workdir=ckpt_dir,
         target_class_list=target_class_list,
     )
