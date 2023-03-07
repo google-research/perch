@@ -261,17 +261,17 @@ class EmbedFn(beam.DoFn):
       logging.error('Failed to load audio : %s', source_info.filepath)
       return
 
-    if audio.shape[0] < MIN_AUDIO_S * self.embedding_model.sample_rate:
-      beam.metrics.Metrics.counter('beaminference', 'short_audio_error').inc()
-      logging.error('short audio file : %s', source_info.filepath)
-      return
-
     if source_info.num_shards > 1:
       shard_len = audio.shape[0] // source_info.num_shards
       timestamp_offset = source_info.shard_num * shard_len
       audio = audio[timestamp_offset : timestamp_offset + shard_len]
     else:
       timestamp_offset = 0
+
+    if audio.shape[0] < MIN_AUDIO_S * self.embedding_model.sample_rate:
+      beam.metrics.Metrics.counter('beaminference', 'short_audio_error').inc()
+      logging.error('short audio file : %s', source_info.filepath)
+      return
 
     if crop_s > 0:
       audio = audio[: int(crop_s * self.embedding_model.sample_rate)]
