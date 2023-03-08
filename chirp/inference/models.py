@@ -30,6 +30,17 @@ import tensorflow as tf
 import tensorflow.compat.v1 as tf1
 
 
+def model_class_map() -> dict[str, Any]:
+  """Get the mapping of model keys to classes."""
+  return {
+      'taxonomy_model_tf': TaxonomyModelTF,
+      'separator_model_tf': SeparatorModelTF,
+      'birdnet': BirdNet,
+      'placeholder_model': PlaceholderModel,
+      'separate_embed_model': SeparateEmbedModel,
+  }
+
+
 @dataclasses.dataclass
 class SeparateEmbedModel(interface.EmbeddingModel):
   """Wrapper for separate separation and embedding models.

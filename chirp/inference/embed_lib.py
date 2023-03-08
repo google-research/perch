@@ -24,30 +24,15 @@ from absl import logging
 import apache_beam as beam
 from chirp.inference import interface
 from chirp.inference import models
+from chirp.inference import tf_examples
 from etils import epath
 import librosa
 from ml_collections import config_dict
 import numpy as np
 import tensorflow as tf
 
-FILE_NAME = 'filename'
-TIMESTAMP = 'timestamp_offset'
-EMBEDDING = 'embedding'
-EMBEDDING_SHAPE = 'embedding_shape'
-LOGITS = 'logits'
-SEPARATED_AUDIO = 'separated_audio'
-SEPARATED_AUDIO_SHAPE = 'separated_audio_shape'
-RAW_AUDIO = 'raw_audio'
-RAW_AUDIO_SHAPE = 'raw_audio_shape'
-MIN_AUDIO_S = 5
 
-MODEL_CLASSES: dict[str, Any] = {
-    'taxonomy_model_tf': models.TaxonomyModelTF,
-    'separator_model_tf': models.SeparatorModelTF,
-    'birdnet': models.BirdNet,
-    'placeholder_model': models.PlaceholderModel,
-    'separate_embed_model': models.SeparateEmbedModel,
-}
+MIN_AUDIO_S = 5
 
 
 @dataclasses.dataclass
@@ -57,46 +42,6 @@ class SourceInfo:
   filepath: str
   shard_num: int
   num_shards: int
-
-
-def get_feature_description(logit_names: Sequence[str] | None = None):
-  """Create a feature description for the TFExamples.
-
-  Each tensor feature includes both a serialized tensor and a 'shape' feature.
-  The tensor feature can be parsed with tf.io.parse_tensor, and then reshaped
-  according to the shape feature.
-
-  Args:
-    logit_names: Name of logit features included in the examples.
-
-  Returns:
-    Feature description dict for parsing TF Example protos.
-  """
-  feature_description = {
-      FILE_NAME: tf.io.FixedLenFeature([], tf.string),
-      TIMESTAMP: tf.io.FixedLenFeature([], tf.int64),
-      EMBEDDING: tf.io.FixedLenFeature([], tf.string, default_value=''),
-      EMBEDDING_SHAPE: tf.io.FixedLenSequenceFeature(
-          [], tf.int64, allow_missing=True
-      ),
-      SEPARATED_AUDIO: tf.io.FixedLenFeature([], tf.string, default_value=''),
-      SEPARATED_AUDIO_SHAPE: tf.io.FixedLenSequenceFeature(
-          [], tf.int64, allow_missing=True
-      ),
-      RAW_AUDIO: tf.io.FixedLenFeature([], tf.string, default_value=''),
-      RAW_AUDIO_SHAPE: tf.io.FixedLenSequenceFeature(
-          [], tf.int64, allow_missing=True
-      ),
-  }
-  if logit_names is not None:
-    for logit_name in logit_names:
-      feature_description[logit_name] = tf.io.FixedLenFeature(
-          [], tf.string, default_value=''
-      )
-      feature_description[f'{logit_name}_shape'] = (
-          tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
-      )
-  return feature_description
 
 
 def create_source_infos(
@@ -160,7 +105,9 @@ class EmbedFn(beam.DoFn):
 
   def setup(self):
     if self.embedding_model is None:
-      self.embedding_model = MODEL_CLASSES[self.model_key](**self.model_config)
+      self.embedding_model = models.model_class_map()[self.model_key](
+          **self.model_config
+      )
     if hasattr(self, 'model_key'):
       del self.model_key
     if hasattr(self, 'model_config'):
@@ -186,59 +133,6 @@ class EmbedFn(beam.DoFn):
         # In case of multi-channel audio, take the first channel.
         audio = audio[0]
       return audio
-
-  def maybe_frame_audio(self, audio: np.ndarray) -> np.ndarray:
-    if hasattr(self.embedding_model, 'window_size_s'):
-      window_size_s = self.embedding_model.window_size_s
-    else:
-      return audio
-
-    if window_size_s <= 0:
-      return audio
-    frame_length = int(window_size_s * self.embedding_model.sample_rate)
-    hop_length = int(self.hop_size_s * self.embedding_model.sample_rate)
-    # Librosa frames as [frame_length, batch], so need a transpose.
-    framed_audio = librosa.util.frame(audio, frame_length, hop_length).T
-    return framed_audio
-
-  def serialize_tensor(self, tensor: tf.Tensor) -> np.ndarray:
-    serialized = tf.io.serialize_tensor(tensor)
-    return serialized.numpy()
-
-  def embed(
-      self, file_id: str, audio: np.ndarray, timestamp_offset: int
-  ) -> tf.train.Example:
-    """Apply the embedding model to the target audio array."""
-    logging.info('...creating embeddings (%s)', file_id)
-    outputs = self.embedding_model.embed(audio)
-    feature = {
-        FILE_NAME: bytes_feature(bytes(file_id, encoding='utf8')),
-        TIMESTAMP: int_feature(timestamp_offset),
-    }
-    if self.write_embeddings and outputs.embeddings is not None:
-      feature[EMBEDDING] = bytes_feature(
-          self.serialize_tensor(outputs.embeddings)
-      )
-      feature[EMBEDDING_SHAPE] = (int_feature(outputs.embeddings.shape),)
-    if self.write_logits and outputs.logits is not None:
-      for logits_key, value in outputs.logits.items():
-        feature[logits_key] = bytes_feature(self.serialize_tensor(value))
-        feature[logits_key + '_shape'] = int_feature(value.shape)
-    if self.write_separated_audio and outputs.separated_audio is not None:
-      feature[SEPARATED_AUDIO] = bytes_feature(
-          self.serialize_tensor(outputs.separated_audio)
-      )
-      feature[SEPARATED_AUDIO_SHAPE] = int_feature(
-          outputs.separated_audio.shape
-      )
-    if self.write_raw_audio:
-      feature[RAW_AUDIO] = bytes_feature(
-          self.serialize_tensor(tf.constant(audio, dtype=tf.float32))
-      )
-      feature[RAW_AUDIO_SHAPE] = int_feature(audio.shape)
-    ex = tf.train.Example(features=tf.train.Features(feature=feature))
-    beam.metrics.Metrics.counter('beaminference', 'examples_processed').inc()
-    return ex
 
   @beam.typehints.with_output_types(Any)
   def process(self, source_info: SourceInfo, crop_s: float = -1.0):
@@ -277,7 +171,22 @@ class EmbedFn(beam.DoFn):
       audio = audio[: int(crop_s * self.embedding_model.sample_rate)]
     elif self.crop_s > 0:
       audio = audio[: int(self.crop_s * self.embedding_model.sample_rate)]
-    return [self.embed(file_name, audio, timestamp_offset)]
+    logging.info(
+        '...creating embeddings (%s / %d)', file_name, timestamp_offset
+    )
+    model_outputs = self.embedding_model.embed(audio)
+    example = tf_examples.model_outputs_to_tf_example(
+        model_outputs=model_outputs,
+        file_id=file_name,
+        audio=audio,
+        timestamp_offset=timestamp_offset,
+        write_raw_audio=self.write_raw_audio,
+        write_separated_audio=self.write_separated_audio,
+        write_embeddings=self.write_embeddings,
+        write_logits=self.write_logits,
+    )
+    beam.metrics.Metrics.counter('beaminference', 'examples_processed').inc()
+    return [example]
 
 
 def build_run_pipeline(base_pipeline, output_dir, source_infos, embed_fn):
@@ -298,17 +207,3 @@ def build_run_pipeline(base_pipeline, output_dir, source_infos, embed_fn):
   )
   metrics = base_pipeline.run().metrics()
   return metrics
-
-
-def bytes_feature(x, default=''):
-  if x is None:
-    x = default
-  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[x]))
-
-
-def int_feature(x, default=-1):
-  if x is None:
-    x = default
-  if hasattr(x, 'count'):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=x))
-  return tf.train.Feature(int64_list=tf.train.Int64List(value=[x]))

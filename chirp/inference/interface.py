@@ -32,15 +32,17 @@ class InferenceOutputs:
   """Wrapper class for outputs from an inference model.
 
   Attributes:
-    embeddings: Embeddings array with shape [Time, Channels, Features].
+    embeddings: Embeddings array with shape [Frames, Channels, Features].
     logits: Dictionary mapping a class list L's name to an array of logits. The
-      logits array has shape [Time, L.size].
+      logits array has shape [Frames, L.size].
     separated_audio: Separated audio channels with shape [Channels, Samples].
+    batched: If True, each output has an additonal batch dimension.
   """
 
   embeddings: np.ndarray | None = None
   logits: LogitType | None = None
   separated_audio: np.ndarray | None = None
+  batched: bool = False
 
   def __post_init__(self):
     # In some scenarios, we may be passed TF EagerTensors. We dereference these
@@ -132,6 +134,7 @@ class EmbeddingModel:
         embeddings=embeddings,
         logits=batched_logits,
         separated_audio=separated_audio,
+        batched=True,
     )
 
   def convert_logits(

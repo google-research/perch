@@ -21,6 +21,8 @@ from typing import Sequence
 
 from chirp.inference import embed_lib
 from chirp.inference import interface
+from chirp.inference import models
+from chirp.inference import tf_examples
 from etils import epath
 from ml_collections import config_dict
 import tensorflow as tf
@@ -37,7 +39,7 @@ class BootstrapState:
 
   def __post_init__(self):
     if self.embedding_model is None:
-      self.embedding_model = embed_lib.MODEL_CLASSES[self.config.model_key](
+      self.embedding_model = models.model_class_map()[self.config.model_key](
           **self.config.model_config
       )
     self.create_embeddings_dataset()
@@ -53,14 +55,8 @@ class BootstrapState:
         embeddings_files, num_parallel_reads=tf.data.AUTOTUNE
     )
 
-    features = embed_lib.get_feature_description()
-
-    def _parser(ex):
-      ex = tf.io.parse_single_example(ex, features)
-      ex['embedding'] = tf.io.parse_tensor(ex['embedding'], tf.float32)
-      return ex
-
-    ds = ds.map(_parser, num_parallel_calls=tf.data.AUTOTUNE)
+    parser = tf_examples.get_example_parser()
+    ds = ds.map(parser, num_parallel_calls=tf.data.AUTOTUNE)
     ds = ds.prefetch(16)
     self.embeddings_dataset = ds
     return ds

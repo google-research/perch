@@ -15,7 +15,6 @@
 
 """Tests for inference library."""
 
-from ml_collections import config_dict
 import os
 import tempfile
 
@@ -24,7 +23,9 @@ from apache_beam.testing import test_pipeline
 from chirp import path_utils
 from chirp.inference import embed_lib
 from chirp.inference import models
+from chirp.inference import tf_examples
 from chirp.taxonomy import namespace_db
+from ml_collections import config_dict
 import numpy as np
 import tensorflow as tf
 
@@ -76,43 +77,43 @@ class InferenceTest(parameterized.TestCase):
     )
 
     source_info = embed_lib.SourceInfo(test_wav_path, 0, 1)
-    feature_description = embed_lib.get_feature_description(
-        logit_names=['label']
-    )
-
     example = embed_fn.process(source_info, crop_s=10.0)[0]
     serialized = example.SerializeToString()
-    got_example = tf.io.parse_single_example(serialized, feature_description)
+
+    parser = tf_examples.get_example_parser(logit_names=['label'])
+    got_example = parser(serialized)
     self.assertIsNotNone(got_example)
-    # got_example = tf.io.parse_single_example(serialized, feature_description)
-    self.assertEqual(got_example[embed_lib.FILE_NAME], 'clap.wav')
+    self.assertEqual(got_example[tf_examples.FILE_NAME], 'clap.wav')
     if make_embeddings and write_embeddings:
-      embedding = tf.io.parse_tensor(got_example['embedding'], tf.float32)
-      self.assertSequenceEqual(embedding.shape, got_example['embedding_shape'])
+      embedding = got_example[tf_examples.EMBEDDING]
+      self.assertSequenceEqual(
+          embedding.shape, got_example[tf_examples.EMBEDDING_SHAPE]
+      )
     else:
-      self.assertEqual(got_example['embedding'], '')
+      self.assertEqual(got_example[tf_examples.EMBEDDING], '')
 
     if make_logits and write_logits:
-      logits = tf.io.parse_tensor(got_example['label'], tf.float32)
-      self.assertSequenceEqual(logits.shape, got_example['label_shape'])
+      self.assertSequenceEqual(
+          got_example['label'].shape, got_example['label_shape']
+      )
     else:
       self.assertEqual(got_example['label'], '')
 
     if make_separated_audio and write_separated_audio:
-      separated_audio = tf.io.parse_tensor(
-          got_example['separated_audio'], tf.float32
-      )
+      separated_audio = got_example[tf_examples.SEPARATED_AUDIO]
       self.assertSequenceEqual(
-          separated_audio.shape, got_example['separated_audio_shape']
+          separated_audio.shape, got_example[tf_examples.SEPARATED_AUDIO_SHAPE]
       )
     else:
-      self.assertEqual(got_example['separated_audio'], '')
+      self.assertEqual(got_example[tf_examples.SEPARATED_AUDIO], '')
 
     if write_raw_audio:
-      raw_audio = tf.io.parse_tensor(got_example['raw_audio'], tf.float32)
-      self.assertSequenceEqual(raw_audio.shape, got_example['raw_audio_shape'])
+      raw_audio = got_example[tf_examples.RAW_AUDIO]
+      self.assertSequenceEqual(
+          raw_audio.shape, got_example[tf_examples.RAW_AUDIO_SHAPE]
+      )
     else:
-      self.assertEqual(got_example['raw_audio'], '')
+      self.assertEqual(got_example[tf_examples.RAW_AUDIO], '')
 
   def test_sep_embed_wrapper(self):
     """Check that the joint-model wrapper works as intended."""
