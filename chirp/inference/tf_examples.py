@@ -80,15 +80,18 @@ def get_example_parser(logit_names: Sequence[str] | None = None):
 
   def _parser(ex):
     ex = tf.io.parse_single_example(ex, features)
-    if ex[EMBEDDING]:
-      ex[EMBEDDING] = tf.io.parse_tensor(ex[EMBEDDING], tf.float32)
-    if ex[SEPARATED_AUDIO]:
-      ex[SEPARATED_AUDIO] = tf.io.parse_tensor(ex[SEPARATED_AUDIO], tf.float32)
-    for logit_key in logit_names:
-      if ex[logit_key]:
-        ex[logit_key] = tf.io.parse_tensor(ex[logit_key], tf.float32)
-    if ex[RAW_AUDIO]:
-      ex[RAW_AUDIO] = tf.io.parse_tensor(ex[RAW_AUDIO], tf.float32)
+    tensor_keys = [EMBEDDING, SEPARATED_AUDIO, RAW_AUDIO]
+    if logit_names is not None:
+      tensor_keys.extend(logit_names)
+    for key in tensor_keys:
+      # Note that we can't use implicit truthiness for string tensors.
+      # We are also required to have the same tensor structure and dtype in
+      # both conditional branches. So we use an empty tensor when no
+      # data is present to parse.
+      if ex[key] != tf.constant(b'', dtype=tf.string):
+        ex[key] = tf.io.parse_tensor(ex[key], tf.float32)
+      else:
+        ex[key] = tf.zeros_like([], dtype=tf.float32)
     return ex
 
   return _parser

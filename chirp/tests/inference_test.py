@@ -90,14 +90,14 @@ class InferenceTest(parameterized.TestCase):
           embedding.shape, got_example[tf_examples.EMBEDDING_SHAPE]
       )
     else:
-      self.assertEqual(got_example[tf_examples.EMBEDDING], '')
+      self.assertEqual(got_example[tf_examples.EMBEDDING].shape, (0,))
 
     if make_logits and write_logits:
       self.assertSequenceEqual(
           got_example['label'].shape, got_example['label_shape']
       )
     else:
-      self.assertEqual(got_example['label'], '')
+      self.assertEqual(got_example['label'].shape, (0,))
 
     if make_separated_audio and write_separated_audio:
       separated_audio = got_example[tf_examples.SEPARATED_AUDIO]
@@ -105,7 +105,7 @@ class InferenceTest(parameterized.TestCase):
           separated_audio.shape, got_example[tf_examples.SEPARATED_AUDIO_SHAPE]
       )
     else:
-      self.assertEqual(got_example[tf_examples.SEPARATED_AUDIO], '')
+      self.assertEqual(got_example[tf_examples.SEPARATED_AUDIO].shape, (0,))
 
     if write_raw_audio:
       raw_audio = got_example[tf_examples.RAW_AUDIO]
@@ -113,7 +113,7 @@ class InferenceTest(parameterized.TestCase):
           raw_audio.shape, got_example[tf_examples.RAW_AUDIO_SHAPE]
       )
     else:
-      self.assertEqual(got_example[tf_examples.RAW_AUDIO], '')
+      self.assertEqual(got_example[tf_examples.RAW_AUDIO].shape, (0,))
 
   def test_sep_embed_wrapper(self):
     """Check that the joint-model wrapper works as intended."""
