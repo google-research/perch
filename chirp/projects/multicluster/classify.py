@@ -15,8 +15,20 @@
 
 """Classification over embeddings."""
 
+import dataclasses
+
+from chirp.models import cmap
 from chirp.projects.multicluster import data_lib
 import tensorflow as tf
+
+
+@dataclasses.dataclass
+class ClassifierMetrics:
+  top1_accuracy: float
+  auc_roc: float
+  recall: float
+  cmap_value: float
+  class_maps: dict[str, float]
 
 
 def get_two_layer_model(
@@ -47,14 +59,15 @@ def train_embedding_model(
     num_epochs: int,
     random_seed: int,
     batch_size: int,
-) -> tuple[float, float]:
+) -> ClassifierMetrics:
   """Trains a classification model over embeddings and labels."""
   model.compile(
       optimizer='adam',
       loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
       metrics=[
-          tf.keras.metrics.BinaryAccuracy(threshold=0.0),
-          tf.keras.metrics.AUC(curve='PR', name='auc'),
+          tf.keras.metrics.Precision(top_k=1, name='top1prec'),
+          tf.keras.metrics.AUC(curve='ROC', name='auc'),
+          tf.keras.metrics.RecallAtPrecision(0.9, name='recall0.9'),
       ],
   )
 
@@ -65,5 +78,13 @@ def train_embedding_model(
   test_ds = merged.create_keras_dataset(test_locs, False, batch_size)
 
   model.fit(train_ds, epochs=num_epochs, verbose=0)
-  _, acc, auc = model.evaluate(test_ds)
-  return acc, auc
+  _, acc, auc_roc, recall = model.evaluate(test_ds, verbose=1)
+
+  # Manually compute per-class mAP and CmAP scores.
+  test_logits = model.predict(test_ds, verbose=0)
+  test_labels = merged.data['label_hot'][test_locs]
+  maps = cmap.CMAP.from_model_output(
+      label_logits=test_logits, label=test_labels
+  ).compute()
+  cmap_value = maps.pop('macro')
+  return ClassifierMetrics(acc, auc_roc, recall, cmap_value, maps)
