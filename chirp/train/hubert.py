@@ -718,6 +718,7 @@ def train(
     readout_loss_mult: float,
     hubert_loss_mult: float,
     reload_quantizer=False,
+    add_class_wise_metrics=True,
 ) -> None:
   """Train a model.
 
@@ -740,6 +741,7 @@ def train(
       used for training.
     reload_quantizer: Whether to reload a pre-trained quantizer. If this is the
       case, it is kept frozen.
+    add_class_wise_metrics: Whether to log class-wise metrics.
   """
   if reload_quantizer and num_quantizer_pretrain_steps:
     raise ValueError(
@@ -854,6 +856,14 @@ def train(
 
       if step % log_every_steps == 0:
         train_metrics = flax_utils.unreplicate(train_metrics).compute()
+
+        metrics_kept = {}
+        for k, v in train_metrics.items():
+          if "xentropy" in k and not add_class_wise_metrics:
+            continue
+          metrics_kept[k] = v
+        train_metrics = metrics_kept
+
         writer.write_scalars(step, utils.flatten_dict(train_metrics))
       reporter(step)
 
@@ -874,6 +884,7 @@ def evaluate(
     train_mode_at_eval: bool | None = False,
     mask_at_eval: bool | None = False,
     name: str = "valid",
+    add_class_wise_metrics: bool = True,
 ):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
@@ -961,6 +972,24 @@ def evaluate(
 
     # Log validation loss
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
+
+    if not add_class_wise_metrics:
+      metrics_kept = {}
+      for k, v in valid_metrics.items():
+        if "xentropy" in k:
+          # Only the class-wise xentropy metrics contain the string 'xentropy';
+          # the key corresponding to overall xentropy is called 'loss'.
+          continue
+        metrics_kept[k] = v
+      valid_metrics = metrics_kept
+
+      for k, v in valid_metrics.items():
+        # Only one of the keys of valid_metrics will contain the string 'cmap',
+        # and the associated value is a dict that has a 'macro' key as well as
+        # a key per class. To disable class-wise metrics, we keep only 'macro'.
+        if "_cmap" in k:
+          valid_metrics[k] = v["macro"]
+
   writer.write_scalars(step, utils.flatten_dict(valid_metrics))
   writer.flush()
 
@@ -980,6 +1009,7 @@ def evaluate_loop(
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     name: str = "valid",
+    add_class_wise_metrics: bool = True,
     **unused_kwargs,
 ):
   """Run evaluation in a loop."""
@@ -1023,6 +1053,7 @@ def evaluate_loop(
         train_mode_at_eval,
         mask_at_eval,
         name=name,
+        add_class_wise_metrics=add_class_wise_metrics,
     )
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_shape)
@@ -1076,6 +1107,7 @@ def run(
     config: config_dict.ConfigDict,
     workdir: str,
     tf_data_service_address: str,
+    add_class_wise_metrics: bool = True,
 ) -> None:
   """Run the experiment."""
   if mode.startswith("eval_"):
@@ -1142,6 +1174,7 @@ def run(
         quant_loss_mult=quant_loss_mult,
         readout_loss_mult=config.train_config.readout_loss_mult,
         hubert_loss_mult=config.train_config.hubert_loss_mult,
+        add_class_wise_metrics=add_class_wise_metrics,
     )
 
   elif mode == "tune_eval_hypers":
@@ -1162,6 +1195,7 @@ def run(
         train_mode_at_eval=config.eval_config.train_mode_at_eval,
         mask_at_eval=config.eval_config.mask_at_eval,
         name=name,
+        add_class_wise_metrics=add_class_wise_metrics,
     )
 
   elif mode == "eval":
@@ -1173,5 +1207,6 @@ def run(
         workdir=workdir,
         logdir=workdir,
         name=name,
+        add_class_wise_metrics=add_class_wise_metrics,
         **config.eval_config,
     )

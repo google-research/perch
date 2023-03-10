@@ -120,6 +120,7 @@ def train(
     logdir: str,
     log_every_steps: int,
     checkpoint_every_steps: int,
+    add_class_wise_metrics: bool = True,
 ) -> None:
   """Train a model.
 
@@ -131,6 +132,7 @@ def train(
     logdir: Directory to use for logging.
     log_every_steps: Write the training minibatch loss.
     checkpoint_every_steps: Checkpoint the model and training state.
+    add_class_wise_metrics: Whether to log class-wise metrics.
   """
   train_iterator = train_dataset.as_numpy_iterator()
   taxonomy_keys = ["label"]
@@ -208,6 +210,14 @@ def train(
 
       if step % log_every_steps == 0:
         train_metrics = flax_utils.unreplicate(train_metrics).compute()
+
+        metrics_kept = {}
+        for k, v in train_metrics.items():
+          if "xentropy" in k and not add_class_wise_metrics:
+            continue
+          metrics_kept[k] = v
+        train_metrics = metrics_kept
+
         writer.write_scalars(step, utils.flatten_dict(train_metrics))
       reporter(step)
 
@@ -225,6 +235,7 @@ def evaluate(
     reporter: periodic_actions.ReportProgress,
     eval_steps_per_checkpoint: int | None = None,
     name: str = "valid",
+    add_class_wise_metrics: bool = True,
 ):
   """Run evaluation."""
   taxonomy_keys = ["label"]
@@ -282,6 +293,24 @@ def evaluate(
 
     # Log validation loss
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
+
+    if not add_class_wise_metrics:
+      metrics_kept = {}
+      for k, v in valid_metrics.items():
+        if "xentropy" in k:
+          # Only the class-wise xentropy metrics contain the string 'xentropy';
+          # the key corresponding to overall xentropy is called 'loss'.
+          continue
+        metrics_kept[k] = v
+      valid_metrics = metrics_kept
+
+      for k, v in valid_metrics.items():
+        # Only one of the keys of valid_metrics will contain the string 'cmap',
+        # and the associated value is a dict that has a 'macro' key as well as
+        # a key per class. To disable class-wise metrics, we keep only 'macro'.
+        if "_cmap" in k:
+          valid_metrics[k] = v["macro"]
+
   writer.write_scalars(step, utils.flatten_dict(valid_metrics))
   writer.flush()
 
@@ -298,6 +327,7 @@ def evaluate_loop(
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     name: str = "valid",
+    add_class_wise_metrics: bool = True,
 ):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -336,6 +366,7 @@ def evaluate_loop(
         reporter,
         eval_steps_per_checkpoint,
         name,
+        add_class_wise_metrics=add_class_wise_metrics,
     )
     if tflite_export:
       export_tf(model_bundle, train_state, workdir, input_shape)
@@ -373,6 +404,7 @@ def run(
     config: config_dict.ConfigDict,
     workdir: str,
     tf_data_service_address: str,
+    add_class_wise_metrics: bool = True,
 ) -> None:
   """Run the experiment."""
   if mode.startswith("eval_"):
@@ -409,6 +441,7 @@ def run(
         train_state,
         train_dataset,
         logdir=workdir,
+        add_class_wise_metrics=add_class_wise_metrics,
         **config.train_config,
     )
   elif mode == "eval":
@@ -419,5 +452,6 @@ def run(
         workdir=workdir,
         logdir=workdir,
         name=name,
+        add_class_wise_metrics=add_class_wise_metrics,
         **config.eval_config,
     )

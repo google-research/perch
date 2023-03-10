@@ -52,6 +52,9 @@ _TF_DATA_SERVICE_ADDRESS = flags.DEFINE_string(
     "The dispatcher's address.",
     allow_override_cpp=True,
 )
+_ADD_CLASS_WISE_METRICS = flags.DEFINE_boolean(
+    "add_class_wise_metrics", True, "Whether to log class-wise metrics."
+)
 flags.mark_flags_as_required(["config", "workdir", "target", "mode"])
 
 
@@ -65,7 +68,11 @@ def main(argv: Sequence[str]) -> None:
   )
 
   TARGETS[_TARGET.value].run(
-      _MODE.value, config, _WORKDIR.value, _TF_DATA_SERVICE_ADDRESS.value
+      _MODE.value,
+      config,
+      _WORKDIR.value,
+      _TF_DATA_SERVICE_ADDRESS.value,
+      _ADD_CLASS_WISE_METRICS.value,
   )
 
 
