@@ -25,6 +25,7 @@ from chirp.models import frontend
 from chirp.models import hubert
 from chirp.models import layers
 from chirp.models import quantizers
+from chirp.models import handcrafted_features
 from chirp.models import soundstream_unet
 from chirp.models import taxonomy_model
 from flax import linen as nn
@@ -44,6 +45,7 @@ def get_globals() -> dict[str, Any]:
       "nn": nn,
       "optax": optax,
       "pipeline": pipeline,
+      "handcrafted_features": handcrafted_features,
       "soundstream_unet": soundstream_unet,
       "taxonomy_model": taxonomy_model,
   }
