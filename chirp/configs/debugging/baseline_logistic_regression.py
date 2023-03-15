@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration to run the logistic regression baseline.
+"""Configuration to run the logistic regression baseline."""
 from chirp import config_utils
 from chirp.configs.debugging import presets
 from ml_collections import config_dict
