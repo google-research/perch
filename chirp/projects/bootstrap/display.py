@@ -15,20 +15,22 @@
 
 """Utility functions for displaying audio and results in Colab/Jupyter."""
 
+import concurrent
 import functools
 import time
 from typing import Sequence
 
-
 from chirp.models import frontend
 from chirp.projects.bootstrap import search
+from etils import epath
 import IPython
 from IPython.display import display as ipy_display
 import ipywidgets
+import librosa
 from librosa import display as librosa_display
 import matplotlib.pyplot as plt
 import numpy as np
-import tensorflow as tf
+import soundfile
 
 
 @functools.cache
@@ -83,45 +85,72 @@ def plot_audio_melspec(
     ipy_display(IPython.display.Audio(audio, rate=sample_rate))
 
 
+def load_audio_window(
+    filepath: str, offset_s: float, sample_rate: int, window_size_s: float
+):
+  """Load an audio window."""
+  with epath.Path(filepath).open('rb') as f:
+    sf = soundfile.SoundFile(f)
+    offset = int(offset_s * sf.samplerate)
+    window_size = int(window_size_s * sf.samplerate)
+    sf.seek(offset)
+    a = sf.read(window_size)
+  a = librosa.resample(
+      y=a, orig_sr=sf.samplerate, target_sr=sample_rate, res_type='polyphase'
+  )
+  if len(a.shape) == 2:
+    # Downstream ops expect mono audio, so reduce to mono.
+    a = a[:, 0]
+  return a
+
+
+def multi_load_audio_window(
+    filepaths: Sequence[str],
+    offsets: Sequence[int],
+    sample_rate: int,
+    window_size_s: float,
+    max_workers: int = 5,
+):
+  """Load audio windows in parallel."""
+  loader = functools.partial(
+      load_audio_window, sample_rate=sample_rate, window_size_s=window_size_s
+  )
+  with concurrent.futures.ThreadPoolExecutor(
+      max_workers=max_workers
+  ) as executor:
+    futures = []
+    for fp, offset in zip(filepaths, offsets):
+      offset_s = offset / sample_rate
+      future = executor.submit(loader, offset_s=offset_s, filepath=fp)
+      futures.append(future)
+    for f in futures:
+      yield f.result()
+
+
 def display_search_results(
     results: search.TopKSearchResults,
     embedding_sample_rate: int,
     source_map: dict[str, str],
     window_s: float = 5.0,
     checkbox_labels: Sequence[str] = (),
+    max_workers=5,
 ):
   """Display search results, and add audio and annotation info to results."""
 
-  # TODO(tomdenton): Find ways to load lots of snippets from wavs quickly.
-  # We have to read the entire source file to get the 5s chunk we want.
-  # This is obviously terribly slow.
-  # Speed it up by abusing the TF Dataset to get parallelized file reads.
-  def _results_generator():
-    for r in results.search_results:
-      filepath = source_map[r.filename]
-      yield hash(r), filepath
-
-  ds = tf.data.Dataset.from_generator(
-      _results_generator, (tf.int64, tf.string), output_shapes=([], [])
-  )
-
-  def _parser(result_hash, filepath):
-    data = tf.io.read_file(filepath)
-    audio, sr = tf.audio.decode_wav(data, 1)
-    return result_hash, audio, sr
-
-  results_map = {hash(r): r for r in results.search_results}
-  ds = ds.map(_parser, num_parallel_calls=tf.data.AUTOTUNE)
+  # Parallel load the audio windows.
   st = time.time()
-  for result_hash, result_audio, audio_sr in ds.as_numpy_iterator():
-    r = results_map[result_hash]
-    st = int(r.timestamp_offset / embedding_sample_rate * audio_sr)
-    end = int(st + window_s * audio_sr)
-    result_audio_window = result_audio[st:end, 0]
-    plot_audio_melspec(result_audio_window, audio_sr)
+  filepaths = [source_map[r.filename] for r in results]
+  offsets = [r.timestamp_offset for r in results]
+  for r, result_audio_window in zip(
+      results,
+      multi_load_audio_window(
+          filepaths, offsets, embedding_sample_rate, window_s, max_workers
+      ),
+  ):
+    plot_audio_melspec(result_audio_window, embedding_sample_rate)
     plt.show()
     print(f'source file: {r.filename}')
-    offset_s = r.timestamp_offset / audio_sr
+    offset_s = r.timestamp_offset / embedding_sample_rate
     print(f'offset:      {offset_s:6.2f}')
     print(f'distance:    {(r.distance + results.distance_offset):6.2f}')
     label_widgets = []
@@ -129,7 +158,6 @@ def display_search_results(
       check = ipywidgets.Checkbox(description=lbl, value=False)
       label_widgets.append(check)
       ipy_display(check)
-
     # Attach audio and widgets to the SearchResult.
     r.audio = result_audio_window
     r.label_widgets = label_widgets
