@@ -132,8 +132,8 @@ class NRCResNet(resnet.ResNet):
     if 'vis_da_c' in dataset_name:
       # The public checkpoint doesn't exist because it's derived from a
       # PyTorch checkpoint (https://github.com/Albert0147/NRC_SFDA, which
-      # points to the Google Drive directory https://drive.google.com/drive/
-      # folders/1rI_I7GOHLi8jA4FnL10xdh8PA1bbwsIp).
+      # points to the Google Drive directory
+      # https://drive.google.com/drive/folders/1rI_I7GOHLi8jA4FnL10xdh8PA1bbwsIp).
       # Download the .pt files locally, then save them into a .npz file using
       # the following command:
       # state_dict = {}; load_fn = lambda letter: state_dict.update({
@@ -144,6 +144,23 @@ class NRCResNet(resnet.ResNet):
       # np.savez('source.npz', **state_dict)
       # Finally, replace the '' below by the path to the source.npz file you
       # just created.
+      return epath.Path('')
+    elif 'office_home' in dataset_name:
+      _, domain = dataset_name.split('/')
+      # The public checkpoint doesn't exist because it's derived from a
+      # PyTorch checkpoint (https://github.com/Albert0147/NRC_SFDA, which
+      # points to the Google Drive directory
+      # https://drive.google.com/drive/folders/10QMTQZqFgEwbvFGdgz7VSha7NYG4q6sh).
+      # Download the .pt files locally (for a2c, c2a, p2a, and r2a), then save
+      # each of them into a .npz file using the following command:
+      # state_dict = {}; load_fn = lambda letter: state_dict.update({
+      #     f'{letter}.{k}': v for k, v in torch.load(
+      #         f'source_{letter}.pt',
+      #         map_location=torch.device('cpu')).items()})
+      # load_fn('B'); load_fn('C'); load_fn('F')
+      # np.savez('source.npz', **state_dict)
+      # Finally, replace the '' below by the path to the source.npz files you
+      # just created using `domain` to determine which one to point to.
       return epath.Path('')
     else:
       raise NotImplementedError(
@@ -213,14 +230,27 @@ def _to_variables(
   Raises:
     RuntimeError: If some convolutional kernel has neither 2 or 4 dimensions.
   """
-  if dataset_name != 'vis_da_c':
+  if dataset_name != 'vis_da_c' and 'office_home' not in dataset_name:
     raise ValueError
+
+  if dataset_name == 'vis_da_c':
+    bottleneck_dense_re = r'^B\.bottleneck'
+    bottleneck_bn_re = r'^B\.bn'
+  else:
+    bottleneck_dense_re = r'^F\.bottle'
+    bottleneck_bn_re = r'^F\.bn'
+    state_dict = {
+        k: v for k, v in state_dict.items() if 'feature_layers' not in k
+    }
 
   flat_params = {}
   flat_batch_stats = {}
 
   def _match_to_block_name(m):
-    block_index_offsets = [0, 3, 7, 30]
+    if dataset_name == 'vis_da_c':
+      block_index_offsets = [0, 3, 7, 30]
+    else:
+      block_index_offsets = [0, 3, 7, 13]
     block_index = int(m.group(2)) + block_index_offsets[int(m.group(1)) - 1]
     return f'BottleneckResNetBlock_{block_index}.'
 
@@ -235,9 +265,11 @@ def _to_variables(
       functools.partial(re.compile(r'^F\.bn1').sub, repl=r'bn_init'),
       # Bottleneck
       functools.partial(
-          re.compile(r'^B\.bottleneck').sub, repl=r'bottleneck_dense'
+          re.compile(bottleneck_dense_re).sub, repl=r'bottleneck_dense'
       ),
-      functools.partial(re.compile(r'^B\.bn').sub, repl=r'bottleneck_bn'),
+      functools.partial(
+          re.compile(bottleneck_bn_re).sub, repl=r'bottleneck_bn'
+      ),
       # Output layer
       functools.partial(re.compile(r'^C\.fc').sub, repl=r'WNDense_0'),
       # Convolutional layers
@@ -303,12 +335,34 @@ def _to_variables(
     )
     flat_dict[tuple(key.split('.'))] = value
 
+  # NRC uses an Office-Home class order other than alphabetical, so we need to
+  # permute the output layer.
+  if 'office_home' in dataset_name:
+    permutation = (
+        [33, 32, 36, 15, 19, 2, 46, 49, 48, 53, 47, 54, 4, 18, 57, 23, 0, 45, 1]
+        + [38, 5, 13, 50, 11, 58, 3, 16, 25, 10, 12, 61, 51, 9, 64, 28, 29, 26]
+        + [21, 31, 62, 40, 35, 27, 14, 20, 43, 34, 37, 63, 39, 55, 41, 6, 8, 30]
+        + [59, 44, 52, 60, 24, 17, 7, 42, 56, 22]
+    )
+    flat_params[('WNDense_0', 'bias')] = flat_params[('WNDense_0', 'bias')][
+        permutation
+    ]
+    flat_params[('WNDense_0', 'kernel_g')] = flat_params[
+        ('WNDense_0', 'kernel_g')
+    ][:, permutation]
+    flat_params[('WNDense_0', 'kernel_v')] = flat_params[
+        ('WNDense_0', 'kernel_v')
+    ][:, permutation]
+
   return flax.core.freeze({
       'params': flax.traverse_util.unflatten_dict(flat_params),
       'batch_stats': flax.traverse_util.unflatten_dict(flat_batch_stats),
   })
 
 
+NRCResNet50 = functools.partial(
+    NRCResNet, stage_sizes=[3, 4, 6, 3], block_cls=resnet.BottleneckResNetBlock
+)
 NRCResNet101 = functools.partial(
     NRCResNet, stage_sizes=[3, 4, 23, 3], block_cls=resnet.BottleneckResNetBlock
 )
