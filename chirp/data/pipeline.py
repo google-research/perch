@@ -875,7 +875,7 @@ class FilterMultiLabelRecordings(DatasetPreprocessOp):
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
   ) -> tf.data.Dataset:
     def _predicate(features):
-      return len(features['label']) == 1
+      return tf.math.equal(tf.shape(features['label'])[0], 1)
     return dataset.filter(_predicate)
 
 @dataclasses.dataclass
