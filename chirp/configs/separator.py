@@ -127,3 +127,10 @@ def get_config() -> config_dict.ConfigDict:
   config.eval_config.frame_size = 32000
 
   return config
+
+
+def get_hyper(hyper):
+  return hyper.sweep(
+      'config.init_config.model_config.num_mask_channels',
+      hyper.discrete([4, 6, 8]),
+  )
