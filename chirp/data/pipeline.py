@@ -1040,8 +1040,12 @@ class ExtractStridedWindows(DatasetPreprocessOp):
       example['segment_id'] = tf.range(
           tf.shape(example['audio'])[0], dtype=tf.int64
       )
-      example['segment_start'] = example['segment_id'] * window_stride
-      example['segment_end'] = example['segment_start'] + window_length
+      example['segment_start'] = tf.cast(
+          example['segment_id'] * window_stride, example['segment_start'].dtype
+      )
+      example['segment_end'] = tf.cast(
+          example['segment_start'] + window_length, example['segment_end'].dtype
+      )
 
       # Other features are shared across slices, so we repeat them across the
       # first axis.

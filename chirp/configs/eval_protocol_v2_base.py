@@ -143,7 +143,6 @@ def get_config() -> config_dict.ConfigDict:
           ],
       ),
       _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
-      _callable_config('pipeline.LabelsToString'),
       _callable_config(
           'pipeline.ExtractStridedWindows',
           window_length_sec=config.window_length_sec,
@@ -153,6 +152,11 @@ def get_config() -> config_dict.ConfigDict:
           'pipeline.DenselyAnnotateWindows',
           overlap_threshold_sec=config.overlap_threshold_sec,
       ),
+      # NOTE: this pipeline operation should be applied at the very end, as it
+      # turns a sequence of labels into a single space-separated string of
+      # species codes. Previous ops in the pipeline assume that labels are
+      # sequences of integer IDs.
+      _callable_config('pipeline.LabelsToString'),
   ]
 
   dataset_configs = {}
