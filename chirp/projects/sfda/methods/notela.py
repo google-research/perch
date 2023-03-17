@@ -574,9 +574,9 @@ class NOTELA(adapt.SFDAMethod):
         adapt.get_common_metrics(supervised=supervised, multi_label=multi_label)
     )["__annotations__"]
 
-    def single_label_loss_fn(probabilities, pseudo_label, **_):
+    def single_label_loss_fn(probabilities, pseudo_label, label_mask, **_):
       pl_xent = losses.label_xent(
-          probabilities=probabilities, label=pseudo_label
+          probabilities=probabilities, label=pseudo_label, label_mask=label_mask
       )
       return pl_xent
 

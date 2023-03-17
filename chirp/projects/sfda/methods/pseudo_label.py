@@ -17,6 +17,7 @@
 
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import losses
+from chirp.projects.sfda import method_utils
 from chirp.projects.sfda import model_utils
 from clu import metrics as clu_metrics
 import flax.linen as nn
@@ -78,9 +79,9 @@ class PseudoLabel(adapt.SFDAMethod):
         adaptation_state.model_params,
         None,
     )
-    logit2proba = nn.sigmoid if multi_label else nn.softmax
-    probabilities = logit2proba(
-        model_output.label
+    reference_label_mask = method_utils.get_label_mask(batch)
+    probabilities = adapt.logit2proba(
+        model_output.label, reference_label_mask, multi_label
     )  # [1, batch_size, num_classes]
     if multi_label:
       # In the multi-label case, given that each class is treated indepently,
@@ -94,15 +95,21 @@ class PseudoLabel(adapt.SFDAMethod):
       )  # [batch_size, num_classes]
       pseudo_label_mask = pseudo_label
     else:
+      if reference_label_mask is None:
+        reference_label_mask = jnp.ones_like(probabilities)
       # In the single-label case, we perform masking at a "sample level",
       # meaning that a sample will only contribute to the loss ifs its maximum
       # probability is above some threshold.
-      pseudo_label_mask = (
-          probabilities.max(-1) > method_kwargs["confidence_threshold"]
-      )  # [batch_size]
+      pseudo_label_mask = (probabilities * reference_label_mask).max(
+          -1
+      ) > method_kwargs[
+          "confidence_threshold"
+      ]  # [batch_size]
       num_classes = probabilities.shape[-1]
       pseudo_label = nn.one_hot(
-          jnp.argmax(probabilities, axis=-1), num_classes, axis=-1
+          jnp.argmax(probabilities * reference_label_mask, axis=-1),
+          num_classes,
+          axis=-1,
       )
 
     return adaptation_state, {
@@ -119,11 +126,12 @@ class PseudoLabel(adapt.SFDAMethod):
     )["__annotations__"]
 
     def single_label_loss_fn(
-        probabilities, pseudo_label, pseudo_label_mask, **_
+        probabilities, pseudo_label, pseudo_label_mask, label_mask, **_
     ):
       pl_xent = losses.label_xent(
           probabilities=probabilities,
           label=pseudo_label,
+          label_mask=label_mask,
           sample_mask=pseudo_label_mask,
       )
       return pl_xent

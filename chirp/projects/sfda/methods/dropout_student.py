@@ -48,6 +48,7 @@ class DropoutStudent(adapt.SFDAMethod):
   def compute_pseudo_label(
       self,
       probabilities: jnp.ndarray,
+      label_mask: jnp.ndarray,
       multi_label: bool,
       alpha: float,
       normalize_pseudo_labels: bool = True,
@@ -56,6 +57,7 @@ class DropoutStudent(adapt.SFDAMethod):
 
     Args:
       probabilities: Model's output probabilities. Shape [*, num_classes]
+      label_mask: Array representing classes to be kep, shape [*, num_classes].
       multi_label: Whether this is a multi-label problem.
       alpha: Weight controlling the 'softness' of pseudo-labels.
       normalize_pseudo_labels: Whether to normalize pseudo-labels to turn them
@@ -68,13 +70,26 @@ class DropoutStudent(adapt.SFDAMethod):
     pseudo_labels = jax.lax.stop_gradient(probabilities)
     if multi_label:
       pseudo_labels = jnp.stack([1 - pseudo_labels, pseudo_labels], axis=-1)
-    pseudo_labels = pseudo_labels ** (1 / alpha)
-    if normalize_pseudo_labels:
-      pseudo_labels /= pseudo_labels.sum(-1, keepdims=True)
-    if multi_label:
+      pseudo_labels = pseudo_labels ** (1 / alpha)
+      if normalize_pseudo_labels:
+        pseudo_labels /= pseudo_labels.sum(-1, keepdims=True)
       pseudo_labels = pseudo_labels[
           ..., -1
       ]  # we only keep the 'positive' probability
+    else:
+      pseudo_labels = pseudo_labels ** (1 / alpha)
+      if normalize_pseudo_labels:
+        if label_mask is not None and (
+            label_mask.shape[-1] == pseudo_labels.shape[-1]
+        ):
+          normalization = (pseudo_labels * label_mask).sum(-1, keepdims=True)
+        else:
+          # Then pseudo_labels are already properly masked.
+          # TODO(mboudiaf): If label_mask is not None, check that
+          # label_mask.sum(-1) == pseudo_labels.shape(-1) in a jittable
+          # fashion.
+          normalization = pseudo_labels.sum(-1, keepdims=True)
+        pseudo_labels /= normalization
     return pseudo_labels
 
   def before_epoch(
@@ -119,6 +134,7 @@ class DropoutStudent(adapt.SFDAMethod):
               forward_result["proba"],
               multi_label=multi_label,
               alpha=method_kwargs["alpha"],
+              label_mask=forward_result["label_mask"],
               normalize_pseudo_labels=method_kwargs["normalize_pseudo_labels"],
           ),
           "id2index": {sample_ids[i]: i for i in range(len(sample_ids))},
@@ -158,6 +174,7 @@ class DropoutStudent(adapt.SFDAMethod):
       A dictionary containing the pseudo-labels to use for the iteration.
     """
 
+    reference_label_mask = method_utils.get_label_mask(batch)
     if method_kwargs["online_pl_updates"]:
       # In the online version, we compute the pseudo-labels on-the-go.
       forward_step = self.cache_get_forward_step(
@@ -170,12 +187,14 @@ class DropoutStudent(adapt.SFDAMethod):
           None,
       )
       model_outputs = flax_utils.unreplicate(model_outputs)
-      logit2proba = nn.sigmoid if multi_label else nn.softmax
       pseudo_label = self.compute_pseudo_label(
-          logit2proba(model_outputs.label),
-          multi_label,
-          method_kwargs["alpha"],
-          method_kwargs["normalize_pseudo_labels"],
+          probabilities=adapt.logit2proba(
+              model_outputs.label, reference_label_mask, multi_label
+          ),
+          label_mask=reference_label_mask,
+          multi_label=multi_label,
+          alpha=method_kwargs["alpha"],
+          normalize_pseudo_labels=method_kwargs["normalize_pseudo_labels"],
       )
     else:
       # In the offline version, we simply grab the pseudo-labels that were
@@ -188,6 +207,10 @@ class DropoutStudent(adapt.SFDAMethod):
           ]
       )
       pseudo_label = method_state["pseudo_label"][batch_indexes]
+      if reference_label_mask is not None:
+        pseudo_label = method_utils.pad_pseudo_label(
+            reference_label_mask, pseudo_label, adaptation_state
+        )
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label)
     }
@@ -200,9 +223,9 @@ class DropoutStudent(adapt.SFDAMethod):
         adapt.get_common_metrics(supervised=supervised, multi_label=multi_label)
     )["__annotations__"]
 
-    def single_label_loss_fn(probabilities, pseudo_label, **_):
+    def single_label_loss_fn(probabilities, pseudo_label, label_mask, **_):
       pl_xent = losses.label_xent(
-          probabilities=probabilities, label=pseudo_label
+          probabilities=probabilities, label=pseudo_label, label_mask=label_mask
       )
       return pl_xent
 

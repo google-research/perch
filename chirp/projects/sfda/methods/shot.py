@@ -112,6 +112,7 @@ class SHOTLoss(clu_metrics.Metric):
   probabilities_sum: jnp.array
   entropy_sum: jnp.array
   pl_xent_sum: jnp.array
+  label_mask: jnp.ndarray | None
   n_samples: int
   beta: float
 
@@ -120,12 +121,15 @@ class SHOTLoss(clu_metrics.Metric):
       cls,
       probabilities: jnp.ndarray,
       pseudo_label: jnp.ndarray,
+      label_mask: jnp.array,
       beta: float,
       **_
   ) -> "SHOTLoss":
-    entropy_sum = losses.label_ent(probabilities=probabilities).sum(axis=0)
+    entropy_sum = losses.label_ent(
+        probabilities=probabilities, label_mask=label_mask
+    ).sum(axis=0)
     pl_xent_sum = losses.label_xent(
-        probabilities=probabilities, label=pseudo_label
+        probabilities=probabilities, label=pseudo_label, label_mask=label_mask
     ).sum(axis=0)
     probabilities_sum = probabilities.sum(axis=0)
 
@@ -133,6 +137,7 @@ class SHOTLoss(clu_metrics.Metric):
         probabilities_sum=probabilities_sum,
         entropy_sum=entropy_sum,
         pl_xent_sum=pl_xent_sum,
+        label_mask=label_mask,
         n_samples=probabilities.shape[0],
         beta=beta,
     )
@@ -142,13 +147,15 @@ class SHOTLoss(clu_metrics.Metric):
         probabilities_sum=self.probabilities_sum + other.probabilities_sum,
         entropy_sum=self.entropy_sum + other.entropy_sum,
         pl_xent_sum=self.pl_xent_sum + other.pl_xent_sum,
+        label_mask=other.label_mask,
         n_samples=self.n_samples + other.n_samples,
         beta=other.beta,
     )
 
   def compute(self):
     probabilities_marginal = self.probabilities_sum / self.n_samples
-    marginal_entropy = losses.label_ent(probabilities_marginal)
+    reference_mask = None if self.label_mask is None else self.label_mask[0]
+    marginal_entropy = losses.label_ent(probabilities_marginal, reference_mask)
     cond_entropy = self.entropy_sum / self.n_samples
     return (
         cond_entropy

@@ -100,7 +100,10 @@ class NRCLoss(clu_metrics.Metric):
 
   def compute(self):
     probabilities_marginal = self.probabilities_sum / self.n_samples
-    marginal_entropy = losses.label_ent(probabilities=probabilities_marginal)
+    # TODO(mboudiaf): fix the single-label case in the audio setting.
+    marginal_entropy = losses.label_ent(
+        probabilities=probabilities_marginal, label_mask=None
+    )
     return (
         1 / self.n_samples * (self.nn_loss_sum + self.extended_nn_loss_sum)
         - marginal_entropy

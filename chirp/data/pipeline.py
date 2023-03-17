@@ -869,6 +869,19 @@ class OnlyKeep(FeaturesPreprocessOp):
 
 
 @dataclasses.dataclass
+class FilterMultiLabelRecordings(DatasetPreprocessOp):
+  """Filters out recordings that have multiple foreground labels."""
+
+  def __call__(
+      self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
+  ) -> tf.data.Dataset:
+    def _predicate(features):
+      return tf.math.equal(tf.shape(features['label'])[0], 1)
+
+    return dataset.filter(_predicate)
+
+
+@dataclasses.dataclass
 class FilterByFeature(DatasetPreprocessOp):
   """Filters the dataset by feature values.
 

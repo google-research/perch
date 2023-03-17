@@ -94,7 +94,9 @@ class DUST(adapt.SFDAMethod):
     for _ in range(method_kwargs["num_random_passes"]):
       random_pass_key, key = jax.random.split(key)
       noisy_probability = forward_fn(key=random_pass_key, train=True)["proba"]
-      kl_distances.append(kl_fn(reference_probability, noisy_probability))
+      kl_distances.append(
+          kl_fn(reference_probability, noisy_probability, label_mask=None)
+      )
 
     # We compute the mask by only keeping samples whose maximum kl_divergence
     # observed is lower than a pre-defined threshold.
@@ -154,9 +156,10 @@ class DUST(adapt.SFDAMethod):
     pseudo_label = method_utils.pad_pseudo_label(
         label_mask, pseudo_label, adaptation_state
     )
-    pseudo_label_mask = method_utils.pad_pseudo_label(
-        label_mask, pseudo_label_mask, adaptation_state
-    )
+    if multi_label:
+      pseudo_label_mask = method_utils.pad_pseudo_label(
+          label_mask, pseudo_label_mask, adaptation_state
+      )
 
     return adaptation_state, {
         "pseudo_label": flax_utils.replicate(pseudo_label),
@@ -172,11 +175,12 @@ class DUST(adapt.SFDAMethod):
     )["__annotations__"]
 
     def single_label_loss_fn(
-        probabilities, pseudo_label, pseudo_label_mask, **_
+        probabilities, pseudo_label, pseudo_label_mask, label_mask, **_
     ):
       pl_xent = losses.label_xent(
           probabilities=probabilities,
           label=pseudo_label,
+          label_mask=label_mask,
           sample_mask=pseudo_label_mask,
       )
       return pl_xent

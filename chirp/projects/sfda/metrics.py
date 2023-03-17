@@ -32,7 +32,7 @@ class Accuracy(clu_metrics.Average):
 
   @classmethod
   def from_model_output(
-      cls, probabilities: jnp.array, label: jnp.array, **kwargs
+      cls, probabilities: jnp.ndarray, label: jnp.ndarray, **kwargs
   ) -> clu_metrics.Metric:
     return super().from_model_output(
         values=(probabilities.argmax(axis=-1) == label.argmax(axis=-1)).astype(
@@ -55,15 +55,21 @@ class MarginalEntropy(clu_metrics.Metric):
   probability_sum: jnp.array
   n_samples: int
   multi_label: bool
+  label_mask: jnp.ndarray | None
 
   @classmethod
   def from_model_output(
-      cls, probabilities: jnp.array, multi_label: bool, **_
+      cls,
+      probabilities: jnp.ndarray,
+      multi_label: bool,
+      label_mask: jnp.ndarray,
+      **_
   ) -> "MarginalEntropy":
     return cls(
         probability_sum=probabilities.sum(axis=0),
         n_samples=probabilities.shape[0],
         multi_label=multi_label,
+        label_mask=label_mask,
     )
 
   def merge(self, other: "MarginalEntropy") -> "MarginalEntropy":
@@ -71,15 +77,19 @@ class MarginalEntropy(clu_metrics.Metric):
         probability_sum=self.probability_sum + other.probability_sum,
         n_samples=self.n_samples + other.n_samples,
         multi_label=other.multi_label,
+        label_mask=other.label_mask,
     )
 
   def compute(self):
     proba_marginal = self.probability_sum * (1 / self.n_samples)
-    return losses.label_ent(proba_marginal)
+    reference_mask = None if self.label_mask is None else self.label_mask[0]
+    return losses.label_ent(proba_marginal, reference_mask)
 
   @classmethod
   def empty(cls) -> "MarginalEntropy":
-    return cls(probability_sum=0.0, n_samples=0, multi_label=False)
+    return cls(
+        probability_sum=0.0, n_samples=0, multi_label=False, label_mask=None
+    )
 
 
 @flax.struct.dataclass
@@ -99,7 +109,7 @@ class MarginalBinaryEntropy(clu_metrics.Metric):
   def from_model_output(
       cls,
       label_mask: jnp.ndarray,
-      probabilities: jnp.array,
+      probabilities: jnp.ndarray,
       multi_label: bool,
       **_
   ) -> "MarginalBinaryEntropy":

@@ -420,16 +420,14 @@ class SFDAMethod(metaclass=abc.ABCMeta):
         )
 
       # Compute metrics and loss
-      logits2probas = nn.sigmoid if multi_label else nn.softmax
+      label_mask = batch.get("label_mask", None)
       gather_args = {
           "multi_label": multi_label,
           "outputs": model_outputs,
-          "probabilities": logits2probas(model_outputs.label),
-          "label_mask": (
-              jnp.ones_like(model_outputs.label)
-              if "label_mask" not in batch
-              else batch["label_mask"]
+          "probabilities": logit2proba(
+              model_outputs.label, label_mask, multi_label
           ),
+          "label_mask": label_mask,
       }
       gather_args.update(method_gather_args)
       if use_supervised_metrics:
@@ -512,9 +510,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
     # Iterate over batches.
     adaptation_state = flax_utils.replicate(adaptation_state)
-    for batch in tqdm.tqdm(
-        adaptation_dataset.as_numpy_iterator(), total=len(adaptation_dataset)
-    ):
+    for batch in tqdm.tqdm(adaptation_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
       verify_batch(batch)
       current_step = int(flax_utils.unreplicate(adaptation_state.step))
@@ -610,15 +606,15 @@ class SFDAMethod(metaclass=abc.ABCMeta):
           train=False,
           use_running_average=True,
       )
-      logits2probas = nn.sigmoid if multi_label else nn.softmax
+      label_mask = batch.get("label_mask", None)
       return model_outputs, metric_collection.merge(
           metric_collection.gather_from_model_output(
               multi_label=multi_label,
               outputs=model_outputs,
-              probabilities=logits2probas(model_outputs.label),
-              label_mask=jnp.ones_like(model_outputs.label)
-              if "label_mask" not in batch
-              else batch["label_mask"],
+              probabilities=logit2proba(
+                  model_outputs.label, label_mask, multi_label
+              ),
+              label_mask=label_mask,
               label=batch["label"].astype(np.int32),
           )
       )
@@ -810,6 +806,32 @@ def perform_adaptation(
   adaptation_writer.close()
   validation_writer.close()
   return adaptation_state
+
+
+def logit2proba(
+    logits: jnp.ndarray, label_mask: jnp.ndarray | None, multi_label: bool
+) -> jnp.array:
+  """Converts model logits to valid probabilities.
+
+  When multi_label=False, uses label_mask to select classes that will be used
+  in the softmax normalization term. The output probabilities should
+  verify jnp.all(probabilities[..., label_mask].sum(-1) == 1.0).
+
+  Args:
+    logits: The logits to be transformed, shape [*, num_classes]
+    label_mask: The mask conveying the classes to be used. Shape [*,
+      num_classes]
+    multi_label: Whether we're in the multi-label setting or not.
+
+  Returns:
+    The resulting probabilities, shape [*, num_classes]
+  """
+  fn = (
+      nn.sigmoid
+      if multi_label
+      else functools.partial(nn.softmax, where=label_mask, initial=0)
+  )
+  return fn(logits)
 
 
 def keyed_map(

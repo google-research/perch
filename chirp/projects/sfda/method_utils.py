@@ -184,6 +184,8 @@ def forward_dataset(
   if np.unique(ids).shape[0] != ids.shape[0]:
     raise ValueError("Ids should uniquely define each sample.")
   result["id"] = ids
+  if "label_mask" in batch:
+    result["label_mask"] = reference_mask
   return result
 
 

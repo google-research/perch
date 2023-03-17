@@ -36,20 +36,27 @@ class ReduceStrategy(enum.Enum):
 
 
 def label_kl(
-    probabilities: jnp.ndarray, label: jnp.ndarray, eps: float = 1e-10, **_
+    probabilities: jnp.ndarray,
+    label: jnp.ndarray,
+    label_mask: jnp.ndarray | None,
+    eps: float = 1e-10,
+    **_,
 ) -> jnp.ndarray:
   """Kulback-Leibler divergence for single-class classification settings.
 
   Args:
     probabilities: Model's probabilities, expected shape [*, num_classes].
     label: One-hot labels, expected shape [*, num_classes].
+    label_mask: Array representing classes to be kept, shape [*, num_classes].
     eps: For numerical stability
 
   Returns:
     Single-class Kulback-Leibler divergence between probabilities and label.
     Shape [*,].
   """
-  return label_xent(probabilities, label, eps) - label_ent(probabilities, eps)  # pytype: disable=wrong-arg-types  # jax-ndarray
+  return label_xent(probabilities, label, label_mask, eps) - label_ent(
+      probabilities, label_mask, eps
+  )  # pytype: disable=wrong-arg-types  # jax-ndarray
 
 
 def label_binary_kl(
@@ -73,6 +80,7 @@ def label_binary_kl(
 def label_xent(
     probabilities: jnp.ndarray,
     label: jnp.ndarray,
+    label_mask: jnp.ndarray | None,
     sample_mask: jnp.ndarray | None = None,
     eps: float = 1e-10,
     **_,
@@ -82,6 +90,8 @@ def label_xent(
   Args:
     probabilities: Model's probabilities, expected shape [*, num_classes].
     label: One-hot labels, expected shape [*, num_classes].
+    label_mask: label_mask: Array representing classes to be kept, shape [*,
+      num_classes].
     sample_mask: A way to mask out some samples when computing the loss. Useful
       for instance to only keep high-confidence samples in pseudo-labelling.
     eps: For numerical stability
@@ -91,23 +101,43 @@ def label_xent(
   """
   if sample_mask is None:
     sample_mask = jnp.ones(probabilities.shape[:-1])
-  xent = -(label * jnp.log(probabilities + eps)).sum(-1)
+  if label_mask is not None and (
+      label_mask.shape[-1] == probabilities.shape[-1]
+  ):
+    xent = -((label * jnp.log(probabilities + eps)) * label_mask).sum(-1)
+  else:
+    # TODO(mboudiaf) If label_mask is not None, check that probabilities are
+    # already masked. In other words, ensure
+    # probabilities.shape[-1] == label_mask.sum(-1)
+    xent = -(label * jnp.log(probabilities + eps)).sum(-1)
   return sample_mask * xent
 
 
 def label_ent(
-    probabilities: jnp.ndarray, eps: float = 1e-10, **_
+    probabilities: jnp.ndarray,
+    label_mask: jnp.ndarray | None,
+    eps: float = 1e-10,
+    **_,
 ) -> jnp.ndarray:
   """Standard entropy used for single-label classification settings.
 
   Args:
     probabilities: Model's probabilities, expected shape [*, num_classes]
+    label_mask: label_mask: Array representing classes to be kept, shape [*,
+      num_classes].
     eps: For numerical stability.
 
   Returns:
     The entropy of probabilities, shape [*,]
   """
-  return -(probabilities * jnp.log(probabilities + eps)).sum(-1)
+  if label_mask is not None and label_mask.shape[-1] == probabilities.shape[-1]:
+    ent = -((probabilities * jnp.log(probabilities + eps)) * label_mask).sum(-1)
+  else:
+    # TODO(mboudiaf) If label_mask is not None, check that probabilities are
+    # already masked. In other words, ensure
+    # probabilities.shape[-1] == label_mask.sum(-1)
+    ent = -((probabilities * jnp.log(probabilities + eps))).sum(-1)
+  return ent
 
 
 def label_binary_ent(

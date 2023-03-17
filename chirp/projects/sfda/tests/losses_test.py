@@ -61,7 +61,7 @@ class LossesTest(absltest.TestCase):
     n_points = 10
     logits = jax.random.uniform(jax.random.PRNGKey(0), (n_points, num_classes))
     probabilities = nn.softmax(logits)
-    ent = losses.label_ent(probabilities)
+    ent = losses.label_ent(probabilities=probabilities, label_mask=None)
 
     # Test that multi-class entropies fall in the range [0, log(num_classes)]
     self.assertTrue((ent >= 0.0).all())
@@ -71,7 +71,9 @@ class LossesTest(absltest.TestCase):
     self.assertAlmostEqual(
         ent.mean(),
         losses.label_xent(
-            probabilities=probabilities, label=probabilities
+            probabilities=probabilities,
+            label=probabilities,
+            label_mask=None,
         ).mean(),
     )
 
