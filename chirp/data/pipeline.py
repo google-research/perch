@@ -1089,9 +1089,14 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
       a labeled segment for the former to inherit its label. This overlap is
       translated into a number of audio samples using the dataset's sampling
       rate. If None, we set the threshold to one audio sample.
+    drop_annotation_bounds: If True, remove the 'annotation_start' and
+      'annotation_end' features. This would be required e.g. prior to batching,
+      as the `annotation_start` and `annotatin_end` features vary in length
+      between examples and cannot be batched.
   """
 
   overlap_threshold_sec: float | None = None
+  drop_annotation_bounds: bool = False
 
   def __call__(
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
@@ -1122,12 +1127,16 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
       overlap_indices = tf.reshape(tf.where(overlap_comparison), [-1])
 
       example['label'] = tf.gather(example['label'], overlap_indices)
-      example['annotation_start'] = tf.gather(
-          example['annotation_start'], overlap_indices
-      )
-      example['annotation_end'] = tf.gather(
-          example['annotation_end'], overlap_indices
-      )
+      if self.drop_annotation_bounds:
+        del example['annotation_start']
+        del example['annotation_end']
+      else:
+        example['annotation_start'] = tf.gather(
+            example['annotation_start'], overlap_indices
+        )
+        example['annotation_end'] = tf.gather(
+            example['annotation_end'], overlap_indices
+        )
       return example
 
     return dataset.map(map_fn)

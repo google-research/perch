@@ -34,6 +34,7 @@ def get_base_config(**kwargs):
   config.sample_rate_hz = 32_000
   config.train_window_size_s = 5
   config.eval_window_size_s = 5
+  config.eval_window_stride_s = 2.5
   config.frame_rate_hz = 100
   config.num_channels = 160
   config.kernel_size = 2_048  # ~0.08 ms * 32,000 Hz
@@ -111,8 +112,9 @@ def _get_pipeline_ops(
     shuffle: bool,
     target_class_list: str,
     mixup: bool,
-    random_slice: bool,
+    slice_method: str,
     slice_window_size: int,
+    slice_window_stride: float,
     slice_start: float,
     random_normalize: bool,
     melspec_num_channels: int,
@@ -129,14 +131,27 @@ def _get_pipeline_ops(
     shuffle_op = _c('pipeline.Shuffle', shuffle_buffer_size=512)
   if mixup:
     mixup_op = _c('pipeline.MixAudio', target_dist=(1.0, 0.5, 0.25, 0.25))
-  if random_slice:
+  if slice_method == 'random':
     slice_op = _c('pipeline.RandomSlice', window_size=slice_window_size)
-  else:
+    annotate_op = None
+  elif slice_method == 'fixed':
     slice_op = _c(
         'pipeline.Slice',
         window_size=slice_window_size,
         start=slice_start,
     )
+    annotate_op = None
+  elif slice_method == 'strided_windows':
+    slice_op = _c(
+        'pipeline.ExtractStridedWindows',
+        window_length_sec=slice_window_size,
+        window_stride_sec=slice_window_stride,
+    )
+    annotate_op = _c(
+        'pipeline.DenselyAnnotateWindows', drop_annotation_bounds=True
+    )
+  else:
+    raise ValueError(f'unrecognized slice method: {slice_method}')
   if random_normalize:
     normalize_op = _c(
         'pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25
@@ -149,6 +164,12 @@ def _get_pipeline_ops(
   ops = [
       shuffle_op,
       _c('pipeline.OnlyJaxTypes'),
+      slice_op,
+      annotate_op,
+      # NOTE: pipeline.ConvertBirdTaxonomyLabels comes *after* the slicing and
+      # annotation ops, as the pipeline.DenselyAnnotateWindows op used when
+      # slice_method == 'strided_windows' expects labels to be sequences of
+      # integers rather than multi-hot encoded vectors.
       _c(
           'pipeline.ConvertBirdTaxonomyLabels',
           source_namespace='ebird2021',
@@ -156,7 +177,6 @@ def _get_pipeline_ops(
           add_taxonomic_labels=False,
       ),
       mixup_op,
-      slice_op,
       normalize_op,
       _c(
           'pipeline.MelSpectrogram',
@@ -202,9 +222,10 @@ def get_supervised_train_pipeline(
           shuffle=True,
           target_class_list=config.get_ref('target_class_list'),
           mixup=True,
-          random_slice=True,
+          slice_method='random',
           slice_window_size=config.get_ref('train_window_size_s'),
-          slice_start=0.0,  # Unused because random_slice = True.
+          slice_window_stride=0.0,  # Unused because slice_method=random'.
+          slice_start=0.0,  # Unused because slice_method='random'.
           random_normalize=True,
           melspec_num_channels=config.get_ref('num_channels'),
           melspec_frame_rate=config.get_ref('frame_rate_hz'),
@@ -222,6 +243,7 @@ def get_supervised_train_pipeline(
 
 def get_supervised_eval_pipeline(
     config: config_dict.ConfigDict,
+    slice_method: str,
     slice_start: float,
     eval_dataset_dir: str,
 ) -> config_dict.ConfigDict:
@@ -233,8 +255,9 @@ def get_supervised_eval_pipeline(
           shuffle=False,
           target_class_list=config.get_ref('target_class_list'),
           mixup=False,
-          random_slice=False,
+          slice_method=slice_method,
           slice_window_size=config.get_ref('eval_window_size_s'),
+          slice_window_stride=config.get_ref('eval_window_stride_s'),
           slice_start=slice_start,
           random_normalize=False,
           melspec_num_channels=config.get_ref('num_channels'),

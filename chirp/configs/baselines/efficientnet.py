@@ -48,8 +48,9 @@ def get_config() -> config_dict.ConfigDict:
   config.eval_dataset_config = {
       'powdermill': presets.get_supervised_eval_pipeline(
           config,
+          slice_method='strided_windows',
           slice_start=0.0,
-          eval_dataset_dir='soundscapes/powdermill:1.3.0',
+          eval_dataset_dir='soundscapes/powdermill_full_length:1.3.0',
       ),
   }
 
