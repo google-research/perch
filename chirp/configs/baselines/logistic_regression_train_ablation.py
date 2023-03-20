@@ -53,19 +53,11 @@ def get_config() -> config_dict.ConfigDict:
   config.init_config.model_config = get_model_config(config)
 
   config.train_config = presets.get_base_train_config(config)
-  config.train_dataset_config = presets.get_supervised_train_pipeline(
-      config,
-      train_dataset_dir='bird_taxonomy/upstream_slice_peaked:1.4.0',
+  config.train_dataset_config = presets.get_ablation_train_dataset_config(
+      config
   )
   config.eval_config = presets.get_base_eval_config(config)
-  config.eval_dataset_config = {
-      'powdermill': presets.get_supervised_eval_pipeline(
-          config,
-          slice_method='strided_windows',
-          slice_start=0.0,
-          eval_dataset_dir='soundscapes/powdermill_full_length:1.3.0',
-      ),
-  }
+  config.eval_dataset_config = presets.get_ablation_eval_dataset_config(config)
 
   return config
 
@@ -75,15 +67,15 @@ def get_hyper(hyper):
   encoder_hypers = hyper.zipit([
       hyper.sweep(
           'config.encoder_config.aggregation',
-          ['beans', 'flatten', 'avg_pool'],
+          ['avg_pool'],
       ),
       hyper.sweep(
           'config.encoder_config.compute_mfccs',
-          [True, True, False],
+          [False],
       ),
   ])
   optimizer_hypers = hyper.sweep(
       'config.init_config.learning_rate',
-      hyper.discrete([1e-2, 1e-1, 1e1]),
+      hyper.discrete([1e-1]),
   )
   return hyper.product([encoder_hypers, optimizer_hypers])

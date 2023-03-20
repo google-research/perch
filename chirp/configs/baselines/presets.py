@@ -95,6 +95,28 @@ def get_base_train_config(
   return train_config
 
 
+def get_base_train_dataset_config(
+    config: config_dict.ConfigDict,
+) -> config_dict.ConfigDict:
+  return get_supervised_train_pipeline(
+      config,
+      filtering_df_paths=None,
+      filter_by_complement=False,  # Unused because filtering_df_path=None.
+      train_dataset_dir='bird_taxonomy/upstream_slice_peaked:1.4.0',
+  )
+
+
+def get_ablation_train_dataset_config(
+    config: config_dict.ConfigDict,
+) -> config_dict.ConfigDict:
+  return get_supervised_train_pipeline(
+      config,
+      filtering_df_paths=None,
+      filter_by_complement=True,
+      train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+  )
+
+
 def get_base_eval_config(
     config: config_dict.ConfigDict, **kwargs
 ) -> config_dict.ConfigDict:
@@ -108,7 +130,63 @@ def get_base_eval_config(
   return eval_config
 
 
+def get_base_eval_dataset_config(
+    config: config_dict.ConfigDict,
+) -> dict[str, config_dict.ConfigDict]:
+  return {
+      'powdermill': get_supervised_eval_pipeline(
+          config,
+          filtering_df_paths=None,
+          filter_by_complement=False,  # Unused because filtering_df_path=None.
+          slice_method='strided_windows',
+          slice_start=0.0,
+          eval_dataset_dir='soundscapes/powdermill_full_length:1.3.0',
+      ),
+  }
+
+
+def get_ablation_eval_dataset_config(
+    config: config_dict.ConfigDict,
+) -> dict[str, config_dict.ConfigDict]:
+  return {
+      'powdermill': get_supervised_eval_pipeline(
+          config,
+          filtering_df_paths=None,
+          filter_by_complement=False,  # Unused because filtering_df_path=None.
+          slice_method='strided_windows',
+          slice_start=0.0,
+          eval_dataset_dir='soundscapes/powdermill_full_length:1.3.0',
+      ),
+      'train_iid_subset': get_supervised_eval_pipeline(
+          config,
+          filtering_df_paths=None,
+          filter_by_complement=False,
+          slice_method='fixed',
+          slice_start=0.5,
+          eval_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+      ),
+      'test_iid': get_supervised_eval_pipeline(
+          config,
+          filtering_df_paths=None,
+          filter_by_complement=False,
+          slice_method='fixed',
+          slice_start=0.5,
+          eval_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+      ),
+      'test_label_shifted': get_supervised_eval_pipeline(
+          config,
+          filtering_df_paths=None,
+          filter_by_complement=False,
+          slice_method='fixed',
+          slice_start=0.5,
+          eval_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+      ),
+  }
+
+
 def _get_pipeline_ops(
+    filtering_df_paths: list[str] | None,
+    filter_by_complement: bool,
     shuffle: bool,
     target_class_list: str,
     mixup: bool,
@@ -125,8 +203,18 @@ def _get_pipeline_ops(
     repeat: bool,
 ) -> list[config_dict.ConfigDict]:
   """Creates the pipeline ops."""
+  filtering_ops = []
   shuffle_op = mixup_op = repeat_op = None
   melspec_stride = sample_rate // melspec_frame_rate
+  if filtering_df_paths:
+    for filtering_df_path in filtering_df_paths:
+      filtering_ops.append(
+          _c(
+              'pipeline.FilterByFeature',
+              filtering_df_path=filtering_df_path,
+              complement=filter_by_complement,
+          )
+      )
   if shuffle:
     shuffle_op = _c('pipeline.Shuffle', shuffle_buffer_size=512)
   if mixup:
@@ -161,7 +249,7 @@ def _get_pipeline_ops(
   if repeat:
     repeat_op = _c('pipeline.Repeat')
 
-  ops = [
+  ops = filtering_ops + [
       shuffle_op,
       _c('pipeline.OnlyJaxTypes'),
       slice_op,
@@ -210,15 +298,22 @@ def _get_pipeline_ops(
 
 def get_supervised_train_pipeline(
     config: config_dict.ConfigDict,
+    filtering_df_paths: list[str] | None,
+    filter_by_complement: bool,
     train_dataset_dir: str,
 ) -> config_dict.ConfigDict:
   """Creates the supervised training data pipeline."""
-  if train_dataset_dir != 'bird_taxonomy/upstream_slice_peaked:1.4.0':
+  if train_dataset_dir not in (
+      'bird_taxonomy/upstream_slice_peaked:1.4.0',
+      'bird_taxonomy/slice_peaked:1.4.0',
+  ):
     raise ValueError('we assume training on XC')
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
       'pipeline.Pipeline',
       ops=_get_pipeline_ops(
+          filtering_df_paths=filtering_df_paths,
+          filter_by_complement=filter_by_complement,
           shuffle=True,
           target_class_list=config.get_ref('target_class_list'),
           mixup=True,
@@ -243,6 +338,8 @@ def get_supervised_train_pipeline(
 
 def get_supervised_eval_pipeline(
     config: config_dict.ConfigDict,
+    filtering_df_paths: list[str] | None,
+    filter_by_complement: bool,
     slice_method: str,
     slice_start: float,
     eval_dataset_dir: str,
@@ -252,6 +349,8 @@ def get_supervised_eval_pipeline(
   eval_dataset_config.pipeline = _c(
       'pipeline.Pipeline',
       ops=_get_pipeline_ops(
+          filtering_df_paths=filtering_df_paths,
+          filter_by_complement=filter_by_complement,
           shuffle=False,
           target_class_list=config.get_ref('target_class_list'),
           mixup=False,
