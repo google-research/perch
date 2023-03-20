@@ -24,10 +24,10 @@ from chirp import path_utils
 from chirp.inference import embed_lib
 from chirp.inference import models
 from chirp.inference import tf_examples
+from chirp.models import frontend
 from chirp.taxonomy import namespace_db
 from ml_collections import config_dict
 import numpy as np
-import tensorflow as tf
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -114,6 +114,36 @@ class InferenceTest(parameterized.TestCase):
       )
     else:
       self.assertEqual(got_example[tf_examples.RAW_AUDIO].shape, (0,))
+
+  def test_handcrafted_features(self):
+    sample_rate = 32000
+    frame_rate = 100
+    mel_config = {
+        'sample_rate': sample_rate,
+        'features': 160,
+        'stride': sample_rate // frame_rate,
+        'kernel_size': int(0.08 * sample_rate),
+        'freq_range': (60.0, sample_rate / 2.0),
+        'scaling_config': frontend.LogScalingConfig(),
+    }
+    features_config = {
+        'compute_mfccs': True,
+        'aggregation': 'beans',
+    }
+    model = models.HandcraftedFeaturesModel(
+        sample_rate=sample_rate,
+        window_size_s=1.0,
+        hop_size_s=1.0,
+        melspec_config=mel_config,
+        features_config=features_config,
+    )
+
+    audio = np.zeros([5 * sample_rate], dtype=np.float32)
+    outputs = model.embed(audio)
+    # Five frames because we have 5s of audio with window 1.0 and hope 1.0.
+    # Beans aggrregation with mfccs creates 20 MFCC channels, and then computes
+    # four summary statistics for each, giving a total of 80 output channels.
+    self.assertSequenceEqual([5, 1, 80], outputs.embeddings.shape)
 
   def test_sep_embed_wrapper(self):
     """Check that the joint-model wrapper works as intended."""

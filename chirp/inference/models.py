@@ -21,6 +21,8 @@ from typing import Any
 
 from absl import logging
 from chirp.inference import interface
+from chirp.models import frontend
+from chirp.models import handcrafted_features
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 from etils import epath
@@ -403,6 +405,34 @@ class BirdNet(interface.EmbeddingModel):
       return self.embed_tflite(framed_audio)
     else:
       return self.embed_saved_model(framed_audio)
+
+
+@dataclasses.dataclass
+class HandcraftedFeaturesModel(interface.EmbeddingModel):
+  """Wrapper for simple feature extraction."""
+
+  window_size_s: float
+  hop_size_s: float
+  melspec_config: config_dict.ConfigDict
+  features_config: config_dict.ConfigDict
+
+  def __post_init__(self):
+    self.melspec_layer = frontend.MelSpectrogram(**self.melspec_config)
+    self.features_layer = handcrafted_features.HandcraftedFeatures(
+        **self.features_config
+    )
+
+  def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
+    framed_audio = self.frame_audio(
+        audio_array, self.window_size_s, self.hop_size_s
+    )
+    melspec = self.melspec_layer.apply({}, framed_audio)
+    features = self.features_layer.apply(
+        {}, melspec[:, :, :, np.newaxis], train=False
+    )
+    # Add a trivial channels dimension.
+    features = features[:, np.newaxis, :]
+    return interface.InferenceOutputs(features, None, None)
 
 
 @dataclasses.dataclass
