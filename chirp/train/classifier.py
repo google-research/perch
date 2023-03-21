@@ -313,8 +313,18 @@ def evaluate(
       new_valid_metrics = get_metrics(batch, train_state)
       valid_metrics = valid_metrics.merge(new_valid_metrics)
       if remainder_batch is not None:
-        new_valid_metrics = get_metrics(remainder_batch, train_state)
-        valid_metrics = valid_metrics.merge(new_valid_metrics)
+        new_valid_metrics = get_metrics(
+            remainder_batch,
+            # The remainder batch has shape [1, ...] rather than
+            # [jax.local_device_count(), ...].
+            jax.tree_map(lambda x: x[:1], train_state),
+        )
+        valid_metrics = valid_metrics.merge(
+            # The new validation metrics computed from the remainder batch have
+            # shape [1, ...], so we unreplicate and replicate them again to
+            # force a shape of [jax.local_device_count(), ...].
+            flax_utils.replicate(flax_utils.unreplicate(new_valid_metrics))
+        )
       if (
           eval_steps_per_checkpoint is not None
           and s >= eval_steps_per_checkpoint
