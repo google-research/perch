@@ -200,6 +200,8 @@ def _get_pipeline_ops(
     melspec_kernel_size: int,
     sample_rate: int,
     batch_size: int,
+    split_across_devices: bool,
+    drop_remainder: bool,
     repeat: bool,
 ) -> list[config_dict.ConfigDict]:
   """Creates the pipeline ops."""
@@ -289,7 +291,8 @@ def _get_pipeline_ops(
       _c(
           'pipeline.Batch',
           batch_size=batch_size,
-          split_across_devices=True,
+          split_across_devices=split_across_devices,
+          drop_remainder=drop_remainder,
       ),
       repeat_op,
   ]
@@ -327,6 +330,8 @@ def get_supervised_train_pipeline(
           melspec_kernel_size=config.get_ref('kernel_size'),
           sample_rate=config.get_ref('sample_rate_hz'),
           batch_size=config.get_ref('batch_size'),
+          split_across_devices=True,
+          drop_remainder=True,
           repeat=True,
       ),
   )
@@ -364,6 +369,8 @@ def get_supervised_eval_pipeline(
           melspec_kernel_size=config.get_ref('kernel_size'),
           sample_rate=config.get_ref('sample_rate_hz'),
           batch_size=config.get_ref('batch_size'),
+          split_across_devices=False,
+          drop_remainder=False,
           repeat=False,
       ),
   )

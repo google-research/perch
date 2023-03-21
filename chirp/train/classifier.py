@@ -278,13 +278,43 @@ def evaluate(
         **xentropy,
     )
 
+  @jax.jit
+  def split_batch(batch):
+    batch_size = batch["audio"].shape[0]
+    num_devices = jax.local_device_count()
+    device_batch_size = batch_size // num_devices
+
+    def device_batch_fn(x):
+      return jnp.reshape(
+          x[: device_batch_size * num_devices],
+          (num_devices, device_batch_size) + x.shape[1:],
+      )
+
+    def remainder_batch_fn(x):
+      return x[device_batch_size * num_devices :][None]
+
+    return (
+        jax.tree_map(device_batch_fn, batch),
+        jax.tree_map(remainder_batch_fn, batch),
+    )
+
   step = int(flax_utils.unreplicate(train_state.step))
   with reporter.timed("eval"):
     valid_metrics = flax_utils.replicate(valid_metrics_collection.empty())
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
+      # Handle device batching if it's not been handled by the data pipeliine
+      # already.
+      remainder_batch = None
+      if batch["label"].ndim == 2:
+        batch, maybe_remainder_batch = split_batch(batch)
+        if maybe_remainder_batch["label"].shape[1] > 0:
+          remainder_batch = maybe_remainder_batch
       new_valid_metrics = get_metrics(batch, train_state)
       valid_metrics = valid_metrics.merge(new_valid_metrics)
+      if remainder_batch is not None:
+        new_valid_metrics = get_metrics(remainder_batch, train_state)
+        valid_metrics = valid_metrics.merge(new_valid_metrics)
       if (
           eval_steps_per_checkpoint is not None
           and s >= eval_steps_per_checkpoint
