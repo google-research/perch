@@ -515,7 +515,7 @@ def prepare_audio_model(
             mask_by_name("gabor_mean", params),
         ),
         optax.masked(
-            project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),
+            project(4 * std_to_fwhm, model.frontend.kernel_size * std_to_fwhm),  # pytype: disable=wrong-arg-types  # jax-types
             mask_by_name("gabor_std", params),
         ),
         optax.masked(
