@@ -977,10 +977,14 @@ class Batch(DatasetPreprocessOp):
     split_across_devices: If true, the minibatch will be split into smaller
       minibatches to be distributed across the local devices present. This is
       useful for distributed training.
+    drop_remainder: Whether or not to drop remainder batch. Note that in the
+      multi-device setting, examples will still be dropped if the dataset size
+      is not a multiple of the batch size divided by the number of devices.
   """
 
   batch_size: int
   split_across_devices: bool = False
+  drop_remainder: bool = True
 
   def __call__(
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
@@ -999,9 +1003,11 @@ class Batch(DatasetPreprocessOp):
       dataset = dataset.batch(
           self.batch_size // jax.device_count(), drop_remainder=True
       )
-      return dataset.batch(jax.local_device_count(), drop_remainder=True)
+      return dataset.batch(
+          jax.local_device_count(), drop_remainder=self.drop_remainder
+      )
     else:
-      return dataset.batch(self.batch_size, drop_remainder=True)
+      return dataset.batch(self.batch_size, drop_remainder=self.drop_remainder)
 
 
 @dataclasses.dataclass
