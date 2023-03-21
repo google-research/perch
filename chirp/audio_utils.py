@@ -19,7 +19,7 @@ General utilities for processing audio and spectrograms.
 """
 import os
 import tempfile
-from typing import Sequence
+from typing import Sequence, Tuple
 import warnings
 
 from chirp import signal
@@ -148,25 +148,49 @@ def ema(
     gamma: float | jnp.ndarray,
     initial_state: jnp.ndarray | None = None,
     axis: int = 0,
-) -> jnp.ndarray:
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
   """Computes the exponential moving average along one axis."""
+  # jax2tf fails to export the semantically simple implementation based on
+  # lax.scan, so we instead use an overly clever while_loop implementation.
+  # The compiler doesn't like dynamic indexing into tensors, so we use the
+  # roll trick to avoid indexing with the step number.
+  # The state variable is initialized at (x[0], 0, 0, ..., 0).
+  # At each step, we use the first value as the current state, and then
+  # roll the state to look like: (0, 0, ..., 0, x[0]).
+  # Then we replace the first value with new state: (y[0], 0, ..., 0, x[0]).
+  # After 3 steps, we have: (y[2], 0, ..., 0, x[0], y[0], y[1]).
+  # And after n steps: (y[n-1], x[0], y[0], y[1], ..., y[n-2]).
+  # So we apply one last roll operation at the end.
+
   # Bring target axis to front.
   xs = jnp.swapaxes(xs, 0, axis)
   if initial_state is None:
     initial_state = xs[0]
 
-  def ema_fn(state, x):
-    new_state = gamma * x + (1.0 - gamma) * state
-    return new_state, new_state
+  cond = lambda step_state: step_state[0] < xs.shape[0]
 
-  # NOTE: For small batches this is potentially an expensive and inefficient
-  # computation, as it requires a loop over potentially long sequences with
-  # minimal computation each step. This could be addressed by partially
-  # unrolling the loop or by a truncated EMA using convolutions.
-  final_state, ys = lax.scan(ema_fn, init=initial_state, xs=xs)
+  def ema_fn(step_state):
+    i, state = step_state
+    new_state = gamma * xs[i] + (1.0 - gamma) * state[0]
+    state = jnp.roll(state, -1, axis=0)
+    state = jnp.concatenate([new_state[jnp.newaxis], state[1:]], axis=0)
+    new_step_state = (i + 1, state)
+    return new_step_state
+
+  init_state = jnp.concatenate(
+      [initial_state[jnp.newaxis, :], jnp.zeros_like(xs)], axis=0
+  )
+  init_step_state = (0, init_state)
+  outputs = lax.while_loop(cond, ema_fn, init_step_state)
+  _, final_state = outputs
+
+  # Apply one last roll operation to get [x[0], y[0], ..., y[n-1]].
+  final_state = jnp.roll(final_state, -1, axis=0)
+  ys = final_state[1:]
+  output_state = ys[-1]
 
   ys = jnp.swapaxes(ys, 0, axis)
-  return ys, final_state  # pytype: disable=bad-return-type  # jax-ndarray
+  return ys, output_state  # pytype: disable=bad-return-type  # jax-ndarray
 
 
 def ema_conv1d(
