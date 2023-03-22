@@ -17,19 +17,20 @@
 
 import dataclasses
 import os
-from typing import Any, Callable, Iterator, Sequence, Set
+from typing import Any, Callable, Iterator, Set
 
 from absl import logging
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 from etils import epath
+from jax import numpy as jnp
 import numpy as np
 import pandas as pd
 import tensorflow_datasets as tfds
 import tqdm
 
 _AUDIO_EXTENSIONS = ['.flac', '.wav']
-LocalizationFn = Callable[[Any, int, float, int], Sequence[tuple[int, int]]]
+LocalizationFn = Callable[[Any, int, float, int], jnp.ndarray]
 MAX_INTERVALS_PER_FILE = 200
 UNKNOWN_LABEL = namespace.UNKNOWN_LABEL
 

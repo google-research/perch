@@ -19,7 +19,6 @@ General utilities for processing audio and spectrograms.
 """
 import os
 import tempfile
-from typing import Sequence
 import warnings
 
 from chirp import signal
@@ -401,7 +400,7 @@ def slice_peaked_audio(
     sample_rate_hz: int,
     interval_length_s: float = 6.0,
     max_intervals: int = 5,
-) -> Sequence[tuple[int, int]]:
+) -> jnp.ndarray:
   """Extracts audio intervals from melspec peaks.
 
   Args:

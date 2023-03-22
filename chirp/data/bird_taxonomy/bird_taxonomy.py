@@ -18,7 +18,7 @@
 import dataclasses
 import functools
 import tempfile
-from typing import Any, Callable, Sequence
+from typing import Any, Callable
 import warnings
 
 from chirp import audio_utils
@@ -27,6 +27,7 @@ from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import premade_queries
 from chirp.taxonomy import namespace_db
 from etils import epath
+from jax import numpy as jnp
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -49,7 +50,7 @@ https://xeno-canto.org/{xeno_canto_id}, and a given example's Xeno-Canto ID can
 be retrieved from the 'filename' feature: 'XC{xeno_canto_id}.mp3'.
 """
 
-LocalizationFn = Callable[[Any, int, float], Sequence[tuple[int, int]]]
+LocalizationFn = Callable[[Any, int, float], jnp.ndarray]
 
 
 @dataclasses.dataclass

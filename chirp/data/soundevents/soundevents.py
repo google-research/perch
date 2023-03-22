@@ -17,7 +17,7 @@
 
 import dataclasses
 import tempfile
-from typing import Any, Callable, Sequence, Tuple
+from typing import Any, Callable
 import warnings
 
 from absl import logging
@@ -26,6 +26,7 @@ from chirp.data import filter_scrub_utils as fsu
 from chirp.data import tfds_features
 from chirp.taxonomy import namespace_db
 from etils import epath
+from jax import numpy as jnp
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -77,7 +78,7 @@ _CITATION = """
 
 """
 
-LocalizationFn = Callable[[Any, int, float], Sequence[Tuple[int, int]]]
+LocalizationFn = Callable[[Any, int, float], jnp.ndarray]
 
 
 @dataclasses.dataclass
