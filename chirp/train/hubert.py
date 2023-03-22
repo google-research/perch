@@ -1107,7 +1107,6 @@ def run(
     config: config_dict.ConfigDict,
     workdir: str,
     tf_data_service_address: str,
-    add_class_wise_metrics: bool = True,
 ) -> None:
   """Run the experiment."""
   if mode.startswith("eval_"):
@@ -1174,7 +1173,7 @@ def run(
         quant_loss_mult=quant_loss_mult,
         readout_loss_mult=config.train_config.readout_loss_mult,
         hubert_loss_mult=config.train_config.hubert_loss_mult,
-        add_class_wise_metrics=add_class_wise_metrics,
+        add_class_wise_metrics=config.train_config.add_class_wise_metrics,
     )
 
   elif mode == "tune_eval_hypers":
@@ -1195,7 +1194,7 @@ def run(
         train_mode_at_eval=config.eval_config.train_mode_at_eval,
         mask_at_eval=config.eval_config.mask_at_eval,
         name=name,
-        add_class_wise_metrics=add_class_wise_metrics,
+        add_class_wise_metrics=config.eval_config.add_class_wise_metrics,
     )
 
   elif mode == "eval":
@@ -1207,6 +1206,5 @@ def run(
         workdir=workdir,
         logdir=workdir,
         name=name,
-        add_class_wise_metrics=add_class_wise_metrics,
         **config.eval_config,
     )

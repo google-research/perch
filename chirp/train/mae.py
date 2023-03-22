@@ -259,7 +259,6 @@ def run(
     config: config_dict.ConfigDict,
     workdir: str,
     tf_data_service_address: str,
-    add_class_wise_metrics: bool,  # pylint: disable=unused-argument
 ) -> None:
   """Run the experiment."""
   if mode in ("train", "finetune"):

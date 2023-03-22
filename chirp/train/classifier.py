@@ -444,7 +444,6 @@ def run(
     config: config_dict.ConfigDict,
     workdir: str,
     tf_data_service_address: str,
-    add_class_wise_metrics: bool = True,
 ) -> None:
   """Run the experiment."""
   if mode.startswith("eval_"):
@@ -481,7 +480,6 @@ def run(
         train_state,
         train_dataset,
         logdir=workdir,
-        add_class_wise_metrics=add_class_wise_metrics,
         **config.train_config,
     )
   elif mode == "eval":
@@ -492,6 +490,5 @@ def run(
         workdir=workdir,
         logdir=workdir,
         name=name,
-        add_class_wise_metrics=add_class_wise_metrics,
         **config.eval_config,
     )
