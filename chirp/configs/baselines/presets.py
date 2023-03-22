@@ -153,9 +153,9 @@ def get_ablation_eval_dataset_config(
           config,
           filtering_df_paths=None,
           filter_by_complement=False,  # Unused because filtering_df_path=None.
-          slice_method='strided_windows',
+          slice_method='fixed',
           slice_start=0.0,
-          eval_dataset_dir='soundscapes/powdermill_full_length:1.3.0',
+          eval_dataset_dir='soundscapes/powdermill:1.3.0',
       ),
       'train_iid_subset': get_supervised_eval_pipeline(
           config,

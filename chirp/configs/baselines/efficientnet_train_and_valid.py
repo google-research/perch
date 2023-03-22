@@ -42,7 +42,24 @@ def get_config() -> config_dict.ConfigDict:
   config.train_config = presets.get_base_train_config(config)
   config.train_dataset_config = presets.get_base_train_dataset_config(config)
   config.eval_config = presets.get_base_eval_config(config)
-  config.eval_dataset_config = presets.get_base_eval_dataset_config(config)
+  config.eval_dataset_config = {
+      'powdermill': presets.get_supervised_eval_pipeline(
+          config,
+          filtering_df_paths=None,
+          filter_by_complement=False,  # Unused because filtering_df_path=None.
+          slice_method='strided_windows',
+          slice_start=0.0,
+          eval_dataset_dir='soundscapes/powdermill_full_length:1.3.0',
+      ),
+      'caples': presets.get_supervised_eval_pipeline(
+          config,
+          filtering_df_paths=None,
+          filter_by_complement=False,  # Unused because filtering_df_path=None.
+          slice_method='fixed',
+          slice_start=0.0,
+          eval_dataset_dir='soundscapes/caples:1.3.0',
+      ),
+  }
 
   return config
 
