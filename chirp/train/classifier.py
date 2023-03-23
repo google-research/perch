@@ -296,26 +296,33 @@ def evaluate(
       batch = jax.tree_map(np.asarray, batch)
       # Handle device batching if it's not been handled by the data pipeliine
       # already.
-      remainder_batch = None
       if batch["label"].ndim == 2:
-        batch, maybe_remainder_batch = split_batch(batch)
-        if maybe_remainder_batch["label"].shape[1] > 0:
-          remainder_batch = maybe_remainder_batch
-      new_valid_metrics = get_metrics(batch, train_state)
-      valid_metrics = valid_metrics.merge(new_valid_metrics)
-      if remainder_batch is not None:
-        new_valid_metrics = get_metrics(
-            remainder_batch,
-            # The remainder batch has shape [1, ...] rather than
-            # [jax.local_device_count(), ...].
-            jax.tree_map(lambda x: x[:1], train_state),
-        )
-        valid_metrics = valid_metrics.merge(
-            # The new validation metrics computed from the remainder batch have
-            # shape [1, ...], so we unreplicate and replicate them again to
-            # force a shape of [jax.local_device_count(), ...].
-            flax_utils.replicate(flax_utils.unreplicate(new_valid_metrics))
-        )
+        even_batch, remainder_batch = split_batch(batch)
+        # It's possible for `even_batch` to be empty if the batch size is
+        # smaller than the local device count (in which case all examples in the
+        # batch are found in `remainder_batch`).
+        if even_batch["label"].shape[1] > 0:
+          new_valid_metrics = get_metrics(even_batch, train_state)
+          valid_metrics = valid_metrics.merge(new_valid_metrics)
+        # It's also possible for `remainder_batch` to be empty if the batch size
+        # is an exact multiple of the local device count (in which case all
+        # examples in the batch are found in `even_batch`).
+        if remainder_batch["label"].shape[1] > 0:
+          new_valid_metrics = get_metrics(
+              remainder_batch,
+              # The remainder batch has shape [1, ...] rather than
+              # [jax.local_device_count(), ...].
+              jax.tree_map(lambda x: x[:1], train_state),
+          )
+          valid_metrics = valid_metrics.merge(
+              # The new validation metrics computed from the remainder batch
+              # have shape [1, ...], so we unreplicate and replicate them again
+              # to force a shape of [jax.local_device_count(), ...].
+              flax_utils.replicate(flax_utils.unreplicate(new_valid_metrics))
+          )
+      else:
+        new_valid_metrics = get_metrics(batch, train_state)
+        valid_metrics = valid_metrics.merge(new_valid_metrics)
       if (
           eval_steps_per_checkpoint is not None
           and s >= eval_steps_per_checkpoint
