@@ -15,48 +15,107 @@
 
 """Scrapes the Xeno-Canto website for taxonomy and audio data."""
 
+
+import concurrent.futures
+import enum
 import functools
-from typing import Sequence
+import itertools
+import json
+import os.path
+from typing import Any, Sequence
 
 from absl import app
 from absl import flags
-from chirp.data import xeno_canto
-from etils import epath
+from chirp.data import utils
 import pandas as pd
+import ratelimiter
+import requests
+import tensorflow as tf
+import tqdm
 
-_MODES = (
-    'collect_info',
-)
-_MODE = flags.DEFINE_enum('mode', 'collect_info', _MODES, 'Operation mode.')
-_INCLUDE_ND_RECORDINGS = flags.DEFINE_boolean(
-    'include_nd_recordings', True, 'Whether to include ND-licensed recordings.'
+_XC_API_RATE_LIMIT = 8
+_XC_API_URL = 'http://www.xeno-canto.org/api/2/recordings'
+_XC_SPECIES_URL = 'https://xeno-canto.org/collection/species/all'
+
+
+class _Modes(enum.Enum):
+  COLLECT_INFO = 'collect_info'
+
+
+_MODE = flags.DEFINE_enum(
+    'mode', 'collect_info', [mode.value for mode in _Modes], 'Operation mode.'
 )
 _OUTPUT_DIR = flags.DEFINE_string(
-    'output_dir', '/tmp/xeno-canto',
-    'Where to output the taxonomy info DataFrame.')
-_TAXONOMY_INFO_FILENAME = flags.DEFINE_string(
-    'taxonomy_info_filename', 'taxonomy_info.json', 'Taxonomy info filename.'
+    'output_dir',
+    '/tmp/xeno-canto',
+    'Where to output the taxonomy info DataFrame.',
+)
+_INFO_FILENAME = flags.DEFINE_string(
+    'info_filename', 'xeno_canto.jsonl', 'Xeno-Canto info filename.'
 )
 
 
 def collect_info(
-    output_dir: str, taxonomy_info_filename: str, include_nd_recordings: bool
-) -> None:
+    output_dir: str, recordings_filename: str
+) -> list[dict[str, Any]]:
   """Scrapes the Xeno-Canto website for audio file IDs.
 
   Args:
-    output_dir: output directory for the taxonomy info DataFrame.
-    taxonomy_info_filename: taxonomy info filename.
-    include_nd_recordings: whether to include ND-licensed recordings.
+    output_dir: Directory in which to store the list of recordings.
+    recordings_filename: Filename to which to store recordings.
+
+  Returns:
+    The list of recordings.
   """
-  taxonomy_info = xeno_canto.create_taxonomy_info(
-      xeno_canto.SpeciesMappingConfig(), output_dir
+  # Collect all species
+  (species,) = pd.read_html(io=_XC_SPECIES_URL, match='Scientific name')
+
+  # Query Xeno-Canto for all recordings for each species
+  session = requests.Session()
+  session.mount(
+      'http://',
+      requests.adapters.HTTPAdapter(
+          max_retries=requests.adapters.Retry(total=5, backoff_factor=0.1)
+      ),
   )
-  taxonomy_info = xeno_canto.retrieve_recording_metadata(
-      taxonomy_info, include_nd_recordings
-  )
-  with (epath.Path(output_dir) / taxonomy_info_filename).open('w') as f:
-    taxonomy_info.to_json(f)
+
+  @ratelimiter.RateLimiter(max_calls=_XC_API_RATE_LIMIT, period=1)
+  def get_recordings(scientific_name: str, page: int = 1):
+    response = session.get(
+        url=_XC_API_URL,
+        params={
+            'query': f"{scientific_name} gen:{scientific_name.split(' ')[0]}",
+            'page': page,
+        },
+    )
+    response.raise_for_status()
+    results = response.json()['recordings']
+
+    # Get next page if there are more
+    if response.json()['numPages'] > page:
+      results.extend(get_recordings(scientific_name, page + 1))
+    return results
+
+  with concurrent.futures.ThreadPoolExecutor(
+      max_workers=_XC_API_RATE_LIMIT
+  ) as executor:
+    species_recordings = executor.map(
+        get_recordings, species['Scientific name']
+    )
+    species_recordings = tqdm.tqdm(
+        species_recordings, total=len(species), desc='Collecting recordings'
+    )
+    recordings = list(itertools.chain.from_iterable(species_recordings))
+
+  # Store recordings as JSONL file
+  # TODO(bartvm): Use gzip compression
+  with tf.io.gfile.GFile(
+      os.path.join(output_dir, recordings_filename), 'w'
+  ) as f:
+    for recording in recordings:
+      f.write(json.dumps(recording))
+      f.write('\n')
+  return recordings
 
 
 def main(argv: Sequence[str]) -> None:
@@ -64,11 +123,9 @@ def main(argv: Sequence[str]) -> None:
     raise app.UsageError('Too many command-line arguments.')
 
   modes = {
-      'collect_info': functools.partial(
-          collect_info, include_nd_recordings=_INCLUDE_ND_RECORDINGS.value
-      ),
+      'collect_info': collect_info,
   }
-  modes[_MODE.value](_OUTPUT_DIR.value, _TAXONOMY_INFO_FILENAME.value)
+  modes[_MODE.value](_OUTPUT_DIR.value, _INFO_FILENAME.value)
 
 
 if __name__ == '__main__':
