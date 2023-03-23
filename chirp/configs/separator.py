@@ -120,6 +120,11 @@ def get_config() -> config_dict.ConfigDict:
 
   config.eval_config = presets.get_base_eval_config(config)
   config.eval_config.eval_steps_per_checkpoint = 100
+  config.eval_config.loss_max_snr = config.train_config.get_ref('loss_max_snr')
+  config.eval_config.taxonomy_labels_weight = config.train_config.get_ref(
+      'taxonomy_labels_weight'
+  )
+
   # Note: frame_size should be divisible by the product of all downsampling
   # strides in the model architecture (eg, 32 * 5 * 2 * 2 * 50, for
   # frontend_config.stride=32, and soundstream_config.strides=[5, 2, 2]),

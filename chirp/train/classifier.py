@@ -247,17 +247,8 @@ def evaluate(
   base_metrics_collection = make_metrics_collection(
       name, taxonomy_keys, model_bundle.model.num_classes
   )
-  valid_metrics_collection = flax.struct.dataclass(
-      type(
-          "_ValidCollection",
-          (base_metrics_collection,),
-          {
-              "__annotations__": {
-                  f"{name}_cmap": cmap.CMAP,
-                  **base_metrics_collection.__annotations__,
-              }
-          },
-      )
+  valid_metrics_collection = cmap.add_cmap_to_metrics_collection(
+      name, base_metrics_collection
   )
 
   @functools.partial(jax.pmap, axis_name="batch")

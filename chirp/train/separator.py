@@ -39,6 +39,7 @@ from jax import lax
 from jax import numpy as jnp
 from jax import random
 from ml_collections import config_dict
+import numpy as np
 import optax
 import tensorflow as tf
 
@@ -120,17 +121,15 @@ def make_metrics_collection(prefix: str):
   }
   for key in ['label'] + utils.TAXONOMY_KEYS:
     metrics_dict.update({
-        key
-        + '_xentropy': clu_metrics.Average.from_fun(
+        f'{key}_xentropy': clu_metrics.Average.from_fun(
             functools.partial(keyed_cross_entropy, key=key)
         ),
-        key
-        + '_map': clu_metrics.Average.from_fun(
+        f'{key}_map': clu_metrics.Average.from_fun(
             functools.partial(keyed_map, key=key)
         ),
     })
   metrics_dict['taxo_loss'] = clu_metrics.Average.from_output('taxo_loss')
-  metrics_dict = {prefix + k: v for k, v in metrics_dict.items()}
+  metrics_dict = {f'{prefix}_{k}': v for k, v in metrics_dict.items()}
   return clu_metrics.Collection.create(**metrics_dict)
 
 
@@ -187,7 +186,7 @@ def train(
 ) -> None:
   """Train a model."""
   train_iterator = train_dataset.as_numpy_iterator()
-  train_metrics_collection = make_metrics_collection('train___')
+  train_metrics_collection = make_metrics_collection('train__')
   initial_step = int(train_state.step)
   train_state = flax.jax_utils.replicate(train_state)
   # Logging
@@ -253,12 +252,15 @@ def train(
     return train_metrics, train_state
 
   for step in range(initial_step, num_train_steps + 1):
-    with jax.profiler.StepTraceAnnotation('train', step_num=step):
+    with jax.profiler.StepTraceAnnotation('train__', step_num=step):
       batch = next(train_iterator)
       train_metrics, train_state = train_step(batch, train_state)
 
       if step % log_every_steps == 0:
         train_metrics = flax_utils.unreplicate(train_metrics).compute()
+        train_metrics = {
+            k.replace('___', '/'): v for k, v in train_metrics.items()
+        }
         writer.write_scalars(step, utils.flatten_dict(train_metrics))
       reporter(step)
     if step % checkpoint_every_steps == 0:
@@ -273,9 +275,16 @@ def evaluate(
     valid_dataset: tf.data.Dataset,
     writer: metric_writers.MetricWriter,
     reporter: periodic_actions.ReportProgress,
+    loss_max_snr: float,
+    taxonomy_labels_weight: float,
     eval_steps_per_checkpoint: int = -1,
+    add_class_wise_metrics: bool = False,
 ):
   """Run evaluation."""
+  base_metrics_collection = make_metrics_collection('valid__')
+  valid_metrics_collection = cmap.add_cmap_to_metrics_collection(
+      'valid', base_metrics_collection
+  )
 
   @functools.partial(jax.pmap, axis_name='batch')
   def get_metrics(batch, train_state):
@@ -283,23 +292,33 @@ def evaluate(
     model_outputs = model_bundle.model.apply(
         variables, batch['audio'], train=False
     )
+    model_outputs = model_outputs.time_reduce_logits('MIDPOINT')
+
     estimate, mixit_matrix = metrics.least_squares_mixit(
         reference=batch['source_audio'], estimate=model_outputs.separated_audio
     )
-    model_outputs = model_outputs.time_reduce_logits('MIDPOINT')
-    return ValidationMetrics.gather_from_model_output(
+    taxo_loss = utils.taxonomy_cross_entropy(
+        model_outputs, taxonomy_labels_weight, **batch
+    )['loss']
+    mixit_neg_snr = p_log_snr_loss(
+        batch['source_audio'], estimate, loss_max_snr
+    )
+    return valid_metrics_collection.gather_from_model_output(
         outputs=model_outputs,
         separated=model_outputs.separated_audio,
         source=batch['source_audio'],
         estimate=estimate,
         mixit_matrix=mixit_matrix,
+        taxo_loss=taxo_loss,
+        mixit_neg_snr=mixit_neg_snr,
         **batch,
         **output.logits(model_outputs),
     )
 
   with reporter.timed('eval'):
-    valid_metrics = flax.jax_utils.replicate(ValidationMetrics.empty())
+    valid_metrics = flax.jax_utils.replicate(valid_metrics_collection.empty())
     for valid_step, batch in enumerate(valid_dataset.as_numpy_iterator()):
+      batch = jax.tree_map(np.asarray, batch)
       new_valid_metrics = get_metrics(batch, flax_utils.replicate(train_state))
       valid_metrics = valid_metrics.merge(new_valid_metrics)
       if (
@@ -311,6 +330,15 @@ def evaluate(
     # Log validation loss
     valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
 
+  if not add_class_wise_metrics:
+    metrics_kept = {}
+    for k, v in valid_metrics.items():
+      if '_cmap_' in k and not v.endswith('_cmap_macro'):
+        # Discard metrics like 'valid_cmap_442' keeping only 'valid_cmap_macro'.
+        continue
+      metrics_kept[k] = v
+    valid_metrics = metrics_kept
+  valid_metrics = {k.replace('___', '/'): v for k, v in valid_metrics.items()}
   writer.write_scalars(int(train_state.step), utils.flatten_dict(valid_metrics))
   writer.flush()
 
@@ -323,9 +351,12 @@ def evaluate_loop(
     logdir: str,
     num_train_steps: int,
     eval_steps_per_checkpoint: int,
+    loss_max_snr: float,
+    taxonomy_labels_weight: float,
     tflite_export: bool = False,
     frame_size: int | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
+    add_class_wise_metrics: bool = False,
 ):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -343,7 +374,8 @@ def evaluate_loop(
       time.sleep(eval_sleep_s)
       continue
     try:
-      ckpt.restore(train_state, next_ckpt)
+      train_state = ckpt.restore(train_state, next_ckpt)
+      logging.info('Restored checkpoing at step %d', int(train_state.step))
     except tf.errors.NotFoundError:
       logging.warning(
           'Checkpoint %s not found in workdir %s',
@@ -353,17 +385,27 @@ def evaluate_loop(
       time.sleep(eval_sleep_s)
       continue
 
+    st = time.time()
     evaluate(
         model_bundle,
         train_state,
         valid_dataset,
         writer,
         reporter,
+        loss_max_snr,
+        taxonomy_labels_weight,
         eval_steps_per_checkpoint,
+        add_class_wise_metrics=add_class_wise_metrics,
     )
-    if tflite_export:
-      export_tf(model_bundle, train_state, workdir, frame_size)
+    elapsed = time.time() - st
     last_step = int(train_state.step)
+    logging.info('Finished eval step %d in %8.2f s', last_step, elapsed)
+    if tflite_export:
+      st = time.time()
+      export_tf(model_bundle, train_state, workdir, frame_size)
+      elapsed = time.time() - st
+      logging.info('Exported model at step %d in %8.2f s', last_step, elapsed)
+
     last_ckpt = next_ckpt
 
 

@@ -55,3 +55,20 @@ class CMAP(
               )
           },
       }
+
+
+def add_cmap_to_metrics_collection(name: str, metrics_collection):
+  """Adds a CMAP instance to an existing CLU metrics collection."""
+  new_collection = flax.struct.dataclass(
+      type(
+          "_ValidCollection",
+          (metrics_collection,),
+          {
+              "__annotations__": {
+                  f"{name}_cmap": CMAP,
+                  **metrics_collection.__annotations__,
+              }
+          },
+      )
+  )
+  return new_collection
