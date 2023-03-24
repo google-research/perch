@@ -76,7 +76,10 @@ def initialize_model(
   train_state = utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state
   )
-  return utils.ModelBundle(model, optimizer, key, ckpt), train_state
+  return (
+      utils.ModelBundle(model=model, key=key, ckpt=ckpt, optimizer=optimizer),
+      train_state,
+  )
 
 
 def initialize_finetune_model(
@@ -131,7 +134,13 @@ def initialize_finetune_model(
       step=0, params=params, opt_state=opt_state, model_state=model_state
   )
   return (
-      classifier.utils.ModelBundle(model, optimizer, key, ckpt, class_lists),
+      classifier.utils.ModelBundle(
+          model=model,
+          key=key,
+          ckpt=ckpt,
+          optimizer=optimizer,
+          class_lists=class_lists,
+      ),
       train_state,
   )
 

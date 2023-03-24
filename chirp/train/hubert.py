@@ -698,7 +698,7 @@ def initialize_model(
       logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
 
   return (
-      utils.ModelBundle(model, optimizer, key, ckpt),
+      utils.ModelBundle(model=model, key=key, ckpt=ckpt, optimizer=optimizer),
       train_state,
       learning_rate,
   )

@@ -167,7 +167,13 @@ def initialize_model(
   )
   train_state = ckpt.restore_or_initialize(train_state)
   return (
-      utils.ModelBundle(model, optimizer, key, ckpt, class_lists),
+      utils.ModelBundle(
+          model=model,
+          key=key,
+          ckpt=ckpt,
+          optimizer=optimizer,
+          class_lists=class_lists,
+      ),
       train_state,
   )
 

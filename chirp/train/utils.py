@@ -40,9 +40,9 @@ class TrainState:
 @flax.struct.dataclass
 class ModelBundle:
   model: nn.Module
-  optimizer: optax.GradientTransformation
   key: jnp.ndarray
   ckpt: checkpoint.Checkpoint
+  optimizer: optax.GradientTransformation | None = None
   class_lists: dict[str, namespace.ClassList] | None = None
 
 

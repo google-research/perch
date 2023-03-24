@@ -72,14 +72,31 @@ def initialize_model(
     rng_seed: int,
     input_shape: tuple[int, ...],
     learning_rate: float,
-    optimizer: optax.GradientTransformation,
     workdir: str,
     target_class_list: str,
+    optimizer: optax.GradientTransformation | None = None,
+    for_inference: bool = False,
 ) -> tuple[utils.ModelBundle, utils.TrainState]:
-  """Creates model for training, eval, or inference."""
-  # learning_rate is unused (it's expected to be used in constructing the
-  # `optimizer` argument), but it's left part of the function signature for
-  # backwards compatibility with the config utils.
+  """Creates model for training, eval, or inference.
+
+  Args:
+    model_config: A config dict of the model parameters.
+    rng_seed: Used to see the random number generator.
+    input_shape: Shape of the model inputs.
+    learning_rate: The learning rate to use for training.
+    workdir: The directory the checkpoint is stored in.
+    target_class_list: A list of target classes for the classifier output.
+    optimizer: The optimizer to use during training. Optional for when loading
+      pre-trained models for inference.
+    for_inference: Indicates whether the model is being initialized for
+      inference (if false, initialzed for training).
+  Note: learning_rate is unused (it's expected to be used in constructing the
+    `optimizer` argument), but it's left part of the function signature for
+    backwards compatibility with the config utils.
+
+  Returns:
+    A tuple of initialized ModelBundle and TrainState objects.
+  """
   del learning_rate
 
   # Initialize random number generator
@@ -99,15 +116,26 @@ def initialize_model(
   params = params.unfreeze()
 
   # Initialize optimizer and handle constraints
-  opt_state = optimizer.init(params)
+  if optimizer is None or for_inference:
+    opt_state = None
+    logging.log("info", "No optimizer specified - loading model for inference.")
+  else:
+    opt_state = optimizer.init(params)
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = utils.TrainState(
-      step=0, params=params, opt_state=opt_state, model_state=model_state
-  )
+  if not for_inference:
+    train_state = utils.TrainState(
+        step=0, params=params, opt_state=opt_state, model_state=model_state
+    )
   return (
-      utils.ModelBundle(model, optimizer, key, ckpt, class_lists),
+      utils.ModelBundle(
+          model=model,
+          key=key,
+          ckpt=ckpt,
+          optimizer=optimizer,
+          class_lists=class_lists,
+      ),
       train_state,
   )
 
