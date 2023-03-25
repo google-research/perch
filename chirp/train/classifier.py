@@ -31,7 +31,6 @@ from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
-import flax
 import flax.jax_utils as flax_utils
 import jax
 from jax import numpy as jnp
@@ -44,24 +43,27 @@ import tensorflow as tf
 EVAL_LOOP_SLEEP_S = 30
 
 
-def make_metrics_collection(
-    prefix: str, keys: list[str], num_labels: dict[str, int]
-) -> type[clu_metrics.Collection]:
-  """Create a collection of metrics with cross-entropy and average precision."""
-
+def get_keyed_map_fn(key):
   def _map(**kwargs):
     return metrics.average_precision(
         scores=kwargs[f"{key}_logits"],
         labels=kwargs[key],
         label_mask=kwargs.get(f"{key}_mask", None),
     )
+  return _map
+
+
+def make_metrics_collection(
+    prefix: str, keys: list[str], num_labels: dict[str, int]
+) -> type[clu_metrics.Collection]:
+  """Create a collection of metrics with cross-entropy and average precision."""
 
   metrics_ = {"loss": clu_metrics.Average.from_output("loss")}
   for key in keys:
     metrics_[f"{key}_xentropy"] = utils.MultiAverage.create(
         num_labels[key]
     ).from_output(f"{key}_xentropy")
-    metrics_[f"{key}_map"] = clu_metrics.Average.from_fun(_map)
+    metrics_[f"{key}_map"] = clu_metrics.Average.from_fun(get_keyed_map_fn(key))
 
   metrics_ = {f"{prefix}_{key}": value for key, value in metrics_.items()}
   return clu_metrics.Collection.create(**metrics_)
