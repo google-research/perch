@@ -460,6 +460,7 @@ class MultiHot(FeaturesPreprocessOp):
 
 @dataclasses.dataclass
 class MergeBackgroundLabels(FeaturesPreprocessOp):
+  """Include background labels in the set of labels for each example."""
 
   def __call__(
       self, features: Features, dataset_info: tfds.core.DatasetInfo
@@ -1164,6 +1165,27 @@ class Cache(DatasetPreprocessOp):
   ) -> tf.data.Dataset:
     del dataset_info
     return dataset.cache(filename=self.filename)
+
+
+@dataclasses.dataclass
+class FilterDropLabel(DatasetPreprocessOp):
+  """Drop any examples with the target label."""
+
+  target_label: str = 'unknown'
+
+  def __call__(
+      self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
+  ) -> tf.data.Dataset:
+    label_names = dataset_info.features['label'].names
+    if self.target_label not in label_names:
+      return dataset
+
+    filter_idx = label_names.index(self.target_label)
+
+    def _pred(features):
+      return tf.math.logical_not(tf.reduce_any(filter_idx == features['label']))
+
+    return dataset.filter(_pred)
 
 
 def get_dataset(
