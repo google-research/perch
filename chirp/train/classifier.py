@@ -321,7 +321,7 @@ def evaluate(
 
   step = int(flax_utils.unreplicate(train_state.step))
   with reporter.timed("eval"):
-    valid_metrics = flax_utils.replicate(valid_metrics_collection.empty())
+    valid_metrics = valid_metrics_collection.empty()
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
       # Handle device batching if it's not been handled by the data pipeliine
@@ -333,7 +333,9 @@ def evaluate(
         # batch are found in `remainder_batch`).
         if even_batch["label"].shape[1] > 0:
           new_valid_metrics = get_metrics(even_batch, train_state)
-          valid_metrics = valid_metrics.merge(new_valid_metrics)
+          valid_metrics = valid_metrics.merge(
+              flax_utils.unreplicate(new_valid_metrics)
+          )
         # It's also possible for `remainder_batch` to be empty if the batch size
         # is an exact multiple of the local device count (in which case all
         # examples in the batch are found in `even_batch`).
@@ -345,14 +347,13 @@ def evaluate(
               jax.tree_map(lambda x: x[:1], train_state),
           )
           valid_metrics = valid_metrics.merge(
-              # The new validation metrics computed from the remainder batch
-              # have shape [1, ...], so we unreplicate and replicate them again
-              # to force a shape of [jax.local_device_count(), ...].
-              flax_utils.replicate(flax_utils.unreplicate(new_valid_metrics))
+              flax_utils.unreplicate(new_valid_metrics)
           )
       else:
         new_valid_metrics = get_metrics(batch, train_state)
-        valid_metrics = valid_metrics.merge(new_valid_metrics)
+        valid_metrics = valid_metrics.merge(
+            flax_utils.unreplicate(new_valid_metrics)
+        )
       if (
           eval_steps_per_checkpoint is not None
           and s >= eval_steps_per_checkpoint
@@ -360,7 +361,7 @@ def evaluate(
         break
 
     # Log validation loss
-    valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
+    valid_metrics = valid_metrics.compute()
 
     if not add_class_wise_metrics:
       metrics_kept = {}
