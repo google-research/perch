@@ -64,12 +64,11 @@ def main(argv: Sequence[str]) -> None:
       _CONFIG.value, config_globals.get_globals()
   )
 
-  TARGETS[_TARGET.value].run(
+  TARGETS[_TARGET.value].Runner(
       _MODE.value,
-      config,
       _WORKDIR.value,
       _TF_DATA_SERVICE_ADDRESS.value,
-  )
+  ).run(config)
 
 
 if __name__ == "__main__":

@@ -23,14 +23,15 @@ from typing import Callable
 
 from absl import logging
 from chirp.data import pipeline
-from chirp.models import rank_based_metrics
 from chirp.models import frontend as frontend_models
 from chirp.models import hubert
 from chirp.models import layers
 from chirp.models import metrics
 from chirp.models import output
 from chirp.models import quantizers
+from chirp.models import rank_based_metrics
 from chirp.taxonomy import class_utils
+from chirp.train import runner_interface
 from chirp.train import utils
 from clu import checkpoint
 from clu import metric_writers
@@ -1101,109 +1102,109 @@ def export_tf_lite(
     f.write(tflite_float_model)
 
 
-def run(
-    mode: str,
-    config: config_dict.ConfigDict,
-    workdir: str,
-    tf_data_service_address: str,
-) -> None:
-  """Run the experiment."""
-  if mode.startswith("eval_"):
-    mode, name = mode.split("_", maxsplit=1)
-    config.eval_dataset_config = getattr(config.eval_dataset_config, name)
-  else:
-    name = "valid"
+class Runner(runner_interface.Runner):
+  """Classifier Runner implementation."""
 
-  if mode == "train":
-    train_dataset, dataset_info = pipeline.get_dataset(
-        is_train=True,
-        tf_data_service_address=tf_data_service_address,
-        **config.train_dataset_config,
-    )
-  elif mode in ["eval", "tune_eval_hypers"]:
-    valid_dataset, dataset_info = pipeline.get_dataset(
-        **config.eval_dataset_config
-    )
-  if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
-    raise ValueError(
-        "Dataset sample rate must match config sample rate. To address this, "
-        "need to set the sample rate in the config to {}.".format(
-            dataset_info.features["audio"].sample_rate
-        )
-    )
+  def run(self, config: config_dict.ConfigDict) -> None:
+    """Run the experiment."""
+    if self.mode.startswith("eval_"):
+      mode, name = self.mode.split("_", maxsplit=1)
+      config.eval_dataset_config = getattr(config.eval_dataset_config, name)
+    else:
+      name = "valid"
 
-  reload_quantizer = False
-  if config.init_config.reload_quantizer_from:
-    reload_quantizer = True
+    if mode == "train":
+      train_dataset, dataset_info = pipeline.get_dataset(
+          is_train=True,
+          tf_data_service_address=self.tf_data_service_address,
+          **config.train_dataset_config,
+      )
+    elif mode in ["eval", "tune_eval_hypers"]:
+      valid_dataset, dataset_info = pipeline.get_dataset(
+          **config.eval_dataset_config
+      )
+    if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
+      raise ValueError(
+          "Dataset sample rate must match config sample rate. To address this, "
+          "need to set the sample rate in the config to {}.".format(
+              dataset_info.features["audio"].sample_rate
+          )
+      )
 
-  # Adjust the multiplier of the quantizer loss such that the quantizer gets the
-  # intended starting learning rate.
-  quant_start_lr = config.init_config.quant_start_learning_rate
-  start_lr = config.init_config.start_learning_rate
-  quant_loss_mult = quant_start_lr / start_lr
-  quant_loss_mult *= config.train_config.quant_loss_mult
+    reload_quantizer = False
+    if config.init_config.reload_quantizer_from:
+      reload_quantizer = True
 
-  # Initialize.
-  if mode == "tune_eval_hypers":
-    # Here, workdir is provided in the init config.
-    model_bundle, train_state, learning_rate_schedule = initialize_model(
-        num_train_steps=config.train_config.num_train_steps,
-        **config.init_config,
-    )
-  else:
-    model_bundle, train_state, learning_rate_schedule = initialize_model(
-        workdir=workdir,
-        num_train_steps=config.train_config.num_train_steps,
-        **config.init_config,
-    )
+    # Adjust the multiplier of the quantizer loss such that the quantizer gets
+    # the intended starting learning rate.
+    quant_start_lr = config.init_config.quant_start_learning_rate
+    start_lr = config.init_config.start_learning_rate
+    quant_loss_mult = quant_start_lr / start_lr
+    quant_loss_mult *= config.train_config.quant_loss_mult
 
-  if mode == "train":
-    train(
-        model_bundle,
-        train_state,
-        learning_rate_schedule,
-        train_dataset,
-        reload_quantizer=reload_quantizer,
-        logdir=workdir,
-        num_train_steps=config.train_config.num_train_steps,
-        log_every_steps=config.train_config.log_every_steps,
-        checkpoint_every_steps=config.train_config.checkpoint_every_steps,
-        num_quantizer_pretrain_steps=config.train_config.num_quantizer_pretrain_steps,
-        quant_loss_mult=quant_loss_mult,
-        readout_loss_mult=config.train_config.readout_loss_mult,
-        hubert_loss_mult=config.train_config.hubert_loss_mult,
-        add_class_wise_metrics=config.train_config.add_class_wise_metrics,
-    )
+    # Initialize.
+    if mode == "tune_eval_hypers":
+      # Here, workdir is provided in the init config.
+      model_bundle, train_state, learning_rate_schedule = initialize_model(
+          num_train_steps=config.train_config.num_train_steps,
+          **config.init_config,
+      )
+    else:
+      model_bundle, train_state, learning_rate_schedule = initialize_model(
+          workdir=self.workdir,
+          num_train_steps=config.train_config.num_train_steps,
+          **config.init_config,
+      )
 
-  elif mode == "tune_eval_hypers":
-    # Running a single round of evaluation (as opposed to running eval in a
-    # loop whenever a new checkpoint is produced).
-    # This is used to tune HuBERT's evaluation hypers once.
-    train_state = model_bundle.ckpt.restore(train_state)
+    if mode == "train":
+      train(
+          model_bundle,
+          train_state,
+          learning_rate_schedule,
+          train_dataset,
+          reload_quantizer=reload_quantizer,
+          logdir=self.workdir,
+          num_train_steps=config.train_config.num_train_steps,
+          log_every_steps=config.train_config.log_every_steps,
+          checkpoint_every_steps=config.train_config.checkpoint_every_steps,
+          num_quantizer_pretrain_steps=config.train_config.num_quantizer_pretrain_steps,
+          quant_loss_mult=quant_loss_mult,
+          readout_loss_mult=config.train_config.readout_loss_mult,
+          hubert_loss_mult=config.train_config.hubert_loss_mult,
+          add_class_wise_metrics=config.train_config.add_class_wise_metrics,
+      )
 
-    writer = metric_writers.create_default_writer(workdir)
-    reporter = periodic_actions.ReportProgress(num_train_steps=0, writer=writer)
-    evaluate(
-        model_bundle,
-        flax_utils.replicate(train_state),
-        learning_rate_schedule,
-        valid_dataset,
-        writer,
-        reporter,
-        train_mode_at_eval=config.eval_config.train_mode_at_eval,
-        mask_at_eval=config.eval_config.mask_at_eval,
-        name=name,
-        add_class_wise_metrics=config.eval_config.add_class_wise_metrics,
-    )
+    elif mode == "tune_eval_hypers":
+      # Running a single round of evaluation (as opposed to running eval in a
+      # loop whenever a new checkpoint is produced).
+      # This is used to tune HuBERT's evaluation hypers once.
+      train_state = model_bundle.ckpt.restore(train_state)
 
-  elif mode == "eval":
-    evaluate_loop(
-        model_bundle,
-        train_state,
-        learning_rate_schedule,
-        valid_dataset,
-        workdir=workdir,
-        logdir=workdir,
-        name=name,
-        **config.eval_config,
-    )
+      writer = metric_writers.create_default_writer(self.workdir)
+      reporter = periodic_actions.ReportProgress(
+          num_train_steps=0, writer=writer
+      )
+      evaluate(
+          model_bundle,
+          flax_utils.replicate(train_state),
+          learning_rate_schedule,
+          valid_dataset,
+          writer,
+          reporter,
+          train_mode_at_eval=config.eval_config.train_mode_at_eval,
+          mask_at_eval=config.eval_config.mask_at_eval,
+          name=name,
+          add_class_wise_metrics=config.eval_config.add_class_wise_metrics,
+      )
+
+    elif mode == "eval":
+      evaluate_loop(
+          model_bundle,
+          train_state,
+          learning_rate_schedule,
+          valid_dataset,
+          workdir=self.workdir,
+          logdir=self.workdir,
+          name=name,
+          **config.eval_config,
+      )

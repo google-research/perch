@@ -26,6 +26,7 @@ from chirp.models import output
 from chirp.models import rank_based_metrics
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
+from chirp.train import runner_interface
 from chirp.train import utils
 from clu import checkpoint
 from clu import metric_writers
@@ -465,56 +466,54 @@ def export_tf(
   )
 
 
-def run(
-    mode: str,
-    config: config_dict.ConfigDict,
-    workdir: str,
-    tf_data_service_address: str,
-) -> None:
-  """Run the experiment."""
-  if mode.startswith("eval_"):
-    mode, name = mode.split("_", maxsplit=1)
-    config.eval_dataset_config = getattr(config.eval_dataset_config, name)
-  else:
-    name = "valid"
+class Runner(runner_interface.Runner):
+  """Classifier Runner implementation."""
 
-  if mode == "train":
-    train_dataset, dataset_info = pipeline.get_dataset(
-        is_train=True,
-        tf_data_service_address=tf_data_service_address,
-        **config.train_dataset_config,
-    )
-  elif mode == "eval":
-    valid_dataset, dataset_info = pipeline.get_dataset(
-        **config.eval_dataset_config
-    )
-  if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
-    raise ValueError(
-        "Dataset sample rate must match config sample rate. To address this, "
-        "need to set the sample rate in the config to {}.".format(
-            dataset_info.features["audio"].sample_rate
-        )
-    )
+  def run(self, config: config_dict.ConfigDict) -> None:
+    """Run the experiment."""
+    if self.mode.startswith("eval_"):
+      mode, name = self.mode.split("_", maxsplit=1)
+      config.eval_dataset_config = getattr(config.eval_dataset_config, name)
+    else:
+      name = "valid"
 
-  model_bundle, train_state = initialize_model(
-      workdir=workdir, **config.init_config
-  )
-  if mode == "train":
-    train_state = model_bundle.ckpt.restore_or_initialize(train_state)
-    train(
-        model_bundle,
-        train_state,
-        train_dataset,
-        logdir=workdir,
-        **config.train_config,
+    if mode == "train":
+      train_dataset, dataset_info = pipeline.get_dataset(
+          is_train=True,
+          tf_data_service_address=self.tf_data_service_address,
+          **config.train_dataset_config,
+      )
+    elif mode == "eval":
+      valid_dataset, dataset_info = pipeline.get_dataset(
+          **config.eval_dataset_config
+      )
+    if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
+      raise ValueError(
+          "Dataset sample rate must match config sample rate. To address this, "
+          "need to set the sample rate in the config to {}.".format(
+              dataset_info.features["audio"].sample_rate
+          )
+      )
+
+    model_bundle, train_state = initialize_model(
+        workdir=self.workdir, **config.init_config
     )
-  elif mode == "eval":
-    evaluate_loop(
-        model_bundle,
-        train_state,
-        valid_dataset,
-        workdir=workdir,
-        logdir=workdir,
-        name=name,
-        **config.eval_config,
-    )
+    if mode == "train":
+      train_state = model_bundle.ckpt.restore_or_initialize(train_state)
+      train(
+          model_bundle,
+          train_state,
+          train_dataset,
+          logdir=self.workdir,
+          **config.train_config,
+      )
+    elif mode == "eval":
+      evaluate_loop(
+          model_bundle,
+          train_state,
+          valid_dataset,
+          workdir=self.workdir,
+          logdir=self.workdir,
+          name=name,
+          **config.eval_config,
+      )

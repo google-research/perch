@@ -20,6 +20,7 @@ from chirp.models import mae
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
 from chirp.train import classifier
+from chirp.train import runner_interface
 from chirp.train import utils
 from clu import checkpoint
 from clu import metric_writers
@@ -263,63 +264,61 @@ def train(
   writer.close()
 
 
-def run(
-    mode: str,
-    config: config_dict.ConfigDict,
-    workdir: str,
-    tf_data_service_address: str,
-) -> None:
-  """Run the experiment."""
-  if mode in ("train", "finetune"):
-    train_dataset, dataset_info = pipeline.get_dataset(
-        is_train=True,
-        tf_data_service_address=tf_data_service_address,
-        **config.train_dataset_config,
-    )
-  elif mode == "eval":
-    valid_dataset, dataset_info = pipeline.get_dataset(
-        **config.eval_dataset_config
-    )
-  if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
-    raise ValueError(
-        "Dataset sample rate must match config sample rate. To address this, "
-        "need to set the sample rate in the config to {}.".format(
-            dataset_info.features["audio"].sample_rate
-        )
-    )
+class Runner(runner_interface.Runner):
+  """MAE Runner implementation."""
 
-  if mode == "train":
-    model_bundle, train_state = initialize_model(
-        workdir=workdir, **config.init_config
-    )
-  else:
-    model_bundle, train_state = initialize_finetune_model(
-        workdir=workdir, **config.init_config
-    )
-  if mode == "train":
-    train_state = model_bundle.ckpt.restore_or_initialize(train_state)
-    train(
-        model_bundle,
-        train_state,
-        train_dataset,
-        logdir=workdir,
-        **config.train_config,
-    )
-  if mode == "finetune":
-    train_state = model_bundle.ckpt.restore_or_initialize(train_state)
-    classifier.train(
-        model_bundle,
-        train_state,
-        train_dataset,
-        logdir=workdir,
-        **config.train_config,
-    )
-  elif mode == "eval":
-    classifier.evaluate_loop(
-        model_bundle,
-        train_state,
-        valid_dataset,
-        workdir=workdir,
-        logdir=workdir,
-        **config.eval_config,
-    )
+  def run(self, config: config_dict.ConfigDict) -> None:
+    """Run the experiment."""
+    if self.mode in ("train", "finetune"):
+      train_dataset, dataset_info = pipeline.get_dataset(
+          is_train=True,
+          tf_data_service_address=self.tf_data_service_address,
+          **config.train_dataset_config,
+      )
+    elif self.mode == "eval":
+      valid_dataset, dataset_info = pipeline.get_dataset(
+          **config.eval_dataset_config
+      )
+    if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
+      raise ValueError(
+          "Dataset sample rate must match config sample rate. To address this, "
+          "need to set the sample rate in the config to {}.".format(
+              dataset_info.features["audio"].sample_rate
+          )
+      )
+
+    if self.mode == "train":
+      model_bundle, train_state = initialize_model(
+          workdir=self.workdir, **config.init_config
+      )
+    else:
+      model_bundle, train_state = initialize_finetune_model(
+          workdir=self.workdir, **config.init_config
+      )
+    if self.mode == "train":
+      train_state = model_bundle.ckpt.restore_or_initialize(train_state)
+      train(
+          model_bundle,
+          train_state,
+          train_dataset,
+          logdir=self.workdir,
+          **config.train_config,
+      )
+    if self.mode == "finetune":
+      train_state = model_bundle.ckpt.restore_or_initialize(train_state)
+      classifier.train(
+          model_bundle,
+          train_state,
+          train_dataset,
+          logdir=self.workdir,
+          **config.train_config,
+      )
+    elif self.mode == "eval":
+      classifier.evaluate_loop(
+          model_bundle,
+          train_state,
+          valid_dataset,
+          workdir=self.workdir,
+          logdir=self.workdir,
+          **config.eval_config,
+      )
