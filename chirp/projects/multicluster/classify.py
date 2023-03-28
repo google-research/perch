@@ -17,7 +17,7 @@
 
 import dataclasses
 
-from chirp.models import cmap
+from chirp.models import rank_based_metrics
 from chirp.projects.multicluster import data_lib
 import tensorflow as tf
 
@@ -83,8 +83,8 @@ def train_embedding_model(
   # Manually compute per-class mAP and CmAP scores.
   test_logits = model.predict(test_ds, verbose=0)
   test_labels = merged.data['label_hot'][test_locs]
-  maps = cmap.CMAP.from_model_output(
+  maps = rank_based_metrics.RankBasedMetrics.from_model_output(
       label_logits=test_logits, label=test_labels
   ).compute()
-  cmap_value = maps.pop('macro')
+  cmap_value = maps.pop('macro_cmap')
   return ClassifierMetrics(acc, auc_roc, recall, cmap_value, maps)

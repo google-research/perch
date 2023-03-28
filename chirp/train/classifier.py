@@ -21,9 +21,9 @@ import time
 from absl import logging
 from chirp import export_utils
 from chirp.data import pipeline
-from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import output
+from chirp.models import rank_based_metrics
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
 from chirp.train import utils
@@ -277,12 +277,14 @@ def evaluate(
   if taxonomy_loss_weight != 0.0:
     taxonomy_keys += utils.TAXONOMY_KEYS
 
-  # The metrics are the same as for training, but with CmAP added
+  # The metrics are the same as for training, but with rank-based metrics added.
   base_metrics_collection = make_metrics_collection(
       name, taxonomy_keys, model_bundle.model.num_classes
   )
-  valid_metrics_collection = cmap.add_cmap_to_metrics_collection(
-      name, base_metrics_collection
+  valid_metrics_collection = (
+      rank_based_metrics.add_rank_based_metrics_to_metrics_collection(
+          name, base_metrics_collection
+      )
   )
 
   @functools.partial(jax.pmap, axis_name="batch")

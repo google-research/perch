@@ -185,6 +185,51 @@ def average_precision(
   return mask * raw_av_prec
 
 
+def generalized_mean_rank(
+    scores: jnp.ndarray,
+    labels: jnp.ndarray,
+    label_mask: jnp.ndarray | None = None,
+    sort_descending: bool = True,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+  """Computes the generalized mean rank and its variance over the last axis.
+
+  The generalized mean rank can be expressed as
+
+      (sum_i #FP ranked above TP_i) / (#FP * #TP).
+
+  We treat all labels as either true positives (if the label is 1) or false
+  positives (if the label is zero).
+
+  Args:
+    scores: A score for each label which can be ranked.
+    labels: A multi-hot encoding of the ground truth positives. Must match the
+      shape of scores.
+    label_mask: A mask indicating which labels to involve in the calculation.
+    sort_descending: An indicator if the search result ordering is in descending
+      order (e.g. for evaluating over similarity metrics where higher scores are
+      preferred). If false, computes the generalize mean rank on descendingly
+      sorted inputs.
+
+  Returns:
+    The generalized mean rank and its variance.
+  """
+  # TODO(vdumoulin): add support for `label_mask`.
+  if label_mask is not None:
+    raise NotImplementedError
+
+  idx = jnp.argsort(scores, axis=-1)
+  if sort_descending:
+    idx = jnp.flip(idx, axis=-1)
+  labels = jnp.take_along_axis(labels, idx, axis=-1)
+
+  num_fp = (labels == 0).sum(axis=-1)
+  num_fp_above = jnp.cumsum(labels == 0, axis=-1)
+
+  gmr = num_fp_above.mean(axis=-1, where=(labels > 0)) / num_fp
+  gmr_var = num_fp_above.var(axis=-1, where=(labels > 0)) / num_fp
+  return gmr, gmr_var
+
+
 def least_squares_solve_mix(matrix, rhs, diag_loading=1e-3):
   # Assumes a real-valued matrix, with zero mean.
   adj_matrix = jnp.conjugate(jnp.swapaxes(matrix, -1, -2))

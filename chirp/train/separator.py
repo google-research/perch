@@ -22,9 +22,9 @@ import time
 from absl import logging
 from chirp import export_utils
 from chirp.data import pipeline
-from chirp.models import cmap
 from chirp.models import metrics
 from chirp.models import output
+from chirp.models import rank_based_metrics
 from chirp.models import separation_model
 from chirp.taxonomy import class_utils
 from chirp.train import utils
@@ -80,14 +80,6 @@ def p_log_sisnr_loss(
       jnp.mean(metrics.negative_snr_loss(source, estimate, max_snr=max_snr)),
       axis_name='batch',
   )
-
-
-@flax.struct.dataclass
-class ValidationMetrics(clu_metrics.Collection):
-  valid_loss: clu_metrics.Average.from_fun(p_log_snr_loss)
-  valid_mixit_log_mse: clu_metrics.Average.from_fun(p_log_mse_loss)
-  valid_mixit_neg_snr: clu_metrics.Average.from_fun(p_log_snr_loss)
-  valid_cmap: cmap.CMAP
 
 
 def keyed_cross_entropy(
@@ -288,8 +280,10 @@ def evaluate(
 ):
   """Run evaluation."""
   base_metrics_collection = make_metrics_collection('valid__')
-  valid_metrics_collection = cmap.add_cmap_to_metrics_collection(
-      'valid', base_metrics_collection
+  valid_metrics_collection = (
+      rank_based_metrics.add_rank_based_metrics_to_metrics_collection(
+          'valid', base_metrics_collection
+      )
   )
 
   @functools.partial(jax.pmap, axis_name='batch')

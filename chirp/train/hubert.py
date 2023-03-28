@@ -23,7 +23,7 @@ from typing import Callable
 
 from absl import logging
 from chirp.data import pipeline
-from chirp.models import cmap
+from chirp.models import rank_based_metrics
 from chirp.models import frontend as frontend_models
 from chirp.models import hubert
 from chirp.models import layers
@@ -912,7 +912,9 @@ def evaluate(
           (base_metrics_collection,),
           {
               "__annotations__": {
-                  f"{name}_cmap": cmap.CMAP,
+                  f"{name}_rank_based_metrics": (
+                      rank_based_metrics.RankBasedMetrics
+                  ),
                   **base_metrics_collection.__annotations__,
               }
           },
