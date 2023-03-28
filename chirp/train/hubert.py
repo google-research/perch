@@ -855,16 +855,20 @@ def train(
       )
 
       if step % log_every_steps == 0:
-        train_metrics = flax_utils.unreplicate(train_metrics).compute()
+        train_metrics = utils.flatten_dict(
+            flax_utils.unreplicate(train_metrics).compute()
+        )
 
-        metrics_kept = {}
-        for k, v in train_metrics.items():
-          if "xentropy" in k and not add_class_wise_metrics:
-            continue
-          metrics_kept[k] = v
-        train_metrics = metrics_kept
+        classwise_metrics = {
+            k: v for k, v in train_metrics.items() if "individual" in k
+        }
+        train_metrics = {
+            k: v for k, v in train_metrics.items() if k not in classwise_metrics
+        }
 
-        writer.write_scalars(step, utils.flatten_dict(train_metrics))
+        writer.write_scalars(step, train_metrics)
+        if add_class_wise_metrics:
+          writer.write_summaries(step, classwise_metrics)
       reporter(step)
 
     if (step + 1) % checkpoint_every_steps == 0 or step == num_train_steps:
@@ -955,7 +959,7 @@ def evaluate(
   step = int(flax_utils.unreplicate(train_state.step))
   key = model_bundle.key
   with reporter.timed("eval"):
-    valid_metrics = flax_utils.replicate(valid_metrics_collection.empty())
+    valid_metrics = valid_metrics_collection.empty()
     for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
       mask_key = None
@@ -963,7 +967,9 @@ def evaluate(
         mask_key, key = random.split(key)
         mask_key = random.split(mask_key, num=jax.local_device_count())
       new_valid_metrics = get_metrics(batch, train_state, mask_key)
-      valid_metrics = valid_metrics.merge(new_valid_metrics)
+      valid_metrics = valid_metrics.merge(
+          flax_utils.unreplicate(new_valid_metrics)
+      )
       if (
           eval_steps_per_checkpoint is not None
           and s >= eval_steps_per_checkpoint
@@ -971,26 +977,17 @@ def evaluate(
         break
 
     # Log validation loss
-    valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
+    valid_metrics = utils.flatten_dict(valid_metrics.compute())
+    classwise_metrics = {
+        k: v for k, v in valid_metrics.items() if "individual" in k
+    }
+    valid_metrics = {
+        k: v for k, v in valid_metrics.items() if k not in classwise_metrics
+    }
 
-    if not add_class_wise_metrics:
-      metrics_kept = {}
-      for k, v in valid_metrics.items():
-        if "xentropy" in k:
-          # Only the class-wise xentropy metrics contain the string 'xentropy';
-          # the key corresponding to overall xentropy is called 'loss'.
-          continue
-        metrics_kept[k] = v
-      valid_metrics = metrics_kept
-
-      for k, v in valid_metrics.items():
-        # Only one of the keys of valid_metrics will contain the string 'cmap',
-        # and the associated value is a dict that has a 'macro' key as well as
-        # a key per class. To disable class-wise metrics, we keep only 'macro'.
-        if "_cmap" in k:
-          valid_metrics[k] = v["macro"]
-
-  writer.write_scalars(step, utils.flatten_dict(valid_metrics))
+  writer.write_scalars(step, valid_metrics)
+  if add_class_wise_metrics:
+    writer.write_summaries(step, classwise_metrics)
   writer.flush()
 
 

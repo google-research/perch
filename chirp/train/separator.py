@@ -322,11 +322,13 @@ def evaluate(
     )
 
   with reporter.timed('eval'):
-    valid_metrics = flax.jax_utils.replicate(valid_metrics_collection.empty())
+    valid_metrics = valid_metrics_collection.empty()
     for valid_step, batch in enumerate(valid_dataset.as_numpy_iterator()):
       batch = jax.tree_map(np.asarray, batch)
       new_valid_metrics = get_metrics(batch, flax_utils.replicate(train_state))
-      valid_metrics = valid_metrics.merge(new_valid_metrics)
+      valid_metrics = valid_metrics.merge(
+          flax_utils.unreplicate(new_valid_metrics)
+      )
       if (
           eval_steps_per_checkpoint > 0
           and valid_step >= eval_steps_per_checkpoint
@@ -334,18 +336,21 @@ def evaluate(
         break
 
     # Log validation loss
-    valid_metrics = flax_utils.unreplicate(valid_metrics).compute()
+    valid_metrics = valid_metrics.compute()
 
-  if not add_class_wise_metrics:
-    metrics_kept = {}
-    for k, v in valid_metrics.items():
-      if '_cmap_' in k and not v.endswith('_cmap_macro'):
-        # Discard metrics like 'valid_cmap_442' keeping only 'valid_cmap_macro'.
-        continue
-      metrics_kept[k] = v
-    valid_metrics = metrics_kept
-  valid_metrics = {k.replace('___', '/'): v for k, v in valid_metrics.items()}
-  writer.write_scalars(int(train_state.step), utils.flatten_dict(valid_metrics))
+  valid_metrics = utils.flatten_dict(
+      {k.replace('___', '/'): v for k, v in valid_metrics.items()}
+  )
+  classwise_metrics = {
+      k: v for k, v in valid_metrics.items() if 'individual' in k
+  }
+  valid_metrics = {
+      k: v for k, v in valid_metrics.items() if k not in classwise_metrics
+  }
+
+  writer.write_scalars(int(train_state.step), valid_metrics)
+  if add_class_wise_metrics:
+    writer.write_summaries(int(train_state.step), classwise_metrics)
   writer.flush()
 
 

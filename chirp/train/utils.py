@@ -102,7 +102,7 @@ class MultiAverage(clu_metrics.Average):
     averages = self.total / self.count
     return {
         "mean": jnp.sum(self.total) / jnp.sum(self.count),
-        **{str(i): averages[i] for i in range(jnp.size(averages))},
+        "individual": averages,
     }
 
 

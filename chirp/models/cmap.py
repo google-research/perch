@@ -44,16 +44,12 @@ class CMAP(
       # Same as sklearn's average_precision_score(label, logits, average=None)
       # but that implementation doesn't scale to 10k+ classes
       class_aps = metrics.average_precision(
-          values["label_logits"][:, mask].T, values["label"][:, mask].T
+          values["label_logits"].T, values["label"].T
       )
+      class_aps = jnp.where(mask, class_aps, jnp.nan)
       return {
-          "macro": jnp.mean(class_aps),
-          **{
-              str(i): ap
-              for i, ap in zip(
-                  jnp.arange(values["label"].shape[1])[mask], class_aps
-              )
-          },
+          "macro": jnp.mean(class_aps, where=mask),
+          "individual": class_aps,
       }
 
 
