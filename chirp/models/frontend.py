@@ -241,6 +241,7 @@ class MelSpectrogram(Frontend):
   freq_range: tuple[int, int]
   power: float = 2.0
   scaling_config: ScalingConfig | None = None
+  nfft: int | None = None
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
@@ -249,6 +250,7 @@ class MelSpectrogram(Frontend):
         inputs,
         nperseg=self.kernel_size,
         noverlap=self.kernel_size - self.stride,
+        nfft=self.nfft,
         padded=False,
     )
     # See notes in STFT regarding output size
