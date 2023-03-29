@@ -15,7 +15,7 @@
 
 """Train a taxonomy classifier."""
 
-from typing import Sequence
+from typing import Protocol, Sequence
 
 from absl import app
 from absl import flags
@@ -26,16 +26,36 @@ from chirp.train import classifier
 from chirp.train import hubert
 from chirp.train import mae
 from chirp.train import separator
+from ml_collections import config_dict
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
 
 from xmanager import xm  # pylint: disable=unused-import
 
-TARGETS = {
-    "classifier": classifier,
-    "mae": mae,
-    "hubert": hubert,
-    "separator": separator,
+
+class Run(Protocol):
+  """Protocol for entry points of project scripts.
+
+  These scripts should aim to include project-specific arguments into the config
+  argument as much as possible, since updating this interface would require
+  changing every project that uses this entry point.
+  """
+
+  def __call__(
+      self,
+      mode: str,
+      config: config_dict.ConfigDict,
+      workdir: str,
+      tf_data_service_address: str,
+  ):
+    ...
+
+
+TARGETS: dict[str, Run] = {
+    "classifier": classifier.run,
+    "mae": mae.run,
+    "hubert": hubert.run,
+    "separator": separator.run,
 }
 
 _CONFIG = config_flags.DEFINE_config_file("config")
@@ -64,7 +84,7 @@ def main(argv: Sequence[str]) -> None:
       _CONFIG.value, config_globals.get_globals()
   )
 
-  TARGETS[_TARGET.value].run(
+  TARGETS[_TARGET.value](
       _MODE.value,
       config,
       _WORKDIR.value,
