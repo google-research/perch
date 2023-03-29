@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 The Chirp Authors.
+# Copyright 2023 The Chirp Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1097,9 +1097,11 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
       translated into a number of audio samples using the dataset's sampling
       rate. If None, we set the threshold to one audio sample.
     drop_annotation_bounds: If True, remove the 'annotation_start' and
-      'annotation_end' features. This would be required e.g. prior to batching,
-      as the `annotation_start` and `annotatin_end` features vary in length
-      between examples and cannot be batched.
+      'annotation_end' features. If False, the annotation bound features are
+      placed in an array of size [num_labels], with zeros for entries where no
+      label is present. This allows downstream batching, since the features are
+      of fixed size. (We also add features for annotation_size and
+      intersection_size for downstream debugging and analysis.)
   """
 
   overlap_threshold_sec: float | None = None
@@ -1122,28 +1124,54 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
       # `overlap_threshold`) if the following is true:
       #     max(segment_start, annotation_start)
       #       <= min(segment_end, annotation_end) - overlap_threshold
-      # Note that `example['segment_{start|end}']` is integer-valued and
+      # Note that `example['segment_{start|end}']` is uint64-valued and
       # `example['annotation_{start|end}']` is a variable-length sequence of
       # integers and the operation is broadcasted across all segments.
+
+      # Find the start and end of he intersection of the annotation and segment.
+      # If inter_end < inter_start, the intersection is empty.
+      inter_end = tf.cast(
+          tf.minimum(example['segment_end'], example['annotation_end']),
+          tf.int64,
+      )
+      inter_start = tf.cast(
+          tf.maximum(example['segment_start'], example['annotation_start']),
+          tf.int64,
+      )
       overlap_comparison = tf.cast(
-          tf.maximum(example['segment_start'], example['annotation_start'])
-          <= tf.minimum(example['segment_end'], example['annotation_end'])
-          - overlap_threshold,
-          tf.bool,
+          inter_end - inter_start - overlap_threshold >= 0, tf.bool
       )
       overlap_indices = tf.reshape(tf.where(overlap_comparison), [-1])
 
-      example['label'] = tf.gather(example['label'], overlap_indices)
       if self.drop_annotation_bounds:
         del example['annotation_start']
         del example['annotation_end']
       else:
-        example['annotation_start'] = tf.gather(
-            example['annotation_start'], overlap_indices
-        )
-        example['annotation_end'] = tf.gather(
-            example['annotation_end'], overlap_indices
-        )
+        # Add per-label annotation metadata. When a label is not present, these
+        # data default to zero.
+        # Note: In case a segment has multiple annotations for the same species,
+        # only one annotation will be described by these metadata.
+        num_classes = len(dataset_info.features['label'].names)
+        label_idxs = tf.gather(example['label'], overlap_indices)
+        example['intersection_size'] = tf.maximum(inter_end - inter_start, 0)
+        example['annotation_length'] = tf.cast(
+            example['annotation_end'], tf.int64
+        ) - tf.cast(example['annotation_start'], tf.int64)
+
+        for k in (
+            'annotation_start',
+            'annotation_end',
+            'intersection_size',
+            'annotation_length',
+        ):
+          example[k] = tf.cast(tf.gather(example[k], overlap_indices), tf.int64)
+          example[k] = tf.scatter_nd(
+              indices=label_idxs[:, tf.newaxis],
+              updates=example[k],
+              shape=[num_classes],
+          )
+
+      example['label'] = tf.gather(example['label'], overlap_indices)
       return example
 
     return dataset.map(map_fn)

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 The Chirp Authors.
+# Copyright 2023 The Chirp Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -422,7 +422,10 @@ class PipelineTest(parameterized.TestCase):
         'label': np.array([0, 1, 2], dtype=np.int64),
     }
     fake_dataset_info = mock.MagicMock(
-        features={'audio': mock.MagicMock(sample_rate=10)}
+        features={
+            'audio': mock.MagicMock(sample_rate=10),
+            'label': mock.MagicMock(names=('dowwoo', 'daejun', 'pilwoo')),
+        }
     )
     original_dataset = tf.data.Dataset.from_tensors(original_example)
     annotated_dataset = pipeline.DenselyAnnotateWindows(
@@ -444,14 +447,17 @@ class PipelineTest(parameterized.TestCase):
   def test_densely_annotate_windows_overlap_1sec(self):
     # Sampling rate is 10, so divide the timestamps by 10 for seconds.
     original_example = {
-        'segment_start': np.array(10, dtype=np.int64),
-        'segment_end': np.array(50, dtype=np.int64),
-        'annotation_start': np.array([10, 30, 45], dtype=np.int64),
-        'annotation_end': np.array([20, 60, 90], dtype=np.int64),
+        'segment_start': np.array(10, dtype=np.uint64),
+        'segment_end': np.array(50, dtype=np.uint64),
+        'annotation_start': np.array([10, 30, 45], dtype=np.uint64),
+        'annotation_end': np.array([20, 60, 90], dtype=np.uint64),
         'label': np.array([0, 1, 2], dtype=np.int64),
     }
     fake_dataset_info = mock.MagicMock(
-        features={'audio': mock.MagicMock(sample_rate=10)}
+        features={
+            'audio': mock.MagicMock(sample_rate=10),
+            'label': mock.MagicMock(names=('dowwoo', 'daejun', 'pilwoo')),
+        }
     )
     original_dataset = tf.data.Dataset.from_tensors(original_example)
     annotated_dataset = pipeline.DenselyAnnotateWindows(
@@ -460,14 +466,19 @@ class PipelineTest(parameterized.TestCase):
     annotated_dataset = next(annotated_dataset.as_numpy_iterator())
 
     expected_dataset = {
-        'segment_start': np.array(10, dtype=np.int64),
-        'segment_end': np.array(50, dtype=np.int64),
-        'annotation_start': np.array([10, 30], dtype=np.int64),
-        'annotation_end': np.array([20, 60], dtype=np.int64),
+        'segment_start': np.array(10, dtype=np.uint64),
+        'segment_end': np.array(50, dtype=np.uint64),
+        # The annotations for labels 0 and 1 are longer than 1s, so are kept.
+        # The annotation metadata for label 2 is all zeros.
+        'annotation_start': np.array([10, 30, 0], dtype=np.uint64),
+        'annotation_end': np.array([20, 60, 0], dtype=np.uint64),
+        'intersection_size': np.array([10, 20, 0], dtype=np.uint64),
+        'annotation_length': np.array([10, 30, 0], dtype=np.uint64),
         'label': np.array([0, 1], dtype=np.int64),
     }
 
     for key, expected_value in expected_dataset.items():
+      print(key, expected_value, annotated_dataset[key])
       np.testing.assert_equal(expected_value, annotated_dataset[key])
 
 
