@@ -13,7 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Train a taxonomy classifier."""
+r"""Entry point for project scripts.
+
+This binary provides a common entry point for all project scripts. In order to
+be compatible, a project must provide a `run` callable which accepts the
+arguments `mode` (e.g., `train`, `eval`, `finetune`), a `config` in the form of
+a `ConfigDict`, and a `workdir` where temporary files can be stored. Finally,
+the `tf_data_service_address` argument is a string which is empty or contains
+the address of the tf.data service dispatcher.
+"""
 
 from typing import Protocol, Sequence
 
@@ -79,6 +87,8 @@ def main(argv: Sequence[str]) -> None:
   if len(argv) > 1:
     raise app.UsageError("Too many command-line arguments.")
   logging.info(_CONFIG.value)
+  # We assume that scripts use JAX, so here we prevent TensorFlow from reserving
+  # all the GPU memory (which leaves nothing for JAX to use).
   tf.config.experimental.set_visible_devices([], "GPU")
   config = config_utils.parse_config(
       _CONFIG.value, config_globals.get_globals()
