@@ -162,12 +162,15 @@ def average_precision(
     The average precision.
   """
   if label_mask is not None:
-    # Set all masked labels to zero, and send the scores for those labels to
-    # a low value. Then the masked scores+labels will not impact the
-    # average precision calculation.
+    # Set all masked labels to zero, and send the scores for those labels to a
+    # low/high value (depending on whether we sort in descending order or not).
+    # Then the masked scores+labels will not impact the average precision
+    # calculation.
     labels = labels * label_mask
-    min_score = jnp.min(scores) - 1.0
-    scores = scores * label_mask + min_score * (1 - label_mask)
+    extremum_score = (
+        jnp.min(scores) - 1.0 if sort_descending else jnp.max(scores) + 1.0
+    )
+    scores = jnp.where(label_mask, scores, extremum_score)
   idx = jnp.argsort(scores)
   if sort_descending:
     idx = jnp.flip(idx, axis=-1)
@@ -213,20 +216,20 @@ def generalized_mean_rank(
   Returns:
     The generalized mean rank and its variance.
   """
-  # TODO(vdumoulin): add support for `label_mask`.
-  if label_mask is not None:
-    raise NotImplementedError
-
   idx = jnp.argsort(scores, axis=-1)
   if sort_descending:
     idx = jnp.flip(idx, axis=-1)
   labels = jnp.take_along_axis(labels, idx, axis=-1)
+  if label_mask is None:
+    label_mask = True
+  else:
+    label_mask = jnp.take_along_axis(label_mask, idx, axis=-1)
 
-  num_fp = (labels == 0).sum(axis=-1)
-  num_fp_above = jnp.cumsum(labels == 0, axis=-1)
+  num_fp = (labels == 0).sum(axis=-1, where=label_mask)
+  num_fp_above = jnp.cumsum((labels == 0) & label_mask, axis=-1)
 
-  gmr = num_fp_above.mean(axis=-1, where=(labels > 0)) / num_fp
-  gmr_var = num_fp_above.var(axis=-1, where=(labels > 0)) / num_fp
+  gmr = num_fp_above.mean(axis=-1, where=(labels > 0) & label_mask) / num_fp
+  gmr_var = num_fp_above.var(axis=-1, where=(labels > 0) & label_mask) / num_fp
   return gmr, gmr_var
 
 

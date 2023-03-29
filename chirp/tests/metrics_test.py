@@ -205,6 +205,18 @@ class MetricsTest(absltest.TestCase):
     batched_gmr_value = batched_gmr_metric.compute()["macro_gmr"]
     self.assertEqual(batched_gmr_value, full_gmr_value)
 
+    # Check that label_mask works as intended.
+    scores = jnp.array([[0.9, 0.2, 0.3, 0.6, 0.5, 0.7, 0.1, 0.4, 0.8, 0.85]])
+    labels = jnp.array([[0, 0, 0, 0, 0, 1, 0, 1, 1, 0]])
+    label_mask = jnp.array(
+        [[True, True, True, True, True, True, True, True, True, False]]
+    )
+    (full_gmr_value,), _ = metrics.generalized_mean_rank(
+        scores=scores, labels=labels, label_mask=label_mask
+    )
+    # Check against the manually verified outcome.
+    self.assertAlmostEqual(full_gmr_value, 5.0 / 18.0)
+
 
 if __name__ == "__main__":
   absltest.main()

@@ -56,6 +56,9 @@ class RankBasedMetrics(
       )
       class_gmr = jnp.where(mask, class_gmr, jnp.nan)
       class_gmr_var = jnp.where(mask, class_gmr_var, jnp.nan)
+      class_num_tp = jnp.where(
+          mask, jnp.sum(values["label"] > 0, axis=0), jnp.nan
+      )
 
       return {
           "macro_cmap": jnp.mean(class_aps, where=mask),
@@ -68,6 +71,7 @@ class RankBasedMetrics(
           ),
           "individual_gmr": class_gmr,
           "individual_gmr_var": class_gmr_var,
+          "individual_num_tp": class_num_tp,
       }
 
 
