@@ -40,14 +40,14 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
       window_size=10,
       window_stride=10,
   )
-  model_config.taxonomy_loss_weight = 0.0
+  model_config.taxonomy_loss_weight = 1e-3
   model_config.frontend = None
   return model_config
 
 
 def get_config() -> config_dict.ConfigDict:
   """Creates the configuration dictionary for training and evaluation."""
-  config = presets.get_base_config()
+  config = presets.get_base_config(num_train_steps=100_000)
   config.encoder_config = get_encoder_config()
   config.init_config = presets.get_base_init_config(config)
   config.init_config.model_config = get_model_config(config)
@@ -62,18 +62,19 @@ def get_config() -> config_dict.ConfigDict:
 
 def get_hyper(hyper):
   """Defines the hyperparameter sweep."""
-  encoder_hypers = hyper.zipit([
+  return hyper.product([
       hyper.sweep(
-          'config.encoder_config.aggregation',
-          ['beans', 'flatten', 'avg_pool'],
+          'config.random_augmentations',
+          hyper.discrete([False, True]),
       ),
       hyper.sweep(
-          'config.encoder_config.compute_mfccs',
-          [True, True, False],
+          'config.init_config.cosine_alpha',
+          # Without / with cosine decay for the learning rate.
+          hyper.discrete([1.0, 0.0]),
+      ),
+      hyper.sweep(
+          'config.init_config.learning_rate',
+          # 10 ** np.linspace(-5, 1, 5)
+          hyper.discrete([1e-05, 3.16e-4, 1e-2, 3.16e-1, 1e1]),
       ),
   ])
-  optimizer_hypers = hyper.sweep(
-      'config.init_config.learning_rate',
-      hyper.discrete([1e-2, 1e-1, 1e1]),
-  )
-  return hyper.product([encoder_hypers, optimizer_hypers])

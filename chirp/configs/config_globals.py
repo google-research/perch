@@ -17,15 +17,16 @@
 from typing import Any
 
 from chirp import audio_utils
+from chirp import config_utils
 from chirp.data import pipeline
 from chirp.eval import eval_lib
 from chirp.models import conformer
 from chirp.models import efficientnet
 from chirp.models import frontend
+from chirp.models import handcrafted_features
 from chirp.models import hubert
 from chirp.models import layers
 from chirp.models import quantizers
-from chirp.models import handcrafted_features
 from chirp.models import soundstream_unet
 from chirp.models import taxonomy_model
 from flax import linen as nn
@@ -35,6 +36,7 @@ import optax
 def get_globals() -> dict[str, Any]:
   return {
       "audio_utils": audio_utils,
+      "config_utils": config_utils,
       "conformer": conformer,
       "efficientnet": efficientnet,
       "eval_lib": eval_lib,

@@ -15,9 +15,11 @@
 
 """Presets for the baseline experiments."""
 
-from chirp.config_utils import callable_config as _c
-from chirp.config_utils import object_config as _o
+from chirp import config_utils
 from ml_collections import config_dict
+
+_c = config_utils.callable_config
+_o = config_utils.object_config
 
 
 def get_base_config(**kwargs):
@@ -38,10 +40,12 @@ def get_base_config(**kwargs):
   config.eval_window_stride_s = 2.5
   config.frame_rate_hz = 100
   config.num_channels = 160
-  config.kernel_size = 2_048  # ~0.08 ms * 32,000 Hz
+  config.kernel_size, config.nfft = config_utils.get_melspec_defaults(config)
+
   config.batch_size = 256
   config.target_class_list = 'xenocanto'
-  config.num_train_steps = 200_000
+  config.num_train_steps = 1_000_000
+  config.random_augmentations = True
   config.loss_fn = _o('optax.sigmoid_binary_cross_entropy')
   config.tfds_data_dir = ''
   config.update(kwargs)
@@ -77,8 +81,17 @@ def get_base_init_config(
       config, config.get_ref('train_window_size_s')
   )
   init_config.learning_rate = 0.0001
+  # Set to 1.0 to turn off cosine decay. The default value for alpha is zero in
+  # optax.cosine_decay_schedule, so we want to try alpha \in {0, 1}.
+  init_config.cosine_alpha = 1.0
   init_config.optimizer = _c(
-      'optax.adam', learning_rate=init_config.get_ref('learning_rate')
+      'optax.adam',
+      learning_rate=_c(
+          'optax.cosine_decay_schedule',
+          init_value=init_config.get_ref('learning_rate'),
+          decay_steps=config.get_ref('num_train_steps'),
+          alpha=init_config.get_ref('cosine_alpha'),
+      ),
   )
   init_config.rng_seed = 0
   init_config.target_class_list = config.get_ref('target_class_list')
@@ -191,15 +204,16 @@ def _get_pipeline_ops(
     filter_by_complement: bool,
     shuffle: bool,
     target_class_list: str,
-    mixup: bool,
+    mixup: bool | config_dict.FieldReference,
     slice_method: str,
     slice_window_size: int,
     slice_window_stride: float,
     slice_start: float,
-    random_normalize: bool,
+    random_normalize: bool | config_dict.FieldReference,
     melspec_num_channels: int,
     melspec_frame_rate: int,
     melspec_kernel_size: int,
+    melspec_nfft: int,
     sample_rate: int,
     batch_size: int,
     split_across_devices: bool,
@@ -208,7 +222,7 @@ def _get_pipeline_ops(
 ) -> list[config_dict.ConfigDict]:
   """Creates the pipeline ops."""
   filtering_ops = []
-  shuffle_op = mixup_op = repeat_op = None
+  shuffle_op = repeat_op = None
   melspec_stride = sample_rate // melspec_frame_rate
   if filtering_df_paths:
     for filtering_df_path in filtering_df_paths:
@@ -221,8 +235,12 @@ def _get_pipeline_ops(
       )
   if shuffle:
     shuffle_op = _c('pipeline.Shuffle', shuffle_buffer_size=512)
-  if mixup:
-    mixup_op = _c('pipeline.MixAudio', target_dist=(1.0, 0.5, 0.25, 0.25))
+  mixup_op = _c(
+      'config_utils.either',
+      object_a=_c('pipeline.MixAudio', target_dist=(1.0, 0.5, 0.25, 0.25)),
+      object_b=_c('pipeline.DatasetPreprocessOp'),
+      return_a=mixup,
+  )
   if slice_method == 'random':
     slice_op = _c('pipeline.RandomSlice', window_size=slice_window_size)
     annotate_op = None
@@ -244,12 +262,15 @@ def _get_pipeline_ops(
     )
   else:
     raise ValueError(f'unrecognized slice method: {slice_method}')
-  if random_normalize:
-    normalize_op = _c(
-        'pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25
-    )
-  else:
-    normalize_op = _c('pipeline.NormalizeAudio', target_gain=0.2)
+
+  normalize_op = _c(
+      'config_utils.either',
+      object_a=_c(
+          'pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25
+      ),
+      object_b=_c('pipeline.NormalizeAudio', target_gain=0.2),
+      return_a=random_normalize,
+  )
   if repeat:
     repeat_op = _c('pipeline.Repeat')
 
@@ -268,27 +289,17 @@ def _get_pipeline_ops(
           target_class_list=target_class_list,
           add_taxonomic_labels=False,
       ),
-      mixup_op,
       normalize_op,
+      mixup_op,
       _c(
           'pipeline.MelSpectrogram',
           features=melspec_num_channels,
           stride=melspec_stride,
           kernel_size=melspec_kernel_size,
+          nfft=melspec_nfft,
           sample_rate=sample_rate,
           freq_range=(60, 10_000),
-          # Settings from PCEN: Why and how
-          scaling_config=_c(
-              'frontend.PCENScalingConfig',
-              # Disable convolutional approximation
-              conv_width=0,
-              # Solution to 2*pi*tau/T = arccos(1 - s^2/(2 * (1 - s)))
-              # (prop III.1) for tau = 1.5 ms and T = 60 ms
-              smoothing_coef=0.145,
-              gain=0.8,
-              bias=10.0,
-              root=4.0,
-          ),
+          scaling_config=_c('frontend.PCENScalingConfig', conv_width=256),
       ),
       _c(
           'pipeline.Batch',
@@ -321,15 +332,16 @@ def get_supervised_train_pipeline(
           filter_by_complement=filter_by_complement,
           shuffle=True,
           target_class_list=config.get_ref('target_class_list'),
-          mixup=True,
+          mixup=config.get_ref('random_augmentations'),
           slice_method='random',
           slice_window_size=config.get_ref('train_window_size_s'),
           slice_window_stride=0.0,  # Unused because slice_method=random'.
           slice_start=0.0,  # Unused because slice_method='random'.
-          random_normalize=True,
+          random_normalize=config.get_ref('random_augmentations'),
           melspec_num_channels=config.get_ref('num_channels'),
           melspec_frame_rate=config.get_ref('frame_rate_hz'),
           melspec_kernel_size=config.get_ref('kernel_size'),
+          melspec_nfft=config.get_ref('nfft'),
           sample_rate=config.get_ref('sample_rate_hz'),
           batch_size=config.get_ref('batch_size'),
           split_across_devices=True,
@@ -369,6 +381,7 @@ def get_supervised_eval_pipeline(
           melspec_num_channels=config.get_ref('num_channels'),
           melspec_frame_rate=config.get_ref('frame_rate_hz'),
           melspec_kernel_size=config.get_ref('kernel_size'),
+          melspec_nfft=config.get_ref('nfft'),
           sample_rate=config.get_ref('sample_rate_hz'),
           batch_size=config.get_ref('batch_size'),
           split_across_devices=False,

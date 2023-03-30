@@ -24,11 +24,11 @@ Philosophy:
   code doesn't panic.
 """
 
-import math
-
-from chirp.config_utils import callable_config as _c
-from chirp.config_utils import object_config as _o
+from chirp import config_utils
 from ml_collections import config_dict
+
+_c = config_utils.callable_config
+_o = config_utils.object_config
 
 
 def get_base_config(**kwargs):
@@ -103,30 +103,7 @@ def get_pcen_melspec_config(
   frontend_stride = config.get_ref('sample_rate_hz') // config.get_ref(
       'frame_rate_hz'
   )
-  # This gives 50% overlap, which is optimal for the Hanning window.
-  # See Heinz, et al: "Spectrum and spectral density estimation by the
-  # Discrete Fourier transform (DFT), including a comprehensive list of window
-  # functions and some new flat-top windows", Section 10.
-  # https://holometer.fnal.gov/GH_FFT.pdf
-  # In brief, 50% overlap gives no amplitude distortion, and minimizes the
-  # overlap correlation. Longer windows average over longer time periods,
-  # losing signal locality, and are also more expensive to compute.
-  kernel_size = 2 * frontend_stride
-  # nfft is preferably the smallest power of two containing the kernel.
-  # This yields a no-nonsense FFT, implemented everywhere.
-  # Note that we can't use fancy math like ceil(log2(ks)) on field references...
-  if kernel_size <= 256:
-    nfft = 256
-  elif 256 < kernel_size <= 512:
-    nfft = 512
-  elif 512 < kernel_size <= 1024:
-    nfft = 1024
-  elif 1024 < kernel_size <= 2048:
-    nfft = 2048
-  elif 2048 < kernel_size <= 4096:
-    nfft = 4096
-  else:
-    raise ValueError('Large kernel {kernel_size}; please define nfft.')
+  kernel_size, nfft = config_utils.get_melspec_defaults(config)
 
   return _c(
       'frontend.MelSpectrogram',

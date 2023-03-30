@@ -40,7 +40,7 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
       window_size=10,
       window_stride=10,
   )
-  model_config.taxonomy_loss_weight = 0.0
+  model_config.taxonomy_loss_weight = 1e-3
   model_config.frontend = None
   return model_config
 
