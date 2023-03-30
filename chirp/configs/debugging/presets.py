@@ -16,6 +16,7 @@
 """Presets for the control experiments."""
 
 from chirp.config_utils import callable_config as _c
+from chirp.config_utils import object_config as _o
 from ml_collections import config_dict
 
 
@@ -39,6 +40,7 @@ def get_base_config(**kwargs):
   config.batch_size = 256
   config.target_class_list = 'xenocanto'
   config.num_train_steps = 200_000
+  config.loss_fn = _o('optax.sigmoid_binary_cross_entropy')
   config.tfds_data_dir = ''
   config.update(kwargs)
   return config

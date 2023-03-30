@@ -15,6 +15,8 @@
 
 """Shared utilities for training scripts."""
 
+from typing import Callable
+
 from chirp.models import output
 from chirp.taxonomy import namespace
 from clu import checkpoint
@@ -131,23 +133,22 @@ def flatten_dict(
   return flattened_dict
 
 
-def taxonomy_cross_entropy(
+def taxonomy_loss(
     outputs: output.TaxonomicOutput,
     taxonomy_loss_weight: float,
+    loss_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
     **kwargs,
 ) -> jnp.ndarray:
-  """Computes mean cross entropy across taxonomic labels."""
-  xentropy = {
-      f"{key}_xentropy": optax.sigmoid_binary_cross_entropy(
-          getattr(outputs, key), kwargs[key]
-      )
+  """Computes the mean loss across taxonomic labels."""
+  losses = {
+      f"{key}_loss": loss_fn(getattr(outputs, key), kwargs[key])
       for key in ["label"] + TAXONOMY_KEYS
       if key in kwargs
   }
-  xentropy["loss"] = jnp.mean(xentropy["label_xentropy"], axis=-1)
+  losses["loss"] = jnp.mean(losses["label_loss"], axis=-1)
   if taxonomy_loss_weight != 0:
-    xentropy["loss"] = xentropy["loss"] + sum(
-        taxonomy_loss_weight * jnp.mean(xentropy[f"{key}_xentropy"], axis=-1)
+    losses["loss"] = losses["loss"] + sum(
+        taxonomy_loss_weight * jnp.mean(losses[f"{key}_loss"], axis=-1)
         for key in TAXONOMY_KEYS
     )
-  return xentropy  # pytype: disable=bad-return-type  # jax-ndarray
+  return losses  # pytype: disable=bad-return-type  # jax-ndarray

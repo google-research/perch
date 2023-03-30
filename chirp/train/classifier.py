@@ -17,6 +17,7 @@
 
 import functools
 import time
+from typing import Callable
 
 from absl import logging
 from chirp import export_utils
@@ -60,9 +61,9 @@ def make_metrics_collection(
 
   metrics_ = {"loss": clu_metrics.Average.from_output("loss")}
   for key in keys:
-    metrics_[f"{key}_xentropy"] = utils.MultiAverage.create(
+    metrics_[f"{key}_loss"] = utils.MultiAverage.create(
         num_labels[key]
-    ).from_output(f"{key}_xentropy")
+    ).from_output(f"{key}_loss")
     metrics_[f"{key}_map"] = clu_metrics.Average.from_fun(get_keyed_map_fn(key))
 
   metrics_ = {f"{prefix}_{key}": value for key, value in metrics_.items()}
@@ -150,6 +151,9 @@ def train(
     logdir: str,
     log_every_steps: int,
     checkpoint_every_steps: int,
+    loss_fn: Callable[
+        [jnp.ndarray, jnp.ndarray], jnp.ndarray
+    ] = optax.sigmoid_binary_cross_entropy,
     add_class_wise_metrics: bool = True,
 ) -> None:
   """Train a model.
@@ -162,6 +166,7 @@ def train(
     logdir: Directory to use for logging.
     log_every_steps: Write the training minibatch loss.
     checkpoint_every_steps: Checkpoint the model and training state.
+    loss_fn: Loss function used for training.
     add_class_wise_metrics: Whether to log class-wise metrics.
   """
   train_iterator = train_dataset.as_numpy_iterator()
@@ -188,17 +193,18 @@ def train(
             "patch_mask": patch_mask_key,
         },
     )
-    xentropy = utils.taxonomy_cross_entropy(
+    losses = utils.taxonomy_loss(
         outputs=model_outputs,
         taxonomy_loss_weight=taxonomy_loss_weight,
+        loss_fn=loss_fn,
         **batch,
     )
     train_metrics = train_metrics_collection.gather_from_model_output(
         **output.logits(model_outputs),
-        **xentropy,
+        **losses,
         **batch,
     )
-    return jnp.mean(xentropy["loss"]), (train_metrics, model_state)
+    return jnp.mean(losses["loss"]), (train_metrics, model_state)
 
   # Define update step
   @functools.partial(jax.pmap, axis_name="batch")
@@ -267,6 +273,9 @@ def evaluate(
     valid_dataset: tf.data.Dataset,
     writer: metric_writers.MetricWriter,
     reporter: periodic_actions.ReportProgress,
+    loss_fn: Callable[
+        [jnp.ndarray, jnp.ndarray], jnp.ndarray
+    ] = optax.sigmoid_binary_cross_entropy,
     eval_steps_per_checkpoint: int | None = None,
     name: str = "valid",
     add_class_wise_metrics: bool = True,
@@ -294,15 +303,16 @@ def evaluate(
     model_outputs = model_bundle.model.apply(
         variables, batch["audio"], train=False, **kwargs
     )
-    xentropy = utils.taxonomy_cross_entropy(
+    losses = utils.taxonomy_loss(
         outputs=model_outputs,
         taxonomy_loss_weight=taxonomy_loss_weight,
+        loss_fn=loss_fn,
         **batch,
     )
     return valid_metrics_collection.gather_from_model_output(
         **output.logits(model_outputs),
         **batch,
-        **xentropy,
+        **losses,
     )
 
   @jax.jit
@@ -388,6 +398,9 @@ def evaluate_loop(
     workdir: str,
     logdir: str,
     num_train_steps: int,
+    loss_fn: Callable[
+        [jnp.ndarray, jnp.ndarray], jnp.ndarray
+    ] = optax.sigmoid_binary_cross_entropy,
     eval_steps_per_checkpoint: int | None = None,
     tflite_export: bool = False,
     input_shape: tuple[int, ...] | None = None,
@@ -430,6 +443,7 @@ def evaluate_loop(
         valid_dataset,
         writer,
         reporter,
+        loss_fn,
         eval_steps_per_checkpoint,
         name,
         add_class_wise_metrics=add_class_wise_metrics,
@@ -505,6 +519,7 @@ def run(
         model_bundle,
         train_state,
         train_dataset,
+        loss_fn=config.loss_fn,
         logdir=workdir,
         **config.train_config,
     )
@@ -513,6 +528,7 @@ def run(
         model_bundle,
         train_state,
         valid_dataset,
+        loss_fn=config.loss_fn,
         workdir=workdir,
         logdir=workdir,
         name=name,

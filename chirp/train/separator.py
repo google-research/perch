@@ -17,6 +17,7 @@
 
 import functools
 import time
+from typing import Callable
 
 
 from absl import logging
@@ -181,6 +182,9 @@ def train(
     loss_max_snr: float,
     classify_bottleneck_weight: float,
     taxonomy_labels_weight: float,
+    loss_fn: Callable[
+        [jnp.ndarray, jnp.ndarray], jnp.ndarray
+    ] = optax.sigmoid_binary_cross_entropy,
 ) -> None:
   """Train a model."""
   train_iterator = train_dataset.as_numpy_iterator()
@@ -210,8 +214,11 @@ def train(
           estimate=model_outputs.separated_audio,
       )
       model_outputs = model_outputs.time_reduce_logits('MIDPOINT')
-      taxo_loss = utils.taxonomy_cross_entropy(
-          model_outputs, taxonomy_labels_weight, **batch
+      taxo_loss = utils.taxonomy_loss(
+          outputs=model_outputs,
+          taxonomy_loss_weight=taxonomy_labels_weight,
+          loss_fn=loss_fn,
+          **batch,
       )['loss']
       mixit_neg_snr = p_log_snr_loss(
           batch['source_audio'], estimate, loss_max_snr
@@ -275,6 +282,9 @@ def evaluate(
     reporter: periodic_actions.ReportProgress,
     loss_max_snr: float,
     taxonomy_labels_weight: float,
+    loss_fn: Callable[
+        [jnp.ndarray, jnp.ndarray], jnp.ndarray
+    ] = optax.sigmoid_binary_cross_entropy,
     eval_steps_per_checkpoint: int = -1,
     add_class_wise_metrics: bool = False,
 ):
@@ -297,8 +307,11 @@ def evaluate(
     estimate, mixit_matrix = metrics.least_squares_mixit(
         reference=batch['source_audio'], estimate=model_outputs.separated_audio
     )
-    taxo_loss = utils.taxonomy_cross_entropy(
-        model_outputs, taxonomy_labels_weight, **batch
+    taxo_loss = utils.taxonomy_loss(
+        outputs=model_outputs,
+        taxonomy_loss_weight=taxonomy_labels_weight,
+        loss_fn=loss_fn,
+        **batch,
     )['loss']
     mixit_neg_snr = p_log_snr_loss(
         batch['source_audio'], estimate, loss_max_snr
@@ -358,6 +371,9 @@ def evaluate_loop(
     eval_steps_per_checkpoint: int,
     loss_max_snr: float,
     taxonomy_labels_weight: float,
+    loss_fn: Callable[
+        [jnp.ndarray, jnp.ndarray], jnp.ndarray
+    ] = optax.sigmoid_binary_cross_entropy,
     tflite_export: bool = False,
     frame_size: int | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
@@ -399,6 +415,7 @@ def evaluate_loop(
         reporter,
         loss_max_snr,
         taxonomy_labels_weight,
+        loss_fn,
         eval_steps_per_checkpoint,
         add_class_wise_metrics=add_class_wise_metrics,
     )
@@ -491,6 +508,7 @@ def run(
         model_bundle,
         train_state,
         train_dataset,
+        loss_fn=config.loss_fn,
         logdir=workdir,
         **config.train_config,
     )
@@ -499,6 +517,7 @@ def run(
         model_bundle,
         train_state,
         valid_dataset,
+        loss_fn=config.loss_fn,
         workdir=workdir,
         logdir=workdir,
         **config.eval_config,
