@@ -24,6 +24,7 @@ from flax import linen as nn
 import jax
 from jax import nn as jnn
 from jax import numpy as jnp
+import optax
 
 JTensor = jnp.ndarray
 
@@ -693,3 +694,9 @@ class EarlyFeatureExtractor(nn.Module):
       inputs = self.activation(inputs)
 
     return inputs
+
+
+def hinge_loss(predictor_outputs, targets):
+  """Computes the hinge loss while accommodating targets in {0, 1}."""
+  targets = 2 * targets - 1
+  return optax.hinge_loss(predictor_outputs, targets)
