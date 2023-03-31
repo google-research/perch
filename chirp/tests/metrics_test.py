@@ -189,7 +189,7 @@ class MetricsTest(absltest.TestCase):
         label=labels, label_logits=scores
     ).compute()["macro_gmr"]
     # Check against the manually verified outcome.
-    self.assertAlmostEqual(full_gmr_value, 5.0 / 18.0)
+    self.assertAlmostEqual(full_gmr_value, 13.0 / 18.0, places=5)
 
     batched_gmr_metric = rank_based_metrics.RankBasedMetrics.empty()
     batched_gmr_metric = batched_gmr_metric.merge(
@@ -215,7 +215,7 @@ class MetricsTest(absltest.TestCase):
         scores=scores, labels=labels, label_mask=label_mask
     )
     # Check against the manually verified outcome.
-    self.assertAlmostEqual(full_gmr_value, 5.0 / 18.0)
+    self.assertAlmostEqual(full_gmr_value, 13.0 / 18.0, places=5)
 
 
 if __name__ == "__main__":

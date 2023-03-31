@@ -56,22 +56,17 @@ class RankBasedMetrics(
       )
       class_gmr = jnp.where(mask, class_gmr, jnp.nan)
       class_gmr_var = jnp.where(mask, class_gmr_var, jnp.nan)
-      class_num_tp = jnp.where(
+      class_num_p = jnp.where(
           mask, jnp.sum(values["label"] > 0, axis=0), jnp.nan
       )
 
       return {
           "macro_cmap": jnp.mean(class_aps, where=mask),
           "individual_cmap": class_aps,
-          # If the GMR is 0.0 for at least one class, then the geometric average
-          # goes to zero. Instead, we take the geometric average of 1 - GMR and
-          # then take 1 - geometric_average.
-          "macro_gmr": 1.0 - jnp.exp(
-              jnp.mean(jnp.log(1.0 - class_gmr), where=mask)
-          ),
+          "macro_gmr": jnp.exp(jnp.mean(jnp.log(class_gmr), where=mask)),
           "individual_gmr": class_gmr,
           "individual_gmr_var": class_gmr_var,
-          "individual_num_tp": class_num_tp,
+          "individual_num_p": class_num_p,
       }
 
 

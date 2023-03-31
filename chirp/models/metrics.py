@@ -198,10 +198,15 @@ def generalized_mean_rank(
 
   The generalized mean rank can be expressed as
 
-      (sum_i #FP ranked above TP_i) / (#FP * #TP).
+      (sum_i #P ranked above N_i) / (#P * #N),
 
-  We treat all labels as either true positives (if the label is 1) or false
-  positives (if the label is zero).
+  or equivalently,
+
+      1 - (sum_i #N ranked above P_i) / (#P * #N).
+
+  This metric is usually better visualized in the logits domain, where it
+  reflects the log-odds of ranking a randomly-chosen positive higher than a
+  randomly-chosen negative.
 
   Args:
     scores: A score for each label which can be ranked.
@@ -214,7 +219,10 @@ def generalized_mean_rank(
       sorted inputs.
 
   Returns:
-    The generalized mean rank and its variance.
+    The generalized mean rank and its variance. The variance is calculated by
+    considering each positive to be an independent sample of the value
+    1 - #N ranked above P_i / #N. This gives a measure of how consistently
+    positives are ranked.
   """
   idx = jnp.argsort(scores, axis=-1)
   if sort_descending:
@@ -225,11 +233,15 @@ def generalized_mean_rank(
   else:
     label_mask = jnp.take_along_axis(label_mask, idx, axis=-1)
 
-  num_fp = (labels == 0).sum(axis=-1, where=label_mask)
-  num_fp_above = jnp.cumsum((labels == 0) & label_mask, axis=-1)
+  num_p = (labels > 0).sum(axis=-1, where=label_mask)
+  num_p_above = jnp.cumsum((labels > 0) & label_mask, axis=-1)
+  num_n = (labels == 0).sum(axis=-1, where=label_mask)
+  num_n_above = jnp.cumsum((labels == 0) & label_mask, axis=-1)
 
-  gmr = num_fp_above.mean(axis=-1, where=(labels > 0) & label_mask) / num_fp
-  gmr_var = num_fp_above.var(axis=-1, where=(labels > 0) & label_mask) / num_fp
+  gmr = num_p_above.mean(axis=-1, where=(labels == 0) & label_mask) / num_p
+  gmr_var = (num_n_above / num_n[:, None]).var(
+      axis=-1, where=(labels > 0) & label_mask
+  )
   return gmr, gmr_var
 
 
