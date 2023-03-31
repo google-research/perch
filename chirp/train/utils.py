@@ -140,13 +140,16 @@ def taxonomy_loss(
     **kwargs,
 ) -> jnp.ndarray:
   """Computes the mean loss across taxonomic labels."""
-  losses = {
-      f"{key}_loss": loss_fn(getattr(outputs, key), kwargs[key])
-      for key in ["label"] + TAXONOMY_KEYS
-      if key in kwargs
-  }
+  losses = {"label_loss": loss_fn(getattr(outputs, "label"), kwargs["label"])}
   losses["loss"] = jnp.mean(losses["label_loss"], axis=-1)
   if taxonomy_loss_weight != 0:
+    losses.update(
+        {
+            f"{key}_loss": loss_fn(getattr(outputs, key), kwargs[key])
+            for key in TAXONOMY_KEYS
+            if key in kwargs
+        }
+    )
     losses["loss"] = losses["loss"] + sum(
         taxonomy_loss_weight * jnp.mean(losses[f"{key}_loss"], axis=-1)
         for key in TAXONOMY_KEYS

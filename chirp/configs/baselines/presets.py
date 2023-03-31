@@ -47,6 +47,9 @@ def get_base_config(**kwargs):
   config.num_train_steps = 1_000_000
   config.random_augmentations = True
   config.loss_fn = _o('optax.sigmoid_binary_cross_entropy')
+  # Set to 1.0 to turn off cosine decay. The default value for alpha is zero in
+  # optax.cosine_decay_schedule, so we want to try alpha \in {0, 1}.
+  config.cosine_alpha = 1.0
   config.tfds_data_dir = ''
   config.update(kwargs)
   return config
@@ -81,16 +84,13 @@ def get_base_init_config(
       config, config.get_ref('train_window_size_s')
   )
   init_config.learning_rate = 0.0001
-  # Set to 1.0 to turn off cosine decay. The default value for alpha is zero in
-  # optax.cosine_decay_schedule, so we want to try alpha \in {0, 1}.
-  init_config.cosine_alpha = 1.0
   init_config.optimizer = _c(
       'optax.adam',
       learning_rate=_c(
           'optax.cosine_decay_schedule',
           init_value=init_config.get_ref('learning_rate'),
           decay_steps=config.get_ref('num_train_steps'),
-          alpha=init_config.get_ref('cosine_alpha'),
+          alpha=config.get_ref('cosine_alpha'),
       ),
   )
   init_config.rng_seed = 0
@@ -287,7 +287,7 @@ def _get_pipeline_ops(
           'pipeline.ConvertBirdTaxonomyLabels',
           source_namespace='ebird2021',
           target_class_list=target_class_list,
-          add_taxonomic_labels=False,
+          add_taxonomic_labels=True,
       ),
       normalize_op,
       mixup_op,

@@ -40,7 +40,7 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
       window_size=10,
       window_stride=10,
   )
-  model_config.taxonomy_loss_weight = 1e-3
+  model_config.taxonomy_loss_weight = 0.0
   model_config.frontend = None
   return model_config
 
@@ -68,18 +68,17 @@ def get_config() -> config_dict.ConfigDict:
 
 def get_hyper(hyper):
   """Defines the hyperparameter sweep."""
-  encoder_hypers = hyper.zipit([
+  return hyper.product([
       hyper.sweep(
-          'config.encoder_config.aggregation',
-          ['avg_pool'],
+          'config.random_augmentations',
+          hyper.discrete([True]),
       ),
       hyper.sweep(
-          'config.encoder_config.compute_mfccs',
-          [False],
+          'config.cosine_alpha',
+          hyper.discrete([1.0]),
+      ),
+      hyper.sweep(
+          'config.init_config.learning_rate',
+          hyper.discrete([1e-1]),
       ),
   ])
-  optimizer_hypers = hyper.sweep(
-      'config.init_config.learning_rate',
-      hyper.discrete([1e-1]),
-  )
-  return hyper.product([encoder_hypers, optimizer_hypers])

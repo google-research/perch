@@ -500,6 +500,7 @@ class MelSpectrogram(FeaturesPreprocessOp):
     name: The name of the feature to process.
     power: The power of the magnitude spectrogram.
     scaling_config: The magnitude scaling to use.
+    nfft: Length of the FFT used, if a zero padded FFT is desired.
   """
 
   features: int
@@ -510,6 +511,7 @@ class MelSpectrogram(FeaturesPreprocessOp):
   name: str = 'audio'
   power: float = 2.0
   scaling_config: frontend.ScalingConfig | None = None
+  nfft: int | None = None
 
   def __call__(
       self, features: Features, dataset_info: tfds.core.DatasetInfo
@@ -519,6 +521,7 @@ class MelSpectrogram(FeaturesPreprocessOp):
         features[self.name],
         nperseg=self.kernel_size,
         noverlap=self.kernel_size - self.stride,
+        nfft=self.nfft,
         padded=False,
     )
     if tf.shape(features[self.name])[-1] % self.stride == 0:
@@ -526,7 +529,7 @@ class MelSpectrogram(FeaturesPreprocessOp):
     stfts = tf.experimental.numpy.swapaxes(stfts, -1, -2)
     magnitude_spectrograms = tf.math.abs(stfts) ** self.power
 
-    num_spectrogram_bins = self.kernel_size // 2 + 1
+    num_spectrogram_bins = magnitude_spectrograms.shape[-1]
     mel_matrix = tf.signal.linear_to_mel_weight_matrix(
         self.features, num_spectrogram_bins, self.sample_rate, *self.freq_range
     )
