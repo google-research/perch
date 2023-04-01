@@ -19,11 +19,12 @@ import os
 import tempfile
 
 from chirp import config_utils
+from chirp import preprocessing
 from chirp.configs import baseline
 from chirp.configs import baseline_attention
 from chirp.configs import baseline_mel_conformer
 from chirp.configs import config_globals
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.models import efficientnet
 from chirp.models import frontend
 from chirp.tests import fake_dataset
@@ -68,7 +69,7 @@ class TrainTest(parameterized.TestCase):
     self.builder = fake_builder
 
   def _get_test_dataset(self, config):
-    ds, dataset_info = pipeline.get_dataset(
+    ds, dataset_info = data_utils.get_dataset(
         "train",
         dataset_directory=self.builder.data_dir,
         pipeline=config.train_dataset_config.pipeline,
@@ -87,30 +88,30 @@ class TrainTest(parameterized.TestCase):
     config.eval_config.eval_steps_per_checkpoint = 1
     config = config_utils.parse_config(config, config_globals.get_globals())
 
-    config.train_dataset_config.pipeline = pipeline.Pipeline(
+    config.train_dataset_config.pipeline = preprocessing.Pipeline(
         ops=[
-            pipeline.OnlyJaxTypes(),
-            pipeline.ConvertBirdTaxonomyLabels(
+            preprocessing.OnlyJaxTypes(),
+            preprocessing.ConvertBirdTaxonomyLabels(
                 source_namespace="ebird2021",
                 target_class_list="xenocanto",
                 add_taxonomic_labels=True,
             ),
-            pipeline.MixAudio(mixin_prob=0.0),
-            pipeline.Batch(batch_size=1, split_across_devices=True),
-            pipeline.RandomSlice(window_size=TEST_WINDOW_S),
-            pipeline.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
+            preprocessing.MixAudio(mixin_prob=0.0),
+            preprocessing.Batch(batch_size=1, split_across_devices=True),
+            preprocessing.RandomSlice(window_size=TEST_WINDOW_S),
+            preprocessing.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
         ]
     )
 
-    config.eval_dataset_config.pipeline = pipeline.Pipeline(
+    config.eval_dataset_config.pipeline = preprocessing.Pipeline(
         ops=[
-            pipeline.OnlyJaxTypes(),
-            pipeline.MultiHot(),
-            pipeline.Batch(batch_size=1, split_across_devices=True),
-            pipeline.Slice(
+            preprocessing.OnlyJaxTypes(),
+            preprocessing.MultiHot(),
+            preprocessing.Batch(batch_size=1, split_across_devices=True),
+            preprocessing.Slice(
                 window_size=TEST_WINDOW_S, start=0.5, names=("audio",)
             ),
-            pipeline.NormalizeAudio(target_gain=0.2, names=("audio",)),
+            preprocessing.NormalizeAudio(target_gain=0.2, names=("audio",)),
         ]
     )
 

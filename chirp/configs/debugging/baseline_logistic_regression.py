@@ -44,37 +44,37 @@ def get_pipeline_ops(
   melspec_stride = sample_rate // melspec_frame_rate
   if filtering_df_path:
     filtering_op = _c(
-        'pipeline.FilterByFeature',
+        'preprocessing.FilterByFeature',
         filtering_df_path=filtering_df_path,
         complement=filter_by_complement,
     )
   if shuffle:
-    shuffle_op = _c('pipeline.Shuffle', shuffle_buffer_size=512)
+    shuffle_op = _c('preprocessing.Shuffle', shuffle_buffer_size=512)
   if mixup:
-    mixup_op = _c('pipeline.MixAudio', target_dist=(1.0, 0.5, 0.25, 0.25))
+    mixup_op = _c('preprocessing.MixAudio', target_dist=(1.0, 0.5, 0.25, 0.25))
   if random_slice:
-    slice_op = _c('pipeline.RandomSlice', window_size=slice_window_size)
+    slice_op = _c('preprocessing.RandomSlice', window_size=slice_window_size)
   else:
     slice_op = _c(
-        'pipeline.Slice',
+        'preprocessing.Slice',
         window_size=slice_window_size,
         start=slice_start,
     )
   if random_normalize:
     normalize_op = _c(
-        'pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25
+        'preprocessing.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25
     )
   else:
-    normalize_op = _c('pipeline.NormalizeAudio', target_gain=0.2)
+    normalize_op = _c('preprocessing.NormalizeAudio', target_gain=0.2)
   if repeat:
-    repeat_op = _c('pipeline.Repeat')
+    repeat_op = _c('preprocessing.Repeat')
 
   ops = [
       filtering_op,
       shuffle_op,
-      _c('pipeline.OnlyJaxTypes'),
+      _c('preprocessing.OnlyJaxTypes'),
       _c(
-          'pipeline.ConvertBirdTaxonomyLabels',
+          'preprocessing.ConvertBirdTaxonomyLabels',
           source_namespace='ebird2021',
           target_class_list=target_class_list,
           add_taxonomic_labels=False,
@@ -83,7 +83,7 @@ def get_pipeline_ops(
       slice_op,
       normalize_op,
       _c(
-          'pipeline.MelSpectrogram',
+          'preprocessing.MelSpectrogram',
           features=melspec_num_channels,
           stride=melspec_stride,
           kernel_size=melspec_kernel_size,
@@ -103,7 +103,7 @@ def get_pipeline_ops(
           ),
       ),
       _c(
-          'pipeline.Batch',
+          'preprocessing.Batch',
           batch_size=batch_size,
           split_across_devices=True,
       ),
@@ -123,7 +123,7 @@ def get_supervised_train_pipeline(
     raise ValueError('we assume training on XC')
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
-      'pipeline.Pipeline',
+      'preprocessing.Pipeline',
       ops=get_pipeline_ops(
           filtering_df_path=filtering_df_path,
           filter_by_complement=filter_by_complement,
@@ -158,7 +158,7 @@ def get_supervised_eval_pipeline(
   """Creates an eval data pipeline."""
   eval_dataset_config = config_dict.ConfigDict()
   eval_dataset_config.pipeline = _c(
-      'pipeline.Pipeline',
+      'preprocessing.Pipeline',
       ops=get_pipeline_ops(
           filtering_df_path=None,
       filter_by_complement=True,

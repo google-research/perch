@@ -34,7 +34,7 @@ _TFDS_DATA_DIR = None
 
 def _melspec_if_baseline(config_string: str, **kwargs):
   return (
-      [_callable_config('pipeline.MelSpectrogram', **kwargs)]
+      [_callable_config('preprocessing.MelSpectrogram', **kwargs)]
       if config_string == 'baseline'
       else []
   )
@@ -110,7 +110,7 @@ def get_config() -> config_dict.ConfigDict:
   # normalizing the audio.
   slice_peaked_pipeline_ops = [
       _callable_config(
-          'pipeline.OnlyKeep',
+          'preprocessing.OnlyKeep',
           names=[
               'audio',
               'label',
@@ -120,12 +120,12 @@ def get_config() -> config_dict.ConfigDict:
           ],
       ),
       _callable_config(
-          'pipeline.Slice',
+          'preprocessing.Slice',
           window_size=xc_window_size_seconds,
           start=xc_slice_start,
       ),
-      _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
-      _callable_config('pipeline.LabelsToString'),
+      _callable_config('preprocessing.NormalizeAudio', target_gain=target_gain),
+      _callable_config('preprocessing.LabelsToString'),
   ]
 
   # Full-length recordings are used to construct the search corpora data (for
@@ -133,7 +133,7 @@ def get_config() -> config_dict.ConfigDict:
   # dense annotating.
   full_length_pipeline_ops = [
       _callable_config(
-          'pipeline.OnlyKeep',
+          'preprocessing.OnlyKeep',
           names=[
               'audio',
               'label',
@@ -142,21 +142,21 @@ def get_config() -> config_dict.ConfigDict:
               'segment_id',
           ],
       ),
-      _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
+      _callable_config('preprocessing.NormalizeAudio', target_gain=target_gain),
       _callable_config(
-          'pipeline.ExtractStridedWindows',
+          'preprocessing.ExtractStridedWindows',
           window_length_sec=config.window_length_sec,
           window_stride_sec=config.window_stride_sec,
       ),
       _callable_config(
-          'pipeline.DenselyAnnotateWindows',
+          'preprocessing.DenselyAnnotateWindows',
           overlap_threshold_sec=config.overlap_threshold_sec,
       ),
       # NOTE: this pipeline operation should be applied at the very end, as it
       # turns a sequence of labels into a single space-separated string of
       # species codes. Previous ops in the pipeline assume that labels are
       # sequences of integer IDs.
-      _callable_config('pipeline.LabelsToString'),
+      _callable_config('preprocessing.LabelsToString'),
   ]
 
   dataset_configs = {}
@@ -170,7 +170,9 @@ def get_config() -> config_dict.ConfigDict:
     else:
       ops = full_length_pipeline_ops
 
-    dataset_config.pipeline = _callable_config('pipeline.Pipeline', ops=ops)
+    dataset_config.pipeline = _callable_config(
+        'preprocessing.Pipeline', ops=ops
+    )
     dataset_config.split = 'train'
     dataset_configs[dataset_description['dataset_name']] = dataset_config
 

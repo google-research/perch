@@ -18,7 +18,7 @@ from typing import Any
 
 from chirp import audio_utils
 from chirp import config_utils
-from chirp.data import pipeline
+from chirp import preprocessing
 from chirp.eval import eval_lib
 from chirp.models import conformer
 from chirp.models import efficientnet
@@ -46,7 +46,7 @@ def get_globals() -> dict[str, Any]:
       "layers": layers,
       "nn": nn,
       "optax": optax,
-      "pipeline": pipeline,
+      "preprocessing": preprocessing,
       "handcrafted_features": handcrafted_features,
       "soundstream_unet": soundstream_unet,
       "taxonomy_model": taxonomy_model,

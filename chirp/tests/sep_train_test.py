@@ -22,7 +22,7 @@ from chirp import audio_utils
 from chirp import config_utils
 from chirp.configs import config_globals
 from chirp.configs import separator as separator_config
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.tests import fake_dataset
 from chirp.train import separator
@@ -65,7 +65,7 @@ class TrainSeparationTest(absltest.TestCase):
       pipeline_ = config.train_dataset_config.pipeline
     else:
       pipeline_ = config.eval_dataset_config.pipeline
-    ds, dataset_info = pipeline.get_dataset(
+    ds, dataset_info = data_utils.get_dataset(
         split,
         is_train=False,  # Avoid shuffle in tests.
         dataset_directory=config.dataset_directory,
@@ -83,35 +83,35 @@ class TrainSeparationTest(absltest.TestCase):
 
     window_size_s = config_dict.FieldReference(1)
     config.train_dataset_config.pipeline = _c(
-        'pipeline.Pipeline',
+        'preprocessing.Pipeline',
         ops=[
-            _c('pipeline.OnlyJaxTypes'),
+            _c('preprocessing.OnlyJaxTypes'),
             _c(
-                'pipeline.ConvertBirdTaxonomyLabels',
+                'preprocessing.ConvertBirdTaxonomyLabels',
                 source_namespace='ebird2021',
                 target_class_list='tiny_species',
                 add_taxonomic_labels=True,
             ),
-            _c('pipeline.MixAudio', mixin_prob=1.0),
-            _c('pipeline.Batch', batch_size=2, split_across_devices=True),
-            _c('pipeline.RandomSlice', window_size=window_size_s),
+            _c('preprocessing.MixAudio', mixin_prob=1.0),
+            _c('preprocessing.Batch', batch_size=2, split_across_devices=True),
+            _c('preprocessing.RandomSlice', window_size=window_size_s),
         ],
     )
 
     config.eval_dataset_config.pipeline = _c(
-        'pipeline.Pipeline',
+        'preprocessing.Pipeline',
         ops=[
-            _c('pipeline.OnlyJaxTypes'),
+            _c('preprocessing.OnlyJaxTypes'),
             _c(
-                'pipeline.ConvertBirdTaxonomyLabels',
+                'preprocessing.ConvertBirdTaxonomyLabels',
                 source_namespace='ebird2021',
                 target_class_list='tiny_species',
                 add_taxonomic_labels=True,
             ),
-            _c('pipeline.MixAudio', mixin_prob=1.0),
-            _c('pipeline.Batch', batch_size=2, split_across_devices=True),
+            _c('preprocessing.MixAudio', mixin_prob=1.0),
+            _c('preprocessing.Batch', batch_size=2, split_across_devices=True),
             _c(
-                'pipeline.Slice',
+                'preprocessing.Slice',
                 window_size=window_size_s,
                 start=0,
                 names=('audio',),

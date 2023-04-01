@@ -36,22 +36,24 @@ def get_config() -> config_dict.ConfigDict:
 
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
-      "pipeline.Pipeline",
+      "preprocessing.Pipeline",
       ops=[
-          _c("pipeline.Shuffle", shuffle_buffer_size=512),
-          _c("pipeline.OnlyKeep", names=["audio", "label"]),
+          _c("preprocessing.Shuffle", shuffle_buffer_size=512),
+          _c("preprocessing.OnlyKeep", names=["audio", "label"]),
           _c(
-              "pipeline.ConvertBirdTaxonomyLabels",
+              "preprocessing.ConvertBirdTaxonomyLabels",
               source_namespace="ebird2021",
               target_class_list=target_class_list,
               add_taxonomic_labels=add_taxonomic_labels,
           ),
           _c(
-              "pipeline.Batch", batch_size=batch_size, split_across_devices=True
+              "preprocessing.Batch",
+              batch_size=batch_size,
+              split_across_devices=True,
           ),
-          _c("pipeline.RandomSlice", window_size=window_size_s),
+          _c("preprocessing.RandomSlice", window_size=window_size_s),
           _c(
-              "pipeline.MelSpectrogram",
+              "preprocessing.MelSpectrogram",
               features=160,
               stride=sample_rate_hz // 128,
               kernel_size=2_048,  # ~0.08 * 32,000
@@ -59,8 +61,8 @@ def get_config() -> config_dict.ConfigDict:
               freq_range=(60, 10_000),
               scaling_config=_c("frontend.PCENScalingConfig", conv_width=256),
           ),
-          _c("pipeline.AddChannel"),
-          _c("pipeline.Repeat"),
+          _c("preprocessing.AddChannel"),
+          _c("preprocessing.Repeat"),
       ],
   )
   train_dataset_config.split = "train"
@@ -68,21 +70,23 @@ def get_config() -> config_dict.ConfigDict:
 
   eval_dataset_config = config_dict.ConfigDict()
   eval_dataset_config.pipeline = _c(
-      "pipeline.Pipeline",
+      "preprocessing.Pipeline",
       ops=[
-          _c("pipeline.OnlyKeep", names=["audio", "label"]),
+          _c("preprocessing.OnlyKeep", names=["audio", "label"]),
           _c(
-              "pipeline.ConvertBirdTaxonomyLabels",
+              "preprocessing.ConvertBirdTaxonomyLabels",
               source_namespace="ebird2021",
               target_class_list=target_class_list,
               add_taxonomic_labels=add_taxonomic_labels,
           ),
           _c(
-              "pipeline.Batch", batch_size=batch_size, split_across_devices=True
+              "preprocessing.Batch",
+              batch_size=batch_size,
+              split_across_devices=True,
           ),
-          _c("pipeline.Slice", window_size=window_size_s, start=0.0),
+          _c("preprocessing.Slice", window_size=window_size_s, start=0.0),
           _c(
-              "pipeline.MelSpectrogram",
+              "preprocessing.MelSpectrogram",
               features=160,
               stride=sample_rate_hz // 128,
               kernel_size=2_048,  # ~0.08 * 32,000
@@ -90,7 +94,7 @@ def get_config() -> config_dict.ConfigDict:
               freq_range=(60, 10_000),
               scaling_config=_c("frontend.PCENScalingConfig", conv_width=256),
           ),
-          _c("pipeline.AddChannel"),
+          _c("preprocessing.AddChannel"),
       ],
   )
   eval_dataset_config.split = "train"

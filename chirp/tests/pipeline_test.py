@@ -18,7 +18,8 @@ import os
 import tempfile
 from unittest import mock
 
-from chirp.data import pipeline
+from chirp import preprocessing
+from chirp.data import utils as data_utils
 from chirp.models import frontend
 from chirp.taxonomy import namespace_db
 from chirp.tests import fake_dataset
@@ -57,12 +58,13 @@ class PipelineTest(parameterized.TestCase):
         ),
     }
     ds = tf.data.Dataset.from_tensor_slices(examples)
-    ds = pipeline.Pipeline(
-        [pipeline.OnlyJaxTypes(), pipeline.MultiHot()], deterministic=True
+    ds = preprocessing.Pipeline(
+        [preprocessing.OnlyJaxTypes(), preprocessing.MultiHot()],
+        deterministic=True,
     )(ds, self._builder.info)
-    mixed_ds = pipeline.Pipeline([pipeline.MixAudio(1.0)], deterministic=True)(
-        ds, self._builder.info
-    )
+    mixed_ds = preprocessing.Pipeline(
+        [preprocessing.MixAudio(1.0)], deterministic=True
+    )(ds, self._builder.info)
     mixed_example = next(mixed_ds.as_numpy_iterator())
     np.testing.assert_allclose(
         mixed_example['audio'], examples['audio'][0] + examples['audio'][1]
@@ -77,8 +79,8 @@ class PipelineTest(parameterized.TestCase):
         ),
     )
 
-    unmixed_ds = pipeline.Pipeline(
-        [pipeline.MixAudio(mixin_prob=0.0)], deterministic=True
+    unmixed_ds = preprocessing.Pipeline(
+        [preprocessing.MixAudio(mixin_prob=0.0)], deterministic=True
     )(ds, self._builder.info)
     for x, y in tf.data.Dataset.zip((ds, unmixed_ds)).as_numpy_iterator():
       for key in x:
@@ -114,8 +116,8 @@ class PipelineTest(parameterized.TestCase):
         'bg_labels': tf.convert_to_tensor([2, 3], dtype=tf.int64),
         'filename': tf.convert_to_tensor('placeholder', dtype=tf.string),
     }
-    example = pipeline.OnlyJaxTypes()(example, self._builder.info)
-    example = pipeline.MultiHot()(example, self._builder.info)
+    example = preprocessing.OnlyJaxTypes()(example, self._builder.info)
+    example = preprocessing.MultiHot()(example, self._builder.info)
 
     # The bg_labels feature should be multi-hot encoded.
     num_classes = self._builder.info.features['bg_labels'].feature.num_classes
@@ -124,10 +126,10 @@ class PipelineTest(parameterized.TestCase):
         np.asarray([0, 0, 1, 1] + [0] * (num_classes - 4), dtype=np.int32),
     )
 
-    example = pipeline.RandomSlice(window_size_s, names=('audio',))(
+    example = preprocessing.RandomSlice(window_size_s, names=('audio',))(
         example, self._builder.info
     )
-    example = pipeline.RandomNormalizeAudio(
+    example = preprocessing.RandomNormalizeAudio(
         min_gain, max_gain, names=('audio',)
     )(example, self._builder.info)
 
@@ -159,16 +161,16 @@ class PipelineTest(parameterized.TestCase):
       self.assertNotIn(key, example)
 
   def test_get_dataset(self):
-    test_pipeline = pipeline.Pipeline([
-        pipeline.OnlyJaxTypes(),
-        pipeline.MultiHot(),
-        pipeline.MixAudio(mixin_prob=0.25),
-        pipeline.Batch(8),
-        pipeline.RandomSlice(window_size=5),
-        pipeline.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
+    test_pipeline = preprocessing.Pipeline([
+        preprocessing.OnlyJaxTypes(),
+        preprocessing.MultiHot(),
+        preprocessing.MixAudio(mixin_prob=0.25),
+        preprocessing.Batch(8),
+        preprocessing.RandomSlice(window_size=5),
+        preprocessing.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
     ])
     for split in self._builder.info.splits.values():
-      dataset, _ = pipeline.get_dataset(
+      dataset, _ = data_utils.get_dataset(
           split.name,
           dataset_directory=self._builder.data_dir,
           pipeline=test_pipeline,
@@ -192,7 +194,7 @@ class PipelineTest(parameterized.TestCase):
       )
       # Check error raising when getting last dataset split without a pipeline.
       with self.assertRaises(ValueError):
-        pipeline.get_dataset(
+        data_utils.get_dataset(
             split.name, dataset_directory=self._builder.data_dir
         )
 
@@ -215,7 +217,7 @@ class PipelineTest(parameterized.TestCase):
         'label': tf.constant([0, 20, 40, 78, 79, 10655, 10932, -1], tf.int64),
         'bg_labels': tf.constant([18, 1000], tf.int64),
     }
-    converter = pipeline.ConvertBirdTaxonomyLabels(
+    converter = preprocessing.ConvertBirdTaxonomyLabels(
         target_class_list='xenocanto'
     )
     converted = converter.convert_features(example, source_class_set)
@@ -255,11 +257,9 @@ class PipelineTest(parameterized.TestCase):
         ),
     }
     ds = tf.data.Dataset.from_tensor_slices(examples)
-    ds = pipeline.Pipeline(
-        [
-            pipeline.LabelsToString(),
-        ]
-    )(
+    ds = preprocessing.Pipeline([
+        preprocessing.LabelsToString(),
+    ])(
         ds, self._builder.info
     ).batch(2)
     class_names = self._builder.info.features['label'].feature.names
@@ -290,11 +290,9 @@ class PipelineTest(parameterized.TestCase):
         ),
     }
     ds = tf.data.Dataset.from_tensor_slices(examples)
-    ds = pipeline.Pipeline(
-        [
-            pipeline.OnlyKeep(names=['segment_start', 'bg_labels']),
-        ]
-    )(ds, self._builder.info).batch(2)
+    ds = preprocessing.Pipeline([
+        preprocessing.OnlyKeep(names=['segment_start', 'bg_labels']),
+    ])(ds, self._builder.info).batch(2)
     processed_example = next(ds.as_numpy_iterator())
     self.assertSameElements(
         processed_example.keys(), ['segment_start', 'bg_labels']
@@ -329,7 +327,7 @@ class PipelineTest(parameterized.TestCase):
     )
     melspec = model.apply({}, jnp.array(signal))
 
-    melspec_tf = pipeline.MelSpectrogram(
+    melspec_tf = preprocessing.MelSpectrogram(
         features=160,
         stride=sample_rate_hz // 100,
         kernel_size=512,  # ~0.08 * 32,000
@@ -352,7 +350,7 @@ class PipelineTest(parameterized.TestCase):
     original_examples = next(
         original_dataset.batch(len(original_dataset)).as_numpy_iterator()
     )
-    dataset = pipeline.ExtractStridedWindows(
+    dataset = preprocessing.ExtractStridedWindows(
         window_length_sec=length_sec,
         window_stride_sec=stride_sec,
         pad_end=pad_end,
@@ -428,7 +426,7 @@ class PipelineTest(parameterized.TestCase):
         }
     )
     original_dataset = tf.data.Dataset.from_tensors(original_example)
-    annotated_dataset = pipeline.DenselyAnnotateWindows(
+    annotated_dataset = preprocessing.DenselyAnnotateWindows(
         overlap_threshold_sec=0
     )(original_dataset, fake_dataset_info)
     annotated_dataset = next(annotated_dataset.as_numpy_iterator())
@@ -460,7 +458,7 @@ class PipelineTest(parameterized.TestCase):
         }
     )
     original_dataset = tf.data.Dataset.from_tensors(original_example)
-    annotated_dataset = pipeline.DenselyAnnotateWindows(
+    annotated_dataset = preprocessing.DenselyAnnotateWindows(
         overlap_threshold_sec=1
     )(original_dataset, fake_dataset_info)
     annotated_dataset = next(annotated_dataset.as_numpy_iterator())

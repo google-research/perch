@@ -21,7 +21,7 @@ from typing import Callable
 
 from absl import logging
 from chirp import export_utils
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.models import metrics
 from chirp.models import output
 from chirp.models import rank_based_metrics
@@ -493,13 +493,13 @@ def run(
     name = "valid"
 
   if mode == "train":
-    train_dataset, dataset_info = pipeline.get_dataset(
+    train_dataset, dataset_info = data_utils.get_dataset(
         is_train=True,
         tf_data_service_address=tf_data_service_address,
         **config.train_dataset_config,
     )
   elif mode == "eval":
-    valid_dataset, dataset_info = pipeline.get_dataset(
+    valid_dataset, dataset_info = data_utils.get_dataset(
         **config.eval_dataset_config
     )
   if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:

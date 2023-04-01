@@ -35,27 +35,27 @@ def get_config() -> config_dict.ConfigDict:
 
   eval_dataset_config = config_dict.ConfigDict()
   eval_dataset_config.pipeline = _c(
-      'pipeline.Pipeline',
+      'preprocessing.Pipeline',
       ops=[
-          _c('pipeline.OnlyJaxTypes'),
+          _c('preprocessing.OnlyJaxTypes'),
           _c(
-              'pipeline.ConvertBirdTaxonomyLabels',
+              'preprocessing.ConvertBirdTaxonomyLabels',
               source_namespace='ebird2021',
               target_class_list=config.get_ref('target_class_list'),
               add_taxonomic_labels=True,
           ),
-          _c('pipeline.MixAudio', mixin_prob=1.0),
+          _c('preprocessing.MixAudio', mixin_prob=1.0),
           _c(
-              'pipeline.Batch',
+              'preprocessing.Batch',
               batch_size=config.batch_size,
               split_across_devices=True,
           ),
           _c(
-              'pipeline.Slice',
+              'preprocessing.Slice',
               window_size=config.get_ref('eval_window_size_s'),
               start=0.0,
           ),
-          _c('pipeline.NormalizeAudio', target_gain=0.45),
+          _c('preprocessing.NormalizeAudio', target_gain=0.45),
       ],
   )
   eval_dataset_config.split = 'train[99%:]'

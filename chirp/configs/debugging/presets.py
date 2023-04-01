@@ -125,42 +125,42 @@ def get_supervised_train_pipeline(
   train_dataset_config = config_dict.ConfigDict()
   if random_slice:
     slice_op = _c(
-        'pipeline.RandomSlice',
+        'preprocessing.RandomSlice',
         window_size=config.get_ref('train_window_size_s'),
     )
   else:
     slice_op = _c(
-        'pipeline.Slice',
+        'preprocessing.Slice',
         window_size=config.get_ref('train_window_size_s'),
         start=0.5,
     )
   ops = [
-      _c('pipeline.Shuffle', shuffle_buffer_size=512),
-      _c('pipeline.OnlyJaxTypes'),
+      _c('preprocessing.Shuffle', shuffle_buffer_size=512),
+      _c('preprocessing.OnlyJaxTypes'),
       _c(
-          'pipeline.ConvertBirdTaxonomyLabels',
+          'preprocessing.ConvertBirdTaxonomyLabels',
           source_namespace='ebird2021',
           target_class_list=config.get_ref('target_class_list'),
           add_taxonomic_labels=False,
       ),
       _c(
-          'pipeline.MixAudio',
+          'preprocessing.MixAudio',
           target_dist=(1.0, 0.5, 0.25, 0.25) if mixup else (1.0,),
       ),
       slice_op,
       _c(
-          'pipeline.Batch',
+          'preprocessing.Batch',
           batch_size=config.get_ref('batch_size'),
           split_across_devices=True,
       ),
-      _c('pipeline.Repeat'),
+      _c('preprocessing.Repeat'),
   ]
   if random_gain:
     ops.append(
-        _c('pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25)
+        _c('preprocessing.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25)
     )
   train_dataset_config.pipeline = _c(
-      'pipeline.Pipeline',
+      'preprocessing.Pipeline',
       ops=ops,
   )
   train_dataset_config.split = 'train'
@@ -184,28 +184,28 @@ def get_supervised_eval_pipeline(
     )
   eval_dataset_config = config_dict.ConfigDict()
   ops = [
-      _c('pipeline.OnlyJaxTypes'),
+      _c('preprocessing.OnlyJaxTypes'),
       _c(
-          'pipeline.ConvertBirdTaxonomyLabels',
+          'preprocessing.ConvertBirdTaxonomyLabels',
           source_namespace='ebird2021',
           target_class_list=config.get_ref('target_class_list'),
           add_taxonomic_labels=False,
       ),
       _c(
-          'pipeline.Slice',
+          'preprocessing.Slice',
           window_size=config.get_ref('eval_window_size_s'),
           start=0.5,
       ),
       _c(
-          'pipeline.Batch',
+          'preprocessing.Batch',
           batch_size=config.get_ref('batch_size'),
           split_across_devices=True,
       ),
   ]
   if normalize:
-    ops.append(_c('pipeline.NormalizeAudio', target_gain=0.2))
+    ops.append(_c('preprocessing.NormalizeAudio', target_gain=0.2))
   eval_dataset_config.pipeline = _c(
-      'pipeline.Pipeline',
+      'preprocessing.Pipeline',
       ops=ops,
   )
   eval_dataset_config.split = 'train'

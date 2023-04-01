@@ -86,7 +86,7 @@ class LoadEvalDatasetsTest(absltest.TestCase):
             'tfds_name': 'fake_bird_taxonomy/fake_variant_1',
             'tfds_data_dir': self.data_dir,
             'pipeline': _c(
-                'pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]
+                'preprocessing.Pipeline', ops=[_c('preprocessing.OnlyJaxTypes')]
             ),
             'split': 'train',
         },
@@ -94,7 +94,7 @@ class LoadEvalDatasetsTest(absltest.TestCase):
             'tfds_name': 'fake_bird_taxonomy/fake_variant_2',
             'tfds_data_dir': self.data_dir,
             'pipeline': _c(
-                'pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]
+                'preprocessing.Pipeline', ops=[_c('preprocessing.OnlyJaxTypes')]
             ),
             'split': 'train',
         },
@@ -134,7 +134,7 @@ class GetEmbeddingsTest(absltest.TestCase):
             'tfds_name': 'fake_bird_taxonomy/fake_variant_1',
             'tfds_data_dir': self.data_dir,
             'pipeline': _c(
-                'pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]
+                'preprocessing.Pipeline', ops=[_c('preprocessing.OnlyJaxTypes')]
             ),
             'split': 'train',
         },

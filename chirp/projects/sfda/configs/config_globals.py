@@ -17,7 +17,7 @@
 from typing import Any
 
 from chirp import audio_utils
-from chirp.data import pipeline
+from chirp import preprocessing
 from chirp.eval import eval_lib
 from chirp.models import conformer
 from chirp.models import efficientnet
@@ -49,7 +49,7 @@ def get_globals() -> dict[str, Any]:
       "frontend": frontend,
       "layers": layers,
       "nn": nn,
-      "pipeline": pipeline,
+      "preprocessing": preprocessing,
       "sfda_pipeline": sfda_pipeline,
       "soundstream_unet": soundstream_unet,
       "pseudo_label": pseudo_label,

@@ -228,37 +228,37 @@ def _get_pipeline_ops(
     for filtering_df_path in filtering_df_paths:
       filtering_ops.append(
           _c(
-              'pipeline.FilterByFeature',
+              'preprocessing.FilterByFeature',
               filtering_df_path=filtering_df_path,
               complement=filter_by_complement,
           )
       )
   if shuffle:
-    shuffle_op = _c('pipeline.Shuffle', shuffle_buffer_size=512)
+    shuffle_op = _c('preprocessing.Shuffle', shuffle_buffer_size=512)
   mixup_op = _c(
       'config_utils.either',
-      object_a=_c('pipeline.MixAudio', target_dist=(1.0, 0.5, 0.25, 0.25)),
-      object_b=_c('pipeline.DatasetPreprocessOp'),
+      object_a=_c('preprocessing.MixAudio', target_dist=(1.0, 0.5, 0.25, 0.25)),
+      object_b=_c('preprocessing.DatasetPreprocessOp'),
       return_a=mixup,
   )
   if slice_method == 'random':
-    slice_op = _c('pipeline.RandomSlice', window_size=slice_window_size)
+    slice_op = _c('preprocessing.RandomSlice', window_size=slice_window_size)
     annotate_op = None
   elif slice_method == 'fixed':
     slice_op = _c(
-        'pipeline.Slice',
+        'preprocessing.Slice',
         window_size=slice_window_size,
         start=slice_start,
     )
     annotate_op = None
   elif slice_method == 'strided_windows':
     slice_op = _c(
-        'pipeline.ExtractStridedWindows',
+        'preprocessing.ExtractStridedWindows',
         window_length_sec=slice_window_size,
         window_stride_sec=slice_window_stride,
     )
     annotate_op = _c(
-        'pipeline.DenselyAnnotateWindows', drop_annotation_bounds=True
+        'preprocessing.DenselyAnnotateWindows', drop_annotation_bounds=True
     )
   else:
     raise ValueError(f'unrecognized slice method: {slice_method}')
@@ -266,17 +266,17 @@ def _get_pipeline_ops(
   normalize_op = _c(
       'config_utils.either',
       object_a=_c(
-          'pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25
+          'preprocessing.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25
       ),
-      object_b=_c('pipeline.NormalizeAudio', target_gain=0.2),
+      object_b=_c('preprocessing.NormalizeAudio', target_gain=0.2),
       return_a=random_normalize,
   )
   if repeat:
-    repeat_op = _c('pipeline.Repeat')
+    repeat_op = _c('preprocessing.Repeat')
 
   ops = filtering_ops + [
       shuffle_op,
-      _c('pipeline.OnlyJaxTypes'),
+      _c('preprocessing.OnlyJaxTypes'),
       slice_op,
       annotate_op,
       # NOTE: pipeline.ConvertBirdTaxonomyLabels comes *after* the slicing and
@@ -284,7 +284,7 @@ def _get_pipeline_ops(
       # slice_method == 'strided_windows' expects labels to be sequences of
       # integers rather than multi-hot encoded vectors.
       _c(
-          'pipeline.ConvertBirdTaxonomyLabels',
+          'preprocessing.ConvertBirdTaxonomyLabels',
           source_namespace='ebird2021',
           target_class_list=target_class_list,
           add_taxonomic_labels=True,
@@ -292,7 +292,7 @@ def _get_pipeline_ops(
       normalize_op,
       mixup_op,
       _c(
-          'pipeline.MelSpectrogram',
+          'preprocessing.MelSpectrogram',
           features=melspec_num_channels,
           stride=melspec_stride,
           kernel_size=melspec_kernel_size,
@@ -302,7 +302,7 @@ def _get_pipeline_ops(
           scaling_config=_c('frontend.PCENScalingConfig', conv_width=256),
       ),
       _c(
-          'pipeline.Batch',
+          'preprocessing.Batch',
           batch_size=batch_size,
           split_across_devices=split_across_devices,
           drop_remainder=drop_remainder,
@@ -326,7 +326,7 @@ def get_supervised_train_pipeline(
     raise ValueError('we assume training on XC')
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
-      'pipeline.Pipeline',
+      'preprocessing.Pipeline',
       ops=_get_pipeline_ops(
           filtering_df_paths=filtering_df_paths,
           filter_by_complement=filter_by_complement,
@@ -366,7 +366,7 @@ def get_supervised_eval_pipeline(
   """Creates an eval data pipeline."""
   eval_dataset_config = config_dict.ConfigDict()
   eval_dataset_config.pipeline = _c(
-      'pipeline.Pipeline',
+      'preprocessing.Pipeline',
       ops=_get_pipeline_ops(
           filtering_df_paths=filtering_df_paths,
           filter_by_complement=filter_by_complement,

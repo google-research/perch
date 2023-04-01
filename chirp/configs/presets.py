@@ -123,33 +123,35 @@ def get_supervised_train_pipeline(
   """Create the supervised training data pipeline."""
   train_dataset_config = config_dict.ConfigDict()
   train_dataset_config.pipeline = _c(
-      'pipeline.Pipeline',
+      'preprocessing.Pipeline',
       ops=[
-          _c('pipeline.Shuffle', shuffle_buffer_size=512),
-          _c('pipeline.OnlyJaxTypes'),
+          _c('preprocessing.Shuffle', shuffle_buffer_size=512),
+          _c('preprocessing.OnlyJaxTypes'),
           _c(
-              'pipeline.ConvertBirdTaxonomyLabels',
+              'preprocessing.ConvertBirdTaxonomyLabels',
               source_namespace='ebird2021',
               target_class_list=config.get_ref('target_class_list'),
               add_taxonomic_labels=config.get_ref('add_taxonomic_labels'),
           ),
-          _c('pipeline.MixAudio', mixin_prob=mixin_prob),
+          _c('preprocessing.MixAudio', mixin_prob=mixin_prob),
           _c(
-              'pipeline.Pad',
+              'preprocessing.Pad',
               pad_size=config.get_ref('train_window_size_s'),
               add_mask=config.get_ref('pad_mask'),
           ),
           _c(
-              'pipeline.RandomSlice',
+              'preprocessing.RandomSlice',
               window_size=config.get_ref('train_window_size_s'),
           ),
           _c(
-              'pipeline.Batch',
+              'preprocessing.Batch',
               batch_size=config.get_ref('batch_size'),
               split_across_devices=True,
           ),
-          _c('pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25),
-          _c('pipeline.Repeat'),
+          _c(
+              'preprocessing.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25
+          ),
+          _c('preprocessing.Repeat'),
       ],
   )
   train_dataset_config.split = 'train'
@@ -164,32 +166,32 @@ def get_supervised_eval_pipeline(
   """Create Caples eval data pipeline."""
   eval_dataset_config = config_dict.ConfigDict()
   eval_dataset_config.pipeline = _c(
-      'pipeline.Pipeline',
+      'preprocessing.Pipeline',
       ops=[
-          _c('pipeline.OnlyJaxTypes'),
+          _c('preprocessing.OnlyJaxTypes'),
           _c(
-              'pipeline.ConvertBirdTaxonomyLabels',
+              'preprocessing.ConvertBirdTaxonomyLabels',
               source_namespace='ebird2021',
               target_class_list=config.get_ref('target_class_list'),
               add_taxonomic_labels=config.get_ref('add_taxonomic_labels'),
           ),
           _c(
-              'pipeline.Pad',
+              'preprocessing.Pad',
               pad_size=config.get_ref('eval_window_size_s'),
               random=False,
               add_mask=config.get_ref('pad_mask'),
           ),
           _c(
-              'pipeline.Slice',
+              'preprocessing.Slice',
               window_size=config.get_ref('eval_window_size_s'),
               start=0.0,
           ),
           _c(
-              'pipeline.Batch',
+              'preprocessing.Batch',
               batch_size=config.get_ref('batch_size'),
               split_across_devices=True,
           ),
-          _c('pipeline.NormalizeAudio', target_gain=0.2),
+          _c('preprocessing.NormalizeAudio', target_gain=0.2),
       ],
   )
   eval_dataset_config.split = 'train'

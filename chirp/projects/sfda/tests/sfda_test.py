@@ -20,7 +20,8 @@ import shutil
 import tempfile
 
 from chirp import config_utils
-from chirp.data import pipeline
+from chirp import preprocessing
+from chirp.data import utils as data_utils
 from chirp.models import frontend
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import model_utils
@@ -93,12 +94,12 @@ class AdaptationTest(parameterized.TestCase):
 
   def _get_datasets(self, config, modality: adapt.Modality):
     if modality == adapt.Modality.AUDIO:
-      adaptation_dataset, _ = pipeline.get_dataset(
+      adaptation_dataset, _ = data_utils.get_dataset(
           "train[:2]",
           dataset_directory=self.audio_builder.data_dir,
           pipeline=config.adaptation_data_config.pipeline,
       )
-      val_dataset, _ = pipeline.get_dataset(
+      val_dataset, _ = data_utils.get_dataset(
           "train[1:2]",
           dataset_directory=self.audio_builder.data_dir,
           pipeline=config.eval_data_config.pipeline,
@@ -128,15 +129,15 @@ class AdaptationTest(parameterized.TestCase):
       config = config_utils.parse_config(config, config_globals.get_globals())
       config.init_config.target_class_list = "xenocanto"
       config.sample_rate_hz = 50
-      toy_pipeline = pipeline.Pipeline(
+      toy_pipeline = preprocessing.Pipeline(
           ops=[
-              pipeline.ConvertBirdTaxonomyLabels(
+              preprocessing.ConvertBirdTaxonomyLabels(
                   source_namespace="ebird2021",
                   target_class_list=config.init_config.target_class_list,
                   add_taxonomic_labels=True,
               ),
-              pipeline.Batch(batch_size=1, split_across_devices=True),
-              pipeline.RandomSlice(window_size=1),
+              preprocessing.Batch(batch_size=1, split_across_devices=True),
+              preprocessing.RandomSlice(window_size=1),
           ]
       )
 

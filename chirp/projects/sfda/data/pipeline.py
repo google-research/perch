@@ -17,14 +17,14 @@
 import dataclasses
 
 from absl import logging
-from chirp.data import pipeline
+from chirp import preprocessing
 import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
 
 @dataclasses.dataclass
-class Batch(pipeline.DatasetPreprocessOp):
+class Batch(preprocessing.DatasetPreprocessOp):
   """Collects samples into batches.
 
   The original Batch operation in chirp/data/pipeline.py drops the remainder

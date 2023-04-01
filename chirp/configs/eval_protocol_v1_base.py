@@ -27,12 +27,12 @@ _TFDS_DATA_DIR = None
 
 
 def _crop_if_slice_peaked(to_crop: bool, **kwargs):
-  return [_callable_config('pipeline.Slice', **kwargs)] if to_crop else []
+  return [_callable_config('preprocessing.Slice', **kwargs)] if to_crop else []
 
 
 def _melspec_if_baseline(config_string: str, **kwargs):
   return (
-      [_callable_config('pipeline.MelSpectrogram', **kwargs)]
+      [_callable_config('preprocessing.MelSpectrogram', **kwargs)]
       if config_string == 'baseline'
       else []
   )
@@ -98,7 +98,7 @@ def get_config() -> config_dict.ConfigDict:
 
     ops = [
         _callable_config(
-            'pipeline.OnlyKeep',
+            'preprocessing.OnlyKeep',
             names=[
                 'audio',
                 'label',
@@ -113,12 +113,14 @@ def get_config() -> config_dict.ConfigDict:
             window_size=xc_window_size_seconds,
             start=xc_slice_start,
         ),
-        _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
-        _callable_config('pipeline.LabelsToString'),
+        _callable_config(
+            'preprocessing.NormalizeAudio', target_gain=target_gain
+        ),
+        _callable_config('preprocessing.LabelsToString'),
     ]
 
     dataset_config.pipeline = _callable_config(
-        'pipeline.Pipeline', ops=ops, deterministic=True
+        'preprocessing.Pipeline', ops=ops, deterministic=True
     )
     dataset_config.split = 'train'
     dataset_configs[dataset_description['dataset_name']] = dataset_config
