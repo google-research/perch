@@ -66,6 +66,23 @@ def get_config() -> config_dict.ConfigDict:
 
 def get_hyper(hyper):
   """Defines the hyperparameter sweep."""
-  return hyper.sweep(
-      'config.init_config.learning_rate', hyper.discrete([1e-3, 1e-2])
-  )
+  return hyper.product([
+      hyper.sweep(
+          'config.random_augmentations',
+          hyper.discrete([False, True]),
+      ),
+      hyper.sweep(
+          'config.init_config.model_config.taxonomy_loss_weight',
+          hyper.discrete([0, 1e-3]),
+      ),
+      hyper.sweep(
+          'config.cosine_alpha',
+          # Without / with cosine decay for the learning rate.
+          hyper.discrete([1.0, 0.0]),
+      ),
+      hyper.sweep(
+          'config.init_config.learning_rate',
+          # 10 ** np.linspace(-5, 1, 5)
+          hyper.discrete([1e-05, 3.16e-4, 1e-2, 3.16e-1, 1e1]),
+      ),
+  ])
