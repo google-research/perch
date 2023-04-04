@@ -15,16 +15,28 @@
 
 """Metrics for training and validation."""
 
+from typing import Any, Dict
 
+from clu import metrics as clu_metrics
 from jax import lax
 from jax import numpy as jnp
 from jax import scipy
 import optax
 
 
+def make_metrics_collection(collecting_keys, average_keys):
+  metrics_dict = {}
+  for k in average_keys:
+    metrics_dict[k] = clu_metrics.Average.from_output(k)
+  metrics_dict['collection'] = clu_metrics.CollectingMetric.from_outputs(
+      collecting_keys
+  )
+  return clu_metrics.Collection.create(**metrics_dict)
+
+
 def mean_cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
   mean = jnp.mean(optax.sigmoid_binary_cross_entropy(logits, labels), axis=-1)
-  return lax.pmean(mean, axis_name="batch")
+  return lax.pmean(mean, axis_name='batch')
 
 
 def map_(
@@ -42,11 +54,41 @@ def map_(
 
 
 def cmap_(
-    logits: jnp.ndarray, labels: jnp.ndarray, sort_descending: bool = True
-) -> jnp.ndarray:
-  return average_precision(
+    logits: jnp.ndarray,
+    labels: jnp.ndarray,
+    sort_descending: bool = True,
+    sample_threshold: int = 0,
+) -> Dict[str, Any]:
+  class_aps = average_precision(
       scores=logits.T, labels=labels.T, sort_descending=sort_descending
   )
+  mask = jnp.sum(labels, axis=0) > sample_threshold
+  class_aps = jnp.where(mask, class_aps, jnp.nan)
+  macro_cmap = jnp.mean(class_aps, where=mask)
+  return {
+      'macro_cmap': macro_cmap,
+      'individual_cmap': class_aps,
+  }
+
+
+def roc_auc_(
+    logits: jnp.ndarray,
+    labels: jnp.ndarray,
+    sort_descending: bool = True,
+    sample_threshold: int = 0,
+) -> Dict[str, Any]:
+  """Compute ROC-AUC scores."""
+  class_roc_auc, class_roc_auc_var = generalized_mean_rank(
+      logits.T, labels.T, sort_descending=sort_descending
+  )
+  mask = jnp.sum(labels, axis=0) > sample_threshold
+  class_roc_auc = jnp.where(mask, class_roc_auc, jnp.nan)
+  class_roc_auc_var = jnp.where(mask, class_roc_auc_var, jnp.nan)
+  return {
+      'macro_roc_auc': jnp.mean(class_roc_auc, where=mask),
+      'individual_roc_auc': class_roc_auc,
+      'individual_roc_auc_var': class_roc_auc_var,
+  }
 
 
 def log_mse_loss(
