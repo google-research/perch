@@ -137,7 +137,7 @@ def get_base_eval_config(
 ) -> config_dict.ConfigDict:
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = config.get_ref('num_train_steps')
-  eval_config.tflite_export = False
+  eval_config.tflite_export = True
   eval_config.input_shape = _compute_input_shape(
       config, config.get_ref('eval_window_size_s')
   )

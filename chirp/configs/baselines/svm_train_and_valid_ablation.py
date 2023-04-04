@@ -48,7 +48,10 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
 
 def get_config() -> config_dict.ConfigDict:
   """Creates the configuration dictionary for training and evaluation."""
-  config = presets.get_base_config(num_train_steps=200_000)
+  config = presets.get_base_config(
+      num_train_steps=200_000,
+      loss_fn=_o('layers.hinge_loss'),
+  )
   config.encoder_config = get_encoder_config()
   config.init_config = presets.get_base_init_config(config)
   config.init_config.model_config = get_model_config(config)
@@ -76,7 +79,7 @@ def get_hyper(hyper):
       ),
       hyper.sweep(
           'config.cosine_alpha',
-          hyper.discrete([1.0]),
+          hyper.discrete([0.0]),
       ),
       hyper.sweep(
           'config.init_config.learning_rate',

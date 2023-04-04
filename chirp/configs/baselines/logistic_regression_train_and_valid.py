@@ -19,6 +19,7 @@ from chirp.configs.baselines import presets
 from ml_collections import config_dict
 
 _c = config_utils.callable_config
+_o = config_utils.object_config
 
 
 def get_encoder_config() -> config_dict.ConfigDict:
@@ -47,7 +48,7 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
 
 def get_config() -> config_dict.ConfigDict:
   """Creates the configuration dictionary for training and evaluation."""
-  config = presets.get_base_config(num_train_steps=100_000)
+  config = presets.get_base_config(num_train_steps=200_000)
   config.encoder_config = get_encoder_config()
   config.init_config = presets.get_base_init_config(config)
   config.init_config.model_config = get_model_config(config)
