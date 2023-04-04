@@ -24,7 +24,6 @@ from chirp import export_utils
 from chirp.data import pipeline
 from chirp.models import metrics
 from chirp.models import output
-from chirp.models import rank_based_metrics
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
 from chirp.train import utils
@@ -51,12 +50,13 @@ def get_keyed_map_fn(key):
         labels=kwargs[key],
         label_mask=kwargs.get(f"{key}_mask", None),
     )
+
   return _map
 
 
-def make_metrics_collection(
-    prefix: str, keys: list[str], num_labels: dict[str, int]
-) -> type[clu_metrics.Collection]:
+def get_train_metrics(
+    keys: list[str], num_labels: dict[str, int]
+) -> dict[str, type[clu_metrics.Metric]]:
   """Create a collection of metrics with cross-entropy and average precision."""
 
   metrics_ = {"loss": clu_metrics.Average.from_output("loss")}
@@ -66,8 +66,7 @@ def make_metrics_collection(
     ).from_output(f"{key}_loss")
     metrics_[f"{key}_map"] = clu_metrics.Average.from_fun(get_keyed_map_fn(key))
 
-  metrics_ = {f"{prefix}_{key}": value for key, value in metrics_.items()}
-  return clu_metrics.Collection.create(**metrics_)
+  return metrics_
 
 
 def initialize_model(
@@ -154,7 +153,6 @@ def train(
     loss_fn: Callable[
         [jnp.ndarray, jnp.ndarray], jnp.ndarray
     ] = optax.sigmoid_binary_cross_entropy,
-    add_class_wise_metrics: bool = True,
 ) -> None:
   """Train a model.
 
@@ -167,15 +165,14 @@ def train(
     log_every_steps: Write the training minibatch loss.
     checkpoint_every_steps: Checkpoint the model and training state.
     loss_fn: Loss function used for training.
-    add_class_wise_metrics: Whether to log class-wise metrics.
   """
   train_iterator = train_dataset.as_numpy_iterator()
   taxonomy_keys = ["label"]
   taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
   if taxonomy_loss_weight != 0.0:
     taxonomy_keys += utils.TAXONOMY_KEYS
-  train_metrics_collection = make_metrics_collection(
-      "train", taxonomy_keys, model_bundle.model.num_classes
+  train_metrics_collection = utils.NestedCollection.create(
+      **get_train_metrics(taxonomy_keys, model_bundle.model.num_classes)
   )
 
   # Forward pass and metrics
@@ -245,20 +242,10 @@ def train(
       train_metrics, train_state = update_step(step_key, batch, train_state)
 
       if step % log_every_steps == 0:
-        train_metrics = utils.flatten_dict(
-            flax_utils.unreplicate(train_metrics).compute()
+        train_metrics = flax_utils.unreplicate(train_metrics).compute()
+        utils.write_metrics(
+            writer, step, {"train_" + k: v for k, v in train_metrics.items()}
         )
-
-        classwise_metrics = {
-            k: v for k, v in train_metrics.items() if "individual" in k
-        }
-        train_metrics = {
-            k: v for k, v in train_metrics.items() if k not in classwise_metrics
-        }
-
-        writer.write_scalars(step, train_metrics)
-        if add_class_wise_metrics:
-          writer.write_summaries(step, classwise_metrics)
       reporter(step)
 
     if (step + 1) % checkpoint_every_steps == 0 or step == num_train_steps:
@@ -278,7 +265,6 @@ def evaluate(
     ] = optax.sigmoid_binary_cross_entropy,
     eval_steps_per_checkpoint: int | None = None,
     name: str = "valid",
-    add_class_wise_metrics: bool = True,
 ):
   """Run evaluation."""
   taxonomy_keys = ["label"]
@@ -287,14 +273,13 @@ def evaluate(
     taxonomy_keys += utils.TAXONOMY_KEYS
 
   # The metrics are the same as for training, but with rank-based metrics added.
-  base_metrics_collection = make_metrics_collection(
-      name, taxonomy_keys, model_bundle.model.num_classes
-  )
-  valid_metrics_collection = (
-      rank_based_metrics.add_rank_based_metrics_to_metrics_collection(
-          name, base_metrics_collection
-      )
-  )
+  metrics_ = get_train_metrics(taxonomy_keys, model_bundle.model.num_classes)
+  valid_metrics = {}
+  for key in taxonomy_keys:
+    valid_metrics[f"{key}_cmap"] = ((f"{key}_logits", key), metrics.cmap)
+    valid_metrics[f"{key}_roc_auc"] = ((f"{key}_logits", key), metrics.roc_auc)
+  metrics_["rank_metrics"] = utils.CollectingMetrics.from_funs(**valid_metrics)
+  valid_metrics_collection = utils.NestedCollection.create(**metrics_)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def get_metrics(batch, train_state):
@@ -377,17 +362,11 @@ def evaluate(
         break
 
     # Log validation loss
-    valid_metrics = utils.flatten_dict(valid_metrics.compute())
-    classwise_metrics = {
-        k: v for k, v in valid_metrics.items() if "individual" in k
-    }
-    valid_metrics = {
-        k: v for k, v in valid_metrics.items() if k not in classwise_metrics
-    }
-
-  writer.write_scalars(step, valid_metrics)
-  if add_class_wise_metrics:
-    writer.write_summaries(step, classwise_metrics)
+    utils.write_metrics(
+        writer,
+        step,
+        {f"{name}_{k}": v for k, v in valid_metrics.compute().items()},
+    )
   writer.flush()
 
 
@@ -406,7 +385,6 @@ def evaluate_loop(
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     name: str = "valid",
-    add_class_wise_metrics: bool = True,
 ):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -446,7 +424,6 @@ def evaluate_loop(
         loss_fn,
         eval_steps_per_checkpoint,
         name,
-        add_class_wise_metrics=add_class_wise_metrics,
     )
     if tflite_export:
       export_tf(model_bundle, train_state, workdir, input_shape)

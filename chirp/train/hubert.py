@@ -23,7 +23,6 @@ from typing import Callable
 
 from absl import logging
 from chirp.data import pipeline
-from chirp.models import rank_based_metrics
 from chirp.models import frontend as frontend_models
 from chirp.models import hubert
 from chirp.models import layers
@@ -36,7 +35,6 @@ from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
-import flax
 from flax import traverse_util
 import flax.jax_utils as flax_utils
 import jax
@@ -271,7 +269,7 @@ def cluster_targets_metrics(
   return ret[key]
 
 
-def make_metrics_collection(
+def get_train_metrics(
     prefix: str,
     keys: list[str],
     num_labels: dict[str, int],
@@ -280,7 +278,7 @@ def make_metrics_collection(
     hubert_loss_mult: float,
     quantizer_points: list[int],
     readout_points: list[int],
-) -> type[clu_metrics.Collection]:
+) -> dict[str, type[clu_metrics.Metric]]:
   """Create a collection of metrics with cross-entropy and average precision."""
 
   metrics_ = {
@@ -339,8 +337,7 @@ def make_metrics_collection(
           ),
       })
 
-  metrics_ = {f"{prefix}_{key}": value for key, value in metrics_.items()}
-  return clu_metrics.Collection.create(**metrics_)
+  return {f"{prefix}_{key}": value for key, value in metrics_.items()}
 
 
 class LearningRateSchedule(enum.Enum):
@@ -718,7 +715,6 @@ def train(
     readout_loss_mult: float,
     hubert_loss_mult: float,
     reload_quantizer=False,
-    add_class_wise_metrics=True,
 ) -> None:
   """Train a model.
 
@@ -741,7 +737,6 @@ def train(
       used for training.
     reload_quantizer: Whether to reload a pre-trained quantizer. If this is the
       case, it is kept frozen.
-    add_class_wise_metrics: Whether to log class-wise metrics.
   """
   if reload_quantizer and num_quantizer_pretrain_steps:
     raise ValueError(
@@ -754,15 +749,17 @@ def train(
   taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
   if taxonomy_loss_weight != 0.0:
     taxonomy_keys += utils.TAXONOMY_KEYS
-  train_metrics_collection = make_metrics_collection(
-      "train",
-      taxonomy_keys,
-      model_bundle.model.num_classes,
-      alpha=model_bundle.model.alpha,
-      readout_loss_mult=readout_loss_mult,
-      hubert_loss_mult=hubert_loss_mult,
-      quantizer_points=model_bundle.model.quantizer_points,
-      readout_points=model_bundle.model.readout_points,
+  train_metrics_collection = utils.NestedCollection.create(
+      **get_train_metrics(
+          "train",
+          taxonomy_keys,
+          model_bundle.model.num_classes,
+          alpha=model_bundle.model.alpha,
+          readout_loss_mult=readout_loss_mult,
+          hubert_loss_mult=hubert_loss_mult,
+          quantizer_points=model_bundle.model.quantizer_points,
+          readout_points=model_bundle.model.readout_points,
+      )
   )
 
   @functools.partial(jax.pmap, axis_name="batch", static_broadcasted_argnums=0)
@@ -855,20 +852,9 @@ def train(
       )
 
       if step % log_every_steps == 0:
-        train_metrics = utils.flatten_dict(
-            flax_utils.unreplicate(train_metrics).compute()
+        utils.write_metrics(
+            writer, step, flax_utils.unreplicate(train_metrics).compute()
         )
-
-        classwise_metrics = {
-            k: v for k, v in train_metrics.items() if "individual" in k
-        }
-        train_metrics = {
-            k: v for k, v in train_metrics.items() if k not in classwise_metrics
-        }
-
-        writer.write_scalars(step, train_metrics)
-        if add_class_wise_metrics:
-          writer.write_summaries(step, classwise_metrics)
       reporter(step)
 
     if (step + 1) % checkpoint_every_steps == 0 or step == num_train_steps:
@@ -888,7 +874,6 @@ def evaluate(
     train_mode_at_eval: bool | None = False,
     mask_at_eval: bool | None = False,
     name: str = "valid",
-    add_class_wise_metrics: bool = True,
 ):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
@@ -896,7 +881,7 @@ def evaluate(
   taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
   if taxonomy_loss_weight != 0.0:
     taxonomy_keys += utils.TAXONOMY_KEYS
-  base_metrics_collection = make_metrics_collection(
+  metrics_ = get_train_metrics(
       name,
       taxonomy_keys,
       model_bundle.model.num_classes,
@@ -906,20 +891,20 @@ def evaluate(
       quantizer_points=model_bundle.model.quantizer_points,
       readout_points=model_bundle.model.readout_points,
   )
-  valid_metrics_collection = flax.struct.dataclass(
-      type(
-          "_ValidCollection",
-          (base_metrics_collection,),
-          {
-              "__annotations__": {
-                  f"{name}_rank_based_metrics": (
-                      rank_based_metrics.RankBasedMetrics
-                  ),
-                  **base_metrics_collection.__annotations__,
-              }
-          },
-      )
+  rank_metrics = {}
+  for key in taxonomy_keys:
+    rank_metrics[f"{key}_cmap"] = (
+        (f"{key}_logits", key),
+        metrics.cmap,
+    )
+    rank_metrics[f"{key}_roc_auc"] = (
+        (f"{key}_logits", key),
+        metrics.roc_auc,
+    )
+  metrics_[f"{name}_rank_metrics"] = utils.CollectingMetrics.from_funs(
+      **rank_metrics
   )
+  valid_metrics_collection = utils.NestedCollection.create(**metrics_)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def get_metrics(batch, train_state, mask_key):
@@ -979,17 +964,7 @@ def evaluate(
         break
 
     # Log validation loss
-    valid_metrics = utils.flatten_dict(valid_metrics.compute())
-    classwise_metrics = {
-        k: v for k, v in valid_metrics.items() if "individual" in k
-    }
-    valid_metrics = {
-        k: v for k, v in valid_metrics.items() if k not in classwise_metrics
-    }
-
-  writer.write_scalars(step, valid_metrics)
-  if add_class_wise_metrics:
-    writer.write_summaries(step, classwise_metrics)
+    utils.write_metrics(writer, step, valid_metrics.compute())
   writer.flush()
 
 
@@ -1008,7 +983,6 @@ def evaluate_loop(
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     name: str = "valid",
-    add_class_wise_metrics: bool = True,
     **unused_kwargs,
 ):
   """Run evaluation in a loop."""
@@ -1052,7 +1026,6 @@ def evaluate_loop(
         train_mode_at_eval,
         mask_at_eval,
         name=name,
-        add_class_wise_metrics=add_class_wise_metrics,
     )
     if tflite_export:
       export_tf_lite(model_bundle, train_state, workdir, input_shape)
@@ -1172,7 +1145,6 @@ def run(
         quant_loss_mult=quant_loss_mult,
         readout_loss_mult=config.train_config.readout_loss_mult,
         hubert_loss_mult=config.train_config.hubert_loss_mult,
-        add_class_wise_metrics=config.train_config.add_class_wise_metrics,
     )
 
   elif mode == "tune_eval_hypers":
@@ -1193,7 +1165,6 @@ def run(
         train_mode_at_eval=config.eval_config.train_mode_at_eval,
         mask_at_eval=config.eval_config.mask_at_eval,
         name=name,
-        add_class_wise_metrics=config.eval_config.add_class_wise_metrics,
     )
 
   elif mode == "eval":

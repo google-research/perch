@@ -15,6 +15,7 @@
 
 """Shared utilities for training scripts."""
 
+import itertools
 from typing import Callable
 
 from chirp.models import output
@@ -23,6 +24,7 @@ from clu import checkpoint
 from clu import metrics as clu_metrics
 import flax
 from flax import linen as nn
+import jax
 from jax import numpy as jnp
 import numpy as np
 import optax
@@ -101,36 +103,102 @@ class MultiAverage(clu_metrics.Average):
     )
 
   def compute(self):
-    averages = self.total / self.count
     return {
         "mean": jnp.sum(self.total) / jnp.sum(self.count),
-        "individual": averages,
+        "individual": self.total / self.count,
     }
 
 
-def flatten_dict(
-    metrics: dict[str, jnp.ndarray | dict[str, jnp.ndarray]]
-) -> dict[str, jnp.ndarray]:
-  """Flatten a metrics dictionary.
+class CollectingMetrics(clu_metrics.Metric):
+  """Metrics that must be calculated on collected values.
 
-  The `MultiAverage` metric actually returns a dictionary instead of a scalar.
-  After calling `compute()` the resulting values must be flattened using this
-  function becfore being passed to `write_scalars`.
+  To avoid having multiple metrics collect the same values (which could require
+  lots of memory) this metric collects all values once, and then applies
+  several functions to the collected values to compute metrics.
+  """
+
+  @classmethod
+  def from_funs(cls, **funs):
+    """Construct from a set of functions.
+
+    Args:
+      **funs: A mapping from metric names to 2-tuples, where the first element
+        is a list of model outputs that need to be collected, and the second
+        element is a function which will be applied to the collected model
+        outputs in order to calculate the final metric value.
+
+    Returns:
+      A metric class that computes metrics using collected values.
+    """
+    names = list(
+        set(
+            itertools.chain.from_iterable(metric[0] for metric in funs.values())
+        )
+    )
+
+    @flax.struct.dataclass
+    class FromFuns(clu_metrics.CollectingMetric.from_outputs(names)):
+      """Collecting metric which applies functions to collected values."""
+
+      def compute(self):
+        """Compute metrics by applying functions to collected values.
+
+        Note that this deviates from the standard `compute` signature, which
+        normally returns a scalar or array.
+
+        Returns:
+          A dictionary mapping metric names to compute values, which can either
+          be scalars/arrays or another dictionary of computed metrics.
+        """
+        with jax.default_device(jax.devices("cpu")[0]):
+          values = super().compute()
+          return {
+              metric_name: metric[1](*(values[name] for name in metric[0]))
+              for metric_name, metric in funs.items()
+          }
+
+      compute_value = None
+
+    return FromFuns
+
+
+def flatten(dict_, parent_key="", sep="_"):
+  """Recursively flatten dictionaries with string keys.
 
   Args:
-    metrics: A dictionary with metrics where the values are either scalars or
-      dictionaries that map strings to scalars.
+    dict_: The dictionary to flatten.
+    parent_key: The name of the parent key.
+    sep: The separator used to combine keys.
 
   Returns:
-    A flat dictionary where each key maps to a scalar.
+    A flat dictionary.
   """
   flattened_dict = {}
-  for k, v in metrics.items():
+  for k, v in dict_.items():
+    child_key = parent_key + sep + k if parent_key else k
     if isinstance(v, dict):
-      flattened_dict.update({f"{k}_{subk}": subv for subk, subv in v.items()})
+      flattened_dict |= flatten(v, child_key, sep=sep)
     else:
-      flattened_dict[k] = v
+      flattened_dict[child_key] = v
   return flattened_dict
+
+
+class NestedCollection(clu_metrics.Collection):
+  """Collection that handles metrics which return multiple values."""
+
+  def compute(self):
+    return flatten(super().compute())
+
+  def compute_values(self):
+    return flatten(super().compute_values())
+
+
+def write_metrics(writer, step, metrics):
+  """Helper function for logging both scalars and arrays."""
+  scalars = {k: v for k, v in metrics.items() if v.ndim == 0}
+  summaries = {k: v for k, v in metrics.items() if v.ndim != 0}
+  writer.write_scalars(step, scalars)
+  writer.write_summaries(step, summaries)
 
 
 def taxonomy_loss(

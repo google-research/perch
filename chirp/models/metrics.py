@@ -15,16 +15,11 @@
 
 """Metrics for training and validation."""
 
+from typing import Any, Dict
 
 from jax import lax
 from jax import numpy as jnp
 from jax import scipy
-import optax
-
-
-def mean_cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
-  mean = jnp.mean(optax.sigmoid_binary_cross_entropy(logits, labels), axis=-1)
-  return lax.pmean(mean, axis_name="batch")
 
 
 def map_(
@@ -41,37 +36,43 @@ def map_(
   )
 
 
-def cmap_(
-    logits: jnp.ndarray, labels: jnp.ndarray, sort_descending: bool = True
-) -> jnp.ndarray:
-  return average_precision(
+def cmap(
+    logits: jnp.ndarray,
+    labels: jnp.ndarray,
+    sort_descending: bool = True,
+    sample_threshold: int = 0,
+) -> Dict[str, Any]:
+  class_aps = average_precision(
       scores=logits.T, labels=labels.T, sort_descending=sort_descending
   )
+  mask = jnp.sum(labels, axis=0) > sample_threshold
+  class_aps = jnp.where(mask, class_aps, jnp.nan)
+  macro_cmap = jnp.mean(class_aps, where=mask)
+  return {
+      'macro': macro_cmap,
+      'individual': class_aps,
+  }
 
 
-def log_mse_loss(
-    source: jnp.ndarray, estimate: jnp.ndarray, max_snr: float = 1e6, eps=1e-8
-) -> jnp.ndarray:
-  """Negative log MSE loss, the negated log of SNR denominator.
-
-  With default max_snr = 1e6, this gives the usual log((source-estimate)**2).
-  When a max_snr is specified, it acts as a soft threshold clamping the loss.
-
-  Args:
-    source: Groundtruth audio, with time in the last dimension.
-    estimate: Estimate of Groundtruth with the same shape as source.
-    max_snr: SNR threshold for minimal loss. The default 1e6 yields an unbiased
-      log mse calculation.
-    eps: Epsilon for log stabilization.
-
-  Returns:
-    Array of loss values.
-  """
-  err_pow = jnp.sum((source - estimate) ** 2, axis=-1)
-  snrfactor = 10.0 ** (-max_snr / 10.0)
-  ref_pow = jnp.sum(jnp.square(source), axis=-1)
-  bias = snrfactor * ref_pow
-  return 10 * jnp.log10(bias + err_pow + eps)
+def roc_auc(
+    logits: jnp.ndarray,
+    labels: jnp.ndarray,
+    sort_descending: bool = True,
+    sample_threshold: int = 0,
+) -> Dict[str, Any]:
+  """Compute ROC-AUC scores."""
+  class_roc_auc, class_roc_auc_var = generalized_mean_rank(
+      logits.T, labels.T, sort_descending=sort_descending
+  )
+  mask = jnp.sum(labels, axis=0) > sample_threshold
+  class_roc_auc = jnp.where(mask, class_roc_auc, jnp.nan)
+  class_roc_auc_var = jnp.where(mask, class_roc_auc_var, jnp.nan)
+  return {
+      'macro': jnp.mean(class_roc_auc, where=mask),
+      'geometric': jnp.exp(jnp.mean(jnp.log(class_roc_auc), where=mask)),
+      'individual': class_roc_auc,
+      'individual_var': class_roc_auc_var,
+  }
 
 
 def negative_snr_loss(
@@ -99,37 +100,6 @@ def negative_snr_loss(
   numer = 10.0 * jnp.log10(ref_pow + eps)
   err_pow = jnp.sum(jnp.square(source - estimate), axis=-1)
   return 10 * jnp.log10(bias + err_pow + eps) - numer
-
-
-def source_sparsity_l1l2ratio_loss(
-    separated_waveforms: jnp.ndarray,
-    mix_of_mix_waveforms: jnp.ndarray,
-    eps: float = 1e-8,
-) -> jnp.ndarray:
-  """Sparsity loss for separated audio.
-
-  Computes the ratio of L1 to L2 measures across source rms power.
-  Note, this is actually the square root of the weighted mean when input
-  and weights are rms power.
-  See Section 2.3 in https://arxiv.org/abs/2106.00847
-
-  Args:
-    separated_waveforms: Estimated separated audio with shape [Batch, Channels,
-      Time].
-    mix_of_mix_waveforms: MoM audio, which separated_waveforms separates.
-    eps: Epsilon for stability.
-
-  Returns:
-    Loss tensor.
-  """
-  src_pow = jnp.mean(jnp.square(separated_waveforms), axis=2)
-  src_rms = jnp.sqrt(src_pow)
-
-  l1norm = jnp.mean(src_rms, axis=1)
-  mixture_pow = jnp.mean(jnp.square(mix_of_mix_waveforms), axis=2)
-  l2norm_mixture = jnp.sqrt(mixture_pow)
-  loss = l1norm / (l2norm_mixture + eps)
-  return loss
 
 
 def average_precision(
