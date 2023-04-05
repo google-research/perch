@@ -39,15 +39,11 @@ def get_config() -> config_dict.ConfigDict:
   config.init_config = presets.get_base_init_config(config)
   config.init_config.model_config = get_model_config()
 
-  config.train_config = presets.get_base_train_config(
-      config, add_class_wise_metrics=True
-  )
+  config.train_config = presets.get_base_train_config(config)
   config.train_dataset_config = presets.get_ablation_train_dataset_config(
       config
   )
-  config.eval_config = presets.get_base_eval_config(
-      config, add_class_wise_metrics=True
-  )
+  config.eval_config = presets.get_base_eval_config(config)
   config.eval_dataset_config = presets.get_ablation_eval_dataset_config(config)
 
   return config
@@ -55,6 +51,4 @@ def get_config() -> config_dict.ConfigDict:
 
 def get_hyper(hyper):
   """Defines the hyperparameter sweep."""
-  return hyper.sweep(
-      'config.init_config.learning_rate', hyper.discrete([1e-3])
-  )
+  return hyper.sweep('config.init_config.learning_rate', hyper.discrete([1e-3]))

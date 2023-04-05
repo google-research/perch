@@ -19,7 +19,6 @@ import functools
 import os
 from chirp.models import cwt
 from chirp.models import metrics
-from chirp.models import rank_based_metrics
 from clu import metrics as clu_metrics
 import flax
 import jax
@@ -123,99 +122,6 @@ class MetricsTest(absltest.TestCase):
     # The best_mix should recover the mixture channels exactly.
     self.assertEqual(l1_err(best_mix[0, 0], mix1), 0.0)
     self.assertEqual(l1_err(best_mix[0, 1], mix2), 0.0)
-
-  def test_cmap(self):
-    # The following example was worked out manually and verified.
-    scores = jnp.array([
-        [1.0, 1.2, 1.3],
-        [0.9, 1.7, 1.2],
-        [0.0, 1.0, 1.4],
-        [0.3, 1.4, 0.6],
-        [0.2, 0.8, 1.0],
-        [0.4, 0.6, 2.9],
-        [1.1, 0.0, 0.0],
-        [0.7, 0.7, 1.8],
-        [1.5, 2.0, 2.4],
-        [2.2, 1.8, 1.1],
-    ])
-    labels = jnp.array([
-        [1, 1, 0],
-        [0, 0, 0],
-        [0, 1, 0],
-        [0, 0, 0],
-        [0, 0, 0],
-        [0, 0, 0],
-        [0, 1, 0],
-        [1, 1, 0],
-        [0, 0, 0],
-        [1, 0, 0],
-    ])
-    full_cmap_value = rank_based_metrics.RankBasedMetrics.from_model_output(
-        label=labels, label_logits=scores
-    ).compute()["macro_cmap"]
-    # Check against the manually verified outcome.
-    self.assertAlmostEqual(full_cmap_value, 0.49687502)
-
-    batched_cmap_metric = rank_based_metrics.RankBasedMetrics.empty()
-    batched_cmap_metric = batched_cmap_metric.merge(
-        rank_based_metrics.RankBasedMetrics.from_model_output(
-            label_logits=scores[:5], label=labels[:5]
-        )
-    )
-    batched_cmap_metric = batched_cmap_metric.merge(
-        rank_based_metrics.RankBasedMetrics.from_model_output(
-            label_logits=scores[5:], label=labels[5:]
-        )
-    )
-    batched_cmap_value = batched_cmap_metric.compute()["macro_cmap"]
-    self.assertEqual(batched_cmap_value, full_cmap_value)
-
-    # Check that when setting a threshold to 3, the cmap is only computed
-    # taking into account column 1 (the only one with >3 samples).
-    self.assertEqual(
-        rank_based_metrics.RankBasedMetrics.from_model_output(
-            label_logits=scores, label=labels
-        ).compute(sample_threshold=3)["macro_cmap"],
-        rank_based_metrics.RankBasedMetrics.from_model_output(
-            label_logits=scores[:, 1:2], label=labels[:, 1:2]
-        ).compute()["macro_cmap"],
-    )
-
-  def test_gmr(self):
-    # The following example was worked out manually and verified.
-    scores = jnp.array([[0.9, 0.2, 0.3, 0.6, 0.5, 0.7, 0.1, 0.4, 0.8]]).T
-    labels = jnp.array([[0, 0, 0, 0, 0, 1, 0, 1, 1]]).T
-    full_gmr_value = rank_based_metrics.RankBasedMetrics.from_model_output(
-        label=labels, label_logits=scores
-    ).compute()["macro_gmr"]
-    # Check against the manually verified outcome.
-    self.assertAlmostEqual(full_gmr_value, 13.0 / 18.0, places=5)
-
-    batched_gmr_metric = rank_based_metrics.RankBasedMetrics.empty()
-    batched_gmr_metric = batched_gmr_metric.merge(
-        rank_based_metrics.RankBasedMetrics.from_model_output(
-            label_logits=scores[:5], label=labels[:5]
-        )
-    )
-    batched_gmr_metric = batched_gmr_metric.merge(
-        rank_based_metrics.RankBasedMetrics.from_model_output(
-            label_logits=scores[5:], label=labels[5:]
-        )
-    )
-    batched_gmr_value = batched_gmr_metric.compute()["macro_gmr"]
-    self.assertEqual(batched_gmr_value, full_gmr_value)
-
-    # Check that label_mask works as intended.
-    scores = jnp.array([[0.9, 0.2, 0.3, 0.6, 0.5, 0.7, 0.1, 0.4, 0.8, 0.85]])
-    labels = jnp.array([[0, 0, 0, 0, 0, 1, 0, 1, 1, 0]])
-    label_mask = jnp.array(
-        [[True, True, True, True, True, True, True, True, True, False]]
-    )
-    (full_gmr_value,), _ = metrics.generalized_mean_rank(
-        scores=scores, labels=labels, label_mask=label_mask
-    )
-    # Check against the manually verified outcome.
-    self.assertAlmostEqual(full_gmr_value, 13.0 / 18.0, places=5)
 
 
 if __name__ == "__main__":

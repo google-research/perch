@@ -25,7 +25,6 @@ from chirp import export_utils
 from chirp.data import pipeline
 from chirp.models import metrics
 from chirp.models import output
-from chirp.models import rank_based_metrics
 from chirp.models import separation_model
 from chirp.taxonomy import class_utils
 from chirp.train import utils
@@ -36,7 +35,6 @@ from clu import periodic_actions
 import flax
 import flax.jax_utils as flax_utils
 import jax
-from jax import lax
 from jax import numpy as jnp
 from jax import random
 from ml_collections import config_dict
@@ -47,83 +45,35 @@ import tensorflow as tf
 EVAL_LOOP_SLEEP_S = 30
 
 
-def p_log_mse_loss(
-    source: jnp.ndarray,
-    estimate: jnp.ndarray,
-    max_snr: float = 1e6,
-    **unused_kwargs,
-):
-  return lax.pmean(
-      jnp.mean(metrics.log_mse_loss(source, estimate, max_snr)),
-      axis_name='batch',
-  )
-
-
 def p_log_snr_loss(
     source: jnp.ndarray,
     estimate: jnp.ndarray,
     max_snr: float = 1e6,
     **unused_kwargs,
 ):
-  return lax.pmean(
-      jnp.mean(metrics.negative_snr_loss(source, estimate, max_snr)),
-      axis_name='batch',
-  )
+  return jnp.mean(metrics.negative_snr_loss(source, estimate, max_snr))
 
 
-def p_log_sisnr_loss(
-    source: jnp.ndarray,
-    estimate: jnp.ndarray,
-    max_snr: float = 1e6,
-    **unused_kwargs,
-):
-  return lax.pmean(
-      jnp.mean(metrics.negative_snr_loss(source, estimate, max_snr=max_snr)),
-      axis_name='batch',
-  )
+TRAIN_METRICS = {
+    'loss': clu_metrics.Average.from_output('loss'),
+    'taxo_loss': clu_metrics.Average.from_output('taxo_loss'),
+    'mixit_neg_snr': clu_metrics.Average.from_output('mixit_neg_snr'),
+}
 
-
-def keyed_cross_entropy(
-    key: str,
-    outputs: separation_model.SeparatorOutput,
-    **kwargs,
-) -> jnp.ndarray | None:
-  """Cross entropy for the specified taxonomic label set."""
-  if getattr(outputs, key) is None:
-    return 0  # pytype: disable=bad-return-type  # jax-ndarray
-  scores = getattr(outputs, key)
-  ce = optax.sigmoid_binary_cross_entropy(scores, kwargs[key])
-  ce = jnp.mean(ce, axis=-1)
-  return ce
-
-
-def keyed_map(
-    key: str, outputs: separation_model.SeparatorOutput, **kwargs
-) -> jnp.ndarray | None:
-  if getattr(outputs, key) is None:
-    return 0  # pytype: disable=bad-return-type  # jax-ndarray
-  scores = getattr(outputs, key)
-  return metrics.average_precision(scores=scores, labels=kwargs[key])
-
-
-def make_metrics_collection(prefix: str):
-  """Create metrics collection."""
-  metrics_dict = {
-      'mixit_log_mse': clu_metrics.LastValue.from_fun(p_log_mse_loss),
-      'mixit_neg_snr': clu_metrics.LastValue.from_output('mixit_neg_snr'),
-  }
-  for key in ['label'] + utils.TAXONOMY_KEYS:
-    metrics_dict.update({
-        f'{key}_xentropy': clu_metrics.Average.from_fun(
-            functools.partial(keyed_cross_entropy, key=key)
-        ),
-        f'{key}_map': clu_metrics.Average.from_fun(
-            functools.partial(keyed_map, key=key)
-        ),
-    })
-  metrics_dict['taxo_loss'] = clu_metrics.Average.from_output('taxo_loss')
-  metrics_dict = {f'{prefix}_{k}': v for k, v in metrics_dict.items()}
-  return clu_metrics.Collection.create(**metrics_dict)
+EVAL_METRICS = {
+    'rank_metrics': utils.CollectingMetrics.from_funs(
+        **{
+            'label_cmap': (('label_logits', 'label'), metrics.cmap),
+            'genus_cmap': (('genus_logits', 'genus'), metrics.cmap),
+            'family_cmap': (('family_logits', 'family'), metrics.cmap),
+            'order_cmap': (('order_logits', 'order'), metrics.cmap),
+            'label_roc_auc': (('label_logits', 'label'), metrics.roc_auc),
+            'genus_roc_auc': (('genus_logits', 'genus'), metrics.roc_auc),
+            'family_roc_auc': (('family_logits', 'family'), metrics.roc_auc),
+            'order_roc_auc': (('order_logits', 'order'), metrics.roc_auc),
+        }
+    )
+}
 
 
 def initialize_model(
@@ -188,7 +138,7 @@ def train(
 ) -> None:
   """Train a model."""
   train_iterator = train_dataset.as_numpy_iterator()
-  train_metrics_collection = make_metrics_collection('train__')
+  train_metrics_collection = utils.NestedCollection.create(**TRAIN_METRICS)
   initial_step = int(train_state.step)
   train_state = flax.jax_utils.replicate(train_state)
   # Logging
@@ -209,7 +159,7 @@ def train(
           train=True,
           mutable=list(model_state.keys()),
       )
-      estimate, mixit_matrix = metrics.least_squares_mixit(
+      estimate, _ = metrics.least_squares_mixit(
           reference=batch['source_audio'],
           estimate=model_outputs.separated_audio,
       )
@@ -223,21 +173,17 @@ def train(
       mixit_neg_snr = p_log_snr_loss(
           batch['source_audio'], estimate, loss_max_snr
       )
-      train_metrics = train_metrics_collection.gather_from_model_output(
-          outputs=model_outputs,
-          separated=model_outputs.separated_audio,
-          source=batch['source_audio'],
-          estimate=estimate,
-          mixit_matrix=mixit_matrix,
-          max_snr=loss_max_snr,
-          taxo_loss=taxo_loss,
-          mixit_neg_snr=mixit_neg_snr,
-          **batch,
-          **output.logits(model_outputs),
-      )
+
       loss = mixit_neg_snr
       if classify_bottleneck_weight > 0.0:
         loss = mixit_neg_snr + classify_bottleneck_weight * jnp.mean(taxo_loss)
+      train_metrics = train_metrics_collection.gather_from_model_output(
+          taxo_loss=taxo_loss,
+          mixit_neg_snr=mixit_neg_snr,
+          loss=loss,
+          **batch,
+          **output.logits(model_outputs),
+      )
       return loss, (train_metrics, model_state)
 
     grads, (train_metrics, model_state) = jax.grad(update_step, has_aux=True)(
@@ -262,11 +208,10 @@ def train(
       train_metrics, train_state = train_step(batch, train_state)
 
       if step % log_every_steps == 0:
-        train_metrics = flax_utils.unreplicate(train_metrics).compute()
-        train_metrics = {
-            k.replace('___', '/'): v for k, v in train_metrics.items()
-        }
-        writer.write_scalars(step, utils.flatten_dict(train_metrics))
+        train_metrics = flax_utils.unreplicate(train_metrics).compute(
+            prefix='train'
+        )
+        utils.write_metrics(writer, step, train_metrics)
       reporter(step)
     if step % checkpoint_every_steps == 0:
       with reporter.timed('checkpoint'):
@@ -286,14 +231,12 @@ def evaluate(
         [jnp.ndarray, jnp.ndarray], jnp.ndarray
     ] = optax.sigmoid_binary_cross_entropy,
     eval_steps_per_checkpoint: int = -1,
-    add_class_wise_metrics: bool = False,
 ):
   """Run evaluation."""
-  base_metrics_collection = make_metrics_collection('valid__')
-  valid_metrics_collection = (
-      rank_based_metrics.add_rank_based_metrics_to_metrics_collection(
-          'valid', base_metrics_collection
-      )
+  train_metrics = TRAIN_METRICS.copy()
+  del train_metrics['loss']
+  valid_metrics_collection = utils.NestedCollection.create(
+      **(train_metrics | EVAL_METRICS)
   )
 
   @functools.partial(jax.pmap, axis_name='batch')
@@ -304,7 +247,7 @@ def evaluate(
     )
     model_outputs = model_outputs.time_reduce_logits('MIDPOINT')
 
-    estimate, mixit_matrix = metrics.least_squares_mixit(
+    estimate, _ = metrics.least_squares_mixit(
         reference=batch['source_audio'], estimate=model_outputs.separated_audio
     )
     taxo_loss = utils.taxonomy_loss(
@@ -317,11 +260,6 @@ def evaluate(
         batch['source_audio'], estimate, loss_max_snr
     )
     return valid_metrics_collection.gather_from_model_output(
-        outputs=model_outputs,
-        separated=model_outputs.separated_audio,
-        source=batch['source_audio'],
-        estimate=estimate,
-        mixit_matrix=mixit_matrix,
         taxo_loss=taxo_loss,
         mixit_neg_snr=mixit_neg_snr,
         **batch,
@@ -343,21 +281,9 @@ def evaluate(
         break
 
     # Log validation loss
-    valid_metrics = valid_metrics.compute()
-
-  valid_metrics = utils.flatten_dict(
-      {k.replace('___', '/'): v for k, v in valid_metrics.items()}
-  )
-  classwise_metrics = {
-      k: v for k, v in valid_metrics.items() if 'individual' in k
-  }
-  valid_metrics = {
-      k: v for k, v in valid_metrics.items() if k not in classwise_metrics
-  }
-
-  writer.write_scalars(int(train_state.step), valid_metrics)
-  if add_class_wise_metrics:
-    writer.write_summaries(int(train_state.step), classwise_metrics)
+    utils.write_metrics(
+        writer, int(train_state.step), valid_metrics.compute(prefix='valid')
+    )
   writer.flush()
 
 
@@ -377,7 +303,6 @@ def evaluate_loop(
     tflite_export: bool = False,
     frame_size: int | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
-    add_class_wise_metrics: bool = False,
 ):
   """Run evaluation in a loop."""
   writer = metric_writers.create_default_writer(logdir)
@@ -417,7 +342,6 @@ def evaluate_loop(
         taxonomy_labels_weight,
         loss_fn,
         eval_steps_per_checkpoint,
-        add_class_wise_metrics=add_class_wise_metrics,
     )
     elapsed = time.time() - st
     last_step = int(train_state.step)

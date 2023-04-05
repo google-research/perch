@@ -68,7 +68,6 @@ def get_base_train_config(
   train_config.num_train_steps = config.get_ref('num_train_steps')
   train_config.log_every_steps = 1_250
   train_config.checkpoint_every_steps = 5_000
-  train_config.add_class_wise_metrics = True
   train_config.update(**kwargs)
   return train_config
 
@@ -79,7 +78,6 @@ def get_base_eval_config(
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = config.get_ref('num_train_steps')
   eval_config.tflite_export = False
-  eval_config.add_class_wise_metrics = True
   eval_config.update(**kwargs)
   return eval_config
 
