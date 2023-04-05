@@ -40,7 +40,8 @@ class Int16AsFloatTensor(tfds.features.Audio):
       dtype: tf.dtypes.DType = tf.float32,
       sample_rate: tfds.typing.Dim,
       encoding: str | tfds.features.Encoding = tfds.features.Encoding.NONE,
-      doc: tfds.features.DocArg = None
+      doc: tfds.features.DocArg = None,
+      lazy_decode: bool = False,
   ):
     del file_format
     del dtype
@@ -49,6 +50,9 @@ class Int16AsFloatTensor(tfds.features.Audio):
         shape=shape, dtype=tf.int16, encoding=encoding
     )
 
+    if lazy_decode:
+      raise ValueError('lazy decoding not supported')
+
     super().__init__(
         file_format=None,
         shape=shape,
@@ -56,6 +60,7 @@ class Int16AsFloatTensor(tfds.features.Audio):
         sample_rate=sample_rate,
         encoding=encoding,
         doc=doc,
+        lazy_decode=lazy_decode,
     )
 
   def get_serialized_info(self):
