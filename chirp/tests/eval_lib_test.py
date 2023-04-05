@@ -25,6 +25,7 @@ from chirp import config_utils
 from chirp.configs import baseline_mel_conformer
 from chirp.configs import config_globals
 from chirp.data.bird_taxonomy import bird_taxonomy
+from chirp.eval import callbacks
 from chirp.eval import eval_lib
 from chirp.taxonomy import namespace_db
 from chirp.tests import fake_dataset
@@ -155,6 +156,35 @@ class GetEmbeddingsTest(absltest.TestCase):
 
     embedding = next(embedded_dataset.as_numpy_iterator())['embedding']
     self.assertTrue(((0 <= embedding) & (embedding <= 2)).all())
+
+  def test_embedding_model_callback(self):
+    placeholder_callback = callbacks.EmbeddingModelCallback(
+        'placeholder_model', ml_collections.ConfigDict({'sample_rate': 32000})
+    )
+    fake_config = ml_collections.ConfigDict()
+    fake_config.dataset_configs = {
+        'fake_dataset_1': {
+            'tfds_name': 'fake_bird_taxonomy/fake_variant_1',
+            'tfds_data_dir': self.data_dir,
+            'pipeline': _c(
+                'pipeline.Pipeline', ops=[_c('pipeline.OnlyJaxTypes')]
+            ),
+            'split': 'train',
+        },
+    }
+    fake_config.model_callback = lambda x: x + 1
+    fake_config = config_utils.parse_config(
+        fake_config, config_globals.get_globals()
+    )
+    dataset = eval_lib.load_eval_datasets(fake_config)
+    (dataset_name,) = dataset.keys()
+    dataset = dataset[dataset_name]
+    embedded_dataset = eval_lib.get_embeddings(
+        dataset, placeholder_callback.model_callback, batch_size=1
+    )
+    self.assertContainsSubset(
+        ['embedding'], embedded_dataset.element_spec.keys()
+    )
 
   def tearDown(self):
     super().tearDown()
@@ -389,7 +419,7 @@ class TaxonomyModelCallbackTest(absltest.TestCase):
     # By default, the model callback should load all available learned
     # representations.
     self.assertLen(
-        eval_lib.TaxonomyModelCallback(
+        callbacks.TaxonomyModelCallback(
             init_config=init_config, workdir=workdir
         ).learned_representations,
         len(all_species),
@@ -397,7 +427,7 @@ class TaxonomyModelCallbackTest(absltest.TestCase):
     # When learned_representation_blocklist is passed, the model callback
     # should *not* load any learned representation for species in the blocklist.
     self.assertNoCommonElements(
-        eval_lib.TaxonomyModelCallback(
+        callbacks.TaxonomyModelCallback(
             init_config=init_config,
             workdir=workdir,
             learned_representation_blocklist=downstream_species,

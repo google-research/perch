@@ -22,6 +22,7 @@ import apache_beam as beam
 from apache_beam.testing import test_pipeline
 from chirp import path_utils
 from chirp.inference import embed_lib
+from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
 from chirp.models import frontend
@@ -186,6 +187,55 @@ class InferenceTest(parameterized.TestCase):
     self.assertSequenceEqual(
         outputs.logits['label'].shape, [5, target_class_list.size]
     )
+
+  def test_pooled_embeddings(self):
+    outputs = interface.InferenceOutputs(
+        embeddings=np.zeros([10, 2, 8]), batched=False
+    )
+    batched_outputs = interface.InferenceOutputs(
+        embeddings=np.zeros([3, 10, 2, 8]), batched=True
+    )
+
+    # Check that no-op is no-op.
+    non_pooled = outputs.pooled_embeddings('', '')
+    self.assertSequenceEqual(non_pooled.shape, outputs.embeddings.shape)
+    batched_non_pooled = batched_outputs.pooled_embeddings('', '')
+    self.assertSequenceEqual(
+        batched_non_pooled.shape, batched_outputs.embeddings.shape
+    )
+
+    for pooling_method in interface.POOLING_METHODS:
+      if pooling_method == 'squeeze':
+        # The 'squeeze' pooling method throws an exception if axis size is > 1.
+        with self.assertRaises(ValueError):
+          time_pooled = outputs.pooled_embeddings(pooling_method, '')
+        continue
+      elif pooling_method == 'flatten':
+        # Concatenates over the target axis.
+        time_pooled = outputs.pooled_embeddings(pooling_method, '')
+        self.assertSequenceEqual(time_pooled.shape, [2, 80])
+        continue
+
+      time_pooled = outputs.pooled_embeddings(pooling_method, '')
+      self.assertSequenceEqual(time_pooled.shape, [2, 8])
+      batched_time_pooled = batched_outputs.pooled_embeddings(
+          pooling_method, ''
+      )
+      self.assertSequenceEqual(batched_time_pooled.shape, [3, 2, 8])
+
+      channel_pooled = outputs.pooled_embeddings('', pooling_method)
+      self.assertSequenceEqual(channel_pooled.shape, [10, 8])
+      batched_channel_pooled = batched_outputs.pooled_embeddings(
+          '', pooling_method
+      )
+      self.assertSequenceEqual(batched_channel_pooled.shape, [3, 10, 8])
+
+      both_pooled = outputs.pooled_embeddings(pooling_method, pooling_method)
+      self.assertSequenceEqual(both_pooled.shape, [8])
+      batched_both_pooled = batched_outputs.pooled_embeddings(
+          pooling_method, pooling_method
+      )
+      self.assertSequenceEqual(batched_both_pooled.shape, [3, 8])
 
   def test_beam_pipeline(self):
     """Check that we can write embeddings to TFRecord file."""

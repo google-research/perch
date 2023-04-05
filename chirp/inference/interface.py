@@ -25,6 +25,7 @@ import numpy as np
 LogitType = Dict[str, np.ndarray]
 
 NULL_LOGIT = -20.0
+POOLING_METHODS = ['first', 'mean', 'max', 'mid', 'flatten', 'squeeze']
 
 
 @dataclasses.dataclass
@@ -56,6 +57,40 @@ class InferenceOutputs:
     if hasattr(self.separated_audio, 'numpy'):
       self.separated_audio = self.separated_audio.numpy()
 
+  def _pool_axis(self, ar: np.ndarray, axis: int, pooling: str) -> np.ndarray:
+    """Apply the specified pooling along the target axis."""
+    if pooling == 'first':
+      outputs = ar.take(0, axis=axis)
+    elif pooling == 'squeeze':
+      # Like 'first' but throws an exception if more than one time step.
+      outputs = ar.squeeze(axis=axis)
+    elif pooling == 'mean':
+      outputs = ar.mean(axis=axis)
+    elif pooling == 'max':
+      outputs = ar.max(axis=axis)
+    elif pooling == 'mid':
+      midpoint_index = ar.shape[axis] // 2
+      outputs = ar.take(midpoint_index, axis=axis)
+    elif pooling == 'flatten':
+      # Flatten the target axis dimension into the last dimension.
+      outputs = ar.swapaxes(axis, -2)
+      new_shape = outputs.shape[:-2] + (outputs.shape[-1] * outputs.shape[-2],)
+      outputs = outputs.reshape(new_shape)
+    elif not pooling:
+      outputs = ar
+    else:
+      raise ValueError(f'Unrecognized pooling method {pooling}.')
+    return outputs
+
+  def pooled_embeddings(
+      self, time_pooling: str, channel_pooling: str = ''
+  ) -> np.ndarray:
+    """Reduce embeddings over the time and/or channel axis."""
+    # Shape is either [B, F, C, D] or [F, C, D], so the time axis is -3.
+    outputs = self._pool_axis(self.embeddings, -3, time_pooling)
+    outputs = self._pool_axis(outputs, -2, channel_pooling)
+    return outputs
+
 
 @dataclasses.dataclass
 class EmbeddingModel:
@@ -77,34 +112,6 @@ class EmbeddingModel:
       An InferenceOutputs object.
     """
     raise NotImplementedError
-
-  def embed_reduce_time(
-      self, audio_array: np.ndarray, pool_method: str
-  ) -> InferenceOutputs:
-    """Embed some aqudio and reduce the embeddings over the time dimension."""
-    outputs = self.embed(audio_array)
-    embeddings = outputs.embeddings
-    if pool_method == 'first':
-      outputs.embeddings = embeddings[:, 0, :]
-    elif pool_method == 'only':
-      # Like 'first' but throws an exception if more than one time step.
-      outputs.embeddings = embeddings.squeeze(axis=1)
-    elif pool_method == 'mean':
-      outputs.embeddings = embeddings.mean(axis=1)
-    elif pool_method == 'max':
-      outputs.embeddings = embeddings.max(axis=1)
-    elif pool_method == 'mid':
-      t = outputs.embeddings.shape[1] // 2
-      outputs.embeddings = embeddings[:, t]
-    elif pool_method == 'flatten':
-      depth = embeddings.shape[-1]
-      time_steps = embeddings.shape[1]
-      outputs.embeddings = embeddings.reshape(
-          [embeddings.shape[0], time_steps * depth]
-      )
-    else:
-      raise ValueError(f'Unrecognized pooling method {pool_method}.')
-    return outputs
 
   def batch_embed(self, audio_batch: np.ndarray) -> InferenceOutputs:
     """Embed a batch of audio."""

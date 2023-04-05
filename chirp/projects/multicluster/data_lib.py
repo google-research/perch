@@ -273,14 +273,8 @@ def embed_dataset(
         ex['audio'] = _pad_audio(ex['audio'], window_size)
 
     outputs = embedding_model.embed(ex['audio'])
-    if outputs.logits is not None:
-      k = list(outputs.logits.keys())[0]
-      logits = pool_time_axis(outputs.logits[k], time_pooling, axis=0).squeeze()
-      ex['logits'] = logits
     if outputs.embeddings is not None:
-      embeds = pool_time_axis(
-          outputs.embeddings, time_pooling, axis=0
-      ).squeeze()
+      embeds = outputs.pooled_embeddings(time_pooling, 'squeeze')
       ex['embeddings'] = embeds
     if outputs.separated_audio is not None:
       ex['separated_audio'] = outputs.separated_audio
