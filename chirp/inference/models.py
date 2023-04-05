@@ -30,6 +30,7 @@ from ml_collections import config_dict
 import numpy as np
 import tensorflow as tf
 import tensorflow.compat.v1 as tf1
+import tensorflow_hub as hub
 
 
 def model_class_map() -> dict[str, Any]:
@@ -416,6 +417,30 @@ class HandcraftedFeaturesModel(interface.EmbeddingModel):
   melspec_config: config_dict.ConfigDict
   features_config: config_dict.ConfigDict
 
+  @classmethod
+  def beans_baseline(cls, sample_rate=32000, frame_rate=100):
+    stride = sample_rate // frame_rate
+    mel_config = config_dict.ConfigDict({
+        'sample_rate': sample_rate,
+        'features': 160,
+        'stride': stride,
+        'kernel_size': 2 * stride,
+        'freq_range': (60.0, sample_rate / 2.0),
+        'scaling_config': frontend.LogScalingConfig(),
+    })
+    features_config = config_dict.ConfigDict({
+        'compute_mfccs': True,
+        'aggregation': 'beans',
+    })
+    # pylint: disable=unexpected-keyword-arg
+    return HandcraftedFeaturesModel(
+        sample_rate=sample_rate,
+        window_size_s=1.0,
+        hop_size_s=1.0,
+        melspec_config=mel_config,
+        features_config=features_config,
+    )
+
   def __post_init__(self):
     self.melspec_layer = frontend.MelSpectrogram(**self.melspec_config)
     self.features_layer = handcrafted_features.HandcraftedFeatures(
@@ -433,6 +458,43 @@ class HandcraftedFeaturesModel(interface.EmbeddingModel):
     # Add a trivial channels dimension.
     features = features[:, np.newaxis, :]
     return interface.InferenceOutputs(features, None, None)
+
+
+@dataclasses.dataclass
+class TFHubModel(interface.EmbeddingModel):
+  """Generic wrapper for TFHub models which produce embeddings."""
+
+  model_url: str
+  embedding_index: int
+
+  @classmethod
+  def yamnet(cls):
+    # Parent class takes a sample_rate arg which pylint doesn't find.
+    # pylint: disable=too-many-function-args
+    return TFHubModel(16000, 'https://tfhub.dev/google/yamnet/1', 1)
+
+  @classmethod
+  def vggish(cls):
+    # pylint: disable=too-many-function-args
+    return TFHubModel(16000, 'https://tfhub.dev/google/vggish/1', -1)
+
+  def __post_init__(self):
+    self.model = hub.load(self.model_url)
+
+  def embed(
+      self, audio_array: np.ndarray[Any, np.dtype[Any]]
+  ) -> interface.InferenceOutputs:
+    outputs = self.model(audio_array)
+    if self.embedding_index < 0:
+      embeddings = outputs
+    else:
+      embeddings = outputs[self.embedding_index]
+    if len(embeddings.shape) == 1:
+      embeddings = embeddings[np.newaxis, :]
+    elif len(embeddings.shape) != 2:
+      raise ValueError('Embeddings should have shape [Depth] or [Time, Depth].')
+    embeddings = embeddings[:, np.newaxis, :]
+    return interface.InferenceOutputs(embeddings, None, None, False)
 
 
 @dataclasses.dataclass
