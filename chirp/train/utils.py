@@ -16,8 +16,11 @@
 """Shared utilities for training scripts."""
 
 import itertools
+import time
 from typing import Callable
 
+from absl import logging
+from chirp import path_utils
 from chirp.models import output
 from chirp.taxonomy import namespace
 from clu import checkpoint
@@ -28,7 +31,7 @@ import jax
 from jax import numpy as jnp
 import numpy as np
 import optax
-
+import tensorflow as tf
 
 TAXONOMY_KEYS = ["genus", "family", "order"]
 
@@ -206,6 +209,34 @@ def write_metrics(writer, step, metrics):
   summaries = {k: v for k, v in metrics.items() if v.ndim != 0}
   writer.write_scalars(step, scalars)
   writer.write_summaries(step, summaries)
+
+
+def wait_for_next_checkpoint(
+    train_state, ckpt, last_ckpt_path, workdir, sleep_s: int = 5
+):
+  """Wait for the next checkpoint to arrive and load train_state."""
+  while True:
+    next_ckpt_path = ckpt.get_latest_checkpoint_to_restore_from()
+    if next_ckpt_path is None:
+      logging.warning("No checkpoint found; sleeping.")
+      time.sleep(sleep_s)
+      continue
+    elif next_ckpt_path == last_ckpt_path:
+      logging.warning("No new checkpoint found; sleeping.")
+      time.sleep(sleep_s)
+      continue
+    try:
+      new_train_state = ckpt.restore(train_state, next_ckpt_path)
+      break
+    except tf.errors.NotFoundError:
+      logging.warning(
+          "Checkpoint %s not found in workdir %s",
+          ckpt.latest_checkpoint,
+          workdir,
+      )
+      time.sleep(sleep_s)
+      continue
+  return new_train_state, next_ckpt_path
 
 
 def taxonomy_loss(

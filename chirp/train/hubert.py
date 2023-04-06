@@ -976,7 +976,7 @@ def evaluate_loop(
     eval_steps_per_checkpoint: int | None = None,
     train_mode_at_eval: bool | None = False,
     mask_at_eval: bool | None = False,
-    tflite_export: bool = False,
+    export_tf: bool = False,
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     name: str = "valid",
@@ -996,21 +996,9 @@ def evaluate_loop(
   input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
 
   while last_step < num_train_steps:
-    ckpt = checkpoint.MultihostCheckpoint(workdir)
-    next_ckpt = ckpt.get_latest_checkpoint_to_restore_from()
-    if next_ckpt is None or next_ckpt == last_ckpt:
-      time.sleep(eval_sleep_s)
-      continue
-    try:
-      train_state = ckpt.restore(train_state, next_ckpt)
-    except tf.errors.NotFoundError:
-      logging.warning(
-          "Checkpoint %s not found in workdir %s",
-          ckpt.latest_checkpoint,
-          workdir,
-      )
-      time.sleep(eval_sleep_s)
-      continue
+    train_state, next_ckpt = utils.wait_for_next_checkpoint(
+        train_state, model_bundle.ckpt, last_ckpt, workdir, eval_sleep_s
+    )
 
     evaluate(
         model_bundle,
@@ -1024,19 +1012,19 @@ def evaluate_loop(
         mask_at_eval,
         name=name,
     )
-    if tflite_export:
-      export_tf_lite(model_bundle, train_state, workdir, input_shape)
+    if export_tf:
+      export_tf_model(model_bundle, train_state, workdir, input_shape)
     last_step = int(train_state.step)
     last_ckpt = next_ckpt
 
 
-def export_tf_lite(
+def export_tf_model(
     model_bundle: utils.ModelBundle,
     train_state: utils.TrainState,
     workdir: str,
     input_shape: tuple[int, ...],
 ):
-  """Write a TFLite flatbuffer."""
+  """Write a TF SavedModel."""
   variables = {"params": train_state.params, **train_state.model_state}
 
   def infer_fn(audio_batch):
@@ -1094,7 +1082,13 @@ def run(
     valid_dataset, dataset_info = data_utils.get_dataset(
         **config.eval_dataset_config
     )
-  if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
+  elif mode == "export":
+    valid_dataset, dataset_info = None, None
+
+  if (
+      dataset_info is not None
+      and dataset_info.features["audio"].sample_rate != config.sample_rate_hz
+  ):
     raise ValueError(
         "Dataset sample rate must match config sample rate. To address this, "
         "need to set the sample rate in the config to {}.".format(
@@ -1173,5 +1167,19 @@ def run(
         workdir=workdir,
         logdir=workdir,
         name=name,
+        export_tf=False,
+        **config.eval_config,
+    )
+
+  elif mode == "export":
+    evaluate_loop(
+        model_bundle,
+        train_state,
+        learning_rate_schedule,
+        valid_dataset,
+        workdir=workdir,
+        logdir=workdir,
+        name=name,
+        export_tf=True,
         **config.eval_config,
     )

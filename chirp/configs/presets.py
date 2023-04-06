@@ -91,7 +91,6 @@ def get_base_eval_config(
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = config.get_ref('num_train_steps')
   eval_config.eval_steps_per_checkpoint = 1000
-  eval_config.tflite_export = True
   eval_config.update(**kwargs)
   return eval_config
 

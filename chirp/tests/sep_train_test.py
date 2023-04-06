@@ -123,7 +123,6 @@ class TrainSeparationTest(absltest.TestCase):
     config.train_config.checkpoint_every_steps = 1
     config.train_config.log_every_steps = 1
     config.eval_config.eval_steps_per_checkpoint = 1
-    config.eval_config.tflite_export = False
 
     if use_small_encoder:
       soundstream_config = config_dict.ConfigDict()
@@ -217,7 +216,9 @@ class TrainSeparationTest(absltest.TestCase):
 
     logging.info('Export Test: Exporting model.')
     frame_size = 32 * 2 * 2 * 250
-    separator.export_tf(model_bundle, train_state, self.train_dir, frame_size)
+    separator.export_tf_model(
+        model_bundle, train_state, self.train_dir, frame_size
+    )
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, 'model.tflite'))
     )

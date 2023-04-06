@@ -168,7 +168,7 @@ class TrainTest(parameterized.TestCase):
         workdir=self.train_dir, **config.init_config
     )
 
-    classifier.export_tf(
+    classifier.export_tf_model(
         model_bundle,
         train_state,
         self.train_dir,

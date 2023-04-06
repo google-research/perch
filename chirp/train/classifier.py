@@ -16,7 +16,6 @@
 """Training loop."""
 
 import functools
-import time
 from typing import Callable
 
 from absl import logging
@@ -369,7 +368,7 @@ def evaluate(
 def evaluate_loop(
     model_bundle: utils.ModelBundle,
     train_state: utils.TrainState,
-    valid_dataset: tf.data.Dataset,
+    valid_dataset: tf.data.Dataset | None,
     workdir: str,
     logdir: str,
     num_train_steps: int,
@@ -377,7 +376,7 @@ def evaluate_loop(
         [jnp.ndarray, jnp.ndarray], jnp.ndarray
     ] = optax.sigmoid_binary_cross_entropy,
     eval_steps_per_checkpoint: int | None = None,
-    tflite_export: bool = False,
+    export_tf: bool = False,
     input_shape: tuple[int, ...] | None = None,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     name: str = "valid",
@@ -395,39 +394,28 @@ def evaluate_loop(
   input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
 
   while last_step < num_train_steps:
-    ckpt = checkpoint.MultihostCheckpoint(workdir)
-    next_ckpt = ckpt.get_latest_checkpoint_to_restore_from()
-    if next_ckpt is None or next_ckpt == last_ckpt:
-      time.sleep(eval_sleep_s)
-      continue
-    try:
-      train_state = ckpt.restore(train_state, next_ckpt)
-    except tf.errors.NotFoundError:
-      logging.warning(
-          "Checkpoint %s not found in workdir %s",
-          ckpt.latest_checkpoint,
-          workdir,
-      )
-      time.sleep(eval_sleep_s)
-      continue
-
-    evaluate(
-        model_bundle,
-        flax_utils.replicate(train_state),
-        valid_dataset,
-        writer,
-        reporter,
-        loss_fn,
-        eval_steps_per_checkpoint,
-        name,
+    train_state, next_ckpt = utils.wait_for_next_checkpoint(
+        train_state, model_bundle.ckpt, last_ckpt, workdir, eval_sleep_s
     )
-    if tflite_export:
-      export_tf(model_bundle, train_state, workdir, input_shape)
+
+    if valid_dataset is not None:
+      evaluate(
+          model_bundle,
+          flax_utils.replicate(train_state),
+          valid_dataset,
+          writer,
+          reporter,
+          loss_fn,
+          eval_steps_per_checkpoint,
+          name,
+      )
+    if export_tf:
+      export_tf_model(model_bundle, train_state, workdir, input_shape)
     last_step = int(train_state.step)
     last_ckpt = next_ckpt
 
 
-def export_tf(
+def export_tf_model(
     model_bundle: utils.ModelBundle,
     train_state: utils.TrainState,
     workdir: str,
@@ -475,7 +463,13 @@ def run(
     valid_dataset, dataset_info = data_utils.get_dataset(
         **config.eval_dataset_config
     )
-  if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
+  elif mode == "export":
+    valid_dataset, dataset_info = None, None
+
+  if (
+      dataset_info is not None
+      and dataset_info.features["audio"].sample_rate != config.sample_rate_hz
+  ):
     raise ValueError(
         "Dataset sample rate must match config sample rate. To address this, "
         "need to set the sample rate in the config to {}.".format(
@@ -505,5 +499,18 @@ def run(
         workdir=workdir,
         logdir=workdir,
         name=name,
+        export_tf=False,
+        **config.eval_config,
+    )
+  elif mode == "export":
+    evaluate_loop(
+        model_bundle,
+        train_state,
+        valid_dataset,
+        loss_fn=config.loss_fn,
+        workdir=workdir,
+        logdir=workdir,
+        name=name,
+        export_tf=True,
         **config.eval_config,
     )

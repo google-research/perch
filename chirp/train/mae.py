@@ -280,7 +280,13 @@ def run(
     valid_dataset, dataset_info = data_utils.get_dataset(
         **config.eval_dataset_config
     )
-  if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:
+  elif mode == "export":
+    valid_dataset, dataset_info = None, None
+
+  if (
+      dataset_info is not None
+      and dataset_info.features["audio"].sample_rate != config.sample_rate_hz
+  ):
     raise ValueError(
         "Dataset sample rate must match config sample rate. To address this, "
         "need to set the sample rate in the config to {}.".format(
@@ -321,5 +327,16 @@ def run(
         valid_dataset,
         workdir=workdir,
         logdir=workdir,
+        export_tf=False,
+        **config.eval_config,
+    )
+  elif mode == "export":
+    classifier.evaluate_loop(
+        model_bundle,
+        train_state,
+        valid_dataset,
+        workdir=workdir,
+        logdir=workdir,
+        export_tf=True,
         **config.eval_config,
     )
