@@ -17,7 +17,7 @@
 import ast
 from typing import Any
 from absl import logging
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.projects.sfda import models
 import jax
 from ml_collections import config_dict
@@ -78,7 +78,7 @@ def get_audio_datasets(
   # is_train only affects how data is processed by tensorflow internally,
   # in the case of a distributed setting. For now, SFDA is only supported in a
   # a non-distributed setting. Therefore, the is_train argument has no effect.
-  adaptation_dataset, adaptation_dataset_info = pipeline.get_dataset(
+  adaptation_dataset, adaptation_dataset_info = data_utils.get_dataset(
       split=adaptation_split,
       is_train=False,
       dataset_directory=adaptation_data_config.dataset_directory,
@@ -95,7 +95,7 @@ def get_audio_datasets(
     )
 
   # Grab the data used for evaluation
-  val_dataset, val_dataset_info = pipeline.get_dataset(
+  val_dataset, val_dataset_info = data_utils.get_dataset(
       split=eval_split,
       is_train=False,
       dataset_directory=eval_data_config.dataset_directory,

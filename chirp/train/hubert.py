@@ -22,7 +22,7 @@ import time
 from typing import Any, Callable
 
 from absl import logging
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.models import frontend as frontend_models
 from chirp.models import hubert
 from chirp.models import layers
@@ -1085,13 +1085,13 @@ def run(
     name = "valid"
 
   if mode == "train":
-    train_dataset, dataset_info = pipeline.get_dataset(
+    train_dataset, dataset_info = data_utils.get_dataset(
         is_train=True,
         tf_data_service_address=tf_data_service_address,
         **config.train_dataset_config,
     )
   elif mode in ["eval", "tune_eval_hypers"]:
-    valid_dataset, dataset_info = pipeline.get_dataset(
+    valid_dataset, dataset_info = data_utils.get_dataset(
         **config.eval_dataset_config
     )
   if dataset_info.features["audio"].sample_rate != config.sample_rate_hz:

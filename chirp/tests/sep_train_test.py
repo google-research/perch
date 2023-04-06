@@ -22,7 +22,7 @@ from chirp import audio_utils
 from chirp import config_utils
 from chirp.configs import config_globals
 from chirp.configs import separator as separator_config
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.tests import fake_dataset
 from chirp.train import separator
@@ -65,7 +65,7 @@ class TrainSeparationTest(absltest.TestCase):
       pipeline_ = config.train_dataset_config.pipeline
     else:
       pipeline_ = config.eval_dataset_config.pipeline
-    ds, dataset_info = pipeline.get_dataset(
+    ds, dataset_info = data_utils.get_dataset(
         split,
         is_train=False,  # Avoid shuffle in tests.
         dataset_directory=config.dataset_directory,

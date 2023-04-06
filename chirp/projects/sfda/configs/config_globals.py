@@ -17,7 +17,6 @@
 from typing import Any
 
 from chirp import audio_utils
-from chirp.data import pipeline
 from chirp.eval import eval_lib
 from chirp.models import conformer
 from chirp.models import efficientnet
@@ -26,6 +25,7 @@ from chirp.models import hubert
 from chirp.models import layers
 from chirp.models import quantizers
 from chirp.models import soundstream_unet
+from chirp.preprocessing import pipeline
 from chirp.projects.sfda.data import pipeline as sfda_pipeline
 from chirp.projects.sfda.methods import ada_bn
 from chirp.projects.sfda.methods import dropout_student

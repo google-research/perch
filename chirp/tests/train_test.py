@@ -23,9 +23,10 @@ from chirp.configs import baseline
 from chirp.configs import baseline_attention
 from chirp.configs import baseline_mel_conformer
 from chirp.configs import config_globals
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.models import efficientnet
 from chirp.models import frontend
+from chirp.preprocessing import pipeline
 from chirp.tests import fake_dataset
 from chirp.train import classifier
 from clu import checkpoint
@@ -68,7 +69,7 @@ class TrainTest(parameterized.TestCase):
     self.builder = fake_builder
 
   def _get_test_dataset(self, config):
-    ds, dataset_info = pipeline.get_dataset(
+    ds, dataset_info = data_utils.get_dataset(
         "train",
         dataset_directory=self.builder.data_dir,
         pipeline=config.train_dataset_config.pipeline,

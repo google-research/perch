@@ -19,7 +19,8 @@ from typing import Callable
 from chirp import config_utils
 from chirp.configs import config_globals
 from chirp.configs import hubert_base_pq
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
+from chirp.preprocessing import pipeline
 from chirp.tests import fake_dataset
 from chirp.train import hubert as hubert_train
 from clu import checkpoint
@@ -101,7 +102,7 @@ class HuBERTTest(absltest.TestCase):
 
   def _get_test_dataset(self, config):
     """Gets the dataset to use for these tests."""
-    ds, dataset_info = pipeline.get_dataset(
+    ds, dataset_info = data_utils.get_dataset(
         "train",
         dataset_directory=self.builder.data_dir,
         pipeline=config.train_dataset_config.pipeline,

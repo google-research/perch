@@ -17,7 +17,7 @@
 import dataclasses
 
 from absl import logging
-from chirp.data import pipeline
+from chirp.preprocessing import pipeline
 import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds

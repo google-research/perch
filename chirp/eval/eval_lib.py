@@ -21,7 +21,7 @@ import os
 from typing import (Callable, Generator, Mapping, Sequence, TypeVar)
 
 from absl import logging
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.models import metrics
 from chirp.taxonomy import namespace_db
 import jax
@@ -281,7 +281,7 @@ class EvalSetSpecification:
 
 def _load_eval_dataset(dataset_config: ConfigDict) -> tf.data.Dataset:
   """Loads an evaluation dataset from its corresponding configuration dict."""
-  return pipeline.get_dataset(
+  return data_utils.get_dataset(
       split=dataset_config.split,
       is_train=False,
       dataset_directory=dataset_config.tfds_name,

@@ -18,7 +18,6 @@ from typing import Any
 
 from chirp import audio_utils
 from chirp import config_utils
-from chirp.data import pipeline
 from chirp.eval import eval_lib
 from chirp.models import conformer
 from chirp.models import efficientnet
@@ -29,6 +28,7 @@ from chirp.models import layers
 from chirp.models import quantizers
 from chirp.models import soundstream_unet
 from chirp.models import taxonomy_model
+from chirp.preprocessing import pipeline
 from flax import linen as nn
 import optax
 

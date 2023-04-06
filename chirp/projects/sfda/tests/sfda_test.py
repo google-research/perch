@@ -20,8 +20,9 @@ import shutil
 import tempfile
 
 from chirp import config_utils
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.models import frontend
+from chirp.preprocessing import pipeline
 from chirp.projects.sfda import adapt
 from chirp.projects.sfda import model_utils
 from chirp.projects.sfda import models
@@ -93,12 +94,12 @@ class AdaptationTest(parameterized.TestCase):
 
   def _get_datasets(self, config, modality: adapt.Modality):
     if modality == adapt.Modality.AUDIO:
-      adaptation_dataset, _ = pipeline.get_dataset(
+      adaptation_dataset, _ = data_utils.get_dataset(
           "train[:2]",
           dataset_directory=self.audio_builder.data_dir,
           pipeline=config.adaptation_data_config.pipeline,
       )
-      val_dataset, _ = pipeline.get_dataset(
+      val_dataset, _ = data_utils.get_dataset(
           "train[1:2]",
           dataset_directory=self.audio_builder.data_dir,
           pipeline=config.eval_data_config.pipeline,

@@ -17,9 +17,9 @@
 import os
 import tempfile
 from unittest import mock
-
-from chirp.data import pipeline
+from chirp.data import utils as data_utils
 from chirp.models import frontend
+from chirp.preprocessing import pipeline
 from chirp.taxonomy import namespace_db
 from chirp.tests import fake_dataset
 from jax import numpy as jnp
@@ -168,7 +168,7 @@ class PipelineTest(parameterized.TestCase):
         pipeline.RandomNormalizeAudio(min_gain=0.15, max_gain=0.25),
     ])
     for split in self._builder.info.splits.values():
-      dataset, _ = pipeline.get_dataset(
+      dataset, _ = data_utils.get_dataset(
           split.name,
           dataset_directory=self._builder.data_dir,
           pipeline=test_pipeline,
@@ -192,7 +192,7 @@ class PipelineTest(parameterized.TestCase):
       )
       # Check error raising when getting last dataset split without a pipeline.
       with self.assertRaises(ValueError):
-        pipeline.get_dataset(
+        data_utils.get_dataset(
             split.name, dataset_directory=self._builder.data_dir
         )
 
