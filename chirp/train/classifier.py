@@ -119,7 +119,7 @@ def initialize_model(
   # Initialize optimizer and handle constraints
   if optimizer is None or for_inference:
     opt_state = None
-    logging.log("info", "No optimizer specified - loading model for inference.")
+    logging.info("No optimizer specified - loading model for inference.")
   else:
     opt_state = optimizer.init(params)
 
