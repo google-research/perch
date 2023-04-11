@@ -42,6 +42,7 @@ def cmap(
     sort_descending: bool = True,
     sample_threshold: int = 0,
 ) -> Dict[str, Any]:
+  """Class mean average precision."""
   class_aps = average_precision(
       scores=logits.T, labels=labels.T, sort_descending=sort_descending
   )

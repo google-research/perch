@@ -63,13 +63,14 @@ def get_config() -> config_dict.ConfigDict:
   config.init_config.frontend_config = frontend_config
 
   config.train_config = hubert_presets.get_base_train_config(config)
-  config.eval_config = hubert_presets.get_base_eval_config(
-      config,
-      input_shape=(
-          config.get_ref("eval_window_size_s")
-          * config.get_ref("sample_rate_hz"),
-      ),
+  config.eval_config = hubert_presets.get_base_eval_config(config)
+
+  config.export_config = config_dict.ConfigDict()
+  config.export_config.input_shape = (
+      config.get_ref("eval_window_size_s") * config.get_ref("sample_rate_hz"),
   )
+  config.export_config.num_train_steps = config.get_ref("num_train_steps")
+
   return config
 
 

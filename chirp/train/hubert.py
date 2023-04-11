@@ -868,12 +868,13 @@ def evaluate(
     train_state: utils.TrainState,
     learning_rate_schedule: optax.Schedule,
     valid_dataset: tf.data.Dataset,
-    writer: metric_writers.MetricWriter,
-    reporter: periodic_actions.ReportProgress,
+    workdir: str,
+    num_train_steps: int,
     eval_steps_per_checkpoint: int | None = None,
     train_mode_at_eval: bool | None = False,
     mask_at_eval: bool | None = False,
     name: str = "valid",
+    eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
 ):
   """Run evaluation."""
   quant_loss_mult, readout_loss_mult, hubert_loss_mult = 1, 1, 1
@@ -940,82 +941,38 @@ def evaluate(
         **batch,
     )
 
-  step = int(flax_utils.unreplicate(train_state.step))
-  key = model_bundle.key
-  with reporter.timed("eval"):
-    valid_metrics = valid_metrics_collection.empty()
-    for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
-      batch = jax.tree_map(np.asarray, batch)
-      mask_key = None
-      if mask_at_eval:
-        mask_key, key = random.split(key)
-        mask_key = random.split(mask_key, num=jax.local_device_count())
-      new_valid_metrics = get_metrics(batch, train_state, mask_key)
-      valid_metrics = valid_metrics.merge(
-          flax_utils.unreplicate(new_valid_metrics)
-      )
-      if (
-          eval_steps_per_checkpoint is not None
-          and s >= eval_steps_per_checkpoint
-      ):
-        break
-
-    # Log validation loss
-    utils.write_metrics(writer, step, valid_metrics.compute(prefix=name))
-  writer.flush()
-
-
-def evaluate_loop(
-    model_bundle: utils.ModelBundle,
-    train_state: utils.TrainState,
-    learning_rate_schedule: optax.Schedule,
-    valid_dataset: tf.data.Dataset,
-    workdir: str,
-    logdir: str,
-    num_train_steps: int,
-    eval_steps_per_checkpoint: int | None = None,
-    train_mode_at_eval: bool | None = False,
-    mask_at_eval: bool | None = False,
-    export_tf: bool = False,
-    input_shape: tuple[int, ...] | None = None,
-    eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
-    name: str = "valid",
-    **unused_kwargs,
-):
-  """Run evaluation in a loop."""
-  del unused_kwargs
-  writer = metric_writers.create_default_writer(logdir)
+  writer = metric_writers.create_default_writer(workdir)
   reporter = periodic_actions.ReportProgress(
       num_train_steps=num_train_steps, writer=writer
   )
-  # Initialize last_step to zero so we always run at least one eval.
-  last_step = -1
-  last_ckpt = ""
+  for train_state in utils.checkpoint_iterator(
+      train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
+  ):
+    step = int(train_state.step)
+    key = model_bundle.key
+    with reporter.timed("eval"):
+      valid_metrics = valid_metrics_collection.empty()
+      for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
+        batch = jax.tree_map(np.asarray, batch)
+        mask_key = None
+        if mask_at_eval:
+          mask_key, key = random.split(key)
+          mask_key = random.split(mask_key, num=jax.local_device_count())
+        new_valid_metrics = get_metrics(
+            batch, flax_utils.replicate(train_state), mask_key
+        )
+        valid_metrics = valid_metrics.merge(
+            flax_utils.unreplicate(new_valid_metrics)
+        )
+        if (
+            eval_steps_per_checkpoint is not None
+            and s >= eval_steps_per_checkpoint
+        ):
+          break
 
-  # Handle lazy computation
-  input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
-
-  while last_step < num_train_steps:
-    train_state, next_ckpt = utils.wait_for_next_checkpoint(
-        train_state, model_bundle.ckpt, last_ckpt, workdir, eval_sleep_s
-    )
-
-    evaluate(
-        model_bundle,
-        flax_utils.replicate(train_state),
-        learning_rate_schedule,
-        valid_dataset,
-        writer,
-        reporter,
-        eval_steps_per_checkpoint,
-        train_mode_at_eval,
-        mask_at_eval,
-        name=name,
-    )
-    if export_tf:
-      export_tf_model(model_bundle, train_state, workdir, input_shape)
-    last_step = int(train_state.step)
-    last_ckpt = next_ckpt
+      # Log validation loss
+      utils.write_metrics(writer, step, valid_metrics.compute(prefix=name))
+    writer.flush()
 
 
 def export_tf_model(
@@ -1023,29 +980,34 @@ def export_tf_model(
     train_state: utils.TrainState,
     workdir: str,
     input_shape: tuple[int, ...],
+    num_train_steps,
+    eval_sleep_s=EVAL_LOOP_SLEEP_S,
 ):
   """Write a TF SavedModel."""
-  variables = {"params": train_state.params, **train_state.model_state}
+  for train_state in utils.checkpoint_iterator(
+      train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
+  ):
+    variables = {"params": train_state.params, **train_state.model_state}
 
-  def infer_fn(audio_batch):
-    model_outputs = model_bundle.model.apply(
-        variables, audio_batch, train=False
+    def infer_fn(audio_batch):
+      model_outputs = model_bundle.model.apply(
+          variables, audio_batch, train=False  # pylint: disable=cell-var-from-loop
+      )
+      return model_outputs.label
+
+    tf_predict = tf.function(
+        jax2tf.convert(infer_fn, enable_xla=False),
+        input_signature=[
+            tf.TensorSpec(
+                shape=(1,) + input_shape, dtype=tf.float32, name="input"
+            )
+        ],
+        autograph=False,
     )
-    return model_outputs.label
 
-  tf_predict = tf.function(
-      jax2tf.convert(infer_fn, enable_xla=False),
-      input_signature=[
-          tf.TensorSpec(
-              shape=(1,) + input_shape, dtype=tf.float32, name="input"
-          )
-      ],
-      autograph=False,
-  )
-
-  converter = tf.lite.TFLiteConverter.from_concrete_functions(
-      [tf_predict.get_concrete_function()], tf_predict
-  )
+    converter = tf.lite.TFLiteConverter.from_concrete_functions(
+        [tf_predict.get_concrete_function()], tf_predict
+    )
 
   converter.target_spec.supported_ops = [
       tf.lite.OpsSet.TFLITE_BUILTINS,  # enable TensorFlow Lite ops.
@@ -1143,43 +1105,34 @@ def run(
     # loop whenever a new checkpoint is produced).
     # This is used to tune HuBERT's evaluation hypers once.
     train_state = model_bundle.ckpt.restore(train_state)
-
-    writer = metric_writers.create_default_writer(workdir)
-    reporter = periodic_actions.ReportProgress(num_train_steps=0, writer=writer)
     evaluate(
         model_bundle,
         flax_utils.replicate(train_state),
         learning_rate_schedule,
         valid_dataset,
-        writer,
-        reporter,
+        workdir=workdir,
         train_mode_at_eval=config.eval_config.train_mode_at_eval,
         mask_at_eval=config.eval_config.mask_at_eval,
         name=name,
+        # Setting num_train_steps=0 will run eval exactly once.
+        num_train_steps=0,
     )
 
   elif mode == "eval":
-    evaluate_loop(
+    evaluate(
         model_bundle,
         train_state,
         learning_rate_schedule,
         valid_dataset,
         workdir=workdir,
-        logdir=workdir,
         name=name,
-        export_tf=False,
         **config.eval_config,
     )
 
   elif mode == "export":
-    evaluate_loop(
+    export_tf_model(
         model_bundle,
         train_state,
-        learning_rate_schedule,
-        valid_dataset,
         workdir=workdir,
-        logdir=workdir,
-        name=name,
-        export_tf=True,
-        **config.eval_config,
+        **config.export_config,
     )

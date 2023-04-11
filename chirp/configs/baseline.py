@@ -49,17 +49,16 @@ def get_config() -> config_dict.ConfigDict:
   config.init_config.model_config = model_config
   # Configure the training loop
   config.train_config = presets.get_base_train_config(config)
-  config.eval_config = presets.get_base_eval_config(
-      config,
-      input_shape=(
-          config.get_ref('eval_window_size_s')
-          * config.get_ref('sample_rate_hz'),
-      ),
+  config.eval_config = presets.get_base_eval_config(config)
+
+  config.export_config = config_dict.ConfigDict()
+  config.export_config.input_shape = (
+      config.get_ref('eval_window_size_s') * config.get_ref('sample_rate_hz'),
   )
+  config.export_config.num_train_steps = config.get_ref('num_train_steps')
+
   return config
 
 
 def get_hyper(hyper):
-  return hyper.sweep(
-      'config.init_config.learning_rate', hyper.discrete([1e-3, 1e-2])
-  )
+  return hyper.sweep('config.init_config.learning_rate', hyper.discrete([1e-3]))

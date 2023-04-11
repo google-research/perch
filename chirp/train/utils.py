@@ -33,7 +33,7 @@ import numpy as np
 import optax
 import tensorflow as tf
 
-TAXONOMY_KEYS = ["genus", "family", "order"]
+TAXONOMY_KEYS = ['genus', 'family', 'order']
 
 
 @flax.struct.dataclass
@@ -63,7 +63,7 @@ class MultiAverage(clu_metrics.Average):
   @classmethod
   def create(cls, n: int):
     return flax.struct.dataclass(
-        type("_InlineMultiAverage", (MultiAverage,), {"_n": n})
+        type('_InlineMultiAverage', (MultiAverage,), {'_n': n})
     )
 
   @classmethod
@@ -79,15 +79,15 @@ class MultiAverage(clu_metrics.Average):
       cls, values: jnp.ndarray, mask: jnp.ndarray | None = None, **_
   ) -> clu_metrics.Metric:
     if values.ndim == 0:
-      raise ValueError("expected a vector")
+      raise ValueError('expected a vector')
     if mask is None:
       mask = jnp.ones_like(values)
     # Leading dimensions of mask and values must match.
     if mask.shape[0] != values.shape[0]:
       raise ValueError(
-          "Argument `mask` must have the same leading dimension as `values`. "
-          f"Received mask of dimension {mask.shape} "
-          f"and values of dimension {values.shape}."
+          'Argument `mask` must have the same leading dimension as `values`. '
+          f'Received mask of dimension {mask.shape} '
+          f'and values of dimension {values.shape}.'
       )
     # Broadcast mask to the same number of dimensions as values.
     if mask.ndim < values.ndim:
@@ -107,8 +107,8 @@ class MultiAverage(clu_metrics.Average):
 
   def compute(self):
     return {
-        "mean": jnp.sum(self.total) / jnp.sum(self.count),
-        "individual": self.total / self.count,
+        'mean': jnp.sum(self.total) / jnp.sum(self.count),
+        'individual': self.total / self.count,
     }
 
 
@@ -153,7 +153,7 @@ class CollectingMetrics(clu_metrics.Metric):
           A dictionary mapping metric names to compute values, which can either
           be scalars/arrays or another dictionary of computed metrics.
         """
-        with jax.default_device(jax.devices("cpu")[0]):
+        with jax.default_device(jax.devices('cpu')[0]):
           values = super().compute()
           return {
               metric_name: metric[1](*(values[name] for name in metric[0]))
@@ -165,7 +165,7 @@ class CollectingMetrics(clu_metrics.Metric):
     return FromFuns
 
 
-def flatten(dict_, parent_key="", sep="_"):
+def flatten(dict_, parent_key='', sep='_'):
   """Recursively flatten dictionaries with string keys.
 
   Args:
@@ -193,13 +193,13 @@ class NestedCollection(clu_metrics.Collection):
   def create(cls, **metrics):
     # TODO(bartvm): This should be fixed in parent class
     return flax.struct.dataclass(
-        type("_InlineCollection", (cls,), {"__annotations__": metrics})
+        type('_InlineCollection', (cls,), {'__annotations__': metrics})
     )
 
-  def compute(self, prefix: str = ""):
+  def compute(self, prefix: str = ''):
     return flatten(super().compute(), parent_key=prefix)
 
-  def compute_values(self, prefix: str = ""):
+  def compute_values(self, prefix: str = ''):
     return flatten(super().compute_values(), parent_key=prefix)
 
 
@@ -218,11 +218,11 @@ def wait_for_next_checkpoint(
   while True:
     next_ckpt_path = ckpt.get_latest_checkpoint_to_restore_from()
     if next_ckpt_path is None:
-      logging.warning("No checkpoint found; sleeping.")
+      logging.warning('No checkpoint found; sleeping.')
       time.sleep(sleep_s)
       continue
     elif next_ckpt_path == last_ckpt_path:
-      logging.warning("No new checkpoint found; sleeping.")
+      logging.warning('No new checkpoint found; sleeping.')
       time.sleep(sleep_s)
       continue
     try:
@@ -230,13 +230,70 @@ def wait_for_next_checkpoint(
       break
     except tf.errors.NotFoundError:
       logging.warning(
-          "Checkpoint %s not found in workdir %s",
+          'Checkpoint %s not found in workdir %s',
           ckpt.latest_checkpoint,
           workdir,
       )
       time.sleep(sleep_s)
       continue
   return new_train_state, next_ckpt_path
+
+
+def checkpoint_iterator(
+    train_state: TrainState,
+    ckpt: checkpoint.Checkpoint,
+    workdir: str,
+    num_train_steps: int,
+    sleep_s: int = 5,
+):
+  """Iterate over checkpoints produced by the train job."""
+  last_step = -1
+  last_ckpt_path = ''
+  elapsed = -1
+
+  st = time.time()
+  while last_step < num_train_steps:
+    if elapsed is None:
+      elapsed = time.time() - st
+      logging.info(
+          'Finished processing checkpoint %d in %8.2f s', last_step, elapsed
+      )
+
+    new_ckpt_path = ckpt.get_latest_checkpoint_to_restore_from()
+    if new_ckpt_path is None:
+      logging.warning('No checkpoint found; sleeping.')
+      time.sleep(sleep_s)
+      continue
+    elif new_ckpt_path == last_ckpt_path:
+      logging.warning('No new checkpoint found; sleeping.')
+      time.sleep(sleep_s)
+      continue
+    try:
+      new_train_state = ckpt.restore(train_state, new_ckpt_path)
+    except tf.errors.NotFoundError:
+      logging.warning(
+          'Checkpoint %s not found in workdir %s',
+          ckpt.latest_checkpoint,
+          workdir,
+      )
+      time.sleep(sleep_s)
+      continue
+    except Exception as error:
+      logging.warning(
+          'Unknown exception %s not found in workdir %s',
+          ckpt.latest_checkpoint,
+          workdir,
+      )
+      logging.error(error)
+      time.sleep(sleep_s)
+      continue
+    last_ckpt_path = new_ckpt_path
+    train_state = new_train_state
+    last_step = int(train_state.step)
+    elapsed = None
+    st = time.time()
+    logging.info('Loaded checkpoint at step %d', int(train_state.step))
+    yield train_state
 
 
 def taxonomy_loss(
@@ -246,18 +303,18 @@ def taxonomy_loss(
     **kwargs,
 ) -> jnp.ndarray:
   """Computes the mean loss across taxonomic labels."""
-  losses = {"label_loss": loss_fn(getattr(outputs, "label"), kwargs["label"])}
-  losses["loss"] = jnp.mean(losses["label_loss"], axis=-1)
+  losses = {'label_loss': loss_fn(getattr(outputs, 'label'), kwargs['label'])}
+  losses['loss'] = jnp.mean(losses['label_loss'], axis=-1)
   if taxonomy_loss_weight != 0:
     losses.update(
         {
-            f"{key}_loss": loss_fn(getattr(outputs, key), kwargs[key])
+            f'{key}_loss': loss_fn(getattr(outputs, key), kwargs[key])
             for key in TAXONOMY_KEYS
             if key in kwargs
         }
     )
-    losses["loss"] = losses["loss"] + sum(
-        taxonomy_loss_weight * jnp.mean(losses[f"{key}_loss"], axis=-1)
+    losses['loss'] = losses['loss'] + sum(
+        taxonomy_loss_weight * jnp.mean(losses[f'{key}_loss'], axis=-1)
         for key in TAXONOMY_KEYS
     )
   return losses  # pytype: disable=bad-return-type  # jax-ndarray

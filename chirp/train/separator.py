@@ -223,13 +223,14 @@ def evaluate(
     model_bundle: utils.ModelBundle,
     train_state: utils.TrainState,
     valid_dataset: tf.data.Dataset,
-    writer: metric_writers.MetricWriter,
-    reporter: periodic_actions.ReportProgress,
+    workdir: str,
+    num_train_steps: int,
     loss_max_snr: float,
     taxonomy_labels_weight: float,
     loss_fn: Callable[
         [jnp.ndarray, jnp.ndarray], jnp.ndarray
     ] = optax.sigmoid_binary_cross_entropy,
+    eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     eval_steps_per_checkpoint: int = -1,
 ):
   """Run evaluation."""
@@ -266,89 +267,43 @@ def evaluate(
         **output.logits(model_outputs),
     )
 
-  with reporter.timed('eval'):
-    valid_metrics = valid_metrics_collection.empty()
-    for valid_step, batch in enumerate(valid_dataset.as_numpy_iterator()):
-      batch = jax.tree_map(np.asarray, batch)
-      new_valid_metrics = get_metrics(batch, flax_utils.replicate(train_state))
-      valid_metrics = valid_metrics.merge(
-          flax_utils.unreplicate(new_valid_metrics)
-      )
-      if (
-          eval_steps_per_checkpoint > 0
-          and valid_step >= eval_steps_per_checkpoint
-      ):
-        break
-
-    # Log validation loss
-    utils.write_metrics(
-        writer, int(train_state.step), valid_metrics.compute(prefix='valid')
-    )
-  writer.flush()
-
-
-def evaluate_loop(
-    model_bundle: utils.ModelBundle,
-    train_state: utils.TrainState,
-    valid_dataset: tf.data.Dataset | None,
-    workdir: str,
-    logdir: str,
-    num_train_steps: int,
-    eval_steps_per_checkpoint: int,
-    loss_max_snr: float,
-    taxonomy_labels_weight: float,
-    loss_fn: Callable[
-        [jnp.ndarray, jnp.ndarray], jnp.ndarray
-    ] = optax.sigmoid_binary_cross_entropy,
-    export_tf: bool = False,
-    frame_size: int | None = None,
-    eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
-):
-  """Run evaluation in a loop."""
-  writer = metric_writers.create_default_writer(logdir)
+  writer = metric_writers.create_default_writer(workdir)
   reporter = periodic_actions.ReportProgress(
       num_train_steps=num_train_steps, writer=writer
   )
-  # Initialize last_step to -1 so we always run at least one eval.
-  last_step = -1
-  last_ckpt = ''
+  for train_state in utils.checkpoint_iterator(
+      train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
+  ):
+    with reporter.timed('eval'):
+      valid_metrics = valid_metrics_collection.empty()
+      for valid_step, batch in enumerate(valid_dataset.as_numpy_iterator()):
+        batch = jax.tree_map(np.asarray, batch)
+        new_valid_metrics = get_metrics(
+            batch, flax_utils.replicate(train_state)
+        )
+        valid_metrics = valid_metrics.merge(
+            flax_utils.unreplicate(new_valid_metrics)
+        )
+        if (
+            eval_steps_per_checkpoint > 0
+            and valid_step >= eval_steps_per_checkpoint
+        ):
+          break
 
-  while last_step < num_train_steps:
-    train_state, next_ckpt = utils.wait_for_next_checkpoint(
-        train_state, model_bundle.ckpt, last_ckpt, workdir, eval_sleep_s
-    )
-
-    if valid_dataset is not None:
-      st = time.time()
-      evaluate(
-          model_bundle,
-          train_state,
-          valid_dataset,
-          writer,
-          reporter,
-          loss_max_snr,
-          taxonomy_labels_weight,
-          loss_fn,
-          eval_steps_per_checkpoint,
+      # Log validation loss
+      utils.write_metrics(
+          writer, int(train_state.step), valid_metrics.compute(prefix='valid')
       )
-      elapsed = time.time() - st
-      last_step = int(train_state.step)
-      logging.info('Finished eval step %d in %8.2f s', last_step, elapsed)
-
-    if export_tf:
-      st = time.time()
-      export_tf_model(model_bundle, train_state, workdir, frame_size)
-      elapsed = time.time() - st
-      logging.info('Exported model at step %d in %8.2f s', last_step, elapsed)
-
-    last_ckpt = next_ckpt
+    writer.flush()
 
 
 def export_tf_model(
     model_bundle: utils.ModelBundle,
     train_state: utils.TrainState,
     workdir: str,
+    num_train_steps: int,
     frame_size: int,
+    eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
 ):
   """Write a TFLite flatbuffer.
 
@@ -356,35 +311,42 @@ def export_tf_model(
     model_bundle: The model bundle.
     train_state: The train state.
     workdir: Where to place the exported model.
+    num_train_steps: Number of training steps.
     frame_size: Frame size for input audio. The exported model will take inputs
       with shape [B, T//frame_size, frame_size]. This ensures that the time
       dimension is divisible by the product of all model strides, which allows
       us to set a polymorphic time dimension. Thus, the frame_size must be
       divisible by the product of all strides in the model.
+    eval_sleep_s: Number of seconds to sleep when waiting for next checkpoint.
   """
-  variables = {'params': train_state.params, **train_state.model_state}
+  for train_state in utils.checkpoint_iterator(
+      train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
+  ):
+    variables = {'params': train_state.params, **train_state.model_state}
 
-  # CAUTION: If the infer_fn signature changes, then the SeparatorTFCallback
-  # in the eval benchmark code will also need to be changed.
-  def infer_fn(framed_audio_batch, variables):
-    flat_inputs = jnp.reshape(
-        framed_audio_batch, [framed_audio_batch.shape[0], -1]
-    )
-    model_outputs = model_bundle.model.apply(
-        variables, flat_inputs, train=False
-    )
-    return (
-        model_outputs.separated_audio,
-        model_outputs.label,
-        model_outputs.embedding,
-    )
+    # CAUTION: If the infer_fn signature changes, then the SeparatorTFCallback
+    # in the eval benchmark code will also need to be changed.
+    def infer_fn(framed_audio_batch, variables):
+      flat_inputs = jnp.reshape(
+          framed_audio_batch, [framed_audio_batch.shape[0], -1]
+      )
+      model_outputs = model_bundle.model.apply(
+          variables, flat_inputs, train=False
+      )
+      return (
+          model_outputs.separated_audio,
+          model_outputs.label,
+          model_outputs.embedding,
+      )
 
-  converted_model = export_utils.Jax2TfModelWrapper(
-      infer_fn, variables, [None, None, frame_size], False
-  )
-  converted_model.export_converted_model(
-      workdir, train_state.step, model_bundle.class_lists
-  )
+    logging.info('Creating converted_model...')
+    converted_model = export_utils.Jax2TfModelWrapper(
+        infer_fn, variables, [None, None, frame_size], False
+    )
+    logging.info('Exporting converted_model...')
+    converted_model.export_converted_model(
+        workdir, train_state.step, model_bundle.class_lists
+    )
 
 
 def run(
@@ -433,24 +395,13 @@ def run(
         **config.train_config,
     )
   elif mode == 'eval':
-    evaluate_loop(
+    evaluate(
         model_bundle,
         train_state,
         valid_dataset,
         loss_fn=config.loss_fn,
         workdir=workdir,
-        logdir=workdir,
-        export_tf=False,
         **config.eval_config,
     )
   elif mode == 'export':
-    evaluate_loop(
-        model_bundle,
-        train_state,
-        valid_dataset,
-        loss_fn=config.loss_fn,
-        workdir=workdir,
-        logdir=workdir,
-        export_tf=True,
-        **config.eval_config,
-    )
+    export_tf_model(model_bundle, train_state, workdir, **config.export_config)

@@ -167,12 +167,15 @@ class TrainTest(parameterized.TestCase):
     model_bundle, train_state = classifier.initialize_model(
         workdir=self.train_dir, **config.init_config
     )
+    train_state = model_bundle.ckpt.restore_or_initialize(train_state)
 
     classifier.export_tf_model(
         model_bundle,
         train_state,
         self.train_dir,
         config.init_config.input_shape,
+        num_train_steps=0,
+        eval_sleep_s=0,
     )
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite"))
@@ -244,12 +247,11 @@ class TrainTest(parameterized.TestCase):
     model_bundle.ckpt.save(train_state)
 
     config.eval_config.num_train_steps = 0
-    classifier.evaluate_loop(
+    classifier.evaluate(
         model_bundle=model_bundle,
         train_state=train_state,
         valid_dataset=ds,
         workdir=self.train_dir,
-        logdir=self.train_dir,
         eval_sleep_s=0,
         **config.eval_config,
     )

@@ -24,7 +24,7 @@ _c = config_utils.callable_config
 
 def get_config() -> config_dict.ConfigDict:
   """Create configuration dictionary for training."""
-  config = presets.get_base_config(batch_size=128, num_train_steps=5_000_000)
+  config = presets.get_base_config(batch_size=8, num_train_steps=5_000_000)
 
   config.train_dataset_config = presets.get_supervised_train_pipeline(
       config,
@@ -129,7 +129,9 @@ def get_config() -> config_dict.ConfigDict:
   # strides in the model architecture (eg, 32 * 5 * 2 * 2 * 50, for
   # frontend_config.stride=32, and soundstream_config.strides=[5, 2, 2]),
   # and classify_stride=50.
-  config.eval_config.frame_size = 32000
+  config.export_config = config_dict.ConfigDict()
+  config.export_config.frame_size = 32000
+  config.export_config.num_train_steps = config.get_ref('num_train_steps')
 
   return config
 
@@ -137,5 +139,5 @@ def get_config() -> config_dict.ConfigDict:
 def get_hyper(hyper):
   return hyper.sweep(
       'config.init_config.model_config.num_mask_channels',
-      hyper.discrete([4, 6, 8]),
+      hyper.discrete([6]),
   )

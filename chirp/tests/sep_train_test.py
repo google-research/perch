@@ -194,12 +194,11 @@ class TrainSeparationTest(absltest.TestCase):
     # Write a chekcpoint, or else the eval will hang.
     model_bundle.ckpt.save(train_state)
 
-    separator.evaluate_loop(
+    separator.evaluate(
         model_bundle=model_bundle,
         train_state=train_state,
         valid_dataset=ds,
         workdir=self.train_dir,
-        logdir=self.train_dir,
         eval_sleep_s=0,
         **config.eval_config,
     )
@@ -210,14 +209,20 @@ class TrainSeparationTest(absltest.TestCase):
     logging.info('Export Test: Initializing JAX model.')
     config = self._get_test_config(use_small_encoder=True)
     config.init_config.model_config.mask_generator.groups = (1, 1)
+    config.export_config.num_train_steps = 0
     model_bundle, train_state = separator.initialize_model(
         workdir=self.train_dir, **config.init_config
     )
 
     logging.info('Export Test: Exporting model.')
+    print('export_config : ', config.export_config)
     frame_size = 32 * 2 * 2 * 250
     separator.export_tf_model(
-        model_bundle, train_state, self.train_dir, frame_size
+        model_bundle,
+        train_state,
+        self.train_dir,
+        eval_sleep_s=0,
+        **config.export_config,
     )
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, 'model.tflite'))

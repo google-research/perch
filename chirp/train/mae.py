@@ -321,22 +321,18 @@ def run(
         **config.train_config,
     )
   elif mode == "eval":
-    classifier.evaluate_loop(
+    classifier.evaluate(
         model_bundle,
         train_state,
         valid_dataset,
+        loss_fn=config.loss_fn,
         workdir=workdir,
-        logdir=workdir,
-        export_tf=False,
         **config.eval_config,
     )
   elif mode == "export":
-    classifier.evaluate_loop(
+    classifier.export_tf_model(
         model_bundle,
         train_state,
-        valid_dataset,
         workdir=workdir,
-        logdir=workdir,
-        export_tf=True,
-        **config.eval_config,
+        **config.export_config,
     )

@@ -276,13 +276,12 @@ class HuBERTTest(absltest.TestCase):
     # Write a checkpoint, or else the eval will hang.
     self.model_bundle.ckpt.save(self.train_state)
     self.config.eval_config.num_train_steps = 0
-    hubert_train.evaluate_loop(
+    hubert_train.evaluate(
         model_bundle=self.model_bundle,
         train_state=self.train_state,
         learning_rate_schedule=self.learn_rate_schedule,
         valid_dataset=ds,
         workdir=self.train_dir,
-        logdir=self.train_dir,
         eval_sleep_s=0,
         **self.config.eval_config
     )

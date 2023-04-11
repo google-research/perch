@@ -257,12 +257,13 @@ def evaluate(
     model_bundle: utils.ModelBundle,
     train_state: utils.TrainState,
     valid_dataset: tf.data.Dataset,
-    writer: metric_writers.MetricWriter,
-    reporter: periodic_actions.ReportProgress,
+    workdir: str,
+    num_train_steps: int,
     loss_fn: Callable[
         [jnp.ndarray, jnp.ndarray], jnp.ndarray
     ] = optax.sigmoid_binary_cross_entropy,
     eval_steps_per_checkpoint: int | None = None,
+    eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     name: str = "valid",
 ):
   """Run evaluation."""
@@ -319,100 +320,58 @@ def evaluate(
         jax.tree_map(remainder_batch_fn, batch),
     )
 
-  step = int(flax_utils.unreplicate(train_state.step))
-  with reporter.timed("eval"):
-    valid_metrics = valid_metrics_collection.empty()
-    for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
-      batch = jax.tree_map(np.asarray, batch)
-      # Handle device batching if it's not been handled by the data pipeliine
-      # already.
-      if batch["label"].ndim == 2:
-        even_batch, remainder_batch = split_batch(batch)
-        # It's possible for `even_batch` to be empty if the batch size is
-        # smaller than the local device count (in which case all examples in the
-        # batch are found in `remainder_batch`).
-        if even_batch["label"].shape[1] > 0:
-          new_valid_metrics = get_metrics(even_batch, train_state)
-          valid_metrics = valid_metrics.merge(
-              flax_utils.unreplicate(new_valid_metrics)
-          )
-        # It's also possible for `remainder_batch` to be empty if the batch size
-        # is an exact multiple of the local device count (in which case all
-        # examples in the batch are found in `even_batch`).
-        if remainder_batch["label"].shape[1] > 0:
-          new_valid_metrics = get_metrics(
-              remainder_batch,
-              # The remainder batch has shape [1, ...] rather than
-              # [jax.local_device_count(), ...].
-              jax.tree_map(lambda x: x[:1], train_state),
-          )
-          valid_metrics = valid_metrics.merge(
-              flax_utils.unreplicate(new_valid_metrics)
-          )
-      else:
-        new_valid_metrics = get_metrics(batch, train_state)
-        valid_metrics = valid_metrics.merge(
-            flax_utils.unreplicate(new_valid_metrics)
-        )
-      if (
-          eval_steps_per_checkpoint is not None
-          and s >= eval_steps_per_checkpoint
-      ):
-        break
-
-    # Log validation loss
-    utils.write_metrics(writer, step, valid_metrics.compute(prefix=name))
-  writer.flush()
-
-
-def evaluate_loop(
-    model_bundle: utils.ModelBundle,
-    train_state: utils.TrainState,
-    valid_dataset: tf.data.Dataset | None,
-    workdir: str,
-    logdir: str,
-    num_train_steps: int,
-    loss_fn: Callable[
-        [jnp.ndarray, jnp.ndarray], jnp.ndarray
-    ] = optax.sigmoid_binary_cross_entropy,
-    eval_steps_per_checkpoint: int | None = None,
-    export_tf: bool = False,
-    input_shape: tuple[int, ...] | None = None,
-    eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
-    name: str = "valid",
-):
-  """Run evaluation in a loop."""
-  writer = metric_writers.create_default_writer(logdir)
+  writer = metric_writers.create_default_writer(workdir)
   reporter = periodic_actions.ReportProgress(
       num_train_steps=num_train_steps, writer=writer
   )
-  # Initialize last_step to -1 so we always run at least one eval.
-  last_step = -1
-  last_ckpt = ""
+  for train_state in utils.checkpoint_iterator(
+      train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
+  ):
+    step = int(train_state.step)
+    replicated_train_state = flax_utils.replicate(train_state)
+    with reporter.timed("eval"):
+      valid_metrics = valid_metrics_collection.empty()
+      for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
+        batch = jax.tree_map(np.asarray, batch)
+        # Handle device batching if it's not been handled by the data pipeliine
+        # already.
+        if batch["label"].ndim == 2:
+          even_batch, remainder_batch = split_batch(batch)
+          # It's possible for `even_batch` to be empty if the batch size is
+          # smaller than the local device count (in which case all examples in
+          # the batch are found in `remainder_batch`).
+          if even_batch["label"].shape[1] > 0:
+            new_valid_metrics = get_metrics(even_batch, replicated_train_state)
+            valid_metrics = valid_metrics.merge(
+                flax_utils.unreplicate(new_valid_metrics)
+            )
+          # It's also possible for `remainder_batch` to be empty if the batch
+          # size is an exact multiple of the local device count (in which case
+          # all examples in the batch are found in `even_batch`).
+          if remainder_batch["label"].shape[1] > 0:
+            new_valid_metrics = get_metrics(
+                remainder_batch,
+                # The remainder batch has shape [1, ...] rather than
+                # [jax.local_device_count(), ...].
+                jax.tree_map(lambda x: x[:1], replicated_train_state),
+            )
+            valid_metrics = valid_metrics.merge(
+                flax_utils.unreplicate(new_valid_metrics)
+            )
+        else:
+          new_valid_metrics = get_metrics(batch, replicated_train_state)
+          valid_metrics = valid_metrics.merge(
+              flax_utils.unreplicate(new_valid_metrics)
+          )
+        if (
+            eval_steps_per_checkpoint is not None
+            and s >= eval_steps_per_checkpoint
+        ):
+          break
 
-  # Handle lazy computation
-  input_shape = tuple(s.get() if hasattr(s, "get") else s for s in input_shape)
-
-  while last_step < num_train_steps:
-    train_state, next_ckpt = utils.wait_for_next_checkpoint(
-        train_state, model_bundle.ckpt, last_ckpt, workdir, eval_sleep_s
-    )
-
-    if valid_dataset is not None:
-      evaluate(
-          model_bundle,
-          flax_utils.replicate(train_state),
-          valid_dataset,
-          writer,
-          reporter,
-          loss_fn,
-          eval_steps_per_checkpoint,
-          name,
-      )
-    if export_tf:
-      export_tf_model(model_bundle, train_state, workdir, input_shape)
-    last_step = int(train_state.step)
-    last_ckpt = next_ckpt
+      # Log validation loss
+      utils.write_metrics(writer, step, valid_metrics.compute(prefix=name))
+    writer.flush()
 
 
 def export_tf_model(
@@ -420,24 +379,29 @@ def export_tf_model(
     train_state: utils.TrainState,
     workdir: str,
     input_shape: tuple[int, ...],
+    num_train_steps: int,
+    eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
 ):
   """Export SavedModel and TFLite."""
-  variables = {"params": train_state.params, **train_state.model_state}
+  for train_state in utils.checkpoint_iterator(
+      train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
+  ):
+    variables = {"params": train_state.params, **train_state.model_state}
 
-  def infer_fn(audio_batch, variables):
-    model_outputs = model_bundle.model.apply(
-        variables, audio_batch, train=False
+    def infer_fn(audio_batch, variables):
+      model_outputs = model_bundle.model.apply(
+          variables, audio_batch, train=False
+      )
+      return model_outputs.label, model_outputs.embedding
+
+    # Note: Polymorphic batch size currently isn't working with the STFT op,
+    # so we provide a static batch size.
+    converted_model = export_utils.Jax2TfModelWrapper(
+        infer_fn, variables, (1,) + input_shape, False
     )
-    return model_outputs.label, model_outputs.embedding
-
-  # Note: Polymorphic batch size currently isn't working with the STFT op,
-  # so we provide a static batch size.
-  converted_model = export_utils.Jax2TfModelWrapper(
-      infer_fn, variables, (1,) + input_shape, False
-  )
-  converted_model.export_converted_model(
-      workdir, train_state.step, model_bundle.class_lists
-  )
+    converted_model.export_converted_model(
+        workdir, train_state.step, model_bundle.class_lists
+    )
 
 
 def run(
@@ -491,26 +455,19 @@ def run(
         **config.train_config,
     )
   elif mode == "eval":
-    evaluate_loop(
+    evaluate(
         model_bundle,
         train_state,
         valid_dataset,
         loss_fn=config.loss_fn,
         workdir=workdir,
-        logdir=workdir,
         name=name,
-        export_tf=False,
         **config.eval_config,
     )
   elif mode == "export":
-    evaluate_loop(
+    export_tf_model(
         model_bundle,
         train_state,
-        valid_dataset,
-        loss_fn=config.loss_fn,
         workdir=workdir,
-        logdir=workdir,
-        name=name,
-        export_tf=True,
-        **config.eval_config,
+        **config.export_config,
     )
