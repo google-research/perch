@@ -736,7 +736,7 @@ def compute_metrics(
     eval_set_results: Mapping[str, pd.DataFrame],
     sort_descending: bool = True,
 ):
-  """Operates over a DataFrame of eval results and produces average precision.
+  """Computes roc-auc & average precision on provided eval results DataFrame.
 
   Args:
     eval_set_name: The name of the evaluation set.
@@ -747,8 +747,8 @@ def compute_metrics(
       descending order by default.
 
   Returns:
-    Produces the specified metrics computed for each species in the given eval
-    set and writes these to a csv for each eval set.
+    Produces metrics (roc-auc & average precision) computed for each species in
+    the given eval set and writes these to a csv for each eval set.
   """
 
   species_metric_eval_set = list()
@@ -756,11 +756,19 @@ def compute_metrics(
     eval_scores = eval_results['score'].values
     species_label_match = eval_results['species_match'].values
 
+    roc_auc = metrics.roc_auc(
+        logits=eval_scores,
+        labels=species_label_match,
+        sort_descending=sort_descending,
+    )
+
     average_precision = metrics.average_precision(
-        eval_scores, species_label_match, sort_descending=sort_descending
+        scores=eval_scores,
+        labels=species_label_match,
+        sort_descending=sort_descending,
     )
     species_metric_eval_set.append(
-        (eval_species, average_precision, eval_set_name)
+        (eval_species, average_precision, roc_auc, eval_set_name)
     )
 
   return species_metric_eval_set

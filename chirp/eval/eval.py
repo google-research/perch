@@ -26,6 +26,12 @@ from chirp.eval import eval_lib
 from ml_collections.config_flags import config_flags
 
 _CONFIG = config_flags.DEFINE_config_file('config')
+_EVAL_RESULTS_HEADER = (
+    'eval_species',
+    'average_precision',
+    'roc_auc',
+    'eval_set_name',
+)
 flags.mark_flags_as_required(['config'])
 
 
@@ -58,7 +64,7 @@ def main(argv: Sequence[str]) -> None:
     )
   # Ensure that every evaluation script includes an instantiation of a Pipeline
   # object with any desired data processing ops.
-  for dataset_config in config.dataset_configs:
+  for dataset_config in config.dataset_configs.values():
     if dataset_config.pipeline is None:
       raise ValueError(
           'eval.py requires each dataset_config in `config.dataset_configs` to '
@@ -91,7 +97,7 @@ def main(argv: Sequence[str]) -> None:
     eval_set_search_results[eval_set_name] = search_results
 
   # Collect eval set species performance results as a list of tuples.
-  eval_metrics = [('eval_species', 'average_precision', 'eval_set_name')]
+  eval_metrics = [_EVAL_RESULTS_HEADER]
   for eval_set_name, eval_set_results in eval_set_search_results.items():
     eval_metrics.extend(
         eval_lib.compute_metrics(
