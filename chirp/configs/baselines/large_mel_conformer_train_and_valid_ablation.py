@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration to train the EfficientNet baseline ablation."""
+"""Configuration to train the (large) Conformer baseline ablation."""
 from chirp import config_utils
 from chirp.configs.baselines import presets
 from ml_collections import config_dict
@@ -21,23 +21,31 @@ from ml_collections import config_dict
 _c = config_utils.callable_config
 
 
-def get_model_config() -> config_dict.ConfigDict:
+def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
   """Returns the model config."""
   model_config = config_dict.ConfigDict()
-  model_config.encoder = _c(
-      'efficientnet.EfficientNet',
-      model=_c('efficientnet.EfficientNetModel', value='b5'),
-  )
   model_config.taxonomy_loss_weight = 1e-3
-  model_config.frontend = None
+  model_config.frontend = presets.get_pcen_melspec_config(config)
+  # Aim to have output targets of 256, starting at 144
+  s = (256 / 144) ** (1 / 5)
+  model_config.encoder = _c(
+      'taxonomy_model.ConformerModel',
+      # Each downsample reduces time by a factor of 2.
+      # An additional downsample by 4 happens in the ConvolutionalSubsampling.
+      downsample=[(2, s), (5, s), (8, s), (11, s), (14, s)],
+      kernel_size=15,
+  )
   return model_config
 
 
 def get_config() -> config_dict.ConfigDict:
   """Creates the configuration dictionary for training and evaluation."""
-  config = presets.get_base_config()
-  config.init_config = presets.get_base_init_config(config)
-  config.init_config.model_config = get_model_config()
+  config = presets.get_base_config(
+      melspec_in_pipeline=False, random_augmentations=True, cosine_alpha=1.0
+  )
+  config.init_config = presets.get_base_init_config(config, learning_rate=1e-5)
+  config.init_config.model_config = get_model_config(config)
+  config.init_config.model_config.taxonomy_loss_weight = 1e-3
 
   config.train_config = presets.get_base_train_config(config)
   config.train_dataset_config = presets.get_ablation_train_dataset_config(
@@ -51,4 +59,8 @@ def get_config() -> config_dict.ConfigDict:
 
 def get_hyper(hyper):
   """Defines the hyperparameter sweep."""
-  return hyper.sweep('config.init_config.learning_rate', hyper.discrete([1e-3]))
+  return hyper.product([
+      hyper.sweep(
+          'config.init_config.rng_seed', hyper.discrete([1235])
+      ),
+  ])

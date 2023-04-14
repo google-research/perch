@@ -13,33 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration to run the logistic regression baseline."""
+"""Configuration to train the (large) EfficientNet baseline ablation."""
 from chirp import config_utils
 from chirp.configs.baselines import presets
 from ml_collections import config_dict
 
 _c = config_utils.callable_config
-_o = config_utils.object_config
-
-
-def get_encoder_config() -> config_dict.ConfigDict:
-  encoder_config = config_dict.ConfigDict()
-  encoder_config.aggregation = 'avg_pool'
-  encoder_config.compute_mfccs = False
-  encoder_config.num_mfccs = 20  # Unused by default.
-  return encoder_config
 
 
 def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
   """Returns the model config."""
   model_config = config_dict.ConfigDict()
   model_config.encoder = _c(
-      'handcrafted_features.HandcraftedFeatures',
-      compute_mfccs=config.encoder_config.get_ref('compute_mfccs'),
-      num_mfccs=config.encoder_config.get_ref('num_mfccs'),
-      aggregation=config.encoder_config.get_ref('aggregation'),
-      window_size=10,
-      window_stride=10,
+      'efficientnet.EfficientNet',
+      model=_c('efficientnet.EfficientNetModel', value='b5'),
   )
   model_config.taxonomy_loss_weight = 0.0
   model_config.frontend = presets.get_pcen_melspec_config(config)
@@ -49,15 +36,11 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
 def get_config() -> config_dict.ConfigDict:
   """Creates the configuration dictionary for training and evaluation."""
   config = presets.get_base_config(
-      batch_size=64,
-      melspec_in_pipeline=False,
-      random_augmentations=True,
-      cosine_alpha=0.0,
-      loss_fn=_o('layers.hinge_loss'),
+      melspec_in_pipeline=False, random_augmentations=True, cosine_alpha=1.0
   )
-  config.encoder_config = get_encoder_config()
-  config.init_config = presets.get_base_init_config(config, learning_rate=0.316)
+  config.init_config = presets.get_base_init_config(config, learning_rate=1e-5)
   config.init_config.model_config = get_model_config(config)
+  config.init_config.model_config.taxonomy_loss_weight = 0.0
 
   config.train_config = presets.get_base_train_config(config)
   config.train_dataset_config = presets.get_ablation_train_dataset_config(
@@ -72,8 +55,5 @@ def get_config() -> config_dict.ConfigDict:
 def get_hyper(hyper):
   """Defines the hyperparameter sweep."""
   return hyper.product([
-      hyper.sweep(
-          'config.init_config.rng_seed',
-          hyper.discrete([1239]),
-      ),
+      hyper.sweep('config.init_config.rng_seed', hyper.discrete([1234])),
   ])

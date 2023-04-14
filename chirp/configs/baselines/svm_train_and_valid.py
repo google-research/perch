@@ -42,14 +42,15 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
       window_stride=10,
   )
   model_config.taxonomy_loss_weight = 0.0
-  model_config.frontend = None
+  model_config.frontend = presets.get_pcen_melspec_config(config)
   return model_config
 
 
 def get_config() -> config_dict.ConfigDict:
   """Creates the configuration dictionary for training and evaluation."""
   config = presets.get_base_config(
-      num_train_steps=200_000,
+      batch_size=64,
+      melspec_in_pipeline=False,
       loss_fn=_o('layers.hinge_loss'),
   )
   config.encoder_config = get_encoder_config()

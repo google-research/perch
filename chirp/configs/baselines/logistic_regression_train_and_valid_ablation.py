@@ -42,15 +42,20 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
       window_stride=10,
   )
   model_config.taxonomy_loss_weight = 0.0
-  model_config.frontend = None
+  model_config.frontend = presets.get_pcen_melspec_config(config)
   return model_config
 
 
 def get_config() -> config_dict.ConfigDict:
   """Creates the configuration dictionary for training and evaluation."""
-  config = presets.get_base_config(num_train_steps=200_000)
+  config = presets.get_base_config(
+      batch_size=64,
+      melspec_in_pipeline=False,
+      random_augmentations=True,
+      cosine_alpha=1.0,
+  )
   config.encoder_config = get_encoder_config()
-  config.init_config = presets.get_base_init_config(config)
+  config.init_config = presets.get_base_init_config(config, learning_rate=0.316)
   config.init_config.model_config = get_model_config(config)
 
   config.train_config = presets.get_base_train_config(config)
@@ -66,16 +71,5 @@ def get_config() -> config_dict.ConfigDict:
 def get_hyper(hyper):
   """Defines the hyperparameter sweep."""
   return hyper.product([
-      hyper.sweep(
-          'config.random_augmentations',
-          hyper.discrete([True]),
-      ),
-      hyper.sweep(
-          'config.cosine_alpha',
-          hyper.discrete([1.0]),
-      ),
-      hyper.sweep(
-          'config.init_config.learning_rate',
-          hyper.discrete([0.316]),
-      ),
+      hyper.sweep('config.init_config.random_seed', hyper.discrete([1236])),
   ])

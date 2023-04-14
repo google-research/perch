@@ -22,6 +22,27 @@ _c = config_utils.callable_config
 _o = config_utils.object_config
 
 
+def get_pcen_melspec_config(
+    config: config_dict.ConfigDict,
+) -> config_dict.ConfigDict:
+  """Get a default PCEN Melspec configuration."""
+  frontend_stride = config.get_ref('sample_rate_hz') // config.get_ref(
+      'frame_rate_hz'
+  )
+  kernel_size, nfft = config_utils.get_melspec_defaults(config)
+
+  return _c(
+      'frontend.MelSpectrogram',
+      features=config.get_ref('num_channels'),
+      stride=frontend_stride,
+      kernel_size=kernel_size,
+      nfft=nfft,
+      sample_rate=config.get_ref('sample_rate_hz'),
+      freq_range=(60, 10_000),
+      scaling_config=_c('frontend.PCENScalingConfig', conv_width=256),
+  )
+
+
 def get_base_config(**kwargs):
   """Creates the base config object.
 
@@ -46,18 +67,26 @@ def get_base_config(**kwargs):
   config.target_class_list = 'xenocanto'
   config.num_train_steps = 1_000_000
   config.random_augmentations = True
+  config.melspec_in_pipeline = True
   config.loss_fn = _o('optax.sigmoid_binary_cross_entropy')
   # Set to 1.0 to turn off cosine decay. The default value for alpha is zero in
   # optax.cosine_decay_schedule, so we want to try alpha \in {0, 1}.
   config.cosine_alpha = 1.0
   config.tfds_data_dir = ''
+
+  config.export_config = config_dict.ConfigDict()
+  config.export_config.input_shape = (
+      config.get_ref('eval_window_size_s') * config.get_ref('sample_rate_hz'),
+  )
+  config.export_config.num_train_steps = config.get_ref('num_train_steps')
+
   config.update(kwargs)
   return config
 
 
 def _compute_input_shape(
     config: config_dict.ConfigDict, window_size_ref: config_dict.FieldReference
-) -> tuple[int, int]:
+) -> config_dict.ConfigDict:
   """Computes the models's input shape."""
   # As explained in chirp.models.frontent.STFT, the output of
   # chirp.data.pipeline.MelSpectrogram has shape [num_frames, num_channels], and
@@ -69,9 +98,15 @@ def _compute_input_shape(
   num_samples = window_size_ref * config.get_ref('sample_rate_hz')
   stride = config.get_ref('sample_rate_hz') // config.get_ref('frame_rate_hz')
   odd_kernel = config.get_ref('kernel_size') % 2
-  return (
+  rval = (
       (num_samples + stride - odd_kernel) // stride + (odd_kernel - 1),
       config.get_ref('num_channels'),
+  )
+  return _c(
+      'config_utils.either',
+      object_a=rval,
+      object_b=(num_samples,),
+      return_a=config.get_ref('melspec_in_pipeline'),
   )
 
 
@@ -137,10 +172,6 @@ def get_base_eval_config(
 ) -> config_dict.ConfigDict:
   eval_config = config_dict.ConfigDict()
   eval_config.num_train_steps = config.get_ref('num_train_steps')
-  eval_config.tflite_export = True
-  eval_config.input_shape = _compute_input_shape(
-      config, config.get_ref('eval_window_size_s')
-  )
   eval_config.update(**kwargs)
   return eval_config
 
@@ -210,6 +241,7 @@ def _get_pipeline_ops(
     slice_window_stride: float,
     slice_start: float,
     random_normalize: bool | config_dict.FieldReference,
+    melspec_in_pipeline: bool | config_dict.FieldReference,
     melspec_num_channels: int,
     melspec_frame_rate: int,
     melspec_kernel_size: int,
@@ -292,14 +324,19 @@ def _get_pipeline_ops(
       normalize_op,
       mixup_op,
       _c(
-          'pipeline.MelSpectrogram',
-          features=melspec_num_channels,
-          stride=melspec_stride,
-          kernel_size=melspec_kernel_size,
-          nfft=melspec_nfft,
-          sample_rate=sample_rate,
-          freq_range=(60, 10_000),
-          scaling_config=_c('frontend.PCENScalingConfig', conv_width=256),
+          'config_utils.either',
+          object_a=_c(
+              'pipeline.MelSpectrogram',
+              features=melspec_num_channels,
+              stride=melspec_stride,
+              kernel_size=melspec_kernel_size,
+              nfft=melspec_nfft,
+              sample_rate=sample_rate,
+              freq_range=(60, 10_000),
+              scaling_config=_c('frontend.PCENScalingConfig', conv_width=256),
+          ),
+          object_b=_c('pipeline.FeaturesPreprocessOp'),
+          return_a=melspec_in_pipeline,
       ),
       _c(
           'pipeline.Batch',
@@ -338,6 +375,7 @@ def get_supervised_train_pipeline(
           slice_window_stride=0.0,  # Unused because slice_method=random'.
           slice_start=0.0,  # Unused because slice_method='random'.
           random_normalize=config.get_ref('random_augmentations'),
+          melspec_in_pipeline=config.get_ref('melspec_in_pipeline'),
           melspec_num_channels=config.get_ref('num_channels'),
           melspec_frame_rate=config.get_ref('frame_rate_hz'),
           melspec_kernel_size=config.get_ref('kernel_size'),
@@ -378,6 +416,7 @@ def get_supervised_eval_pipeline(
           slice_window_stride=config.get_ref('eval_window_stride_s'),
           slice_start=slice_start,
           random_normalize=False,
+          melspec_in_pipeline=config.get_ref('melspec_in_pipeline'),
           melspec_num_channels=config.get_ref('num_channels'),
           melspec_frame_rate=config.get_ref('frame_rate_hz'),
           melspec_kernel_size=config.get_ref('kernel_size'),

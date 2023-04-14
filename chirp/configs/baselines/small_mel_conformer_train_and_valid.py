@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Configuration to train the Conformer baseline."""
+"""Configuration to train the (small) Conformer baseline."""
 from chirp import config_utils
 from chirp.configs.baselines import presets
 from ml_collections import config_dict
@@ -21,11 +21,11 @@ from ml_collections import config_dict
 _c = config_utils.callable_config
 
 
-def get_model_config() -> config_dict.ConfigDict:
+def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
   """Returns the model config."""
   model_config = config_dict.ConfigDict()
   model_config.taxonomy_loss_weight = 1e-3
-  model_config.frontend = None
+  model_config.frontend = presets.get_pcen_melspec_config(config)
   # Aim to have output targets of 256, starting at 144
   s = (256 / 144) ** (1 / 5)
   model_config.encoder = _c(
@@ -41,9 +41,9 @@ def get_model_config() -> config_dict.ConfigDict:
 
 def get_config() -> config_dict.ConfigDict:
   """Creates the configuration dictionary for training and evaluation."""
-  config = presets.get_base_config()
+  config = presets.get_base_config(melspec_in_pipeline=False)
   config.init_config = presets.get_base_init_config(config)
-  config.init_config.model_config = get_model_config()
+  config.init_config.model_config = get_model_config(config)
   config.train_config = presets.get_base_train_config(config)
   config.train_dataset_config = presets.get_base_train_dataset_config(config)
   config.eval_config = presets.get_base_eval_config(config)
