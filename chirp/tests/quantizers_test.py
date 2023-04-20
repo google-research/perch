@@ -81,7 +81,7 @@ class QuantizersTest(absltest.TestCase):
 
     inputs = jnp.ones([2, 4, embedding_dim])
     params = vq.init(rngs, inputs, train=False, mutable=True)
-    model_state, model_params = params.pop('params')
+    model_state, model_params = flax.core.pop(params, 'params')
 
     # Refresh with threshold 0.0, which should leave the params unchanged.
     updated_params, updated_state = quantizers.refresh_codebooks(
@@ -100,7 +100,7 @@ class QuantizersTest(absltest.TestCase):
     _, params = vq.apply(params, inputs, train=True, mutable=True)
     # Refresh the codebooks with threshold 2.0, which should cause codebooks
     # to update.
-    model_state, model_params = params.pop('params')
+    model_state, model_params = flax.core.pop(params, 'params')
     updated_params, updated_state = quantizers.refresh_codebooks(
         model_params, model_state, key, 2.0
     )
