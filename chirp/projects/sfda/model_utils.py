@@ -486,8 +486,8 @@ def prepare_audio_model(
     variables = model.init(
         jax.random.PRNGKey(rng_seed), jnp.zeros((1,) + input_shape), train=False
     )
-    model_state, params = variables.pop("params")
-    params = params.unfreeze()
+    model_state, params = flax.core.pop(variables, "params")
+    params = flax.core.unfreeze(params)
 
   # Define the optimizer
   if optimizer_config is None:
@@ -602,8 +602,8 @@ def prepare_image_model(
         False,
         False,
     )
-  model_state, params = variables.pop("params")
-  params = params.unfreeze()
+  model_state, params = flax.core.pop(variables, "params")
+  params = flax.core.unfreeze(params)
 
   # Define the optimizer
   if optimizer_config is None:
