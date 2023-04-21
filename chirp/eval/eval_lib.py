@@ -323,13 +323,6 @@ def get_embeddings(
     An updated TF Dataset with a new 'embedding' feature and deleted 'audio'
     feature.
   """
-  # To accommodate accelerators with static shape requirements (e.g., TPUs),
-  # we pad the dataset with elements such that its length is exactly divisible
-  # by `batch_size`.
-  num_elements = len(dataset)
-  padded_dataset = dataset.concatenate(
-      dataset.take(1).repeat(batch_size - (num_elements % batch_size))
-  )
 
   def _map_func(example):
     example['embedding'] = tf.numpy_function(
@@ -340,14 +333,11 @@ def get_embeddings(
 
   # Use the 'audio' feature to produce a model embedding; delete the old 'audio'
   # feature.
-  embedded_padded_dataset = (
-      padded_dataset.batch(batch_size, drop_remainder=True)
-      .prefetch(1)
-      .map(_map_func)
+  embedded_dataset = (
+      dataset.batch(batch_size, drop_remainder=False).prefetch(1).map(_map_func)
   )
 
-  # `take(num_elements)` ensures that we discard the padded examples.
-  return embedded_padded_dataset.unbatch().take(num_elements)
+  return embedded_dataset.unbatch()
 
 
 def _get_class_representatives_df(
@@ -532,16 +522,14 @@ def _add_dataset_name(
 
 
 def _numpy_iterator_with_progress_logging(embedded_dataset):
-  num_embeddings = len(embedded_dataset)
-  roughly_5_per_cent = int(0.05 * num_embeddings)
 
   for i, example in enumerate(embedded_dataset.as_numpy_iterator()):
     yield example
     logging.log_every_n(
         logging.INFO,
-        'Computing embeddings (%.1f%% done)...',
-        roughly_5_per_cent,
-        100 * (i + 1) / num_embeddings,
+        'Converting concatenated embedded dataset to dataframe (%d done)...',
+        1000,  # n=1000
+        i,
     )
 
 
@@ -757,10 +745,12 @@ def compute_metrics(
     species_label_match = eval_results['species_match'].values
 
     roc_auc = metrics.roc_auc(
-        logits=eval_scores,
-        labels=species_label_match,
+        logits=eval_scores.reshape(-1, 1),
+        labels=species_label_match.reshape(-1, 1),
         sort_descending=sort_descending,
-    )
+    )[
+        'macro'
+    ]  # Dictionary of macro, geometric, individual & individual_var.
 
     average_precision = metrics.average_precision(
         scores=eval_scores,

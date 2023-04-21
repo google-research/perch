@@ -110,28 +110,11 @@ def get_config() -> config_dict.ConfigDict:
   # normalizing the audio.
   slice_peaked_pipeline_ops = [
       _callable_config(
-          'pipeline.OnlyKeep',
-          names=[
-              'audio',
-              'label',
-              'bg_labels',
-              'recording_id',
-              'segment_id',
-          ],
-      ),
-      _callable_config(
           'pipeline.Slice',
           window_size=xc_window_size_seconds,
           start=xc_slice_start,
       ),
       _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
-      _callable_config('pipeline.LabelsToString'),
-  ]
-
-  # Full-length recordings are used to construct the search corpora data (for
-  # Xeno-Canto and BirdCLEF). Slices are constructed using strided windowing
-  # dense annotating.
-  full_length_pipeline_ops = [
       _callable_config(
           'pipeline.OnlyKeep',
           names=[
@@ -140,20 +123,71 @@ def get_config() -> config_dict.ConfigDict:
               'bg_labels',
               'recording_id',
               'segment_id',
-              'annotation_id',
-              'annotation_start',
-              'annotation_end',
+              'segment_start',
+              'segment_end',
           ],
       ),
+      _callable_config('pipeline.LabelsToString'),
+  ]
+
+  # Full-length Xeno-Canto recordings are processed to extract strided windows.
+  # Each strided window receives the recording-level annotations. (Note that for
+  # this dataset, we do not have human segment-level annotations, so we do not
+  # follow the same process as with BirdCLEF downstream full-length recordings.)
+  full_length_xc_pipeline_ops = [
       _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
       _callable_config(
           'pipeline.ExtractStridedWindows',
           window_length_sec=config.window_length_sec,
           window_stride_sec=config.window_stride_sec,
+          pad_end=True,
+      ),
+      _callable_config(
+          'pipeline.OnlyKeep',
+          names=[
+              'audio',
+              'label',
+              'bg_labels',
+              'recording_id',
+              'segment_id',
+              'segment_start',
+              'segment_end',
+          ],
+      ),
+      # NOTE: this pipeline operation should be applied at the very end, as it
+      # turns a sequence of labels into a single space-separated string of
+      # species codes. Previous ops in the pipeline assume that labels are
+      # sequences of integer IDs.
+      _callable_config('pipeline.LabelsToString'),
+  ]
+
+  # Full-length recordings are used to construct the search corpora data for
+  # BirdCLEF soundscapes. Slices are constructed using strided windowing and
+  # dense annotation.
+  full_length_birdclef_pipeline_ops = [
+      _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
+      _callable_config(
+          'pipeline.ExtractStridedWindows',
+          window_length_sec=config.window_length_sec,
+          window_stride_sec=config.window_stride_sec,
+          pad_end=True,
       ),
       _callable_config(
           'pipeline.DenselyAnnotateWindows',
           overlap_threshold_sec=config.overlap_threshold_sec,
+          drop_annotation_bounds=True,
+      ),
+      _callable_config(
+          'pipeline.OnlyKeep',
+          names=[
+              'audio',
+              'label',
+              'bg_labels',
+              'recording_id',
+              'segment_id',
+              'segment_start',
+              'segment_end',
+          ],
       ),
       # NOTE: this pipeline operation should be applied at the very end, as it
       # turns a sequence of labels into a single space-separated string of
@@ -170,8 +204,10 @@ def get_config() -> config_dict.ConfigDict:
 
     if dataset_description['to_crop']:
       ops = slice_peaked_pipeline_ops
+    elif dataset_description['dataset_name'] == 'xc_downstream':
+      ops = full_length_xc_pipeline_ops
     else:
-      ops = full_length_pipeline_ops
+      ops = full_length_birdclef_pipeline_ops
 
     dataset_config.pipeline = _callable_config('pipeline.Pipeline', ops=ops)
     dataset_config.split = 'train'
