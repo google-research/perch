@@ -30,6 +30,7 @@ from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
+import flax
 import flax.jax_utils as flax_utils
 import jax
 from jax import numpy as jnp
@@ -112,9 +113,9 @@ def initialize_model(
   variables = model.init(
       model_init_key, jnp.zeros((1,) + input_shape), train=False
   )
-  model_state, params = variables.pop("params")
+  model_state, params = flax.core.pop(variables, "params")
   # NOTE: https://github.com/deepmind/optax/issues/160
-  params = params.unfreeze()
+  params = flax.core.unfreeze(params)
 
   # Initialize optimizer and handle constraints
   if optimizer is None or for_inference:
