@@ -18,6 +18,7 @@
 from chirp.models import efficientnet
 from chirp.models import frontend
 from chirp.models import taxonomy_model
+import flax
 import jax
 from jax import numpy as jnp
 from jax import random
@@ -80,7 +81,7 @@ class TaxonomyModelTest(absltest.TestCase):
 
     fake_audio = 10 * random.normal(self.key, (2, 11025))
     rng, _ = random.split(self.key)
-    model_state, _ = self.variables.pop("params")
+    model_state, _ = flax.core.pop(self.variables, "params")
     _, updated_state = self.model.apply(
         self.variables,
         fake_audio,
