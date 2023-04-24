@@ -765,23 +765,31 @@ def compute_metrics(
 
 
 def write_results_to_csv(
-    metric_results: Sequence[tuple[str, float, str]], write_results_dir: str
+    metric_results: Sequence[tuple[str, float, float, str]],
+    write_results_dir: str,
 ):
-  """Writew evaluation metric results to csv.
+  """Write evaluation metric results to csv.
 
     Writes a csv file where each row corresponds to a particular evaluation
-    example's search task performance.
+    example's search task performance. If the provided write_results_dir doesn't
+    exist, it is created. If an evaluation results file already exists, it is
+    overwritten.
 
   Args:
-    metric_results: A sequence of tuples of (eval species name, eval metric,
-      evaluation set name) to write to csv. The first row encodes the column
-      header or column names.
+    metric_results: A sequence of tuples of (eval species name,
+      average_precision, roc_auc [arithmetic mean], evaluation set name) to
+      write to csv. The first row encodes the column header or column names.
     write_results_dir: The path to write the computed metrics to file.
   """
 
   write_results_path = os.path.join(write_results_dir, 'evaluation_results.csv')
   results_df = pd.DataFrame(metric_results[1:], columns=metric_results[0])
-  results_df.to_csv(write_results_path)
+
+  # Check if the specified directory exists; if not, create & write to csv.
+  if write_results_dir.find('cns') == 0:
+    if not os.path.exists(write_results_dir):
+      os.makedirs(write_results_dir)
+    results_df.to_csv(write_results_path, index=False)
 
 
 
