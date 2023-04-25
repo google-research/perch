@@ -42,13 +42,12 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
 def get_config() -> config_dict.ConfigDict:
   """Creates the configuration dictionary for training and evaluation."""
   config = presets.get_base_config(
-      melspec_in_pipeline=False, cosine_alpha=0.0, random_augmentations=True
+      melspec_in_pipeline=False, cosine_alpha=1.0, random_augmentations=True
   )
   config.init_config = presets.get_base_init_config(
       config, learning_rate=3.16e-4
   )
   config.init_config.model_config = get_model_config(config)
-  config.init_config.model_config.taxonomy_loss_weight = 0.0
 
   config.train_config = presets.get_base_train_config(config)
   config.train_dataset_config = presets.get_ablation_train_dataset_config(

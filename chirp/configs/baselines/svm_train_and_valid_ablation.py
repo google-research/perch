@@ -56,7 +56,7 @@ def get_config() -> config_dict.ConfigDict:
       loss_fn=_o('layers.hinge_loss'),
   )
   config.encoder_config = get_encoder_config()
-  config.init_config = presets.get_base_init_config(config, learning_rate=0.316)
+  config.init_config = presets.get_base_init_config(config, learning_rate=10.0)
   config.init_config.model_config = get_model_config(config)
 
   config.train_config = presets.get_base_train_config(config)

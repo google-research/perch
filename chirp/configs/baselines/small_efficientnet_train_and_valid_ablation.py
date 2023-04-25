@@ -28,7 +28,7 @@ def get_model_config(config: config_dict.ConfigDict) -> config_dict.ConfigDict:
       'efficientnet.EfficientNet',
       model=_c('efficientnet.EfficientNetModel', value='b1'),
   )
-  model_config.taxonomy_loss_weight = 1e-3
+  model_config.taxonomy_loss_weight = 0.0
   model_config.frontend = presets.get_pcen_melspec_config(config)
   return model_config
 
@@ -38,9 +38,10 @@ def get_config() -> config_dict.ConfigDict:
   config = presets.get_base_config(
       melspec_in_pipeline=False, random_augmentations=True, cosine_alpha=0.0
   )
-  config.init_config = presets.get_base_init_config(config, learning_rate=1e-2)
+  config.init_config = presets.get_base_init_config(
+      config, learning_rate=3.16e-4
+  )
   config.init_config.model_config = get_model_config(config)
-  config.init_config.model_config.taxonomy_loss_weight = 1e-3
 
   config.train_config = presets.get_base_train_config(config)
   config.train_dataset_config = presets.get_ablation_train_dataset_config(

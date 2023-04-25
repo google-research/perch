@@ -52,7 +52,7 @@ def get_config() -> config_dict.ConfigDict:
       batch_size=64,
       melspec_in_pipeline=False,
       random_augmentations=True,
-      cosine_alpha=1.0,
+      cosine_alpha=0.0,
   )
   config.encoder_config = get_encoder_config()
   config.init_config = presets.get_base_init_config(config, learning_rate=0.316)
@@ -71,5 +71,5 @@ def get_config() -> config_dict.ConfigDict:
 def get_hyper(hyper):
   """Defines the hyperparameter sweep."""
   return hyper.product([
-      hyper.sweep('config.init_config.random_seed', hyper.discrete([1236])),
+      hyper.sweep('config.init_config.rng_seed', hyper.discrete([1236])),
   ])
