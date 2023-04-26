@@ -35,6 +35,7 @@ from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
 from clu import periodic_actions
+import flax
 from flax import traverse_util
 import flax.jax_utils as flax_utils
 import jax
@@ -567,10 +568,10 @@ def initialize_model(
       mask_key=mask_key,
       train_mode_quantizer=False,
   )
-  model_state, params = variables.pop("params")
+  model_state, params = flax.core.pop(variables, "params")
 
   # NOTE: https://github.com/deepmind/optax/issues/160
-  params = params.unfreeze()
+  params = flax.core.unfreeze(params)
 
   # Define the learning rate schedule for HuBERT.
   learning_rate_schedule = LearningRateSchedule(learning_rate_schedule)
