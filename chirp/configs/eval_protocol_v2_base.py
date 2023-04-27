@@ -23,6 +23,7 @@ evaluation is performed over a pretrained EfficientNet model.
 
 import itertools
 
+from typing import Sequence
 from chirp import config_utils
 from ml_collections import config_dict
 
@@ -40,15 +41,26 @@ def _melspec_if_baseline(config_string: str, **kwargs):
   )
 
 
-def get_config() -> config_dict.ConfigDict:
+def get_config(
+    data_ops: Sequence[config_dict.ConfigDict] | None = None,
+) -> config_dict.ConfigDict:
   """Creates a base configuration dictionary for the v2 evaluation protocol.
 
   The v2 protocol evaluates on artificially rare Sapsucker Woods (SSW) species
   and on held-out Colombia and Hawaii species.
 
+  Args:
+    data_ops: An optional sequence of additional pipeline preprocessing data ops
+      to add to the default configuration.
+
   Returns:
     The base configuration dictionary for the v2 evaluation protocol.
   """
+  # If no additional data pipeline ops are passed, update to empty list for
+  # downstream concatenation type matching.
+  if not data_ops:
+    data_ops = []
+
   config = config_dict.ConfigDict()
 
   tfds_data_dir = config_dict.FieldReference(_TFDS_DATA_DIR)
@@ -203,11 +215,11 @@ def get_config() -> config_dict.ConfigDict:
     dataset_config.tfds_data_dir = tfds_data_dir
 
     if dataset_description['to_crop']:
-      ops = slice_peaked_pipeline_ops
+      ops = slice_peaked_pipeline_ops + data_ops
     elif dataset_description['dataset_name'] == 'xc_downstream':
-      ops = full_length_xc_pipeline_ops
+      ops = full_length_xc_pipeline_ops + data_ops
     else:
-      ops = full_length_birdclef_pipeline_ops
+      ops = full_length_birdclef_pipeline_ops + data_ops
 
     dataset_config.pipeline = _callable_config('pipeline.Pipeline', ops=ops)
     dataset_config.split = 'train'
