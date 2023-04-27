@@ -16,7 +16,7 @@
 """Training loop."""
 
 import functools
-from typing import Callable
+from typing import Callable, Sequence
 
 from absl import logging
 from chirp import export_utils
@@ -72,7 +72,7 @@ def get_train_metrics(
 def initialize_model(
     model_config: config_dict.ConfigDict,
     rng_seed: int,
-    input_shape: tuple[int, ...],
+    input_shape: Sequence[int],
     learning_rate: float,
     workdir: str,
     target_class_list: str,
@@ -110,6 +110,9 @@ def initialize_model(
   model = taxonomy_model.TaxonomyModel(
       num_classes={k: v.size for (k, v) in class_lists.items()}, **model_config
   )
+  # Ensure input_shape is a tuple for concatenation.
+  input_shape = tuple(input_shape)
+
   variables = model.init(
       model_init_key, jnp.zeros((1,) + input_shape), train=False
   )

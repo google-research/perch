@@ -17,7 +17,6 @@
 from typing import Any
 
 from chirp import audio_utils
-from chirp import config_utils
 from chirp.eval import callbacks
 from chirp.eval import eval_lib
 from chirp.models import conformer
@@ -38,7 +37,6 @@ def get_globals() -> dict[str, Any]:
   return {
       "audio_utils": audio_utils,
       "callbacks": callbacks,
-      "config_utils": config_utils,
       "conformer": conformer,
       "efficientnet": efficientnet,
       "eval_lib": eval_lib,

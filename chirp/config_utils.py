@@ -175,11 +175,13 @@ def parse_config(
       value = config_dict.ConfigDict(value)
     if isinstance(value, config_dict.ConfigDict):
       if set(value.keys()) == {_CALLABLE, _KWARGS}:
-        return eval(value[_CALLABLE], globals_)(  # pylint: disable=eval-used
-            **parse_config(value[_KWARGS], globals_)
+        return _parse_value(
+            eval(value[_CALLABLE], globals_)(  # pylint: disable=eval-used
+                **parse_config(value[_KWARGS], globals_)
+            )
         )
       elif set(value.keys()) == {_OBJECT}:
-        return eval(value[_OBJECT], globals_)  # pylint: disable=eval-used
+        return _parse_value(eval(value[_OBJECT], globals_))  # pylint: disable=eval-used
       else:
         return parse_config(value, globals_)
     elif isinstance(value, config_dict.FieldReference):
