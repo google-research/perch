@@ -232,14 +232,10 @@ class EvalSetTest(absltest.TestCase):
     partial_specification = functools.partial(
         eval_lib.EvalSetSpecification,
         class_names=self.class_names,
-        search_corpus_classwise_mask_fn=(
-            lambda df, _: df['label'].map(lambda s: True)
-        ),
-        class_representative_global_mask_fn=(
-            lambda df: df['label'].map(lambda s: True)
-        ),
+        search_corpus_classwise_mask_fn=(lambda _: 'label.str.contains("")'),
+        class_representative_global_mask_expr='label.str.contains("")',
         class_representative_classwise_mask_fn=(
-            lambda df, class_name: df['label'].str.contains(class_name)
+            lambda class_name: f'label.str.contains("{class_name}")'
         ),
         num_representatives_per_class=0,
     )
@@ -250,14 +246,10 @@ class EvalSetTest(absltest.TestCase):
     fake_config.debug = {'embedded_dataset_cache_path': ''}
     fake_config.eval_set_specifications = {
         'fake_specification_1': partial_specification(
-            search_corpus_global_mask_fn=(
-                lambda df: df['dataset_name'] == 'dataset_1'
-            )
+            search_corpus_global_mask_expr='dataset_name == "dataset_1"'
         ),
         'fake_specification_2': partial_specification(
-            search_corpus_global_mask_fn=(
-                lambda df: df['dataset_name'] == 'dataset_2'
-            )
+            search_corpus_global_mask_expr='dataset_name == "dataset_2"'
         ),
     }
 
@@ -284,18 +276,14 @@ class EvalSetTest(absltest.TestCase):
     fake_config.debug = {'embedded_dataset_cache_path': ''}
     fake_config.eval_set_specifications = {
         'fake_specification': eval_lib.EvalSetSpecification(
-            search_corpus_global_mask_fn=(
-                lambda df: df['dataset_name'] == 'dataset_1'
-            ),
+            search_corpus_global_mask_expr='dataset_name == "dataset_1"',
             class_names=self.class_names,
             search_corpus_classwise_mask_fn=(
-                lambda df, n: ~df['bg_labels'].str.contains(n)
+                lambda n: f'not bg_labels.str.contains("{n}")'
             ),
-            class_representative_global_mask_fn=(
-                lambda df: df['dataset_name'] == 'dataset_1'
-            ),
+            class_representative_global_mask_expr='dataset_name == "dataset_1"',
             class_representative_classwise_mask_fn=(
-                lambda df, n: df['label'].str.contains(n)
+                lambda n: f'label.str.contains("{n}")'
             ),
             num_representatives_per_class=num_representatives_per_class,
         )
