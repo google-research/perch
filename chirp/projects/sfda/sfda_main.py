@@ -64,6 +64,10 @@ def main(argv: Sequence[str]) -> None:
   config = config.unlock()
   method_config = getattr(method_config, config.modality.value)
 
+  # Target class list to use for initialization. If None, defaults to
+  # config.init_config.target_class_list.
+  init_target_class_list = None
+
   if config.modality == adapt.Modality.AUDIO:
     adaptation_dataset, val_dataset = data_utils.get_audio_datasets(
         adaptation_data_config=config.adaptation_data_config,
@@ -81,6 +85,14 @@ def main(argv: Sequence[str]) -> None:
     elif config.init_config.target_class_list == "vis_da_c":
       builder_kwargs = {
           "data_dir": _VISDA_DIR.value,
+      }
+    elif config.init_config.target_class_list == "office_home":
+      # We use the source domain name in the target class list for
+      # initialization, which indicates to the model which checkpoint to load.
+      init_target_class_list = f"office_home/{config.init_config.source_domain}"
+      builder_kwargs = {
+          "data_dir": _VISDA_DIR.value,
+          "config": config.init_config.target_domain,
       }
     else:
       builder_kwargs = {}
@@ -102,7 +114,9 @@ def main(argv: Sequence[str]) -> None:
           input_shape=None
           if config.modality == adapt.Modality.IMAGE
           else config.init_config.input_shape,
-          target_class_list=config.init_config.target_class_list,
+          target_class_list=(
+              init_target_class_list or config.init_config.target_class_list
+          ),
           adaptation_iterations=len(adaptation_dataset)
           * method_config.num_epochs,
           modality=config.modality,

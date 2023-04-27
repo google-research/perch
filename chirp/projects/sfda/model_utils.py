@@ -584,7 +584,11 @@ def prepare_image_model(
   if (
       optimizer_config is not None
       and optimizer_config.mult_learning_rate_resnet_base != 1
-      and model_config.encoder != models.ImageModelName.NRC_RESNET
+      and model_config.encoder
+      not in (
+          models.ImageModelName.NRC_RESNET,
+          models.ImageModelName.NRC_RESNET_OFFICE_HOME,
+      )
   ):
     raise ValueError(
         "Setting `mult_learning_rate_resnet_base` in "

@@ -203,6 +203,11 @@ def get_metadata(dataset_name: str) -> dict[str, Any]:
     # on the validation set of VisDA-C.
     split = {'train': 'validation[:75%]', 'eval': 'validation[75%:]'}
     return {'num_classes': 12, 'resolution': 224, 'splits': split}
+  elif 'office_home' in dataset_name:
+    # In line with NRC's results, we do both the adaptation and the evaluation
+    # on all of Office-Home.
+    split = {'train': 'train', 'eval': 'train'}
+    return {'num_classes': 65, 'resolution': 224, 'splits': split}
   else:
     raise NotImplementedError(
         f'Unknown number of classes for dataset {dataset_name}.'

@@ -38,6 +38,8 @@ def get_config() -> config_dict.ConfigDict:
   init_config.target_class_list = "cifar10_corrupted"
   init_config.corruption_name = "gaussian_noise"
   init_config.corruption_severity = 5
+  init_config.source_domain = "art"
+  init_config.target_domain = "clipart"
   init_config.pretrained_model = True
 
   config.init_config = init_config
