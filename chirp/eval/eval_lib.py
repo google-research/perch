@@ -35,8 +35,6 @@ _LABEL_KEY = 'label'
 _BACKGROUND_KEY = 'bg_labels'
 ConfigDict = ml_collections.ConfigDict
 
-MaskFunction = Callable[[pd.DataFrame], pd.Series]
-ClasswiseMaskFunction = Callable[[pd.DataFrame, str], pd.Series]
 ClasswiseEvalSetGenerator = Generator[
     tuple[str, pd.DataFrame, pd.DataFrame], None, None
 ]
@@ -52,29 +50,32 @@ class EvalSetSpecification:
 
   Attributes:
     class_names: Class names over which to perform the evaluation.
-    search_corpus_global_mask_fn: Function mapping the embeddings dataframe to a
-      boolean mask over its rows. Used to represent global properties like
-      `df['dataset_name'] == 'birdclef_colombia'`. Computed once and combined
-      with `search_corpus_classwise_mask_fn` for every class in `class_names` to
+    search_corpus_global_mask_expr: String expression passed to the embeddings
+      dataframe's `eval` method to obtain a boolean mask over its rows. Used to
+      represent global properties like `df['dataset_name'] ==
+      'birdclef_colombia'`. Computed once and combined with
+      `search_corpus_classwise_mask_fn` for every class in `class_names` to
       perform boolean indexing on the embeddings dataframe and form the search
       corpus.
-    search_corpus_classwise_mask_fn: Function mapping the embeddings dataframe
-      and a class name to a boolean mask over its rows. Used to represent
-      classwise properties like `~df['bg_labels'].str.contains(class_name)`.
-      Combined with `search_corpus_global_mask_fn` for every class in
+    search_corpus_classwise_mask_fn: Function mapping a class name to a string
+      expression passed to the embeddings dataframe's `eval` method to obtain a
+      boolean mask over its rows. Used to represent classwise properties like
+      `~df['bg_labels'].str.contains(class_name)`. Combined with
+      `search_corpus_global_mask_expr` for every class in `class_names` to
+      perform boolean indexing on the embeddings dataframe and form the search
+      corpus.
+    class_representative_global_mask_expr: String expression passed to the
+      embeddings dataframe's `eval` method to obtain a boolean mask over its
+      rows. Used to represent global properties like `df['dataset_name'] ==
+      'xc_downstream'`. Computed once and combined with
+      `class_representative_corpus_classwise_mask_fn` for every class in
       `class_names` to perform boolean indexing on the embeddings dataframe and
-      form the search corpus.
-    class_representative_global_mask_fn: Function mapping the embeddings
-      dataframe to a boolean mask over its rows. Used to represent global
-      properties like `df['dataset_name'] == 'xc_downstream'`. Computed once and
-      combined with `class_representative_corpus_classwise_mask_fn` for every
-      class in `class_names` to perform boolean indexing on the embeddings
-      dataframe and form the collection of class representatives.
-    class_representative_classwise_mask_fn: Function mapping the embeddings
-      dataframe and a class name to a boolean mask over its rows. Used to
-      represent classwise properties like
-      `df['label'].str.contains(class_name)`. Combined with
-      `class_representative_corpus_global_mask_fn` for every class in
+      form the collection of class representatives.
+    class_representative_classwise_mask_fn: Function mapping a class name to a
+      string expression passed to the embeddings dataframe's `eval` method to
+      obtain a boolean mask over its rows. Used to represent classwise
+      properties like `df['label'].str.contains(class_name)`. Combined with
+      `class_representative_corpus_global_mask_expr` for every class in
       `class_names` to perform boolean indexing on the embeddings dataframe and
       form the collection of class representatives.
     num_representatives_per_class: Number of class representatives to sample. If
@@ -84,10 +85,10 @@ class EvalSetSpecification:
   """
 
   class_names: Sequence[str]
-  search_corpus_global_mask_fn: MaskFunction
-  search_corpus_classwise_mask_fn: ClasswiseMaskFunction
-  class_representative_global_mask_fn: MaskFunction
-  class_representative_classwise_mask_fn: ClasswiseMaskFunction
+  search_corpus_global_mask_expr: str
+  search_corpus_classwise_mask_fn: Callable[[str], str]
+  class_representative_global_mask_expr: str
+  class_representative_classwise_mask_fn: Callable[[str], str]
   num_representatives_per_class: int
 
   @classmethod
@@ -137,23 +138,6 @@ class EvalSetSpecification:
     corpus_dataset_name = (
         f'birdclef_{location}' if corpus_type == 'birdclef' else 'xc_downstream'
     )
-    has_corpus_dataset_name = (
-        lambda df: df['dataset_name'] == corpus_dataset_name
-    )
-    # Only include embeddings in the searchcorpus which have foreground
-    # ('label') and/or background labels ('bg_labels') for some class in
-    # `class_names`, which are encoded as space-separated species IDs/codes.
-    has_some_fg_annotation = (
-        # `'|'.join(class_names)` is a regex which matches *any* class in
-        # `class_names`.
-        lambda df: df['label'].str.contains('|'.join(class_names))
-    )
-    has_some_bg_annotation = lambda df: df['bg_labels'].str.contains(
-        '|'.join(class_names)
-    )
-    has_some_annotation = lambda df: has_some_fg_annotation(
-        df
-    ) | has_some_bg_annotation(df)
 
     class_representative_dataset_name = {
         'ssw': 'xc_artificially_rare',
@@ -161,25 +145,34 @@ class EvalSetSpecification:
         'hawaii': 'xc_downstream',
     }[location]
 
+    # `'|'.join(class_names)` is a regex which matches *any* class in
+    # `class_names`.
+    class_name_regexp = '|'.join(class_names)
+
     return cls(
         class_names=class_names,
-        search_corpus_global_mask_fn=(
-            lambda df: has_corpus_dataset_name(df) & has_some_annotation(df)
+        # Only include embeddings in the search corpus which have foreground
+        # ('label') and/or background labels ('bg_labels') for some class in
+        # `class_names`, which are encoded as space-separated species IDs/codes.
+        search_corpus_global_mask_expr=(
+            f'dataset_name == "{corpus_dataset_name}" and '
+            f'(label.str.contains("{class_name_regexp}") or '
+            f'bg_labels.str.contains("{class_name_regexp}"))'
         ),
         # Ensure that target species' background vocalizations are not present
         # in the 'xc_fg' corpus and vice versa.
         search_corpus_classwise_mask_fn={
-            'xc_fg': lambda df, n: ~df['bg_labels'].str.contains(n),
-            'xc_bg': lambda df, n: ~df['label'].str.contains(n),
-            'birdclef': lambda df, _: df['label'].map(lambda s: True),
+            'xc_fg': lambda name: f'not bg_labels.str.contains("{name}")',
+            'xc_bg': lambda name: f'not label.str.contains("{name}")',
+            'birdclef': lambda _: 'label.str.contains("")',
         }[corpus_type],
         # Class representatives are drawn only from foreground-vocalizing
         # species present in Xeno-Canto.
-        class_representative_global_mask_fn=(
-            lambda df: df['dataset_name'] == class_representative_dataset_name
+        class_representative_global_mask_expr=(
+            f'dataset_name == "{class_representative_dataset_name}"'
         ),
         class_representative_classwise_mask_fn=(
-            lambda df, class_name: df['label'].str.contains(class_name)
+            lambda name: f'label.str.contains("{name}")'
         ),
         num_representatives_per_class=num_representatives_per_class,
     )
@@ -231,23 +224,6 @@ class EvalSetSpecification:
     corpus_dataset_name = (
         f'birdclef_{location}' if corpus_type == 'birdclef' else 'xc_downstream'
     )
-    has_corpus_dataset_name = (
-        lambda df: df['dataset_name'] == corpus_dataset_name
-    )
-    # Only include embeddings in the searchcorpus which have foreground
-    # ('label') and/or background labels ('bg_labels') for some class in
-    # `class_names`, which are encoded as space-separated species IDs/codes.
-    has_some_fg_annotation = (
-        # `'|'.join(class_names)` is a regex which matches *any* class in
-        # `class_names`.
-        lambda df: df['label'].str.contains('|'.join(class_names))
-    )
-    has_some_bg_annotation = lambda df: df['bg_labels'].str.contains(
-        '|'.join(class_names)
-    )
-    has_some_annotation = lambda df: has_some_fg_annotation(
-        df
-    ) | has_some_bg_annotation(df)
 
     class_representative_dataset_name = {
         'ssw': 'xc_artificially_rare_class_reps',
@@ -255,25 +231,32 @@ class EvalSetSpecification:
         'hawaii': 'xc_downstream_class_reps',
     }[location]
 
+    class_name_regexp = '|'.join(class_names)
+
     return cls(
         class_names=class_names,
-        search_corpus_global_mask_fn=(
-            lambda df: has_corpus_dataset_name(df) & has_some_annotation(df)
+        # Only include embeddings in the search corpus which have foreground
+        # ('label') and/or background labels ('bg_labels') for some class in
+        # `class_names`, which are encoded as space-separated species IDs/codes.
+        search_corpus_global_mask_expr=(
+            f'dataset_name == "{corpus_dataset_name}" and '
+            f'(label.str.contains("{class_name_regexp}") or '
+            f'bg_labels.str.contains("{class_name_regexp}"))'
         ),
         # Ensure that target species' background vocalizations are not present
         # in the 'xc_fg' corpus and vice versa.
         search_corpus_classwise_mask_fn={
-            'xc_fg': lambda df, n: ~df['bg_labels'].str.contains(n),
-            'xc_bg': lambda df, n: ~df['label'].str.contains(n),
-            'birdclef': lambda df, _: df['label'].map(lambda s: True),
+            'xc_fg': lambda name: f'not bg_labels.str.contains("{name}")',
+            'xc_bg': lambda name: f'not label.str.contains("{name}")',
+            'birdclef': lambda _: 'label.str.contains("")',
         }[corpus_type],
         # Class representatives are drawn from foreground-vocalizing species
         # present in Xeno-Canto after applying peak-finding.
-        class_representative_global_mask_fn=(
-            lambda df: df['dataset_name'] == class_representative_dataset_name
+        class_representative_global_mask_expr=(
+            f'dataset_name == "{class_representative_dataset_name}"'
         ),
         class_representative_classwise_mask_fn=(
-            lambda df, class_name: df['label'].str.contains(class_name)
+            lambda name: f'label.str.contains("{name}")'
         ),
         num_representatives_per_class=num_representatives_per_class,
     )
@@ -422,8 +405,29 @@ def _get_search_corpus_df(
   )
 
 
+@dataclasses.dataclass
+class _HashedEmbeddingsDataFrame:
+  """A hashable dataclass to encapsulate an embeddings DataFrame.
+
+  NOTE: The hash implementation relies on a unique object ID for the DataFrame,
+  which is determined at creation time. This is fast, but brittle. The
+  embeddings DataFrame should *never* be modified in-place; doing so would
+  result in a different DataFrame with the same hash.
+  """
+
+  df: pd.DataFrame
+
+  def __hash__(self):
+    return id(self.df)
+
+
+@functools.cache
+def _df_eval(hashable_df: _HashedEmbeddingsDataFrame, expr: str) -> pd.Series:
+  return hashable_df.df.eval(expr, engine='python')
+
+
 def _eval_set_generator(
-    embeddings_df: pd.DataFrame,
+    embeddings_df: _HashedEmbeddingsDataFrame,
     eval_set_specification: EvalSetSpecification,
     rng_key: jax.random.KeyArray,
 ) -> ClasswiseEvalSetGenerator:
@@ -439,11 +443,12 @@ def _eval_set_generator(
   Yields:
     A (class_name, class_representatives_df, search_corpus_df) tuple.
   """
-  global_search_corpus_mask = (
-      eval_set_specification.search_corpus_global_mask_fn(embeddings_df)
+  global_search_corpus_mask = _df_eval(
+      embeddings_df, eval_set_specification.search_corpus_global_mask_expr
   )
-  global_class_representative_mask = (
-      eval_set_specification.class_representative_global_mask_fn(embeddings_df)
+  global_class_representative_mask = _df_eval(
+      embeddings_df,
+      eval_set_specification.class_representative_global_mask_expr,
   )
 
   num_representatives_per_class = (
@@ -453,17 +458,15 @@ def _eval_set_generator(
   for class_name in eval_set_specification.class_names:
     choice_key, rng_key = jax.random.split(rng_key)
 
-    class_representative_mask = (
-        global_class_representative_mask
-        & eval_set_specification.class_representative_classwise_mask_fn(
-            embeddings_df, class_name
-        )
+    class_representative_mask = global_class_representative_mask & _df_eval(
+        embeddings_df,
+        eval_set_specification.class_representative_classwise_mask_fn(
+            class_name
+        ),
     )
-    search_corpus_mask = (
-        global_search_corpus_mask
-        & eval_set_specification.search_corpus_classwise_mask_fn(
-            embeddings_df, class_name
-        )
+    search_corpus_mask = global_search_corpus_mask & _df_eval(
+        embeddings_df,
+        eval_set_specification.search_corpus_classwise_mask_fn(class_name),
     )
 
     # TODO(vdumoulin): fix the issue upstream to avoid having to skip
@@ -478,14 +481,14 @@ def _eval_set_generator(
       continue
 
     class_representatives_df = _get_class_representatives_df(
-        embeddings_df,
+        embeddings_df.df,
         class_representative_mask,
         num_representatives_per_class,
         choice_key,
     )
 
     search_corpus_df = _get_search_corpus_df(
-        embeddings_df, search_corpus_mask, class_representatives_df
+        embeddings_df.df, search_corpus_mask, class_representatives_df
     )
 
     # TODO(vdumoulin): fix the issue upstream to avoid having to skip classes
@@ -618,7 +621,7 @@ def prepare_eval_sets(
   ) in config.eval_set_specifications.items():
     rng_key, eval_set_key = jax.random.split(rng_key)
     yield eval_set_name, _eval_set_generator(
-        embeddings_df=embeddings_df,
+        embeddings_df=_HashedEmbeddingsDataFrame(embeddings_df),
         eval_set_specification=eval_set_specification,
         rng_key=eval_set_key,
     )
