@@ -253,19 +253,22 @@ class EvalSetTest(absltest.TestCase):
         ),
     }
 
-    eval_set_generator = eval_lib.prepare_eval_sets(
-        fake_config, self.embedded_datasets
+    eval_sets = list(
+        eval_lib.prepare_eval_sets(fake_config, self.embedded_datasets)
     )
-    eval_sets = [(n, list(g)) for n, g in eval_set_generator]
 
     # There should be two eval sets.
     self.assertEqual(
-        [n for n, _ in eval_sets],
+        [eval_set.name for eval_set in eval_sets],
         ['fake_specification_1', 'fake_specification_2'],
     )
     # There should be one classwise eval set per class.
-    for _, classwise_eval_sets in eval_sets:
-      self.assertEqual([n for n, _, _ in classwise_eval_sets], ['a', 'b', 'c'])
+    for eval_set in eval_sets:
+      class_names = [
+          classwise_eval_set.class_name
+          for classwise_eval_set in eval_set.classwise_eval_sets
+      ]
+      self.assertEqual(class_names, ['a', 'b', 'c'])
 
   def test_eval_set_generator(self):
     num_representatives_per_class = 2
@@ -289,14 +292,16 @@ class EvalSetTest(absltest.TestCase):
         )
     }
 
-    ((_, classwise_eval_sets),) = eval_lib.prepare_eval_sets(
+    (eval_set,) = eval_lib.prepare_eval_sets(
         fake_config, self.embedded_datasets
     )
-    for (
-        class_name,
-        class_representatives_df,
-        search_corpus_df,
-    ) in classwise_eval_sets:
+    for classwise_eval_set in eval_set.classwise_eval_sets:
+      class_name = classwise_eval_set.class_name
+      class_representatives_df = classwise_eval_set.class_representatives_df
+      search_corpus_df = eval_set.search_corpus_df[
+          classwise_eval_set.search_corpus_mask
+      ]
+
       # We should get the number of class representatives we requested.
       self.assertLen(class_representatives_df, num_representatives_per_class)
       # All class representatives should have the label `class_name`.
@@ -333,15 +338,20 @@ class SearchProcedureTest(absltest.TestCase):
     })
 
   def test_query_search(self):
-    actual_query_result = eval_lib.query_search(
-        query=self.query,
+    score = pd.Series([0.0, 1.0, 0.7071])
+    search_corpus_mask = pd.Series([False, True, True])
+
+    actual_query_result = eval_lib._make_species_scores_df(
+        score=score,
         species_id=self.species_id,
         search_corpus=self.search_corpus,
-        search_score=eval_lib.cosine_similarity,
+        search_corpus_mask=search_corpus_mask,
     )
-    expected_query_result = pd.DataFrame(
-        {'score': [0.0, 1.0, 0.7071], 'species_match': [1, 0, 1]}
-    )
+    expected_query_result = pd.DataFrame({
+        'score': score.tolist(),
+        'species_match': [1, 0, 1],
+        'label_mask': search_corpus_mask.tolist(),
+    })
     actual_query_scores = actual_query_result['score'].round(4)
     expected_query_scores = expected_query_result['score']
     self.assertTrue((actual_query_scores == expected_query_scores).all())
@@ -349,6 +359,10 @@ class SearchProcedureTest(absltest.TestCase):
     actual_query_matches = actual_query_result['species_match']
     expected_query_matches = expected_query_result['species_match']
     self.assertTrue((actual_query_matches == expected_query_matches).all())
+
+    actual_label_mask = actual_query_result['label_mask']
+    expected_label_mask = expected_query_result['label_mask']
+    self.assertTrue((actual_label_mask == expected_label_mask).all())
 
 
 class DefaultFunctionsTest(absltest.TestCase):
@@ -362,26 +376,26 @@ class DefaultFunctionsTest(absltest.TestCase):
     self.assertTrue(actual_avg_query.tolist(), expected_avg_query.tolist())
 
   def test_cosine_similarity(self):
-    embedding = np.arange(0, 5)
+    embedding = np.array([[0.0, 1.0, 2.0, 3.0, 4.0]])
     actual_similarity = eval_lib.cosine_similarity(embedding, embedding)
     expected_similarity = 1.0
-    self.assertAlmostEqual(actual_similarity, expected_similarity)
+    np.testing.assert_allclose(actual_similarity, expected_similarity)
 
-    orthog_embedding0 = [-0.5, 0.0, -0.5, 0.0, -0.5]
-    orthog_embedding1 = [0.0, 0.5, 0.0, 0.5, 0.0]
+    orthog_embedding0 = np.array([[-0.5, 0.0, -0.5, 0.0, -0.5]])
+    orthog_embedding1 = np.array([[0.0, 0.5, 0.0, 0.5, 0.0]])
     actual_similarity = eval_lib.cosine_similarity(
         orthog_embedding0, orthog_embedding1
     )
     expected_similarity = 0.0
-    self.assertAlmostEqual(actual_similarity, expected_similarity)
+    np.testing.assert_allclose(actual_similarity, expected_similarity)
 
-    opposite_embedding0 = [-1] * 5
-    opposite_embedding1 = [1] * 5
+    opposite_embedding0 = np.array([[-1.0, -1.0, -1.0, -1.0, -1.0]])
+    opposite_embedding1 = np.array([[1.0, 1.0, 1.0, 1.0, 1.0]])
     actual_similarity = eval_lib.cosine_similarity(
         opposite_embedding0, opposite_embedding1
     )
     expected_similarity = -1.0
-    self.assertAlmostEqual(actual_similarity, expected_similarity)
+    np.testing.assert_allclose(actual_similarity, expected_similarity)
 
 
 class TaxonomyModelCallbackTest(absltest.TestCase):

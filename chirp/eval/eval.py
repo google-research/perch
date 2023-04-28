@@ -82,19 +82,17 @@ def main(argv: Sequence[str]) -> None:
     )
 
   eval_set_search_results = dict()
-  for eval_set_name, eval_set_generator in eval_lib.prepare_eval_sets(
-      config, embedded_datasets
-  ):
-    logging.info(eval_set_name)
+  for eval_set in eval_lib.prepare_eval_sets(config, embedded_datasets):
+    logging.info(eval_set.name)
 
     search_results = eval_lib.search(
-        eval_set_generator,
+        eval_set,
         config.model_callback.learned_representations,
         config.create_species_query,
         config.score_search,
     )
 
-    eval_set_search_results[eval_set_name] = search_results
+    eval_set_search_results[eval_set.name] = search_results
 
   # Collect eval set species performance results as a list of tuples.
   eval_metrics = [_EVAL_RESULTS_HEADER]

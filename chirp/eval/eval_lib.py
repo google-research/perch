@@ -18,7 +18,7 @@
 import dataclasses
 import functools
 import os
-from typing import (Callable, Generator, Mapping, Sequence, TypeVar)
+from typing import (Callable, Iterator, Mapping, Sequence, TypeVar)
 
 from absl import logging
 from chirp.data import utils as data_utils
@@ -35,10 +35,6 @@ _LABEL_KEY = 'label'
 _BACKGROUND_KEY = 'bg_labels'
 ConfigDict = ml_collections.ConfigDict
 
-ClasswiseEvalSetGenerator = Generator[
-    tuple[str, pd.DataFrame, pd.DataFrame], None, None
-]
-EvalSetGenerator = Generator[tuple[str, ClasswiseEvalSetGenerator], None, None]
 EvalModelCallable = Callable[[np.ndarray], np.ndarray]
 
 _T = TypeVar('_T', bound='EvalSetSpecification')
@@ -262,6 +258,20 @@ class EvalSetSpecification:
     )
 
 
+@dataclasses.dataclass
+class ClasswiseEvalSet:
+  class_name: str
+  class_representatives_df: pd.DataFrame
+  search_corpus_mask: pd.Series
+
+
+@dataclasses.dataclass
+class EvalSet:
+  name: str
+  search_corpus_df: pd.DataFrame
+  classwise_eval_sets: tuple[ClasswiseEvalSet, ...]
+
+
 def _load_eval_dataset(dataset_config: ConfigDict) -> tf.data.Dataset:
   """Loads an evaluation dataset from its corresponding configuration dict."""
   return data_utils.get_dataset(
@@ -374,37 +384,6 @@ def _get_class_representatives_df(
   return embeddings_df[class_representative_mask]
 
 
-def _get_search_corpus_df(
-    embeddings_df: pd.DataFrame,
-    search_corpus_mask: pd.Series,
-    class_representatives_df: pd.DataFrame,
-) -> pd.DataFrame:
-  """Creates a search corpus DataFrame, excluding any class representative.
-
-  Args:
-    embeddings_df: The embeddings DataFrame.
-    search_corpus_mask: A boolean mask indicating which embeddings to consider
-      for the search corpus.
-    class_representatives_df: The class representatives DataFrame.
-
-  Returns:
-    A DataFrame of the search corpus.
-  """
-  search_corpus_df = embeddings_df[search_corpus_mask]
-  # Make sure to drop any embeddings present in the class representatives
-  # from the search corpus.
-  #
-  # Note that for eval v2, indices will not be dropped because class reps &
-  # search corpus examples are drawn from different datasets. For XC, there will
-  # be one match between the class rep & search corpus example for each species.
-  return search_corpus_df.drop(
-      class_representatives_df.index,
-      # It's possible that the class representatives and the search corpus don't
-      # intersect; this is fine.
-      errors='ignore',
-  )
-
-
 @dataclasses.dataclass
 class _HashedEmbeddingsDataFrame:
   """A hashable dataclass to encapsulate an embeddings DataFrame.
@@ -426,12 +405,19 @@ def _df_eval(hashable_df: _HashedEmbeddingsDataFrame, expr: str) -> pd.Series:
   return hashable_df.df.eval(expr, engine='python')
 
 
-def _eval_set_generator(
+def _prepare_eval_set(
     embeddings_df: _HashedEmbeddingsDataFrame,
     eval_set_specification: EvalSetSpecification,
     rng_key: jax.random.KeyArray,
-) -> ClasswiseEvalSetGenerator:
-  """Creates a generator for a given eval set.
+) -> tuple[pd.DataFrame, tuple[ClasswiseEvalSet, ...]]:
+  """Prepares a single eval set.
+
+  This entails creating and returning a search corpus DataFrame and a classwise
+  eval set generator. The latter iterates over classes in the eval set
+  specification and yields (class_name, class_representatives_df,
+  search_corpus_mask) tuples. Each search corpus mask indicates which part of
+  the search corpus should be ignored in the context of its corresponding class
+  (e.g., because it overlaps with the chosen class representatives).
 
   Args:
     embeddings_df: A DataFrame containing all evaluation embeddings and their
@@ -440,8 +426,8 @@ def _eval_set_generator(
     rng_key: The PRNG key used to perform random subsampling of the class
       representatives when necessary.
 
-  Yields:
-    A (class_name, class_representatives_df, search_corpus_df) tuple.
+  Returns:
+    A (search_corpus_df, classwise_eval_set_generator) tuple.
   """
   global_search_corpus_mask = _df_eval(
       embeddings_df, eval_set_specification.search_corpus_global_mask_expr
@@ -455,6 +441,9 @@ def _eval_set_generator(
       eval_set_specification.num_representatives_per_class
   )
 
+  search_corpus_df = embeddings_df.df[global_search_corpus_mask]
+  classwise_eval_sets = []
+
   for class_name in eval_set_specification.class_names:
     choice_key, rng_key = jax.random.split(rng_key)
 
@@ -463,10 +452,6 @@ def _eval_set_generator(
         eval_set_specification.class_representative_classwise_mask_fn(
             class_name
         ),
-    )
-    search_corpus_mask = global_search_corpus_mask & _df_eval(
-        embeddings_df,
-        eval_set_specification.search_corpus_classwise_mask_fn(class_name),
     )
 
     # TODO(vdumoulin): fix the issue upstream to avoid having to skip
@@ -487,15 +472,24 @@ def _eval_set_generator(
         choice_key,
     )
 
-    search_corpus_df = _get_search_corpus_df(
-        embeddings_df.df, search_corpus_mask, class_representatives_df
+    search_corpus_mask = (
+        global_search_corpus_mask
+        & _df_eval(
+            embeddings_df,
+            eval_set_specification.search_corpus_classwise_mask_fn(class_name),
+        )
+        # Exclude rows selected as class representatives.
+        & ~embeddings_df.df.index.isin(class_representatives_df.index)
     )
+    search_corpus_mask = search_corpus_mask.loc[search_corpus_df.index]
 
     # TODO(vdumoulin): fix the issue upstream to avoid having to skip classes
     # in the first place.
     if (
-        search_corpus_df['label'].str.contains(class_name)
-        | search_corpus_df['bg_labels'].str.contains(class_name)
+        search_corpus_df['label'][search_corpus_mask].str.contains(class_name)
+        | search_corpus_df['bg_labels'][search_corpus_mask].str.contains(
+            class_name
+        )
     ).sum() == 0:
       logging.warning(
           'Skipping %s as the corpus contains no individual of that class',
@@ -503,7 +497,15 @@ def _eval_set_generator(
       )
       continue
 
-    yield (class_name, class_representatives_df, search_corpus_df)
+    classwise_eval_sets.append(
+        ClasswiseEvalSet(
+            class_name=class_name,
+            class_representatives_df=class_representatives_df,
+            search_corpus_mask=search_corpus_mask,
+        )
+    )
+
+  return search_corpus_df, tuple(classwise_eval_sets)
 
 
 def _add_dataset_name(
@@ -579,7 +581,7 @@ def _create_embeddings_dataframe(
 
 def prepare_eval_sets(
     config: ConfigDict, embedded_datasets: dict[str, tf.data.Dataset]
-) -> EvalSetGenerator:
+) -> Iterator[EvalSet]:
   """Constructs and yields eval sets.
 
   Args:
@@ -587,9 +589,13 @@ def prepare_eval_sets(
     embedded_datasets: A mapping from dataset name to embedded dataset.
 
   Yields:
-    A tuple of (eval_set_name, eval_set_generator). The eval set generator
-    itself yields (class_name, class_representatives_df, search_corpus_df)
-    tuples. The DataFrame (`*_df`) objects have the following columns:
+    A tuple of (eval_set_name, search_corpus_df, classwise_eval_set_generator).
+    The classwise eval set generator itself yields (class_name,
+    class_representatives_df, search_corpus_mask) tuples. Each search corpus
+    mask indicates which part of the search corpus should be ignored in the
+    context of its corresponding class (e.g., because it overlaps with the
+    chosen class representatives). The DataFrame (`*_df`) objects have the
+    following columns:
     - embedding: numpy array of dtype float32.
     - label: space-separated string of foreground labels.
     - bg_labels: space-separated string of background labels.
@@ -620,27 +626,28 @@ def prepare_eval_sets(
       eval_set_specification,
   ) in config.eval_set_specifications.items():
     rng_key, eval_set_key = jax.random.split(rng_key)
-    yield eval_set_name, _eval_set_generator(
+    search_corpus_df, classwise_eval_sets = _prepare_eval_set(
         embeddings_df=_HashedEmbeddingsDataFrame(embeddings_df),
         eval_set_specification=eval_set_specification,
         rng_key=eval_set_key,
     )
+    yield EvalSet(
+        name=eval_set_name,
+        search_corpus_df=search_corpus_df,
+        classwise_eval_sets=classwise_eval_sets,
+    )
 
 
 def search(
-    eval_and_search_corpus: ClasswiseEvalSetGenerator,
+    eval_set: EvalSet,
     learned_representations: Mapping[str, np.ndarray],
     create_species_query: Callable[[Sequence[np.ndarray]], np.ndarray],
-    search_score: Callable[[np.ndarray, np.ndarray], float],
+    search_score: Callable[[np.ndarray, np.ndarray], np.ndarray],
 ) -> Mapping[str, pd.DataFrame]:
   """Performs search over evaluation set examples and search corpus pairs.
 
   Args:
-    eval_and_search_corpus: A ClasswiseEvalSetGenerator, an alias for a
-      Generator of Tuples, where each contains an eval set species name
-      (class_name), a DataFrame containing a collection of representatives of
-      the eval set species, and a DataFrame containing a collection of search
-      corpus species examples to perform search over.
+    eval_set: The evaluation set over which to perform search.
     learned_representations: Mapping from class name to its learned
       representation. If a key exists in the mapping, the corresponding
       representation is used instead of calling `create_species_query` on the
@@ -659,54 +666,69 @@ def search(
     - column 1 contains a search score (float)
     - column 2 contains an indicator of whether the eval and search species are
     the same (bool).
+    - column 3 contains an indicator of whether to exclude the row for the
+    search corpus (bool).
   """
 
   # A mapping from eval species class to a DataFrame of search results.
   eval_search_results = dict()
 
-  for species_id, eval_reps, search_corpus in eval_and_search_corpus:
-    if species_id in learned_representations:
-      query = learned_representations[species_id]
-    else:
-      query = create_species_query(eval_reps['embedding'])
+  # Gather all query vectors.
+  queries = np.stack(
+      [
+          learned_representations[ces.class_name]
+          if ces.class_name in learned_representations
+          else create_species_query(ces.class_representatives_df['embedding'])
+          for ces in eval_set.classwise_eval_sets
+      ]
+  )
 
-    species_scores = query_search(
-        query=query,
-        species_id=species_id,
-        search_corpus=search_corpus,
-        search_score=search_score,
+  # Perform a matrix-matrix scoring using stacked queries and search corpus
+  # embeddings.
+  scores = search_score(
+      queries, np.stack(eval_set.search_corpus_df[_EMBEDDING_KEY].tolist())
+  )
+
+  for score, ces in zip(scores, eval_set.classwise_eval_sets):
+    species_scores = _make_species_scores_df(
+        score=pd.Series(score.tolist(), index=eval_set.search_corpus_df.index),
+        species_id=ces.class_name,
+        search_corpus=eval_set.search_corpus_df,
+        search_corpus_mask=ces.search_corpus_mask,
     )
 
-    eval_search_results[species_id] = species_scores
+    eval_search_results[ces.class_name] = species_scores
 
   return eval_search_results
 
 
-def query_search(
-    query: np.ndarray,
+def _make_species_scores_df(
+    score: pd.Series,
     species_id: str,
     search_corpus: pd.DataFrame,
-    search_score: Callable[[np.ndarray, np.ndarray], float],
+    search_corpus_mask: pd.Series,
 ) -> pd.DataFrame:
-  """Performs vector-based comparison between the query and search corpus.
+  """Creates a DataFrame of scores and other metric-relevant information.
 
   Args:
-    query: A vector representation of an evaluation species.
+    score: A Series of scores (with respect to a query for species `species_id`)
+      for each embedding in the search corpus.
     species_id: The species ID of the query.
     search_corpus: A DataFrame containing rows of search examples.
-    search_score: A Callable that operates over two vectors and returns a float.
+    search_corpus_mask: A boolean Series indicating which part of the search
+      corpus should be ignored in the context of its corresponding class (e.g.,
+      because it overlaps with the chosen class representatives).
 
   Returns:
     A DataFrame where each row corresponds to the results on a single search
-    examplar, with columns for a numeric score and species match (bool) checked
-    between the query species ID and the search corpus examplar's foreground and
-    background species labels.
+    examplar, with columns for i) a numeric score, ii) a species match (bool)
+    checked between the query species ID and the search corpus examplar's
+    foreground and background species labels, and iii) a label mask (bool)
+    indicating whether the row should be ignored when computing metrics.
   """
 
   search_species_scores = pd.DataFrame()
-  search_species_scores['score'] = search_corpus[_EMBEDDING_KEY].apply(
-      lambda x: search_score(query, x)
-  )
+  search_species_scores['score'] = score
   fg_species_match = (
       search_corpus[_LABEL_KEY]
       .apply(lambda x: species_id in x.split(' '))
@@ -718,6 +740,7 @@ def query_search(
       .astype(np.int16)
   )
   search_species_scores['species_match'] = fg_species_match | bg_species_match
+  search_species_scores['label_mask'] = search_corpus_mask
 
   return search_species_scores
 
@@ -732,7 +755,8 @@ def compute_metrics(
   Args:
     eval_set_name: The name of the evaluation set.
     eval_set_results: A mapping from species ID to a DataFrame of the search
-      results for that species (with columns 'score' and 'species_match').
+      results for that species (with columns 'score', 'species_match', and
+      'label_mask').
     sort_descending: An indicator if the search result ordering is in descending
       order to be used post-search by average-precision based metrics. Sorts in
       descending order by default.
@@ -746,6 +770,7 @@ def compute_metrics(
   for eval_species, eval_results in eval_set_results.items():
     eval_scores = eval_results['score'].values
     species_label_match = eval_results['species_match'].values
+    label_mask = eval_results['label_mask'].to_numpy().astype(eval_scores.dtype)
 
     roc_auc = metrics.roc_auc(
         logits=eval_scores.reshape(-1, 1),
@@ -756,8 +781,9 @@ def compute_metrics(
     ]  # Dictionary of macro, geometric, individual & individual_var.
 
     average_precision = metrics.average_precision(
-        scores=eval_scores,
-        labels=species_label_match,
+        eval_scores,
+        species_label_match,
+        label_mask=label_mask,
         sort_descending=sort_descending,
     )
     species_metric_eval_set.append(
@@ -816,7 +842,7 @@ def create_averaged_query(
   return query
 
 
-def cosine_similarity(vector_a: np.ndarray, vector_b: np.ndarray) -> float:
+def cosine_similarity(vector_a: np.ndarray, vector_b: np.ndarray) -> np.ndarray:
   """Computes cosine similarity between two vectors and returns the score.
 
   Args:
@@ -834,7 +860,10 @@ def cosine_similarity(vector_a: np.ndarray, vector_b: np.ndarray) -> float:
     close to 1 means to A and B are very similar vectors.
   """
 
-  dot_prod = np.dot(vector_a, vector_b)
-  norm_prod = np.linalg.norm(vector_a) * np.linalg.norm(vector_b)
+  dot_prod = vector_a @ vector_b.T
+  norm_prod = (
+      np.linalg.norm(vector_a, axis=-1, keepdims=True)
+      * np.linalg.norm(vector_b, axis=-1, keepdims=True).T
+  )
 
   return dot_prod / norm_prod
