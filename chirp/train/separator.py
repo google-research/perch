@@ -97,7 +97,7 @@ def initialize_model(
   variables = model.init(
       model_init_key, jnp.zeros((1,) + input_shape), train=False
   )
-  model_state, params = variables.pop('params')
+  model_state, params = flax.core.pop(variables, 'params')
 
   # Initialize optimizer
   optimizer = optax.adam(learning_rate=learning_rate)
