@@ -224,7 +224,7 @@ class EmbeddingModelCallback:
     self.model_callback = self.__call__
 
   def __call__(self, inputs: np.ndarray) -> np.ndarray:
-    model_outputs = self.loaded_model.batch_embed(inputs).embeddings
+    model_outputs = self.loaded_model.batch_embed(inputs)
     # Batched model outputs have shape [B, T, C, D], but we require [B, D].
     return model_outputs.pooled_embeddings(
         self.time_pooling, self.channel_pooling
