@@ -23,6 +23,7 @@ from absl import logging
 from chirp import config_utils
 from chirp.configs import config_globals
 from chirp.eval import eval_lib
+import jax
 from ml_collections.config_flags import config_flags
 
 _CONFIG = config_flags.DEFINE_config_file('config')
@@ -35,9 +36,8 @@ _EVAL_RESULTS_HEADER = (
 flags.mark_flags_as_required(['config'])
 
 
-def main(argv: Sequence[str]) -> None:
-  if len(argv) > 1:
-    raise app.UsageError('Too many command-line arguments.')
+def _main():
+  """Main function."""
   logging.info(_CONFIG.value)
   config = config_utils.parse_config(
       _CONFIG.value, config_globals.get_globals()
@@ -104,6 +104,14 @@ def main(argv: Sequence[str]) -> None:
     )
 
   eval_lib.write_results_to_csv(eval_metrics, config.write_results_dir)  # pytype: disable=wrong-arg-types  # jax-ndarray
+
+
+def main(argv: Sequence[str]) -> None:
+  if len(argv) > 1:
+    raise app.UsageError('Too many command-line arguments.')
+
+  with jax.default_matmul_precision('float32'):
+    _main()
 
 
 if __name__ == '__main__':
