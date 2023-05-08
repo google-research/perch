@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Embed Caples data."""
+"""Embed audio data using both a seapration and embedding model."""
 
 from chirp import config_utils
 from ml_collections import config_dict
@@ -29,7 +29,8 @@ def get_config() -> config_dict.ConfigDict:
 
   config.output_dir = ''
   config.source_file_patterns = ['soundscapes/*.wav']
-  model_checkpoint_path = ''
+  sep_model_checkpoint_path = ''
+  emb_model_checkpoint_path = ''
 
   config.num_shards_per_file = 1
   config.embed_fn_config = {
@@ -37,12 +38,20 @@ def get_config() -> config_dict.ConfigDict:
       'write_logits': False,
       'write_separated_audio': False,
       'write_raw_audio': False,
-      'model_key': 'taxonomy_model_tf',
+      'model_key': 'separate_embed_model',
       'model_config': {
-          'model_path': model_checkpoint_path,
-          'window_size_s': 5.0,
-          'hop_size_s': 2.5,
           'sample_rate': 32000,
+          'taxonomy_model_tf_config': {
+              'model_path': emb_model_checkpoint_path,
+              'window_size_s': 5.0,
+              'hop_size_s': 2.5,
+              'sample_rate': 32000,
+          },
+          'separator_model_tf_config': {
+              'model_path': sep_model_checkpoint_path,
+              'sample_rate': 32000,
+              'frame_size': 32000,
+          },
       },
   }
   return config

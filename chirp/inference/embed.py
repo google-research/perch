@@ -24,10 +24,10 @@ from absl import logging
 import apache_beam as beam
 from chirp import config_utils
 from chirp.configs import config_globals
-from chirp.configs.inference import birdnet_soundscapes
-from chirp.configs.inference import raw_soundscapes
-from chirp.configs.inference import separate_soundscapes
 from chirp.inference import embed_lib
+from chirp.inference.configs import birdnet_soundscapes
+from chirp.inference.configs import raw_soundscapes
+from chirp.inference.configs import separate_soundscapes
 from etils import epath
 import numpy as np
 
@@ -56,7 +56,8 @@ def dry_run(config, source_infos):
   got = test_embed_fn.process(test_source, _DRY_RUN_CROP_S.value)
   elapsed = time.time() - start
   if not got:
-    raise Exception('Something went wrong; no results found.')
+    # pylint: disable=broad-exception-raised
+    raise ValueError('Something went wrong; no results found.')
   test_embed_fn.teardown()
   print(f'Dry run successful! Party! Inference time : {elapsed:5.3f}')
 
@@ -80,7 +81,9 @@ def main(unused_argv: Sequence[str]) -> None:
 
   # Create and run the beam pipeline.
   source_infos = embed_lib.create_source_infos(
-      config.source_file_patterns, config.num_shards_per_file
+      config.source_file_patterns,
+      config.num_shards_per_file,
+      config.shard_len_s,
   )
   logging.info('Found %d source infos.', len(source_infos))
 

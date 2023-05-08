@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Embed Caples data."""
+"""Embed audio data with BirdNET."""
 
 from chirp import config_utils
 from ml_collections import config_dict

@@ -16,23 +16,21 @@
 """Create embeddings for an audio corpus."""
 
 import dataclasses
-import os
 from typing import Any, Sequence
-import warnings
 
 from absl import logging
 import apache_beam as beam
+import audioread
+from chirp import audio_utils
+from chirp import path_utils
 from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
 from etils import epath
-import librosa
 from ml_collections import config_dict
 import numpy as np
+import soundfile
 import tensorflow as tf
-
-
-MIN_AUDIO_S = 5
 
 
 @dataclasses.dataclass
@@ -41,11 +39,11 @@ class SourceInfo:
 
   filepath: str
   shard_num: int
-  num_shards: int
+  shard_len_s: float
 
 
 def create_source_infos(
-    source_file_patterns: str, num_shards_per_file: int
+    source_file_patterns: str, num_shards_per_file: int, shard_len_s: float
 ) -> Sequence[SourceInfo]:
   """Expand source file patterns into a list of SourceInfos."""
   source_files = []
@@ -56,9 +54,7 @@ def create_source_infos(
   source_file_splits = []
   for source in source_files:
     for i in range(num_shards_per_file):
-      source_file_splits.append(
-          SourceInfo(source.as_posix(), i, num_shards_per_file)
-      )
+      source_file_splits.append(SourceInfo(source.as_posix(), i, shard_len_s))
   return source_file_splits
 
 
@@ -78,6 +74,8 @@ class EmbedFn(beam.DoFn):
       model_key: str,
       model_config: config_dict.ConfigDict,
       crop_s: float = -1.0,
+      file_id_depth: int = 0,
+      min_audio_s: float = 5.0,
       embedding_model: interface.EmbeddingModel | None = None,
   ):
     """Initialize the embedding DoFn.
@@ -92,6 +90,10 @@ class EmbedFn(beam.DoFn):
       model_config: Keyword arg dictionary for the model wrapper class. Only
         used for setting up the embedding model.
       crop_s: If greater than zero, run on only the first crop_s seconds.
+      file_id_depth: Number of parent directories to include in the file_id. eg,
+        If file_id_depth=2 and the filename is `C://my/file/is/awesome.wav`,
+        then the file_id will be `file/is/awesome.wav`.
+      min_audio_s: Minimum allowed audio length, in seconds.
       embedding_model: Pre-loaded embedding model.
     """
     self.model_key = model_key
@@ -102,6 +104,8 @@ class EmbedFn(beam.DoFn):
     self.write_raw_audio = write_raw_audio
     self.crop_s = crop_s
     self.embedding_model = embedding_model
+    self.file_id_depth = file_id_depth
+    self.min_audio_s = min_audio_s
 
   def setup(self):
     if self.embedding_model is None:
@@ -113,26 +117,33 @@ class EmbedFn(beam.DoFn):
     if hasattr(self, 'model_config'):
       del self.model_config
 
-  def load_audio(self, filepath: str) -> np.ndarray | None:
-    with warnings.catch_warnings():
-      warnings.simplefilter('ignore')
-      try:
-        audio, _ = librosa.load(
-            filepath, sr=self.embedding_model.sample_rate, res_type='polyphase'
+  def load_audio(
+      self, filepath: str, offset_s: float, window_size_s: float
+  ) -> np.ndarray | None:
+    audio = np.array(
+        audio_utils.load_audio(
+            filepath, target_sample_rate=self.embedding_model.sample_rate
         )
-      except Exception as inst:  # pylint: disable=broad-except
-        # We have no idea what can go wrong in librosa, so we catch a broad
-        # exception here.
-        logging.warning(
-            'The audio at %s could not be loaded. The exception was (%s)',
-            filepath,
-            inst,
-        )
-        return None
-      while len(audio.shape) > 1:
-        # In case of multi-channel audio, take the first channel.
-        audio = audio[0]
-      return audio
+    )
+    if offset_s > 0:
+      offset = int(offset_s * self.embedding_model.sample_rate)
+      if offset > audio.shape[0]:
+        raise ValueError('Offset out of bounds.')
+      audio = audio[offset:]
+    if window_size_s > 0:
+      window_size = int(window_size_s * self.embedding_model.sample_rate)
+      audio = audio[:window_size]
+
+    logging.warning('Audio loaded successfully.')
+    return audio
+
+  def _log_exception(self, filepath, exception, counter_name):
+    beam.metrics.Metrics.counter('beaminference', 'audio_read_failed').inc()
+    logging.warning(
+        'The audio at %s could not be loaded. The exception was (%s)',
+        filepath,
+        exception,
+    )
 
   @beam.typehints.with_output_types(Any)
   def process(self, source_info: SourceInfo, crop_s: float = -1.0):
@@ -146,40 +157,54 @@ class EmbedFn(beam.DoFn):
     Returns:
       A TFExample.
     """
-    file_name = os.path.basename(source_info.filepath)
+    file_id = epath.Path(
+        *epath.Path(source_info.filepath).parts[-(self.file_id_depth + 1) :]
+    ).as_posix()
 
     logging.info('...loading audio (%s)', source_info.filepath)
-    audio = self.load_audio(source_info.filepath)
-    if audio is None:
-      beam.metrics.Metrics.counter('beaminference', 'load_audio_error').inc()
-      logging.error('Failed to load audio : %s', source_info.filepath)
-      return
-
-    if source_info.num_shards > 1:
-      shard_len = audio.shape[0] // source_info.num_shards
-      timestamp_offset = source_info.shard_num * shard_len
-      audio = audio[timestamp_offset : timestamp_offset + shard_len]
-    else:
-      timestamp_offset = 0
-
-    if audio.shape[0] < MIN_AUDIO_S * self.embedding_model.sample_rate:
-      beam.metrics.Metrics.counter('beaminference', 'short_audio_error').inc()
-      logging.error('short audio file : %s', source_info.filepath)
-      return
+    timestamp_offset_s = source_info.shard_num * source_info.shard_len_s
 
     if crop_s > 0:
-      audio = audio[: int(crop_s * self.embedding_model.sample_rate)]
+      window_size_s = crop_s
     elif self.crop_s > 0:
-      audio = audio[: int(self.crop_s * self.embedding_model.sample_rate)]
+      window_size_s = self.crop_s
+    elif source_info.shard_len_s > 0:
+      window_size_s = source_info.shard_len_s
+    else:
+      window_size_s = -1
+
+    try:
+      audio = self.load_audio(
+          source_info.filepath, timestamp_offset_s, window_size_s
+      )
+    except soundfile.LibsndfileError as inst:
+      self._log_exception(source_info.filepath, inst, 'audio_libsndfile_error')
+      return
+    except ValueError as inst:
+      self._log_exception(source_info.filepath, inst, 'audio_bad_offset')
+      return
+    except audioread.NoBackendError as inst:
+      self._log_exception(source_info.filepath, inst, 'audio_no_backend')
+      return
+
+    if audio is None:
+      self._log_exception(source_info.filepath, 'no_exception', 'audio_empty')
+      return
+    if audio.shape[0] < self.min_audio_s * self.embedding_model.sample_rate:
+      self._log_exception(
+          source_info.filepath, 'no_exception', 'audio_too_short'
+      )
+      return
+
     logging.info(
-        '...creating embeddings (%s / %d)', file_name, timestamp_offset
+        '...creating embeddings (%s / %d)', file_id, timestamp_offset_s
     )
     model_outputs = self.embedding_model.embed(audio)
     example = tf_examples.model_outputs_to_tf_example(
         model_outputs=model_outputs,
-        file_id=file_name,
+        file_id=file_id,
         audio=audio,
-        timestamp_offset=timestamp_offset,
+        timestamp_offset_s=timestamp_offset_s,
         write_raw_audio=self.write_raw_audio,
         write_separated_audio=self.write_separated_audio,
         write_embeddings=self.write_embeddings,

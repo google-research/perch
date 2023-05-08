@@ -24,7 +24,7 @@ import tensorflow as tf
 
 # Feature keys.
 FILE_NAME = 'filename'
-TIMESTAMP = 'timestamp_offset'
+TIMESTAMP_S = 'timestamp_s'
 EMBEDDING = 'embedding'
 EMBEDDING_SHAPE = 'embedding_shape'
 LOGITS = 'logits'
@@ -49,7 +49,7 @@ def get_feature_description(logit_names: Sequence[str] | None = None):
   """
   feature_description = {
       FILE_NAME: tf.io.FixedLenFeature([], tf.string),
-      TIMESTAMP: tf.io.FixedLenFeature([], tf.int64),
+      TIMESTAMP_S: tf.io.FixedLenFeature([], tf.float32),
       EMBEDDING: tf.io.FixedLenFeature([], tf.string, default_value=''),
       EMBEDDING_SHAPE: tf.io.FixedLenSequenceFeature(
           [], tf.int64, allow_missing=True
@@ -106,7 +106,7 @@ def model_outputs_to_tf_example(
     model_outputs: interface.InferenceOutputs,
     file_id: str,
     audio: np.ndarray,
-    timestamp_offset: int,
+    timestamp_offset_s: float,
     write_embeddings: bool,
     write_logits: bool,
     write_separated_audio: bool,
@@ -115,7 +115,7 @@ def model_outputs_to_tf_example(
   """Create a TFExample from InferenceOutputs."""
   feature = {
       FILE_NAME: bytes_feature(bytes(file_id, encoding='utf8')),
-      TIMESTAMP: int_feature(timestamp_offset),
+      TIMESTAMP_S: float_feature(timestamp_offset_s),
   }
   if write_embeddings and model_outputs.embeddings is not None:
     feature[EMBEDDING] = bytes_feature(
@@ -154,3 +154,11 @@ def int_feature(x, default=-1):
   if hasattr(x, 'count'):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=x))
   return tf.train.Feature(int64_list=tf.train.Int64List(value=[x]))
+
+
+def float_feature(x, default=0.0):
+  if x is None:
+    x = default
+  if hasattr(x, 'count'):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=x))
+  return tf.train.Feature(float_list=tf.train.FloatList(value=[x]))

@@ -63,7 +63,7 @@ class BootstrapState:
 
   def create_source_map(self):
     """Map filenames to full filepaths."""
-    source_infos = embed_lib.create_source_infos(self.config.audio_globs, 1)
+    source_infos = embed_lib.create_source_infos(self.config.audio_globs, 1, -1)
 
     self.source_map = {}
     for s in source_infos:

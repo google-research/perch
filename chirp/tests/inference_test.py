@@ -69,6 +69,7 @@ class InferenceTest(parameterized.TestCase):
         write_raw_audio=write_raw_audio,
         model_key='placeholder_model',
         model_config=model_kwargs,
+        file_id_depth=0,
     )
     embed_fn.setup()
     self.assertIsNotNone(embed_fn.embedding_model)
@@ -77,7 +78,7 @@ class InferenceTest(parameterized.TestCase):
         'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
     )
 
-    source_info = embed_lib.SourceInfo(test_wav_path, 0, 1)
+    source_info = embed_lib.SourceInfo(test_wav_path.as_posix(), 0, 10)
     example = embed_fn.process(source_info, crop_s=10.0)[0]
     serialized = example.SerializeToString()
 
@@ -242,7 +243,7 @@ class InferenceTest(parameterized.TestCase):
     test_wav_path = path_utils.get_absolute_epath(
         'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
     )
-    source_infos = [embed_lib.SourceInfo(test_wav_path.as_posix(), 0, 0)]
+    source_infos = [embed_lib.SourceInfo(test_wav_path.as_posix(), 0, 10)]
     base_pipeline = test_pipeline.TestPipeline()
     tempdir = tempfile.gettempdir()
     output_dir = os.path.join(tempdir, 'testBeamStuff_output')
