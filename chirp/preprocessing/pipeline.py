@@ -28,25 +28,42 @@ from jax import numpy as jnp
 import pandas as pd
 import tensorflow as tf
 import tensorflow_datasets as tfds
+import tensorflow_io as tfio
 
 
 Features = dict[str, tf.Tensor]
 
 
 class FeaturesPreprocessOp:
+  """Preprocessing op which applies changes to specific features."""
 
   def __call__(
       self, features: Features, dataset_info: tfds.core.DatasetInfo
   ) -> Features:
     return features.copy()
 
+  def get_sample_rate(self, dataset_info):
+    # Use the explicit sample_rate param if available.
+    if hasattr(self, 'sample_rate') and self.sample_rate is not None:
+      return self.sample_rate
+    # Otherwise, the sample_rate described by the dataset_info.
+    return dataset_info.features['audio'].sample_rate
+
 
 class DatasetPreprocessOp:
+  """Preprocessing op which transforms the dataset."""
 
   def __call__(
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
   ) -> tf.data.Dataset:
     return dataset
+
+  def get_sample_rate(self, dataset_info):
+    # Use the explicit sample_rate param if available.
+    if hasattr(self, 'sample_rate') and self.sample_rate is not None:
+      return self.sample_rate
+    # Otherwise, the sample_rate described by the dataset_info.
+    return dataset_info.features['audio'].sample_rate
 
 
 @dataclasses.dataclass
@@ -117,17 +134,19 @@ class Pad(FeaturesPreprocessOp):
     add_mask: Whether to add a new mask feature indicating where the padding
       appears in the named features.
     names: The name of the features to pad.
+    sample_rate: Optional sample rate. Reads from dataset_info if not provided.
   """
 
   pad_size: float
   random: bool = True
   add_mask: bool = True
   names: tuple[str, ...] = ('audio',)
+  sample_rate: int | None = None
 
   def __call__(
       self, features: Features, dataset_info: tfds.core.DatasetInfo
   ) -> Features:
-    sample_rate = dataset_info.features[self.names[0]].sample_rate
+    sample_rate = self.get_sample_rate(dataset_info)
     window_size = tf.cast(self.pad_size * sample_rate, tf.int32)
 
     features = features.copy()
@@ -166,16 +185,18 @@ class Slice(FeaturesPreprocessOp):
     window_size: The size of the window to take, in seconds.
     start: The starting point of the window, in seconds.
     names: The name of the features to slice. Each will be sliced the same way.
+    sample_rate: Optional sample rate. Reads from dataset_info if not provided.
   """
 
   window_size: float
   start: float
   names: tuple[str, ...] = ('audio', 'source_audio', 'audio_mask')
+  sample_rate: int | None = None
 
   def __call__(
       self, features: Features, dataset_info: tfds.core.DatasetInfo
   ) -> Features:
-    sample_rate = dataset_info.features[self.names[0]].sample_rate
+    sample_rate = self.get_sample_rate(dataset_info)
     window_size = tf.cast(self.window_size * sample_rate, tf.int64)
     start = tf.cast(self.start * sample_rate, tf.int64)
 
@@ -196,15 +217,17 @@ class RandomSlice(FeaturesPreprocessOp):
   Attributes:
     window_size: The size of the window to take, in seconds.
     names: The name of the features to slice. Each will be sliced the same way.
+    sample_rate: Optional sample rate. Reads from dataset_info if not provided.
   """
 
   window_size: float
   names: tuple[str, ...] = ('audio', 'source_audio', 'audio_mask')
+  sample_rate: int | None = None
 
   def __call__(
       self, features: Features, dataset_info: tfds.core.DatasetInfo
   ) -> Features:
-    sample_rate = dataset_info.features[self.names[0]].sample_rate
+    sample_rate = self.get_sample_rate(dataset_info)
     audio_len = tf.shape(features[self.names[0]])[-1] / sample_rate
     max_start = tf.cast(audio_len - self.window_size, tf.float32)
     start = tf.random.uniform(shape=(), minval=0, maxval=max_start)
@@ -288,6 +311,38 @@ class RandomNormalizeAudio(FeaturesPreprocessOp):
     return NormalizeAudio(
         target_gain=target_gain, names=self.names, eps=self.eps
     )(features, dataset_info)
+
+
+@dataclasses.dataclass
+class ResampleAudio(FeaturesPreprocessOp):
+  """Resample audio features to a target sample rate."""
+
+  target_sample_rate: int
+  feature_name: str = 'audio'
+  sample_rate: int | None = None
+
+  def __call__(
+      self, features: Features, dataset_info: tfds.core.DatasetInfo
+  ) -> Features:
+    source_sample_rate = self.get_sample_rate(dataset_info)
+    features = features.copy()
+    audio = features[self.feature_name]
+    if len(audio.shape) == 2:
+      # Assume [Batch, Samples], expand to [B, S, Channels] to match
+      # tfio assumptions.
+      audio = audio[:, :, tf.newaxis]
+    elif len(audio.shape) != 1:
+      raise ValueError(f'Unexpected audio shape. ({audio.shape})')
+
+    features[self.feature_name] = tfio.audio.resample(
+        audio, rate_in=source_sample_rate, rate_out=self.target_sample_rate
+    )
+
+    if len(features[self.feature_name].shape) == 3:
+      features[self.feature_name] = tf.squeeze(
+          features[self.feature_name], axis=2
+      )
+    return features
 
 
 @dataclasses.dataclass
@@ -1018,16 +1073,18 @@ class ExtractStridedWindows(DatasetPreprocessOp):
       that are past the end of the recording are padded with zeros until the
       window moves fully past the end of the recording. Otherwise, only window
       positions that fully overlap the recording are considered.
+    sample_rate: Optional sample rate. Reads from dataset_info if not provided.
   """
 
   window_length_sec: float
   window_stride_sec: float
   pad_end: bool = True
+  sample_rate: int | None = None
 
   def __call__(
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
   ) -> tf.data.Dataset:
-    sample_rate = dataset_info.features['audio'].sample_rate
+    sample_rate = self.get_sample_rate(dataset_info)
     window_length = int(sample_rate * self.window_length_sec)
     window_stride = int(sample_rate * self.window_stride_sec)
 
@@ -1098,6 +1155,7 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
       label is present. This allows downstream batching, since the features are
       of fixed size. (We also add features for annotation_size and
       intersection_size for downstream debugging and analysis.)
+    sample_rate: Optional sample rate. Reads from dataset_info if not provided.
   """
 
   overlap_threshold_sec: float | None = None
@@ -1106,7 +1164,7 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
   def __call__(
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
   ) -> tf.data.Dataset:
-    sample_rate = dataset_info.features['audio'].sample_rate
+    sample_rate = self.get_sample_rate(dataset_info)
     overlap_threshold = (
         1
         if self.overlap_threshold_sec is None
@@ -1170,6 +1228,9 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
       example['label'] = tf.gather(example['label'], overlap_indices)
       return example
 
+    # TODO(tomdenton): We should refactor this into a FeaturesPreprocessOp.
+    # Refactoring will allow grouping it with other ops and
+    # reduce the total number of dataset.map calls, thus saving parallelism.
     return dataset.map(map_fn)
 
 

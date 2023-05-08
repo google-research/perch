@@ -14,7 +14,10 @@ flax = "^0.6.7"
 jax = "^0.4.1"
 ml-collections = "^0.1.1"
 optax = "^0.1.4"
-tensorflow = "^2.11.0"
+# Note that tensorflow and tensorflow-io versions must be synchronized.
+# See: https://github.com/tensorflow/io#tensorflow-version-compatibility
+tensorflow = "=2.11.0"
+tensorflow-io = "=0.31"
 tensorflow-datasets = {version = "^4.8.0", extras = ["dev"]}
 pandas = "1.5.1"
 etils = {version = "^0.9.0", extras = ["epath"]}
