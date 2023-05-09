@@ -78,8 +78,6 @@ def get_config(
   # already 5-seconds long and do not need any cropping.
   xc_window_size_seconds = 5
   xc_slice_start = 0.5
-  # The audio is normalized to a target gain of 0.2.
-  target_gain = 0.2
 
   # Hyperparameters for the v2 evaluation which uses strided windowing and
   # dense annotation.
@@ -126,7 +124,6 @@ def get_config(
           window_size=xc_window_size_seconds,
           start=xc_slice_start,
       ),
-      _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
       _callable_config(
           'pipeline.OnlyKeep',
           names=[
@@ -147,7 +144,6 @@ def get_config(
   # this dataset, we do not have human segment-level annotations, so we do not
   # follow the same process as with BirdCLEF downstream full-length recordings.)
   full_length_xc_pipeline_ops = [
-      _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
       _callable_config(
           'pipeline.ExtractStridedWindows',
           window_length_sec=config.window_length_sec,
@@ -166,10 +162,10 @@ def get_config(
               'segment_end',
           ],
       ),
-      # NOTE: this pipeline operation should be applied at the very end, as it
-      # turns a sequence of labels into a single space-separated string of
-      # species codes. Previous ops in the pipeline assume that labels are
-      # sequences of integer IDs.
+      # NOTE: this pipeline operation should be applied after window extraction,
+      # dense annotation, and the OnlyKeep operation. This op turns a sequence
+      # of labels into a single space-separated string of species codes;
+      # the previous ops assume that labels are sequences of int IDs.
       _callable_config('pipeline.LabelsToString'),
   ]
 
@@ -177,7 +173,6 @@ def get_config(
   # BirdCLEF soundscapes. Slices are constructed using strided windowing and
   # dense annotation.
   full_length_birdclef_pipeline_ops = [
-      _callable_config('pipeline.NormalizeAudio', target_gain=target_gain),
       _callable_config(
           'pipeline.ExtractStridedWindows',
           window_length_sec=config.window_length_sec,

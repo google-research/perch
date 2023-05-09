@@ -16,8 +16,8 @@
 """Data pipeline functions."""
 
 import dataclasses
-from typing import Iterable
-from typing import Sequence
+from typing import Iterable, Sequence
+
 from absl import logging
 from chirp import audio_utils
 from chirp.models import frontend
