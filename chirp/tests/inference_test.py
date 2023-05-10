@@ -117,6 +117,17 @@ class InferenceTest(parameterized.TestCase):
     else:
       self.assertEqual(got_example[tf_examples.RAW_AUDIO].shape, (0,))
 
+  @parameterized.product(
+      config_name=(
+          'raw_soundscapes',
+          'separate_soundscapes',
+          'birdnet_soundscapes',
+      ),
+  )
+  def test_load_configs(self, config_name):
+    config = embed_lib.get_config(config_name)
+    self.assertIsNotNone(config)
+
   def test_handcrafted_features(self):
     sample_rate = 32000
     frame_rate = 100

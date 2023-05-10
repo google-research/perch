@@ -26,6 +26,9 @@ from chirp import path_utils
 from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
+from chirp.inference.configs import birdnet_soundscapes
+from chirp.inference.configs import raw_soundscapes
+from chirp.inference.configs import separate_soundscapes
 from etils import epath
 from ml_collections import config_dict
 import numpy as np
@@ -46,6 +49,7 @@ def create_source_infos(
     source_file_patterns: str, num_shards_per_file: int, shard_len_s: float
 ) -> Sequence[SourceInfo]:
   """Expand source file patterns into a list of SourceInfos."""
+  # TODO(tomdenton): probe each file and create work units in a new Beam stage.
   source_files = []
   for pattern in source_file_patterns:
     for source_file in epath.Path('').glob(pattern):
@@ -212,6 +216,20 @@ class EmbedFn(beam.DoFn):
     )
     beam.metrics.Metrics.counter('beaminference', 'examples_processed').inc()
     return [example]
+
+
+def get_config(config_key: str):
+  """Get a config given its keyed name."""
+  # TODO(tomdenton): Find a way to feed new configs without code changes.
+  if config_key == 'birdnet_soundscapes':
+    config = birdnet_soundscapes.get_config()
+  elif config_key == 'raw_soundscapes':
+    config = raw_soundscapes.get_config()
+  elif config_key == 'separate_soundscapes':
+    config = separate_soundscapes.get_config()
+  else:
+    raise ValueError('Unknown config.')
+  return config
 
 
 def build_run_pipeline(base_pipeline, output_dir, source_infos, embed_fn):

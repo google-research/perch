@@ -175,7 +175,9 @@ class EmbeddingModel:
     frame_length = int(window_size_s * self.sample_rate)
     hop_length = int(hop_size_s * self.sample_rate)
     # Librosa frames as [frame_length, batch], so need a transpose.
-    framed_audio = librosa.util.frame(audio_array, frame_length, hop_length).T
+    framed_audio = librosa.util.frame(
+        audio_array, frame_length=frame_length, hop_length=hop_length
+    ).T
     return framed_audio
 
   def normalize_audio(

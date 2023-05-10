@@ -216,8 +216,20 @@ class TaxonomyModelTF(interface.EmbeddingModel):
 
   def __post_init__(self):
     logging.info('Loading taxonomy model...')
-    self.model = tf.saved_model.load(epath.Path(self.model_path) / 'savedmodel')
-    label_csv_path = epath.Path(self.model_path) / 'label.csv'
+
+    base_path = epath.Path(self.model_path)
+    if (base_path / 'saved_model.pb').exists() and (
+        base_path / 'assets'
+    ).exists():
+      # This looks like a TFHub downloaded model.
+      model_path = base_path
+      label_csv_path = epath.Path(self.model_path) / 'assets' / 'label.csv'
+    else:
+      # Probably a savedmodel distributed directly.
+      model_path = base_path / 'savedmodel'
+      label_csv_path = base_path / 'label.csv'
+
+    self.model = tf.saved_model.load(model_path.as_posix())
     with label_csv_path.open('r') as f:
       self.class_list = namespace.ClassList.from_csv('label', f)
 

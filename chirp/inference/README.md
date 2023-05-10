@@ -41,3 +41,35 @@ glob matching pattern for the target wav files.
 The embedding script also includes a `dry_run` option which processes a single
 file at random using the chosen configuration. This is useful for ensuring that
 the model and data is configured properly before launching a large job.
+
+Step-by-step:
+
+* Run the main repository's installation instructions.
+
+* Download and extract the Perch model from TFHub:
+  https://tfhub.dev/google/bird-vocalization-classifier/2
+
+* Adjust the inference raw_soundscapes config file:
+
+    * Fill in `config.source_file_patterns` with the path to some audio
+      files. eg: `config.source_file_patterns = ['/my/drive/*.wav']`
+
+    * Fill in the `model_checkpoint_path` with the path of the model
+      downloaded from TFHub.
+
+    * Fill in `config.output_dir` with the path where you would like to
+      write the outputs. eg, `config.output_dir = '/my/drive/embeddings'`
+
+    * Adjust `config.shard_length_s` and `config.num_shards_per_file` according
+      to your target data. We produce work-units for each audio file by breaking
+      each file into parts according to these config values: Setting
+      `shard_length_s` to 60 means each work unit will handle 60 seconds of
+      audio from a given file. Setting `num_shards_per_file` to 15 will then
+      produce a work-unit for each of the first 15 minutes of the audio.
+      If the audio is less than 15 minutes, these extra work units will just do
+      nothing. If the audio is more than 15 minutes long, the extra audio
+      will not be used.
+
+* From the terminal, change directory to the main chirp repository, and use
+  poetry to run the embed.py script:
+  ```poetry run python chirp/inference/embed.py --```
