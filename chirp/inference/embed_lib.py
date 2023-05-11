@@ -28,6 +28,7 @@ from chirp.inference import models
 from chirp.inference import tf_examples
 from chirp.inference.configs import birdnet_soundscapes
 from chirp.inference.configs import raw_soundscapes
+from chirp.inference.configs import reef
 from chirp.inference.configs import separate_soundscapes
 from etils import epath
 from ml_collections import config_dict
@@ -227,6 +228,8 @@ def get_config(config_key: str):
     config = raw_soundscapes.get_config()
   elif config_key == 'separate_soundscapes':
     config = separate_soundscapes.get_config()
+  elif config_key == 'reef':
+    config = reef.get_config()
   else:
     raise ValueError('Unknown config.')
   return config

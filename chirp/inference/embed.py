@@ -65,15 +65,7 @@ def dry_run(config, source_infos):
 
 def main(unused_argv: Sequence[str]) -> None:
   logging.info('Loading config')
-  # TODO(tomdenton): Find a better config system that works for Beam workers.
-  if _CONFIG_KEY.value == 'birdnet_soundscapes':
-    config = birdnet_soundscapes.get_config()
-  elif _CONFIG_KEY.value == 'raw_soundscapes':
-    config = raw_soundscapes.get_config()
-  elif _CONFIG_KEY.value == 'separate_soundscapes':
-    config = separate_soundscapes.get_config()
-  else:
-    raise ValueError('Unknown config.')
+  config = embed_lib.get_config(_CONFIG_KEY.value)
   config = config_utils.parse_config(config, config_globals.get_globals())
 
   logging.info('Locating source files...')
@@ -92,9 +84,10 @@ def main(unused_argv: Sequence[str]) -> None:
     dry_run(config, source_infos)
     return
 
-  options = PipelineOptions(runner='DirectRunner',
-                            direct_num_workers=config.num_direct_workers,
-                            direct_running_mode='in_memory')
+  options = beam.options.pipeline_options.PipelineOptions(
+      runner='DirectRunner',
+      direct_num_workers=config.num_direct_workers,
+      direct_running_mode='in_memory')
   pipeline = beam.Pipeline(options=options)
   embed_fn = embed_lib.EmbedFn(**config.embed_fn_config)
   embed_lib.build_run_pipeline(
