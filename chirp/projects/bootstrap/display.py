@@ -39,7 +39,7 @@ def get_melspec_layer(sample_rate: int, root=8.0):
   # Usage: melspec_layer.apply({}, audio)
   stride = sample_rate // 100
   melspec_layer = frontend.MelSpectrogram(  # pytype: disable=wrong-arg-types  # typed-pandas
-      160,
+      96,
       stride,
       2 * stride,
       sample_rate,
@@ -120,8 +120,7 @@ def multi_load_audio_window(
   ) as executor:
     futures = []
     for fp, offset in zip(filepaths, offsets):
-      offset_s = offset / sample_rate
-      future = executor.submit(loader, offset_s=offset_s, filepath=fp)
+      future = executor.submit(loader, offset_s=offset, filepath=fp)
       futures.append(future)
     for f in futures:
       yield f.result()

@@ -89,7 +89,7 @@ class DistanceStats:
 def search_embeddings_parallel(
     embeddings_dataset: tf.data.Dataset,
     query_embedding_batch: np.ndarray,
-    hop_size: int,
+    hop_size_s: int,
     top_k: int = 10,
     target_dist: float = 0.0,
     query_reduce_fn: Callable = tf.reduce_min,  # pylint: disable=g-bare-generic
@@ -101,7 +101,7 @@ def search_embeddings_parallel(
   Args:
     embeddings_dataset: tf.data.Dataset over embeddings
     query_embedding_batch: Batch of query embeddings with shape [Batch, Depth].
-    hop_size: Embedding hop size in samples.
+    hop_size_s: Embedding hop size in seconds.
     top_k: Number of results desired.
     target_dist: Get results closest to the target_dist. Set to 0.0 for standard
       nearest-neighbor search.
@@ -139,7 +139,7 @@ def search_embeddings_parallel(
   for ex in tqdm.tqdm(embeddings_dataset.as_numpy_iterator()):
     for t in range(ex['embedding'].shape[0]):
       dist = np.abs(ex['q_distance'][0, t] - target_dist)
-      offset = t * hop_size + ex['timestamp_offset']
+      offset = t * hop_size_s + ex['timestamp_s']
       result = SearchResult(
           ex['embedding'][t, :, :], dist, ex['filename'].decode(), offset
       )
