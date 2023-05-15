@@ -762,8 +762,9 @@ def compute_metrics(
       descending order by default.
 
   Returns:
-    Produces metrics (roc-auc & average precision) computed for each species in
-    the given eval set and writes these to a csv for each eval set.
+    Produces metrics (average_precision, roc_auc, num_pos_match, num_neg_match)
+    computed for each species in the given eval set and writes these to a csv
+    for each eval set.
   """
 
   species_metric_eval_set = list()
@@ -786,9 +787,18 @@ def compute_metrics(
         label_mask=label_mask,
         sort_descending=sort_descending,
     )
-    species_metric_eval_set.append(
-        (eval_species, average_precision, roc_auc, eval_set_name)
-    )
+
+    num_pos_match = sum(species_label_match == 1)
+    num_neg_match = sum(species_label_match == 0)
+
+    species_metric_eval_set.append((
+        eval_species,
+        average_precision,
+        roc_auc,
+        num_pos_match,
+        num_neg_match,
+        eval_set_name,
+    ))
 
   return species_metric_eval_set
 

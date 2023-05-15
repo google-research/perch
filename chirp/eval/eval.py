@@ -31,6 +31,8 @@ _EVAL_RESULTS_HEADER = (
     'eval_species',
     'average_precision',
     'roc_auc',
+    'num_pos_match',
+    'num_neg_match',
     'eval_set_name',
 )
 flags.mark_flags_as_required(['config'])
