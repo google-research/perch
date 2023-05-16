@@ -25,10 +25,6 @@ import apache_beam as beam
 from chirp import config_utils
 from chirp.configs import config_globals
 from chirp.inference import embed_lib
-from chirp.inference.configs import birdnet_soundscapes
-from chirp.inference.configs import raw_soundscapes
-from chirp.inference.configs import reef
-from chirp.inference.configs import separate_soundscapes
 from etils import epath
 import numpy as np
 

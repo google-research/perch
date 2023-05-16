@@ -49,5 +49,6 @@ def get_config() -> config_dict.ConfigDict:
           'hop_size_s': 5.0,
           'sample_rate': 32000,
       },
+      'speech_filter_threshold': 0.95,
   }
   return config

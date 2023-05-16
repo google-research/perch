@@ -32,7 +32,7 @@ def get_config() -> config_dict.ConfigDict:
   sep_model_checkpoint_path = ''
   emb_model_checkpoint_path = ''
 
-  config.num_shards_per_file = 1
+  config.num_shards_per_file = 15
   config.shard_len_s = 60
   # Number of workers when using the Beam DirectRunner on a single machine.
   config.num_direct_workers = 8
@@ -47,7 +47,7 @@ def get_config() -> config_dict.ConfigDict:
           'taxonomy_model_tf_config': {
               'model_path': emb_model_checkpoint_path,
               'window_size_s': 5.0,
-              'hop_size_s': 2.5,
+              'hop_size_s': 5.0,
               'sample_rate': 32000,
           },
           'separator_model_tf_config': {
@@ -56,5 +56,6 @@ def get_config() -> config_dict.ConfigDict:
               'frame_size': 32000,
           },
       },
+      'speech_filter_threshold': 0.95,
   }
   return config

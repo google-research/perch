@@ -478,12 +478,13 @@ class TFHubModel(interface.EmbeddingModel):
 
   model_url: str
   embedding_index: int
+  logits_index: int = -1
 
   @classmethod
   def yamnet(cls):
     # Parent class takes a sample_rate arg which pylint doesn't find.
     # pylint: disable=too-many-function-args
-    return TFHubModel(16000, 'https://tfhub.dev/google/yamnet/1', 1)
+    return TFHubModel(16000, 'https://tfhub.dev/google/yamnet/1', 1, 0)
 
   @classmethod
   def vggish(cls):
@@ -505,8 +506,13 @@ class TFHubModel(interface.EmbeddingModel):
       embeddings = embeddings[np.newaxis, :]
     elif len(embeddings.shape) != 2:
       raise ValueError('Embeddings should have shape [Depth] or [Time, Depth].')
+
+    if self.logits_index >= 0:
+      logits = {'label': outputs[self.logits_index]}
+    else:
+      logits = None
     embeddings = embeddings[:, np.newaxis, :]
-    return interface.InferenceOutputs(embeddings, None, None, False)
+    return interface.InferenceOutputs(embeddings, logits, None, False)
 
 
 @dataclasses.dataclass

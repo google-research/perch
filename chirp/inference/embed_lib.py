@@ -16,7 +16,7 @@
 """Create embeddings for an audio corpus."""
 
 import dataclasses
-from typing import Any, Sequence
+from typing import Any, Sequence, Tuple
 
 from absl import logging
 import apache_beam as beam
@@ -31,6 +31,7 @@ from chirp.inference.configs import raw_soundscapes
 from chirp.inference.configs import reef
 from chirp.inference.configs import separate_soundscapes
 from etils import epath
+import librosa
 from ml_collections import config_dict
 import numpy as np
 import soundfile
@@ -82,6 +83,8 @@ class EmbedFn(beam.DoFn):
       file_id_depth: int = 0,
       min_audio_s: float = 5.0,
       embedding_model: interface.EmbeddingModel | None = None,
+      speech_filter_threshold: float = -1.0,
+      speech_filter_width: int = 5,
   ):
     """Initialize the embedding DoFn.
 
@@ -100,6 +103,11 @@ class EmbedFn(beam.DoFn):
         then the file_id will be `file/is/awesome.wav`.
       min_audio_s: Minimum allowed audio length, in seconds.
       embedding_model: Pre-loaded embedding model.
+      speech_filter_threshold: Filter threshold for yamnet voice activation. Any
+        work unit which contians audio exceeding this threshold will be
+        discarded.
+      speech_filter_width: Number of timesteps to average when computing the
+        speech score.
     """
     self.model_key = model_key
     self.model_config = model_config
@@ -111,6 +119,8 @@ class EmbedFn(beam.DoFn):
     self.embedding_model = embedding_model
     self.file_id_depth = file_id_depth
     self.min_audio_s = min_audio_s
+    self.speech_filter_threshold = speech_filter_threshold
+    self.speech_filter_width = speech_filter_width
 
   def setup(self):
     if self.embedding_model is None:
@@ -121,6 +131,8 @@ class EmbedFn(beam.DoFn):
       del self.model_key
     if hasattr(self, 'model_config'):
       del self.model_config
+    if self.speech_filter_threshold > 0.0:
+      self.yamnet = models.TFHubModel.yamnet()
 
   def load_audio(
       self, filepath: str, offset_s: float, window_size_s: float
@@ -142,11 +154,35 @@ class EmbedFn(beam.DoFn):
     logging.warning('Audio loaded successfully.')
     return audio
 
-  def _log_exception(self, filepath, exception, counter_name):
-    beam.metrics.Metrics.counter('beaminference', 'audio_read_failed').inc()
+  def get_speech_score(self, audio: np.ndarray) -> float:
+    """Check whether the audio contains human speech."""
+    if self.speech_filter_threshold <= 0.0:
+      return -1.0
+    # resample audio to yamnet 16kHz target.
+    audio = librosa.resample(
+        audio,
+        self.embedding_model.sample_rate,
+        self.yamnet.sample_rate,
+        res_type='polyphase',
+    )
+    speech_logits = self.yamnet.embed(audio).logits['label'][..., 0]
+
+    # Apply a low-pass filter over the yamnet speech logits.
+    # This ensures that transient false positives don't ruin our day.
+    width = self.speech_filter_width
+    speech_logits = (
+        np.convolve(speech_logits, np.ones([width]), 'valid') / width
+    )
+    return speech_logits.max()
+
+  def _log_exception(self, source_info, exception, counter_name):
+    beam.metrics.Metrics.counter('beaminference', counter_name).inc()
     logging.warning(
-        'The audio at %s could not be loaded. The exception was (%s)',
-        filepath,
+        'The audio at (%s / %d) could not be loaded (%s). '
+        'The exception was (%s)',
+        source_info.filepath,
+        source_info.shard_num,
+        counter_name,
         exception,
     )
 
@@ -183,22 +219,24 @@ class EmbedFn(beam.DoFn):
           source_info.filepath, timestamp_offset_s, window_size_s
       )
     except soundfile.LibsndfileError as inst:
-      self._log_exception(source_info.filepath, inst, 'audio_libsndfile_error')
+      self._log_exception(source_info, inst, 'audio_libsndfile_error')
       return
     except ValueError as inst:
-      self._log_exception(source_info.filepath, inst, 'audio_bad_offset')
+      self._log_exception(source_info, inst, 'audio_bad_offset')
       return
     except audioread.NoBackendError as inst:
-      self._log_exception(source_info.filepath, inst, 'audio_no_backend')
+      self._log_exception(source_info, inst, 'audio_no_backend')
       return
 
     if audio is None:
-      self._log_exception(source_info.filepath, 'no_exception', 'audio_empty')
+      self._log_exception(source_info, 'no_exception', 'audio_empty')
       return
     if audio.shape[0] < self.min_audio_s * self.embedding_model.sample_rate:
-      self._log_exception(
-          source_info.filepath, 'no_exception', 'audio_too_short'
-      )
+      self._log_exception(source_info, 'no_exception', 'audio_too_short')
+      return
+    speech_score = self.get_speech_score(audio)
+    if 0 < self.speech_filter_threshold < speech_score:
+      self._log_exception(source_info, 'no_exception', 'contains_speech')
       return
 
     logging.info(
@@ -232,6 +270,8 @@ def get_config(config_key: str):
     config = reef.get_config()
   else:
     raise ValueError('Unknown config.')
+  logging.info('Loaded config %s', config_key)
+  logging.info('Config output location : %s', config.output_dir)
   return config
 
 
