@@ -113,6 +113,26 @@ def get_config(
           'to_crop': False,
           'tfds_name': 'soundscapes/coffee_farms_full_length',
       },
+      {
+          'dataset_name': 'soundscapes_hawaii',
+          'to_crop': False,
+          'tfds_name': 'soundscapes/hawaii_full_length',
+      },
+      {
+          'dataset_name': 'soundscapes_high_sierras',
+          'to_crop': False,
+          'tfds_name': 'soundscapes/high_sierras_full_length',
+      },
+      {
+          'dataset_name': 'soundscapes_sierra_nevada',
+          'to_crop': False,
+          'tfds_name': 'soundscapes/sierras_kahl_full_length',
+      },
+      {
+          'dataset_name': 'soundscapes_peru',
+          'to_crop': False,
+          'tfds_name': 'soundscapes/peru_full_length',
+      },
   )
 
   # Construct Pipelines to process slice-peaked and full-length datasets.
@@ -228,21 +248,39 @@ def get_config(
   # Build all eval set specifications.
   config.eval_set_specifications = {}
   for corpus_type, location in itertools.product(
-      ('xc_fg', 'xc_bg', 'soundscapes'), ('ssw', 'coffee_farms', 'hawaii')
+      ('xc_fg', 'xc_bg', 'soundscapes'),
+      (
+          'ssw',
+          'coffee_farms',
+          'hawaii',
+          'high_sierras',
+          'sierra_nevada',
+          'peru',
+      ),
   ):
-    # SSW species are "artificially rare" (a limited number of examples were
-    # included during upstream training). If provided, we use the singular
-    # learned vector representation from upstream training during search.
-    # Otherwise, we use all available upstream recordings.
-    if location == 'ssw':
-      config.eval_set_specifications[f'artificially_rare_{corpus_type}'] = (
-          _callable_config(
-              'eval_lib.EvalSetSpecification.v2_specification',
-              location=location,
-              corpus_type=corpus_type,
-              num_representatives_per_class=-1,
-          )
-      )
+    if location in ('ssw', 'high_sierras', 'sierra_nevada', 'peru'):
+      # SSW species are "artificially rare" (a limited number of examples were
+      # included during upstream training). If provided, we use the singular
+      # learned vector representation from upstream training during search.
+      # Otherwise, we use all available upstream recordings.
+      if location == 'ssw':
+        config.eval_set_specifications[f'artificially_rare_{corpus_type}'] = (
+            _callable_config(
+                'eval_lib.EvalSetSpecification.v2_specification',
+                location=location,
+                corpus_type=corpus_type,
+                num_representatives_per_class=-1,
+            )
+        )
+      else:
+        config.eval_set_specifications[f'{location}_{corpus_type}'] = (
+            _callable_config(
+                'eval_lib.EvalSetSpecification.v2_specification',
+                location=location,
+                corpus_type=corpus_type,
+                num_representatives_per_class=-1,
+            )
+        )
     # For downstream species, we sweep over {1, 2, 4, 8, 16} representatives
     # per class, and in each case we resample the collection of class
     # representatives 5 times to get confidence intervals on the metrics.

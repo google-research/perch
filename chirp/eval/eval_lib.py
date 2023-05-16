@@ -207,6 +207,13 @@ class EvalSetSpecification:
             for c in namespace_db.load_db().class_lists['hawaii'].classes
             if c in downstream_class_names
         ],
+        'high_sierras': (
+            namespace_db.load_db().class_lists['high_sierras'].classes
+        ),
+        'sierra_nevada': (
+            namespace_db.load_db().class_lists['sierras_kahl'].classes
+        ),
+        'peru': namespace_db.load_db().class_lists['peru'].classes,
     }[location]
 
     # The name of the dataset to draw embeddings from to form the corpus.
@@ -220,6 +227,11 @@ class EvalSetSpecification:
         'ssw': 'xc_artificially_rare_class_reps_v2',
         'coffee_farms': 'xc_downstream_class_reps',
         'hawaii': 'xc_downstream_class_reps',
+        # TODO(vdumoulin): Create dataset variant for class reps of High
+        # Sierras, Sierra Nevada, and Peru.
+        'high_sierras': 'xc_downstream_class_reps',
+        'sierra_nevada': 'xc_downstream_class_reps',
+        'peru': 'xc_downstream_class_reps',
     }[location]
 
     class_name_regexp = '|'.join(class_names)
