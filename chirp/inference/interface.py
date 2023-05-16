@@ -174,6 +174,8 @@ class EmbeddingModel:
       return audio_array[np.newaxis, :]
     frame_length = int(window_size_s * self.sample_rate)
     hop_length = int(hop_size_s * self.sample_rate)
+    if audio_array.shape[0] < frame_length:
+      audio_array = librosa.util.pad_center(audio_array, frame_length)
     # Librosa frames as [frame_length, batch], so need a transpose.
     framed_audio = librosa.util.frame(
         audio_array, frame_length=frame_length, hop_length=hop_length

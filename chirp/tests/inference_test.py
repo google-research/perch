@@ -117,6 +117,45 @@ class InferenceTest(parameterized.TestCase):
     else:
       self.assertEqual(got_example[tf_examples.RAW_AUDIO].shape, (0,))
 
+  def test_embed_short_audio(self):
+    """Test that EmbedFn handles audio shorter than the model window_size_s."""
+    model_kwargs = {
+        'sample_rate': 16000,
+        'embedding_size': 128,
+        'make_embeddings': True,
+        'make_logits': False,
+        'make_separated_audio': False,
+        'window_size_s': 5.0,
+    }
+    embed_fn = embed_lib.EmbedFn(
+        write_embeddings=True,
+        write_logits=False,
+        write_separated_audio=False,
+        write_raw_audio=False,
+        model_key='placeholder_model',
+        model_config=model_kwargs,
+        min_audio_s=1.0,
+        file_id_depth=0,
+    )
+    embed_fn.setup()
+    self.assertIsNotNone(embed_fn.embedding_model)
+
+    test_wav_path = path_utils.get_absolute_epath(
+        'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+    )
+    source_info = embed_lib.SourceInfo(test_wav_path.as_posix(), 0, 10)
+    # Crop to 3.0s to ensure we can handle short audio examples.
+    example = embed_fn.process(source_info, crop_s=3.0)[0]
+    serialized = example.SerializeToString()
+
+    parser = tf_examples.get_example_parser(logit_names=['label'])
+    got_example = parser(serialized)
+    self.assertIsNotNone(got_example)
+    embedding = got_example[tf_examples.EMBEDDING]
+    self.assertSequenceEqual(
+        embedding.shape, got_example[tf_examples.EMBEDDING_SHAPE]
+    )
+
   @parameterized.product(
       config_name=(
           'raw_soundscapes',
