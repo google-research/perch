@@ -16,7 +16,7 @@
 """Model callbacks library."""
 
 import dataclasses
-from typing import Sequence
+from typing import cast, Sequence
 
 from absl import logging
 from chirp.eval import eval_lib
@@ -27,13 +27,58 @@ from chirp.taxonomy import namespace_db
 from chirp.train import classifier
 from chirp.train import hubert
 from chirp.train import separator
+from clu import checkpoint
 from etils import epath
 import jax
+from jax import numpy as jnp
 import ml_collections
 import numpy as np
 import tensorflow as tf
 
 ConfigDict = ml_collections.ConfigDict
+
+
+def pmap_with_remainder(
+    model_callable: eval_lib.EvalModelCallable,
+) -> eval_lib.EvalModelCallable:
+  """Run a model callback in a multi-device setting.
+
+  Since the model can be called with a variable batch size, this has to be
+  handled in a multi-device environment. We do this by splitting the batch
+  across the devices and hosts using `pmap`. If there is a remainder to the
+  batch, then we process this in a separate call which is done on each host.
+
+  Args:
+    model_callable: A model callable (must be a JAX function).
+
+  Returns:
+    A model callable with the same signature but which uses data parallelism.
+  """
+  model_callable_pmap = jax.pmap(model_callable)
+  model_callable_jit = jax.jit(model_callable)
+
+  def parallel_model_callable(inputs: np.ndarray) -> np.ndarray:
+    # Split the batch across devices
+    n, m = jax.local_device_count(), inputs.shape[0]
+
+    if m < n:
+      return model_callable_jit(inputs)
+
+    batch = jnp.reshape(inputs[: n * (m // n)], (n, m // n) + inputs.shape[1:])
+    outputs = model_callable_pmap(batch)
+    outputs = jnp.reshape(outputs, (n * (m // n),) + outputs.shape[2:])
+
+    # Check if there is a remainder to the batch
+    r = m - n * (m // n)
+    if r == 0:
+      return outputs
+    else:
+      # If not, run the remainder of the batch on each host
+      batch = inputs[n * (m // n) :]
+      remainder = model_callable_jit(batch)
+      return jnp.concatenate([outputs, remainder])
+
+  return parallel_model_callable
 
 
 @dataclasses.dataclass
@@ -76,14 +121,16 @@ class TaxonomyModelCallback:
     model_bundle, train_state = classifier.initialize_model(
         workdir=self.workdir, **self.init_config
     )
-    train_state = model_bundle.ckpt.restore(train_state)
+    # All hosts should load the same checkpoint
+    multihost_ckpt = cast(checkpoint.MultihostCheckpoint, model_bundle.ckpt)
+    ckpt = checkpoint.Checkpoint(multihost_ckpt.multihost_base_directory + '-0')
+    train_state = ckpt.restore(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
 
-    @jax.jit
     def fprop(inputs):
       return model_bundle.model.apply(variables, inputs, train=False).embedding
 
-    self.model_callback = fprop
+    self.model_callback = pmap_with_remainder(fprop)
 
     if self.use_learned_representations:
       class_list = (

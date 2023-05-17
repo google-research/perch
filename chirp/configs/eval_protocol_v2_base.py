@@ -70,7 +70,7 @@ def get_config(
   # to the right number of when forming eval sets.
   config.rng_seed = 1234
   config.write_results_dir = '/tmp/'
-  config.batch_size = 16
+  config.batch_size = 1024
 
   # Xeno-Canto's slice_peaked variants contain 6-second audio segments that are
   # randomly cropped to 5-second segments during training. At evaluation, we
