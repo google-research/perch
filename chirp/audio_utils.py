@@ -21,6 +21,7 @@ import os
 import tempfile
 import warnings
 
+from chirp import path_utils
 from chirp import signal
 from etils import epath
 from jax import lax
