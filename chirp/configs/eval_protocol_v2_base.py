@@ -216,7 +216,9 @@ def get_config(
     else:
       ops = full_length_birdclef_pipeline_ops + data_ops
 
-    dataset_config.pipeline = _callable_config('pipeline.Pipeline', ops=ops)
+    dataset_config.pipeline = _callable_config(
+        'pipeline.Pipeline', ops=ops, deterministic=True
+    )
     dataset_config.split = 'train'
     dataset_configs[dataset_description['dataset_name']] = dataset_config
 
