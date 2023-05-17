@@ -71,12 +71,12 @@ def get_config() -> config_dict.ConfigDict:
       {
           'dataset_name': 'xc_artificially_rare',
           'to_crop': True,
-          'tfds_name': 'bird_taxonomy/upstream_ar_only_slice_peaked',
+          'tfds_name': 'bird_taxonomy/upstream_ar_only_slice_peaked:1.*.*',
       },
       {
           'dataset_name': 'xc_downstream',
           'to_crop': True,
-          'tfds_name': 'bird_taxonomy/downstream_slice_peaked',
+          'tfds_name': 'bird_taxonomy/downstream_slice_peaked:1.*.*',
       },
       {
           'dataset_name': 'birdclef_ssw',

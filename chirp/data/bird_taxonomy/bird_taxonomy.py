@@ -77,7 +77,7 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('1.4.0')
+  VERSION = tfds.core.Version('2.0.0')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
       '1.1.0': (
@@ -116,6 +116,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       ),
       '1.4.0': 'Added a seabird_sliced_peaked dataset.',
       '1.5.0': 'Updated ebird2021 taxonomy.',
+      '2.0.0': (
+          "Updated the upstream split to align with Coffee Farms and Hawai'i."
+      ),
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg

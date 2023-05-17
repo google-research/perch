@@ -30,13 +30,14 @@ from chirp.taxonomy import namespace_db
 DOWNSTREAM_SPECIES_PATH = "data/bird_taxonomy/metadata/downstream_species.txt"
 SSW_STATS_PATH = "data/bird_taxonomy/metadata/ssw_stats.json"
 
+DOWNSTREAM_CLASS_LIST = "downstream_species_v2"
+AR_CLASS_LIST = "artificially_rare_species_v2"
+AR_SAMPLING_PRNG_SEED = 2023 + 5 + 11
+
 
 def get_upstream_metadata_query() -> fsu.QuerySequence:
-  _, _, _, unfeasible_ar_species = get_artificially_rare_species_constraints(
-      5, 5
-  )
   db = namespace_db.load_db()
-  downstream_species = list(db.class_lists["downstream_species"].classes)
+  downstream_species = list(db.class_lists[DOWNSTREAM_CLASS_LIST].classes)
   return fsu.QuerySequence(
       [
           fsu.Query(
@@ -45,7 +46,7 @@ def get_upstream_metadata_query() -> fsu.QuerySequence:
                   "mask_op": fsu.MaskOp.NOT_IN,
                   "op_kwargs": {
                       "key": "species_code",
-                      "values": downstream_species + unfeasible_ar_species,
+                      "values": downstream_species,
                   },
               },
           )
@@ -127,13 +128,11 @@ def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
   Returns:
     The QuerySequence to apply
   """
-  with open(path_utils.get_absolute_epath(SSW_STATS_PATH), "rb") as f:
-    ssw_stats = json.load(f)
-  (target_fg, target_bg, feasible_ar_species, unfeasible_ar_species) = (
-      get_artificially_rare_species_constraints(5, 5)
-  )
   db = namespace_db.load_db()
-  downstream_species = list(db.class_lists["downstream_species"].classes)
+  downstream_species = list(db.class_lists[DOWNSTREAM_CLASS_LIST].classes)
+  # NOTE: Artificially rare species are the subset of SSW species which do not
+  # intersect with the downstream species.
+  ar_species = list(db.class_lists[AR_CLASS_LIST].classes)
 
   queries = [
       # Filter all samples from downstream species
@@ -143,27 +142,15 @@ def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
               "mask_op": fsu.MaskOp.NOT_IN,
               "op_kwargs": {
                   "key": "species_code",
-                  "values": downstream_species + unfeasible_ar_species,
+                  "values": downstream_species,
               },
           },
       ),
       # Sample recordings from artificially rare (AR) species.
       fsu.QuerySequence(
-          mask_query=fsu.QueryParallel(
-              [
-                  fsu.Query(
-                      fsu.MaskOp.CONTAINS_ANY,
-                      {
-                          "key": "bg_species_codes",
-                          "values": feasible_ar_species,
-                      },
-                  ),
-                  fsu.Query(
-                      fsu.MaskOp.IN,
-                      {"key": "species_code", "values": feasible_ar_species},
-                  ),
-              ],
-              fsu.MergeStrategy.OR,
+          mask_query=fsu.Query(
+              fsu.MaskOp.IN,
+              {"key": "species_code", "values": ar_species},
           ),
           queries=[
               # Recall that recordings that contain downstream_species in
@@ -188,11 +175,10 @@ def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
                   },
               ),
               fsu.Query(
-                  fsu.TransformOp.SAMPLE_UNDER_CONSTRAINTS,
+                  fsu.TransformOp.SAMPLE,
                   {
-                      "species_stats": ssw_stats,
-                      "target_fg": target_fg,
-                      "target_bg": target_bg,
+                      "target_fg": {k: 10 for k in ar_species},
+                      "prng_seed": AR_SAMPLING_PRNG_SEED,
                   },
               ),
           ],
@@ -202,36 +188,21 @@ def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
           op=fsu.TransformOp.SCRUB,
           kwargs={
               "key": "bg_species_codes",
-              "values": downstream_species + unfeasible_ar_species,
+              "values": downstream_species + ar_species,
           },
       ),
   ]
   if ar_only:
     queries.append(
-        fsu.QueryParallel(
-            queries=[
-                fsu.Query(
-                    op=fsu.TransformOp.FILTER,
-                    kwargs={
-                        "mask_op": fsu.MaskOp.CONTAINS_ANY,
-                        "op_kwargs": {
-                            "key": "bg_species_codes",
-                            "values": feasible_ar_species,
-                        },
-                    },
-                ),
-                fsu.Query(
-                    op=fsu.TransformOp.FILTER,
-                    kwargs={
-                        "mask_op": fsu.MaskOp.IN,
-                        "op_kwargs": {
-                            "key": "species_code",
-                            "values": feasible_ar_species,
-                        },
-                    },
-                ),
-            ],
-            merge_strategy=fsu.MergeStrategy.CONCAT_NO_DUPLICATES,
+        fsu.Query(
+            op=fsu.TransformOp.FILTER,
+            kwargs={
+                "mask_op": fsu.MaskOp.IN,
+                "op_kwargs": {
+                    "key": "species_code",
+                    "values": ar_species,
+                },
+            },
         )
     )
 
@@ -239,26 +210,23 @@ def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
 
 
 def get_downstream_metadata_query() -> fsu.QuerySequence:
-  (_, _, feasible_ar_species, _) = get_artificially_rare_species_constraints(
-      5, 5
-  )
-
   db = namespace_db.load_db()
-  downstream_species = list(db.class_lists["downstream_species"].classes)
-  return fsu.QuerySequence(
-      [
-          fsu.Query(
-              op=fsu.TransformOp.FILTER,
-              kwargs={
-                  "mask_op": fsu.MaskOp.IN,
-                  "op_kwargs": {
-                      "key": "species_code",
-                      "values": downstream_species + feasible_ar_species,
-                  },
+  downstream_species = list(db.class_lists[DOWNSTREAM_CLASS_LIST].classes)
+  # NOTE: Artificially rare species are the subset of SSW species which do not
+  # intersect with the downstream species.
+  ar_species = list(db.class_lists[AR_CLASS_LIST].classes)
+  return fsu.QuerySequence([
+      fsu.Query(
+          op=fsu.TransformOp.FILTER,
+          kwargs={
+              "mask_op": fsu.MaskOp.IN,
+              "op_kwargs": {
+                  "key": "species_code",
+                  "values": downstream_species + ar_species,
               },
-          ),
-      ]
-  )
+          },
+      ),
+  ])
 
 
 def get_downstream_data_query() -> fsu.QuerySequence:
@@ -268,25 +236,13 @@ def get_downstream_data_query() -> fsu.QuerySequence:
     The QuerySequence to apply.
   """
   db = namespace_db.load_db()
-  downstream_species = list(db.class_lists["downstream_species"].classes)
-  (_, _, feasible_ar_species, unfeasible_ar_species) = (
-      get_artificially_rare_species_constraints(5, 5)
-  )
+  downstream_species = list(db.class_lists[DOWNSTREAM_CLASS_LIST].classes)
+  # NOTE: Artificially rare species are the subset of SSW species which do not
+  # intersect with the downstream species.
+  ar_species = list(db.class_lists[AR_CLASS_LIST].classes)
   upstream_query = get_upstream_data_query()
   return fsu.QuerySequence([
       fsu.QueryComplement(upstream_query, "xeno_canto_id"),
-      # We remove unfeasible AR species. For the nominal (5, 5) scenario,
-      # this group is empty.
-      fsu.Query(
-          fsu.TransformOp.FILTER,
-          {
-              "mask_op": fsu.MaskOp.NOT_IN,
-              "op_kwargs": {
-                  "key": "species_code",
-                  "values": unfeasible_ar_species,
-              },
-          },
-      ),
       # Annotations of species that are not part of the downstream evaluation
       # are scrubbed if they appear in the background or foreground.
       # Therefore, we're only left with relevant species annotated.
@@ -294,14 +250,14 @@ def get_downstream_data_query() -> fsu.QuerySequence:
           op=fsu.TransformOp.SCRUB_ALL_BUT,
           kwargs={
               "key": "bg_species_codes",
-              "values": downstream_species + feasible_ar_species,
+              "values": downstream_species + ar_species,
           },
       ),
       fsu.Query(
           op=fsu.TransformOp.SCRUB_ALL_BUT,
           kwargs={
               "key": "species_code",
-              "values": downstream_species + feasible_ar_species,
+              "values": downstream_species + ar_species,
           },
       ),
   ])

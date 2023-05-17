@@ -48,11 +48,10 @@ class EvalSetSpecification:
     class_names: Class names over which to perform the evaluation.
     search_corpus_global_mask_expr: String expression passed to the embeddings
       dataframe's `eval` method to obtain a boolean mask over its rows. Used to
-      represent global properties like `df['dataset_name'] ==
-      'birdclef_colombia'`. Computed once and combined with
-      `search_corpus_classwise_mask_fn` for every class in `class_names` to
-      perform boolean indexing on the embeddings dataframe and form the search
-      corpus.
+      represent global properties like `df['dataset_name'] == 'coffee_farms'`.
+      Computed once and combined with `search_corpus_classwise_mask_fn` for
+      every class in `class_names` to perform boolean indexing on the embeddings
+      dataframe and form the search corpus.
     search_corpus_classwise_mask_fn: Function mapping a class name to a string
       expression passed to the embeddings dataframe's `eval` method to obtain a
       boolean mask over its rows. Used to represent classwise properties like
@@ -97,7 +96,7 @@ class EvalSetSpecification:
     """Instantiates an eval protocol v1 EvalSetSpecification.
 
     Args:
-      location: Geographical location in {'ssw', 'colombia', 'hawaii'}.
+      location: Geographical location in {'ssw', 'coffee_farms', 'hawaii'}.
       corpus_type: Corpus type in {'xc_fg', 'xc_bg', 'birdclef'}.
       num_representatives_per_class: Number of class representatives to sample.
         If -1, all representatives are used.
@@ -106,21 +105,19 @@ class EvalSetSpecification:
       The EvalSetSpecification.
     """
     downstream_class_names = (
-        namespace_db.load_db().class_lists['downstream_species'].classes
+        namespace_db.load_db().class_lists['downstream_species_v2'].classes
     )
     # "At-risk" species are excluded from downstream data due to conservation
     # status.
     class_names = {
         'ssw': (
             namespace_db.load_db()
-            .class_lists['artificially_rare_species']
+            .class_lists['artificially_rare_species_v2']
             .classes
         ),
-        'colombia': [
+        'coffee_farms': [
             c
-            for c in namespace_db.load_db()
-            .class_lists['birdclef2019_colombia']
-            .classes
+            for c in namespace_db.load_db().class_lists['coffee_farms'].classes
             if c in downstream_class_names
         ],
         'hawaii': [
@@ -136,8 +133,8 @@ class EvalSetSpecification:
     )
 
     class_representative_dataset_name = {
-        'ssw': 'xc_artificially_rare',
-        'colombia': 'xc_downstream',
+        'ssw': 'xc_artificially_rare_v2',
+        'coffee_farms': 'xc_downstream',
         'hawaii': 'xc_downstream',
     }[location]
 
@@ -183,8 +180,8 @@ class EvalSetSpecification:
     """Instantiates an eval protocol v2 EvalSetSpecification.
 
     Args:
-      location: Geographical location in {'ssw', 'colombia', 'hawaii'}.
-      corpus_type: Corpus type in {'xc_fg', 'xc_bg', 'birdclef'}.
+      location: Geographical location in {'ssw', 'coffee_farms', 'hawaii'}.
+      corpus_type: Corpus type in {'xc_fg', 'xc_bg', 'soundscapes'}.
       num_representatives_per_class: Number of class representatives to sample.
         If -1, all representatives are used.
 
@@ -192,21 +189,17 @@ class EvalSetSpecification:
       The EvalSetSpecification.
     """
     downstream_class_names = (
-        namespace_db.load_db().class_lists['downstream_species'].classes
+        namespace_db.load_db().class_lists['downstream_species_v2'].classes
     )
-    # "At-risk" species are excluded from downstream data due to conservation
-    # status.
     class_names = {
         'ssw': (
             namespace_db.load_db()
-            .class_lists['artificially_rare_species']
+            .class_lists['artificially_rare_species_v2']
             .classes
         ),
-        'colombia': [
+        'coffee_farms': [
             c
-            for c in namespace_db.load_db()
-            .class_lists['birdclef2019_colombia']
-            .classes
+            for c in namespace_db.load_db().class_lists['coffee_farms'].classes
             if c in downstream_class_names
         ],
         'hawaii': [
@@ -218,12 +211,14 @@ class EvalSetSpecification:
 
     # The name of the dataset to draw embeddings from to form the corpus.
     corpus_dataset_name = (
-        f'birdclef_{location}' if corpus_type == 'birdclef' else 'xc_downstream'
+        f'soundscapes_{location}'
+        if corpus_type == 'soundscapes'
+        else 'xc_downstream'
     )
 
     class_representative_dataset_name = {
-        'ssw': 'xc_artificially_rare_class_reps',
-        'colombia': 'xc_downstream_class_reps',
+        'ssw': 'xc_artificially_rare_class_reps_v2',
+        'coffee_farms': 'xc_downstream_class_reps',
         'hawaii': 'xc_downstream_class_reps',
     }[location]
 
@@ -244,7 +239,7 @@ class EvalSetSpecification:
         search_corpus_classwise_mask_fn={
             'xc_fg': lambda name: f'not bg_labels.str.contains("{name}")',
             'xc_bg': lambda name: f'not label.str.contains("{name}")',
-            'birdclef': lambda _: 'label.str.contains("")',
+            'soundscapes': lambda _: 'label.str.contains("")',
         }[corpus_type],
         # Class representatives are drawn from foreground-vocalizing species
         # present in Xeno-Canto after applying peak-finding.

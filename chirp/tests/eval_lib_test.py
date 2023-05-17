@@ -416,7 +416,7 @@ class TaxonomyModelCallbackTest(absltest.TestCase):
 
     db = namespace_db.load_db()
     all_species = db.class_lists['xenocanto'].classes
-    downstream_species = db.class_lists['downstream_species'].classes
+    downstream_species = db.class_lists['downstream_species_v2'].classes
 
     # By default, the model callback should load all available learned
     # representations.

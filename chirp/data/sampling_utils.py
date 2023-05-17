@@ -18,9 +18,11 @@
 import bisect
 import collections
 import copy
+import hashlib
 
 
 from absl import logging
+import jax
 import numpy as np
 import pandas as pd
 
@@ -31,13 +33,61 @@ import pandas as pd
 _RECORDING = tuple[str, list[str], int]
 
 
+def sample_recordings(
+    df: pd.DataFrame,
+    target_fg: dict[str, int],
+    prng_seed: int,
+):
+  """Subsamples recordings from df.
+
+  Args:
+    df: The dataframe to subsample.
+    target_fg: A dictionnary mapping each species to its required number of
+      foreground recordings to be subsampled.
+    prng_seed: The PRNG seed to use for random sampling.
+
+  Returns:
+    The subsampled df such that there are exactly target_fg[species] foreground
+    labels of each species.
+  """
+  key = jax.random.PRNGKey(prng_seed)
+
+  def _subsample(group_df):
+    (species_code,) = group_df['species_code'].unique()
+    indices = sorted(
+        jax.random.choice(
+            # Create a unique key derived from the global key and the species
+            # code.
+            jax.random.fold_in(
+                key,
+                int(
+                    hashlib.md5(species_code.encode()).hexdigest()[:8], base=16
+                ),
+            ),
+            len(group_df),
+            shape=(target_fg[species_code],),
+            replace=False,
+        ).tolist()
+    )
+    return group_df.iloc[indices]
+
+  return (
+      df[df['species_code'].isin(target_fg.keys())]
+      .groupby('species_code', group_keys=False)
+      .apply(_subsample)
+  )
+
+
+# TODO(vdumoulin): remove.
 def sample_recordings_under_constraints(
     df: pd.DataFrame,
     target_fg: dict[str, int],
     target_bg: dict[str, int],
     species_stats: dict[str, dict[str, int]] | None = None,
 ):
-  """Subsamples recordings from df under foreground/background constraints.
+  """DEPRECATED.
+
+  Subsamples recordings from df under foreground/background constraints.
 
   Args:
     df: The dataframe to subsample.

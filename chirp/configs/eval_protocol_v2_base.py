@@ -87,31 +87,31 @@ def get_config(
 
   required_datasets = (
       {
-          'dataset_name': 'xc_artificially_rare_class_reps',
+          'dataset_name': 'xc_artificially_rare_class_reps_v2',
           'to_crop': True,
-          'tfds_name': 'bird_taxonomy/upstream_ar_only_slice_peaked',
+          'tfds_name': 'bird_taxonomy/upstream_ar_only_slice_peaked:2.*.*',
       },
       {
           'dataset_name': 'xc_downstream_class_reps',
           'to_crop': True,
-          'tfds_name': 'bird_taxonomy/downstream_slice_peaked',
+          'tfds_name': 'bird_taxonomy/downstream_slice_peaked:2.*.*',
       },
       # The `xc_downstream` dataset includes feasible artificially rare species
       # and downstream species with which to construct search corpora.
       {
           'dataset_name': 'xc_downstream',
           'to_crop': False,
-          'tfds_name': 'bird_taxonomy/downstream_full_length',
+          'tfds_name': 'bird_taxonomy/downstream_full_length:2.*.*',
       },
       {
-          'dataset_name': 'birdclef_ssw',
+          'dataset_name': 'soundscapes_ssw',
           'to_crop': False,
           'tfds_name': 'soundscapes/ssw_full_length',
       },
       {
-          'dataset_name': 'birdclef_colombia',
+          'dataset_name': 'soundscapes_coffee_farms',
           'to_crop': False,
-          'tfds_name': 'soundscapes/birdclef2019_colombia_full_length',
+          'tfds_name': 'soundscapes/coffee_farms_full_length',
       },
   )
 
@@ -142,7 +142,8 @@ def get_config(
   # Full-length Xeno-Canto recordings are processed to extract strided windows.
   # Each strided window receives the recording-level annotations. (Note that for
   # this dataset, we do not have human segment-level annotations, so we do not
-  # follow the same process as with BirdCLEF downstream full-length recordings.)
+  # follow the same process as with soundscapes downstream full-length
+  # recordings.)
   full_length_xc_pipeline_ops = [
       _callable_config(
           'pipeline.ExtractStridedWindows',
@@ -170,9 +171,9 @@ def get_config(
   ]
 
   # Full-length recordings are used to construct the search corpora data for
-  # BirdCLEF soundscapes. Slices are constructed using strided windowing and
-  # dense annotation.
-  full_length_birdclef_pipeline_ops = [
+  # soundscapes. Slices are constructed using strided windowing and dense
+  # annotation.
+  full_length_soundscapes_pipeline_ops = [
       _callable_config(
           'pipeline.ExtractStridedWindows',
           window_length_sec=config.window_length_sec,
@@ -214,7 +215,7 @@ def get_config(
     elif dataset_description['dataset_name'] == 'xc_downstream':
       ops = full_length_xc_pipeline_ops + data_ops
     else:
-      ops = full_length_birdclef_pipeline_ops + data_ops
+      ops = full_length_soundscapes_pipeline_ops + data_ops
 
     dataset_config.pipeline = _callable_config(
         'pipeline.Pipeline', ops=ops, deterministic=True
@@ -227,7 +228,7 @@ def get_config(
   # Build all eval set specifications.
   config.eval_set_specifications = {}
   for corpus_type, location in itertools.product(
-      ('xc_fg', 'xc_bg', 'birdclef'), ('ssw', 'colombia', 'hawaii')
+      ('xc_fg', 'xc_bg', 'soundscapes'), ('ssw', 'coffee_farms', 'hawaii')
   ):
     # SSW species are "artificially rare" (a limited number of examples were
     # included during upstream training). If provided, we use the singular
