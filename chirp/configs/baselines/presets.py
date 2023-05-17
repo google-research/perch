@@ -152,7 +152,7 @@ def get_base_train_dataset_config(
       config,
       filtering_df_paths=None,
       filter_by_complement=False,  # Unused because filtering_df_path=None.
-      train_dataset_dir='bird_taxonomy/upstream_slice_peaked:1.4.0',
+      train_dataset_dir='bird_taxonomy/upstream_slice_peaked:2.0.0',
   )
 
 
@@ -163,7 +163,7 @@ def get_ablation_train_dataset_config(
       config,
       filtering_df_paths=None,
       filter_by_complement=True,
-      train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+      train_dataset_dir='bird_taxonomy/slice_peaked:2.0.0',
   )
 
 
@@ -209,7 +209,7 @@ def get_ablation_eval_dataset_config(
           filter_by_complement=False,
           slice_method='fixed',
           slice_start=0.5,
-          eval_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+          eval_dataset_dir='bird_taxonomy/slice_peaked:2.0.0',
       ),
       'test_iid': get_supervised_eval_pipeline(
           config,
@@ -217,7 +217,7 @@ def get_ablation_eval_dataset_config(
           filter_by_complement=False,
           slice_method='fixed',
           slice_start=0.5,
-          eval_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+          eval_dataset_dir='bird_taxonomy/slice_peaked:2.0.0',
       ),
       'test_label_shifted': get_supervised_eval_pipeline(
           config,
@@ -225,7 +225,7 @@ def get_ablation_eval_dataset_config(
           filter_by_complement=False,
           slice_method='fixed',
           slice_start=0.5,
-          eval_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
+          eval_dataset_dir='bird_taxonomy/slice_peaked:2.0.0',
       ),
   }
 
@@ -357,8 +357,8 @@ def get_supervised_train_pipeline(
 ) -> config_dict.ConfigDict:
   """Creates the supervised training data pipeline."""
   if train_dataset_dir not in (
-      'bird_taxonomy/upstream_slice_peaked:1.4.0',
-      'bird_taxonomy/slice_peaked:1.4.0',
+      'bird_taxonomy/upstream_slice_peaked:2.0.0',
+      'bird_taxonomy/slice_peaked:2.0.0',
   ):
     raise ValueError('we assume training on XC')
   train_dataset_config = config_dict.ConfigDict()
