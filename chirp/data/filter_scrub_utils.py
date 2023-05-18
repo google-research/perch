@@ -55,7 +55,6 @@ class TransformOp(enum.Enum):
   SCRUB_ALL_BUT = 'scrub_all_but'
   FILTER = 'filter'
   SAMPLE = 'sample'
-  SAMPLE_UNDER_CONSTRAINTS = 'sample_under_constraints'
   APPEND = 'append'
 
 
@@ -623,9 +622,6 @@ OPS = {
     MaskOp.CONTAINS_ANY: contains_any,
     MaskOp.NOT_IN: is_not_in,
     TransformOp.SAMPLE: su.sample_recordings,
-    TransformOp.SAMPLE_UNDER_CONSTRAINTS: (
-        su.sample_recordings_under_constraints
-    ),
     TransformOp.SCRUB: lambda df, **kwargs: df.apply(
         functools.partial(scrub, **kwargs), axis=1, result_type='expand'
     ),

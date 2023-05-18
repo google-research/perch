@@ -112,25 +112,6 @@ class NotInTests(DataProcessingTest):
       )
 
 
-class SamplingTest(DataProcessingTest):
-
-  def test_sampling_under_constraints(self):
-    toy_df = pd.DataFrame({
-        'species_code': ['O', 'A', 'B', 'A', 'O', 'O'],
-        'bg_species_codes': [['O'], ['O', 'B'], ['A'], [], ['A'], ['A', 'B']],
-    })
-    species_of_interest = ['A', 'B']
-    target_fg = {k: 1 for k in species_of_interest}
-    target_bg = {k: 2 for k in species_of_interest}
-    query = fsu.Query(
-        fsu.TransformOp.SAMPLE_UNDER_CONSTRAINTS,
-        {'target_fg': target_fg, 'target_bg': target_bg},
-    )
-    df = fsu.apply_query(toy_df, query)
-    expected_df = toy_df.drop([0, 3, 4])
-    self.assertEqual(df.to_dict(), expected_df.to_dict())
-
-
 class ScrubTest(DataProcessingTest):
 
   def test_scrubbing_ideal(self):
