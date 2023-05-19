@@ -107,7 +107,9 @@ def _main():
 
   # In a multi-host setting, only the first host should write results
   if jax.process_index() == 0:
-    eval_lib.write_results_to_csv(eval_metrics, config.write_results_dir)  # pytype: disable=wrong-arg-types  # jax-ndarray
+    eval_lib.write_results_to_csv(
+        eval_metrics, config.write_results_dir, config.write_filename
+    )  # pytype: disable=wrong-arg-types  # jax-ndarray
 
 
 def main(argv: Sequence[str]) -> None:

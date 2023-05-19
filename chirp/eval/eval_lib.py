@@ -18,7 +18,7 @@
 import dataclasses
 import functools
 import os
-from typing import (Callable, Iterator, Mapping, Sequence, TypeVar)
+from typing import Callable, Iterator, Mapping, Sequence, TypeVar
 
 from absl import logging
 from chirp.data import utils as data_utils
@@ -801,6 +801,7 @@ def compute_metrics(
 def write_results_to_csv(
     metric_results: Sequence[tuple[str, float, float, str]],
     write_results_dir: str,
+    write_filename: str | None,
 ):
   """Write evaluation metric results to csv.
 
@@ -814,9 +815,10 @@ def write_results_to_csv(
       average_precision, roc_auc [arithmetic mean], evaluation set name) to
       write to csv. The first row encodes the column header or column names.
     write_results_dir: The path to write the computed metrics to file.
+    write_filename: A specified name for the eval results file.
   """
 
-  write_results_path = os.path.join(write_results_dir, 'evaluation_results.csv')
+  write_results_path = os.path.join(write_results_dir, write_filename)
   results_df = pd.DataFrame(metric_results[1:], columns=metric_results[0])
 
   # Check if the specified directory exists; if not, create & write to csv.
