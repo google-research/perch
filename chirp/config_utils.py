@@ -191,7 +191,11 @@ def parse_config(
 
   with config.ignore_type():
     for key, value in config.items():
-      if isinstance(value, (list, tuple)):
+      # We purposefully only attempt to parse values inside list and tuple
+      # instances (and not e.g. namedtuple instances, since optax defines
+      # GradientTransformation as a namedtuple and we don't want to parse its
+      # values), which precludes using isinstance(value, (list, tuple)).
+      if type(value) in (list, tuple):
         config[key] = type(value)(_parse_value(v) for v in value)
       else:
         config[key] = _parse_value(value)

@@ -33,14 +33,6 @@ _object_config = config_utils.object_config
 _TFDS_DATA_DIR = None
 
 
-def _melspec_if_baseline(config_string: str, **kwargs):
-  return (
-      [_callable_config('pipeline.MelSpectrogram', **kwargs)]
-      if config_string == 'baseline'
-      else []
-  )
-
-
 def get_config(
     data_ops: Sequence[config_dict.ConfigDict] | None = None,
 ) -> config_dict.ConfigDict:
