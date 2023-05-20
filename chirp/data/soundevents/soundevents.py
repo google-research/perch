@@ -243,7 +243,7 @@ class Soundevents(tfds.core.GeneratorBasedBuilder):
     source_info = fsu.apply_sequence(
         source_info, self.builder_config.data_processing_query
     )
-    return source_info
+    return source_info  # pytype: disable=bad-return-type  # typed-pandas
 
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
     # Defined as part of the tfds API for dividing the dataset into splits.
