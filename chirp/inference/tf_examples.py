@@ -18,6 +18,7 @@
 from typing import Sequence
 
 from chirp.inference import interface
+from etils import epath
 import numpy as np
 import tensorflow as tf
 
@@ -95,6 +96,20 @@ def get_example_parser(logit_names: Sequence[str] | None = None):
     return ex
 
   return _parser
+
+
+def create_embeddings_dataset(embeddings_glob, prefetch: int = 128):
+  """Create a TF Dataset of the embeddings."""
+  embeddings_glob = epath.Path(embeddings_glob)
+  embeddings_files = [fn.as_posix() for fn in embeddings_glob.glob('')]
+  ds = tf.data.TFRecordDataset(
+      embeddings_files, num_parallel_reads=tf.data.AUTOTUNE
+  )
+
+  parser = get_example_parser()
+  ds = ds.map(parser, num_parallel_calls=tf.data.AUTOTUNE)
+  ds = ds.prefetch(prefetch)
+  return ds
 
 
 def serialize_tensor(tensor: tf.Tensor) -> np.ndarray:

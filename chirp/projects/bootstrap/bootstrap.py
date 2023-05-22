@@ -16,7 +16,6 @@
 """Configuration and init library for Search Bootstrap projects."""
 
 import dataclasses
-import os
 from typing import Sequence
 
 from chirp.inference import embed_lib
@@ -49,15 +48,7 @@ class BootstrapState:
     """Create a TF Dataset of the embeddings."""
     if self.embeddings_dataset:
       return self.embeddings_dataset
-    embeddings_glob = epath.Path(self.config.embeddings_glob)
-    embeddings_files = [fn.as_posix() for fn in embeddings_glob.glob('')]
-    ds = tf.data.TFRecordDataset(
-        embeddings_files, num_parallel_reads=tf.data.AUTOTUNE
-    )
-
-    parser = tf_examples.get_example_parser()
-    ds = ds.map(parser, num_parallel_calls=tf.data.AUTOTUNE)
-    ds = ds.prefetch(16)
+    ds = tf_examples.create_embeddings_dataset(self.config.embeddings_glob)
     self.embeddings_dataset = ds
     return ds
 
@@ -67,14 +58,16 @@ class BootstrapState:
 
     self.source_map = {}
     for s in source_infos:
-      filename = os.path.basename(s.filepath)
-      dupe = self.source_map.get(filename)
+      file_id = epath.Path(
+          *epath.Path(s.filepath).parts[-(self.config.file_id_depth + 1) :]
+      ).as_posix()
+      dupe = self.source_map.get(file_id)
       if dupe:
         raise ValueError(
             'All base filenames must be unique. '
-            f'Filename {filename} appears in both {s.filepath} and {dupe}.'
+            f'Filename {file_id} appears in both {s.filepath} and {dupe}.'
         )
-      self.source_map[filename] = s.filepath
+      self.source_map[file_id] = s.filepath
 
 
 @dataclasses.dataclass
@@ -84,6 +77,7 @@ class BootstrapConfig:
   # Embeddings dataset info.
   embeddings_glob: str
   embedding_hop_size_s: float
+  file_id_depth: int
   audio_globs: Sequence[str] | None
 
   # Annotations info.
