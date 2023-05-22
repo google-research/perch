@@ -34,14 +34,14 @@ import soundfile
 
 
 @functools.cache
-def get_melspec_layer(sample_rate: int, root=8.0):
+def get_melspec_layer(sample_rate: int, root=4.0):
   """Creates a melspec layer for easy visualization."""
   # Usage: melspec_layer.apply({}, audio)
   stride = sample_rate // 100
   melspec_layer = frontend.MelSpectrogram(  # pytype: disable=wrong-arg-types  # typed-pandas
       96,
       stride,
-      2 * stride,
+      4 * stride,
       sample_rate,
       (60.0, sample_rate / 2.0),
       scaling_config=frontend.PCENScalingConfig(root=root, bias=0.0),

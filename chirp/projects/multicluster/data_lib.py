@@ -37,6 +37,7 @@ from etils import epath
 import librosa
 import numpy as np
 import tensorflow as tf
+import tqdm
 
 
 @dataclasses.dataclass
@@ -89,6 +90,9 @@ class MergedDataset:
       class_counts[(cl, cl_str)] += 1
     for (cl, cl_str), count in sorted(class_counts.items()):
       print(f'    class {cl_str} / {cl} : {count}')
+    self.class_names = {
+        cl_str: cl for cl, cl_str in zip(merged['label'], merged['label_str'])
+    }
 
   def create_random_train_test_split(
       self,
@@ -121,7 +125,7 @@ class MergedDataset:
     return train_locs, test_locs, class_locs
 
   def create_keras_dataset(
-      self, locs: np.ndarray, is_train: bool, batch_size: int
+      self, locs: Sequence[int], is_train: bool, batch_size: int
   ) -> tf.data.Dataset:
     """Create a keras-friendly tf.data.Dataset from the in-memory dataset."""
 
@@ -141,16 +145,6 @@ class MergedDataset:
       ds = ds.shuffle(1024)
     ds = ds.batch(batch_size)
     return ds
-
-
-def progress_dot(i: int, print_mod: int = 10, break_mod: Optional[int] = None):
-  """Print a dot, with occasional line breaks."""
-  if break_mod is None:
-    break_mod = 25 * print_mod
-  if (i + 1) % break_mod == 0:
-    print('.')
-  elif (i + 1) % print_mod == 0 or print_mod <= 1:
-    print('.', end='')
 
 
 def dataset_from_labeled_wav_dirs(
@@ -202,6 +196,8 @@ def dataset_from_labeled_wav_dirs(
 def pool_time_axis(embeddings, pool_method, axis=1):
   """Apply pooling over the specified axis."""
   if pool_method == 'mean':
+    if embeddings.shape[axis] == 0:
+      return embeddings.sum(axis=axis)
     return embeddings.mean(axis=axis)
   elif pool_method == 'max':
     return embeddings.max(axis=axis)
@@ -253,7 +249,7 @@ def embed_dataset(
   """
   merged = collections.defaultdict(list)
   exclude_classes = set(exclude_classes)
-  for i, ex in enumerate(dataset.as_numpy_iterator()):
+  for ex in tqdm.tqdm(dataset.as_numpy_iterator()):
     if ex['label_str'] in exclude_classes:
       continue
     if data_sample_rate > 0 and data_sample_rate != embedding_model.sample_rate:
@@ -278,8 +274,6 @@ def embed_dataset(
       ex['embeddings'] = embeds
     if outputs.separated_audio is not None:
       ex['separated_audio'] = outputs.separated_audio
-
-    progress_dot(i)
 
     for k in ex.keys():
       merged[k].append(ex[k])
