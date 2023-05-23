@@ -75,7 +75,7 @@ def get_config(
   # dense annotation.
   config.window_length_sec = 5
   config.window_stride_sec = 2.5
-  config.overlap_threshold_sec = 1
+  config.overlap_threshold_sec = None
 
   required_datasets = (
       {
