@@ -401,7 +401,7 @@ class BirdNet(interface.EmbeddingModel):
       logits.append(self.model.get_tensor(output_details['index']))
       embeddings.append(self.model.get_tensor(embedding_idx))
     # Create [Batch, 1, Features]
-    embeddings = np.array(embeddings)[:, np.newaxis, :]
+    embeddings = np.array(embeddings)
     logits = np.array(logits)
     logits = self.convert_logits(
         logits, self.class_list, self.target_class_list
