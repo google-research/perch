@@ -16,7 +16,7 @@
 """Create embeddings for an audio corpus."""
 
 import dataclasses
-from typing import Any, Sequence, Tuple
+from typing import Any, Sequence
 
 from absl import logging
 import apache_beam as beam
@@ -226,6 +226,15 @@ class EmbedFn(beam.DoFn):
       return
     except audioread.NoBackendError as inst:
       self._log_exception(source_info, inst, 'audio_no_backend')
+      return
+    except EOFError as inst:
+      self._log_exception(source_info, inst, 'audio_eof_error')
+      return
+    except RuntimeError as inst:
+      if 'Soundfile is not available' in str(inst):
+        self._log_exception(source_info, inst, 'audio_no_soundfile')
+      else:
+        self._log_exception(source_info, inst, 'audio_runtime_error')
       return
 
     if audio is None:
