@@ -48,7 +48,9 @@ class SourceInfo:
 
 
 def create_source_infos(
-    source_file_patterns: str, num_shards_per_file: int, shard_len_s: float
+    source_file_patterns: Sequence[str],
+    num_shards_per_file: int,
+    shard_len_s: float,
 ) -> Sequence[SourceInfo]:
   """Expand source file patterns into a list of SourceInfos."""
   # TODO(tomdenton): probe each file and create work units in a new Beam stage.

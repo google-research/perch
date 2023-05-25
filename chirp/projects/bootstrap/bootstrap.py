@@ -54,6 +54,8 @@ class BootstrapState:
 
   def create_source_map(self):
     """Map filenames to full filepaths."""
+    if self.config.audio_globs is None:
+      raise ValueError('Cannot create source map with no audio globs.')
     source_infos = embed_lib.create_source_infos(self.config.audio_globs, 1, -1)
 
     self.source_map = {}
