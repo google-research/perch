@@ -18,7 +18,10 @@
 import dataclasses
 from typing import Any, Callable, List, Sequence
 
+from chirp.inference import tf_examples
+from etils import epath
 import numpy as np
+from scipy.io import wavfile
 import tensorflow as tf
 import tqdm
 
@@ -76,6 +79,22 @@ class TopKSearchResults:
     self.search_results = [self.search_results[idx] for idx in idxs]
     self._update_deseridata()
 
+  def write_labeled_data(self, labeled_data_path: str, sample_rate: int):
+    """Write labeled results to the labeled data collection."""
+    labeled_data_path = epath.Path(labeled_data_path)
+    for r in self.search_results:
+      labels = [ch.description for ch in r.label_widgets if ch.value]
+      if not labels:
+        continue
+      extension = epath.Path(r.filename).suffix
+      filename = epath.Path(r.filename).name[: -len(extension)]
+      output_filename = f'{filename}___{r.timestamp_offset}{extension}'
+      for label in labels:
+        output_path = labeled_data_path / label
+        output_path.mkdir(parents=True, exist_ok=True)
+        output_filepath = output_path / output_filename
+        wavfile.write(output_filepath, sample_rate, r.audio)
+
 
 @dataclasses.dataclass
 class DistanceStats:
@@ -116,7 +135,7 @@ def search_embeddings_parallel(
 
   def _q_dist(ex):
     # exapand embedding from [T, C, D] to [B', T, C, D].
-    dists = (ex['embedding'][tf.newaxis, :, :, :] - queries) ** 2
+    dists = (ex[tf_examples.EMBEDDING][tf.newaxis, :, :, :] - queries) ** 2
     # Take min distance over channels and queries, leaving only time.
     dists = tf.reduce_sum(dists, axis=-1)  # Reduce over vector depth
     dists = tf.reduce_min(dists, axis=-1)  # Reduce over channels
@@ -124,10 +143,6 @@ def search_embeddings_parallel(
     dists = query_reduce_fn(dists, axis=0)  # Reduce over query batch
 
     ex['q_distance'] = dists
-    ex['min_dist'] = tf.reduce_min(dists)
-    ex['max_dist'] = tf.reduce_max(dists)
-    ex['mean_dist'] = tf.reduce_mean(dists)
-    ex['std_dist'] = tf.math.reduce_std(dists)
     return ex
 
   embeddings_dataset = embeddings_dataset.map(
@@ -135,21 +150,81 @@ def search_embeddings_parallel(
   )
 
   results = TopKSearchResults([], top_k=top_k, distance_offset=target_dist)
-  file_stats = {}
-  for ex in tqdm.tqdm(embeddings_dataset.as_numpy_iterator()):
-    for t in range(ex['embedding'].shape[0]):
-      dist = np.abs(ex['q_distance'][0, t] - target_dist)
-      offset = t * hop_size_s + ex['timestamp_s']
-      result = SearchResult(
-          ex['embedding'][t, :, :], dist, ex['filename'].decode(), offset
-      )
-      results.update(result)
-    file_stats[ex['filename'].decode()] = DistanceStats(
-        min_dist=ex['min_dist'],
-        max_dist=ex['max_dist'],
-        mean_dist=ex['mean_dist'],
-        std_dist=ex['std_dist'],
-        num_windows=ex['embedding'].shape[0],
-    )
+  all_distances = []
+  try:
+    for ex in tqdm.tqdm(embeddings_dataset.as_numpy_iterator()):
+      all_distances.append(ex['q_distance'].reshape([-1]))
+      for t in range(ex[tf_examples.EMBEDDING].shape[0]):
+        dist = np.abs(ex['q_distance'][0, t] - target_dist)
+        offset = t * hop_size_s + ex[tf_examples.TIMESTAMP_S]
+        result = SearchResult(
+            ex[tf_examples.EMBEDDING][t, :, :],
+            dist,
+            ex['filename'].decode(),
+            offset,
+        )
+        results.update(result)
+  except KeyboardInterrupt:
+    pass
+  all_distances = np.concatenate(all_distances)
   results.sort()
-  return results, file_stats
+  return results, all_distances
+
+
+def classifer_search_embeddings_parallel(
+    embeddings_dataset: tf.data.Dataset,
+    embeddings_classifier: tf.keras.Model,
+    target_index: int,
+    hop_size_s: int,
+    top_k: int = 10,
+    target_logit: float = 0.0,
+):
+  """Get examples for a target class with logit near the target logit.
+
+  Args:
+    embeddings_dataset: tf.data.Dataset over embeddings
+    embeddings_classifier: Keras model turning embeddings into logits.
+    target_index: Choice of class index.
+    hop_size_s: Embedding hop size in seconds.
+    top_k: Number of results desired.
+    target_logit: Get results near the target logit.
+
+  Returns:
+    TopKSearchResults and all logits.
+  """
+  results = TopKSearchResults([], top_k=top_k, distance_offset=target_logit)
+
+  def classify_batch(batch):
+    emb = batch[tf_examples.EMBEDDING]
+    # This seems to 'just work' when the classifier input shape is [None, D]
+    # and the embeddings shape is [B, C, D].
+    logits = embeddings_classifier(emb)
+    # Restrict to target class.
+    logits = logits[..., target_index]
+    # Take the maximum logit over channels.
+    logits = tf.reduce_max(logits, axis=-1)
+    batch['logits'] = logits
+    return batch
+
+  ds = embeddings_dataset.map(
+      classify_batch, num_parallel_calls=tf.data.AUTOTUNE
+  )
+
+  all_logits = []
+  try:
+    for ex in tqdm.tqdm(ds.as_numpy_iterator()):
+      emb = ex[tf_examples.EMBEDDING]
+      logits = ex['logits']
+      all_logits.append(logits)
+      for t in range(emb.shape[0]):
+        dist = np.abs(logits[t] - target_logit)
+        offset = t * hop_size_s + ex[tf_examples.TIMESTAMP_S]
+        result = SearchResult(
+            emb[t, :, :], dist, ex['filename'].decode(), offset
+        )
+        results.update(result)
+  except KeyboardInterrupt:
+    pass
+  results.sort()
+  all_logits = np.concatenate(all_logits)
+  return results, all_logits
