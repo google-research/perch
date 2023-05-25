@@ -108,7 +108,6 @@ def collect_info(
     recordings = list(itertools.chain.from_iterable(species_recordings))
 
   # Store recordings as JSONL file
-  # TODO(bartvm): Use gzip compression
   with tf.io.gfile.GFile(
       os.path.join(output_dir, recordings_filename), 'w'
   ) as f:

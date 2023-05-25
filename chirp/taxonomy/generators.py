@@ -25,7 +25,10 @@ from chirp import path_utils
 from chirp.taxonomy import namespace
 
 
-EBIRD2021_DATA_PATH = 'taxonomy/data/source_data/eBird_Taxonomy_v2021.csv'
+EBIRD_DATA_PATHS = {
+    2021: 'taxonomy/data/source_data/eBird_Taxonomy_v2021.csv',
+    2022: 'taxonomy/data/source_data/ebird_taxonomy_v2022.csv',
+}
 AUDIOSET_DATA_PATH = 'taxonomy/data/source_data/AudioSet_ontology.json'
 
 
@@ -44,9 +47,9 @@ class GeneratorOutput:
 
 
 @functools.lru_cache(maxsize=1)
-def load_ebird2021_dict():
-  """Load the ebird2021 data in a convenient dictionary form."""
-  ebird_fp = path_utils.get_absolute_epath(EBIRD2021_DATA_PATH)
+def load_ebird_dict(version=2021):
+  """Load the ebird data in a convenient dictionary form."""
+  ebird_fp = path_utils.get_absolute_epath(EBIRD_DATA_PATHS[version])
   with open(ebird_fp, 'r') as f:
     dr = csv.DictReader(f)
     rows = list(dr)
@@ -78,10 +81,10 @@ def load_ebird2021_dict():
 
 
 @functools.lru_cache(maxsize=1)
-def load_ebird2021_issf_dict():
+def load_ebird_issf_dict(version=2021):
   """Create the mapping from ebird subspecies codes (issf) to species."""
   # Note: 'issf' is short for 'Identifiable Sub-specific Form.'
-  ebird_fp = path_utils.get_absolute_epath(EBIRD2021_DATA_PATH)
+  ebird_fp = path_utils.get_absolute_epath(EBIRD_DATA_PATHS[version])
   with open(ebird_fp, 'r') as f:
     dr = csv.DictReader(f)
     rows = [r for r in dr if r['CATEGORY'] == 'issf']
@@ -93,9 +96,9 @@ def load_ebird2021_issf_dict():
   return issf_dict
 
 
-def generate_ebird2021():
-  """Generate the ebird2021 namespace file."""
-  codes_dict = load_ebird2021_dict()
+def generate_ebird(version=2021):
+  """Generate the ebird namespace file."""
+  codes_dict = load_ebird_dict(version=version)
 
   def _to_set(key):
     return set([data[key] for data in codes_dict.values() if data[key]])
@@ -104,16 +107,22 @@ def generate_ebird2021():
       [k for (k, v) in codes_dict.items() if v['category'] == 'species']
   )
 
+  suffix = '' if version == 2021 else f'_{version}'
+
   # Namespaces
-  ebird_all = namespace.Namespace('ebird2021', set(codes_dict.keys()))
-  ebird_species = namespace.Namespace('ebird2021_species', set(species))
-  ebird_genera = namespace.Namespace('bird_genera', _to_set('genus'))
-  ebird_families = namespace.Namespace('bird_families', _to_set('family'))
-  ebird_orders = namespace.Namespace('bird_orders', _to_set('order'))
-  clements_namespace = namespace.Namespace('clements', _to_set('sci_name'))
+  ebird_all = namespace.Namespace(f'ebird{version}', set(codes_dict.keys()))
+  ebird_species = namespace.Namespace(f'ebird{version}_species', set(species))
+  ebird_genera = namespace.Namespace(f'bird_genera{suffix}', _to_set('genus'))
+  ebird_families = namespace.Namespace(
+      f'bird_families{suffix}', _to_set('family')
+  )
+  ebird_orders = namespace.Namespace(f'bird_orders{suffix}', _to_set('order'))
+  clements_namespace = namespace.Namespace(
+      f'clements{suffix}', _to_set('sci_name')
+  )
 
   issfs = set([k for (k, v) in codes_dict.items() if v['category'] == 'issf'])
-  ebird_issf = namespace.Namespace('ebird2021_issf', issfs)
+  ebird_issf = namespace.Namespace(f'ebird{version}_issf', issfs)
 
   # Taxonomic Mappings
   ebird_all_to_species = {}
@@ -127,9 +136,9 @@ def generate_ebird2021():
   # seems parseable in the taxonomy file (of the form: 'genus sp1 x sp2')
   # but it'll take a lot of work.
   ebird_all_to_species = namespace.Mapping.from_dict(
-      'ebird2021_to_species',
-      'ebird2021',
-      'ebird2021_species',
+      f'ebird{version}_to_species',
+      f'ebird{version}',
+      f'ebird{version}_species',
       ebird_all_to_species,
   )
 
@@ -142,7 +151,10 @@ def generate_ebird2021():
         # Some 'spuh' classes roll up to Order and thus have no family.
         mapping_dict[k] = 'unknown'
     mapping = namespace.Mapping.from_dict(
-        f'ebird2021_to_{key}', 'ebird2021', target_namespace.name, mapping_dict
+        f'ebird{version}_to_{key}{suffix}',
+        f'ebird{version}',
+        target_namespace.name,
+        mapping_dict,
     )
     return mapping
 
@@ -156,9 +168,9 @@ def generate_ebird2021():
       if v['category'] == 'issf'
   }
   issf_to_species = namespace.Mapping(
-      'ebird2021_issf_to_ebird2021_species',
-      'ebird2021_issf',
-      'ebird2021_species',
+      f'ebird{version}_issf_to_ebird{version}_species',
+      f'ebird{version}_issf',
+      f'ebird{version}_species',
       [(k, v) for (k, v) in sorted(issf_dict.items())],
   )
 
@@ -169,8 +181,8 @@ def generate_ebird2021():
         if codes_dict[sp][key] in target_namespace.classes
     }
     mapping = namespace.Mapping.from_dict(
-        f'ebird2021_species_to_{key}',
-        'ebird2021_species',
+        f'ebird{version}_species_to_{key}{suffix}',
+        f'ebird{version}_species',
         target_namespace.name,
         mapping_dict,
     )

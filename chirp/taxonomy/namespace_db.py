@@ -61,13 +61,14 @@ class NamespaceDatabase:
     class_lists = {}
 
     # Load generated ebird data.
-    generated_data = generators.generate_ebird2021()
-    for ns in generated_data.namespaces:
-      namespaces[ns.name] = ns
-    for mapping in generated_data.mappings:
-      mappings[mapping.name] = mapping
-    for class_list in generated_data.class_lists:
-      class_lists[class_list.name] = class_list
+    for version in (2021, 2022):
+      generated_data = generators.generate_ebird(version=version)
+      for ns in generated_data.namespaces:
+        namespaces[ns.name] = ns
+      for mapping in generated_data.mappings:
+        mappings[mapping.name] = mapping
+      for class_list in generated_data.class_lists:
+        class_lists[class_list.name] = class_list
 
     # Load CSV data.
     namespace_csvs = path_utils.listdir(NAMESPACES_PATH)
