@@ -17,8 +17,11 @@
 
 General utilities for processing audio and spectrograms.
 """
+import concurrent
+import functools
 import os
 import tempfile
+from typing import Generator, Sequence
 import warnings
 
 from chirp import path_utils
@@ -29,7 +32,9 @@ from jax import numpy as jnp
 from jax import random
 from jax import scipy as jsp
 import librosa
+import numpy as np
 from scipy import signal as scipy_signal
+import soundfile
 import tensorflow as tf
 
 _WINDOW_FNS = {
@@ -61,6 +66,79 @@ def load_audio(
           res_type=resampling_type,
       )
       return audio
+
+
+def load_audio_window(
+    filepath: str, offset_s: float, sample_rate: int, window_size_s: float
+) -> jnp.ndarray:
+  """Load an audio window using Soundfile.
+
+  Args:
+    filepath: Path to audio file.
+    offset_s: Read offset within the file.
+    sample_rate: Sample rate for returned audio.
+    window_size_s: Length of audio to read. Reads all if <0.
+
+  Returns:
+    Numpy array of loaded audio.
+  """
+  with epath.Path(filepath).open('rb') as f:
+    sf = soundfile.SoundFile(f)
+    if offset_s > 0:
+      offset = int(offset_s * sf.samplerate)
+      sf.seek(offset)
+    if window_size_s < 0:
+      a = sf.read()
+    else:
+      window_size = int(window_size_s * sf.samplerate)
+      a = sf.read(window_size)
+  if len(a.shape) == 2:
+    # Downstream ops expect mono audio, so reduce to mono.
+    a = a[:, 0]
+  a = librosa.resample(
+      y=a, orig_sr=sf.samplerate, target_sr=sample_rate, res_type='polyphase'
+  )
+  return a
+
+
+def multi_load_audio_window(
+    filepaths: Sequence[str],
+    offsets: Sequence[int] | None,
+    sample_rate: int,
+    window_size_s: float,
+    max_workers: int = 5,
+) -> Generator[np.ndarray, None, None]:
+  """Generator for loading audio windows in parallel.
+
+  Note that audio is returned in the same order as the filepaths.
+  Also, this ultimately relies on soundfile, which can be buggy in some cases.
+
+  Args:
+    filepaths: Paths to audio to load.
+    offsets: Read offset in seconds for each file, or None if no offsets are
+      needed.
+    sample_rate: Sample rate for returned audio.
+    window_size_s: Window length to read from each file. Set <0 to read all.
+    max_workers: Number of threads to allocate.
+
+  Yields:
+    Loaded audio windows.
+  """
+  loader = functools.partial(
+      load_audio_window, sample_rate=sample_rate, window_size_s=window_size_s
+  )
+  if offsets is None:
+    offsets = [0.0 for _ in filepaths]
+  # ThreadPoolExecutor works well despite the
+  with concurrent.futures.ThreadPoolExecutor(
+      max_workers=max_workers
+  ) as executor:
+    futures = []
+    for fp, offset in zip(filepaths, offsets):
+      future = executor.submit(loader, offset_s=offset, filepath=fp)
+      futures.append(future)
+    for f in futures:
+      yield f.result()
 
 
 # pylint: disable=g-doc-return-or-yield,g-doc-args,unused-argument
@@ -181,7 +259,7 @@ def ema_conv1d(
 
   kernel = jnp.array(
       [(1.0 - gamma) ** k for k in range(conv_width - 1)] + [gamma]
-  )
+  ).astype(xs.dtype)
   if isinstance(gamma, float) or gamma.ndim == 0:
     kernel = kernel[jnp.newaxis, jnp.newaxis, :]
     kernel = jnp.repeat(kernel, xs.shape[-1], axis=1)

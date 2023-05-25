@@ -15,22 +15,18 @@
 
 """Utility functions for displaying audio and results in Colab/Jupyter."""
 
-import concurrent
 import functools
-import time
 from typing import Sequence
 
+from chirp import audio_utils
 from chirp.models import frontend
 from chirp.projects.bootstrap import search
-from etils import epath
 import IPython
 from IPython.display import display as ipy_display
 import ipywidgets
-import librosa
 from librosa import display as librosa_display
 import matplotlib.pyplot as plt
 import numpy as np
-import soundfile
 
 
 @functools.cache
@@ -85,47 +81,6 @@ def plot_audio_melspec(
     ipy_display(IPython.display.Audio(audio, rate=sample_rate))
 
 
-def load_audio_window(
-    filepath: str, offset_s: float, sample_rate: int, window_size_s: float
-):
-  """Load an audio window."""
-  with epath.Path(filepath).open('rb') as f:
-    sf = soundfile.SoundFile(f)
-    offset = int(offset_s * sf.samplerate)
-    window_size = int(window_size_s * sf.samplerate)
-    sf.seek(offset)
-    a = sf.read(window_size)
-  a = librosa.resample(
-      y=a, orig_sr=sf.samplerate, target_sr=sample_rate, res_type='polyphase'
-  )
-  if len(a.shape) == 2:
-    # Downstream ops expect mono audio, so reduce to mono.
-    a = a[:, 0]
-  return a
-
-
-def multi_load_audio_window(
-    filepaths: Sequence[str],
-    offsets: Sequence[int],
-    sample_rate: int,
-    window_size_s: float,
-    max_workers: int = 5,
-):
-  """Load audio windows in parallel."""
-  loader = functools.partial(
-      load_audio_window, sample_rate=sample_rate, window_size_s=window_size_s
-  )
-  with concurrent.futures.ThreadPoolExecutor(
-      max_workers=max_workers
-  ) as executor:
-    futures = []
-    for fp, offset in zip(filepaths, offsets):
-      future = executor.submit(loader, offset_s=offset, filepath=fp)
-      futures.append(future)
-    for f in futures:
-      yield f.result()
-
-
 def display_search_results(
     results: search.TopKSearchResults,
     embedding_sample_rate: int,
@@ -137,12 +92,11 @@ def display_search_results(
   """Display search results, and add audio and annotation info to results."""
 
   # Parallel load the audio windows.
-  st = time.time()
   filepaths = [source_map[r.filename] for r in results]
   offsets = [r.timestamp_offset for r in results]
   for r, result_audio_window in zip(
       results,
-      multi_load_audio_window(
+      audio_utils.multi_load_audio_window(
           filepaths, offsets, embedding_sample_rate, window_s, max_workers
       ),
   ):
@@ -162,6 +116,3 @@ def display_search_results(
     r.label_widgets = label_widgets
 
     print('-' * 80)
-  end = time.time()
-  # TODO(tomdenton): Clean up debug messages.
-  print(end - st)

@@ -28,16 +28,14 @@ training small classifiers or evaluating clustering methods.
 
 import collections
 import dataclasses
-import os
 import time
 from typing import Dict, Optional, Sequence, Tuple
 
+from chirp import audio_utils
 from chirp.inference import interface
 from etils import epath
-import librosa
 import numpy as np
 import tensorflow as tf
-import tqdm
 
 
 @dataclasses.dataclass
@@ -57,22 +55,13 @@ class MergedDataset:
   num_classes: Optional[int] = None
   data_sample_rate: Optional[int] = None
   embedding_dim: Optional[int] = None
-  label_lookup: Optional[tf.lookup.StaticHashTable] = None
+  labels: Optional[Tuple[str, ...]] = None
 
   def __post_init__(self):
-    wavs_dataset, label_lookup = dataset_from_labeled_wav_dirs(
-        self.base_dir, self.num_splits, self.exclude_classes
-    )
-    self.label_lookup = label_lookup
-    for ex in wavs_dataset.as_numpy_iterator():
-      self.data_sample_rate = ex['sample_rate']
-      break
-
     st = time.time()
-    merged = embed_dataset(
+    labels, merged = embed_dataset(
+        self.base_dir,
         self.embedding_model,
-        wavs_dataset,
-        self.data_sample_rate,
         self.time_pooling,
         self.exclude_classes,
     )
@@ -81,9 +70,8 @@ class MergedDataset:
     self.data = merged
     self.embedding_dim = merged['embeddings'].shape[-1]
 
-    self.num_classes = self.label_lookup.size()
-    if hasattr(self.num_classes, 'numpy'):
-      self.num_classes = self.num_classes.numpy()
+    self.labels = tuple(labels)
+    self.num_classes = len(self.labels)
     print(f'    found {self.num_classes} classes.')
     class_counts = collections.defaultdict(int)
     for cl, cl_str in zip(merged['label'], merged['label_str']):
@@ -147,52 +135,6 @@ class MergedDataset:
     return ds
 
 
-def dataset_from_labeled_wav_dirs(
-    base_dir: str, num_splits: int, exclude_classes: Sequence[str] = ()
-) -> Tuple[tf.data.Dataset, tf.lookup.StaticHashTable]:
-  """Create a dataset from wavs organized into label directories."""
-  wavs_glob = os.path.join(base_dir, '*/*.wav')
-
-  # Count the number of labels.
-  p = epath.Path(base_dir)
-  labels = sorted(
-      [
-          lbl.stem
-          for lbl in p.iterdir()
-          if lbl.is_dir() and lbl.stem not in exclude_classes
-      ]
-  )
-  label_lookup = tf.lookup.StaticHashTable(
-      tf.lookup.KeyValueTensorInitializer(labels, range(len(labels))),
-      len(labels),
-  )
-
-  def _read_wav(filename):
-    """TF function for creating wav features with a filepath label."""
-    file_contents = tf.io.read_file(filename)
-    try:
-      wav, sample_rate = tf.audio.decode_wav(file_contents, desired_channels=1)
-    except tf.errors.OpError as e:
-      raise ValueError(f'Failed to decode wav file ({filename})') from e
-    wav = tf.squeeze(wav, axis=-1)
-    sample_rate = tf.cast(sample_rate, dtype=tf.int64)
-    label = tf.strings.split(filename, '/')[-2]
-    split = tf.strings.to_hash_bucket(filename, num_splits)
-    features = {
-        'filename': filename,
-        'split': split,
-        'audio': wav,
-        'label': label_lookup.lookup(label),
-        'label_str': label,
-        'label_hot': tf.one_hot(label_lookup.lookup(label), len(labels)),
-        'sample_rate': sample_rate,
-    }
-    return features
-
-  ds = tf.data.Dataset.list_files(wavs_glob).map(_read_wav)
-  return ds, label_lookup
-
-
 def pool_time_axis(embeddings, pool_method, axis=1):
   """Apply pooling over the specified axis."""
   if pool_method == 'mean':
@@ -227,56 +169,70 @@ def _pad_audio(audio: np.ndarray, target_length: int) -> np.ndarray:
 
 
 def embed_dataset(
+    base_dir: str,
     embedding_model: interface.EmbeddingModel,
-    dataset: tf.data.Dataset,
-    data_sample_rate: int,
     time_pooling: str,
     exclude_classes: Sequence[str] = (),
-) -> Dict[str, np.ndarray]:
+) -> Tuple[Sequence[str], Dict[str, np.ndarray]]:
   """Add embeddings to an eval dataset.
 
   Embed a dataset, creating an in-memory copy of all data with embeddings added.
+  The base_dir should contain folders corresponding to classes, and each
+  sub-folder should contina wav files for the respective class.
+
+  Note that any wav files in the base_dir directly will be ignored.
 
   Args:
-    embedding_model: Inference model.
-    dataset: TF Dataset of unbatched audio examples.
-    data_sample_rate: Sample rate of dataset audio.
+    base_dir: Directory contianing audio data.
+    embedding_model: Model for computing audio embeddings.
     time_pooling: Key for time pooling strategy.
     exclude_classes: Classes to skip.
 
   Returns:
-    Dict contianing the entire embedded dataset.
+    Ordered labels and a Dict contianing the entire embedded dataset.
   """
+  base_dir = epath.Path(base_dir)
+  labels = sorted([p.name for p in base_dir.glob('*') if p.is_dir()])
+  if not labels:
+    raise ValueError(
+        'No subfolders found in base directory. Audio will be '
+        'matched as "base_dir/*/*.wav", with the subfolders '
+        'indicating class names.'
+    )
+  labels = [label for label in labels if label not in exclude_classes]
+
+  if hasattr(embedding_model, 'window_size_s'):
+    window_size = int(
+        embedding_model.window_size_s * embedding_model.sample_rate
+    )
+  else:
+    window_size = -1
+
+  filepaths = []
   merged = collections.defaultdict(list)
-  exclude_classes = set(exclude_classes)
-  for ex in tqdm.tqdm(dataset.as_numpy_iterator()):
-    if ex['label_str'] in exclude_classes:
-      continue
-    if data_sample_rate > 0 and data_sample_rate != embedding_model.sample_rate:
-      ex['audio'] = librosa.resample(
-          ex['audio'],
-          data_sample_rate,
-          embedding_model.sample_rate,
-          res_type='polyphase',
-      )
+  for label_idx, label in enumerate(labels):
+    label_hot = np.zeros([len(labels)], np.int32)
+    label_hot[label_idx] = 1
+    filepaths = [fp.as_posix() for fp in (base_dir / label).glob('*.wav')]
+    audio_iterator = audio_utils.multi_load_audio_window(
+        filepaths, None, embedding_model.sample_rate, -1
+    )
 
-    audio_size = ex['audio'].shape[0]
-    if hasattr(embedding_model, 'window_size_s'):
-      window_size = int(
-          embedding_model.window_size_s * embedding_model.sample_rate
-      )
+    for fp, audio in zip(filepaths, audio_iterator):
+      audio_size = audio.shape[0]
       if window_size > audio_size:
-        ex['audio'] = _pad_audio(ex['audio'], window_size)
-
-    outputs = embedding_model.embed(ex['audio'])
-    if outputs.embeddings is not None:
+        audio = _pad_audio(audio, window_size)
+      outputs = embedding_model.embed(audio)
       embeds = outputs.pooled_embeddings(time_pooling, 'squeeze')
-      ex['embeddings'] = embeds
-    if outputs.separated_audio is not None:
-      ex['separated_audio'] = outputs.separated_audio
+      merged['embeddings'].append(embeds)
 
-    for k in ex.keys():
-      merged[k].append(ex[k])
+      filename = epath.Path(fp).name
+      merged['filename'].append(f'{label}/{filename}')
+      # TODO(tomdenton): Make audio loading optional, for handling larger data.
+      merged['audio'].append(audio)
+      merged['label'].append(label_idx)
+      merged['label_str'].append(label)
+      merged['label_hot'].append(label_hot)
 
   # pad audio to ensure all the same length.
   target_audio_len = np.max([a.shape[0] for a in merged['audio']])
@@ -284,18 +240,5 @@ def embed_dataset(
 
   outputs = {}
   for k in merged.keys():
-    if k == 'embeddings':
-      print([x.shape for x in merged[k]])
     outputs[k] = np.stack(merged[k])
-
-  # Check that all keys have the same batch dimension.
-  batch_size = outputs['embeddings'].shape[0]
-  for k in outputs:
-    if outputs[k].shape[0] != batch_size:
-      mismatched = outputs[k].shape[0]
-      raise ValueError(
-          f'Size mismatch between embeddings ({batch_size}) '
-          f'and {k} ({mismatched})'
-      )
-
-  return outputs
+  return labels, outputs
