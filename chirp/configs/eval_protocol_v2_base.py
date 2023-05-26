@@ -18,12 +18,11 @@
 This config sets up model evaluation using the generalization evaluation
 framework over windowed and densely annotated examples without applying any
 aggregation of scored search results at the recording or annotation level. The
-evaluation is performed over a pretrained EfficientNet model.
+evaluation is performed over the specified pre-trained model.
 """
 
 import itertools
-
-from typing import Sequence
+from typing import Dict, Sequence
 from chirp import config_utils
 from ml_collections import config_dict
 
@@ -31,6 +30,46 @@ _callable_config = config_utils.callable_config
 _object_config = config_utils.object_config
 
 _TFDS_DATA_DIR = None
+_EVAL_REGIONS = (
+    'ssw',
+    'coffee_farms',
+    'hawaii',
+    'high_sierras',
+    'sierra_nevada',
+    'peru',
+)
+_CORPUS_TYPES = ('xc_fg', 'xc_bg', 'soundscapes')
+_NUM_REPS = (1, 2, 4, 8, 16)
+_SEEDS = (1, 2, 3, 4, 5)
+
+
+def build_eval_set_specs() -> Dict[str, config_dict.ConfigDict]:
+  """Build EvalSetSpecifications with which to construct all eval datasets.
+
+  In v2, a varied number of class representatives will be used to produce model
+  embeddings to form the basis for species queries during eval_lib.search(). The
+  representatives are resampled len(_SEEDS) times to be able to compute metric
+  confidence intervals.
+
+  Returns:
+    A mapping of eval set specifier to a ConfigDict containing the unparsed
+    EvalSetSpecification configs.
+  """
+
+  eval_set_specifications = {}
+
+  for corpus_type, location in itertools.product(_CORPUS_TYPES, _EVAL_REGIONS):
+    for k, seed in itertools.product(_NUM_REPS, _SEEDS):
+      eval_set_specifications[f'{location}_{corpus_type}_{k}_seed{seed}'] = (
+          _callable_config(
+              'eval_lib.EvalSetSpecification.v2_specification',
+              location=location,
+              corpus_type=corpus_type,
+              num_representatives_per_class=k,
+          )
+      )
+
+  return eval_set_specifications
 
 
 def get_config(
@@ -79,30 +118,21 @@ def get_config(
 
   required_datasets = (
       {
-          'dataset_name': 'xc_artificially_rare_class_reps_v2',
-          'to_crop': True,
-          'tfds_name': 'bird_taxonomy/upstream_ar_only_slice_peaked:2.*.*',
-      },
-      {
-          'dataset_name': 'xc_downstream_class_reps',
-          'to_crop': True,
-          'tfds_name': 'bird_taxonomy/downstream_slice_peaked:2.*.*',
+          'dataset_name': 'xc_class_reps',
+          'tfds_name': 'bird_taxonomy/class_representatives_slice_peaked:2.*.*',
       },
       # The `xc_downstream` dataset includes feasible artificially rare species
       # and downstream species with which to construct search corpora.
       {
           'dataset_name': 'xc_downstream',
-          'to_crop': False,
           'tfds_name': 'bird_taxonomy/downstream_full_length:2.*.*',
       },
       {
           'dataset_name': 'soundscapes_ssw',
-          'to_crop': False,
           'tfds_name': 'soundscapes/ssw_full_length',
       },
       {
           'dataset_name': 'soundscapes_coffee_farms',
-          'to_crop': False,
           'tfds_name': 'soundscapes/coffee_farms_full_length',
       },
   )
@@ -202,7 +232,7 @@ def get_config(
     dataset_config.tfds_name = dataset_description['tfds_name']
     dataset_config.tfds_data_dir = tfds_data_dir
 
-    if dataset_description['to_crop']:
+    if dataset_description['dataset_name'] == 'xc_class_reps':
       ops = slice_peaked_pipeline_ops + data_ops
     elif dataset_description['dataset_name'] == 'xc_downstream':
       ops = full_length_xc_pipeline_ops + data_ops
@@ -218,36 +248,7 @@ def get_config(
   config.dataset_configs = dataset_configs
 
   # Build all eval set specifications.
-  config.eval_set_specifications = {}
-  for corpus_type, location in itertools.product(
-      ('xc_fg', 'xc_bg', 'soundscapes'), ('ssw', 'coffee_farms', 'hawaii')
-  ):
-    # SSW species are "artificially rare" (a limited number of examples were
-    # included during upstream training). If provided, we use the singular
-    # learned vector representation from upstream training during search.
-    # Otherwise, we use all available upstream recordings.
-    if location == 'ssw':
-      config.eval_set_specifications[f'artificially_rare_{corpus_type}'] = (
-          _callable_config(
-              'eval_lib.EvalSetSpecification.v2_specification',
-              location=location,
-              corpus_type=corpus_type,
-              num_representatives_per_class=-1,
-          )
-      )
-    # For downstream species, we sweep over {1, 2, 4, 8, 16} representatives
-    # per class, and in each case we resample the collection of class
-    # representatives 5 times to get confidence intervals on the metrics.
-    else:
-      for k, seed in itertools.product((1, 2, 4, 8, 16), range(1, 6)):
-        config.eval_set_specifications[
-            f'{location}_{corpus_type}_{k}_seed{seed}'
-        ] = _callable_config(
-            'eval_lib.EvalSetSpecification.v2_specification',
-            location=location,
-            corpus_type=corpus_type,
-            num_representatives_per_class=k,
-        )
+  config.eval_set_specifications = build_eval_set_specs()
 
   config.debug = config_dict.ConfigDict()
   # Path to the embedded dataset cache. If set, the embedded dataset will be

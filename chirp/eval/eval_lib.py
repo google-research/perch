@@ -36,8 +36,26 @@ _BACKGROUND_KEY = 'bg_labels'
 ConfigDict = ml_collections.ConfigDict
 
 EvalModelCallable = Callable[[np.ndarray], np.ndarray]
-
 _T = TypeVar('_T', bound='EvalSetSpecification')
+_EVAL_REGIONS = (
+    'ssw',
+    'coffee_farms',
+    'hawaii',
+    'high_sierras',
+    'sierra_nevada',
+    'peru',
+)
+
+
+# TODO(bringingjoy): Update once mismatched species codes are resolved in our
+# class lists.
+_MISMATCHED_SPECIES_CODES = [
+    'reevir1',
+    'gnwtea',
+    'grnjay',
+    'butwoo1',
+    'unknown',
+]
 
 
 @dataclasses.dataclass
@@ -191,23 +209,32 @@ class EvalSetSpecification:
     downstream_class_names = (
         namespace_db.load_db().class_lists['downstream_species_v2'].classes
     )
-    class_names = {
-        'ssw': (
-            namespace_db.load_db()
-            .class_lists['artificially_rare_species_v2']
-            .classes
-        ),
-        'coffee_farms': [
+    class_names = {}
+    for region in _EVAL_REGIONS:
+      if region == 'ssw':
+        # Filter recordings with 'unknown' species label.
+        ssw = 'artificially_rare_species_v2'
+        species = [
             c
-            for c in namespace_db.load_db().class_lists['coffee_farms'].classes
-            if c in downstream_class_names
-        ],
-        'hawaii': [
+            for c in namespace_db.load_db().class_lists[ssw].classes
+            if c not in _MISMATCHED_SPECIES_CODES
+        ]
+      elif region in ('peru', 'high_sierras', 'sierra_nevada'):
+        species = [
             c
-            for c in namespace_db.load_db().class_lists['hawaii'].classes
+            for c in namespace_db.load_db().class_lists[region].classes
+            if c not in _MISMATCHED_SPECIES_CODES
+        ]
+      else:
+        # Keep recordings which map to downstream class species.
+        species = [
+            c
+            for c in namespace_db.load_db().class_lists[region].classes
             if c in downstream_class_names
-        ],
-    }[location]
+            and c not in _MISMATCHED_SPECIES_CODES
+        ]
+      class_names[region] = species
+    class_names = class_names[location]
 
     # The name of the dataset to draw embeddings from to form the corpus.
     corpus_dataset_name = (
@@ -216,12 +243,7 @@ class EvalSetSpecification:
         else 'xc_downstream'
     )
 
-    class_representative_dataset_name = {
-        'ssw': 'xc_artificially_rare_class_reps_v2',
-        'coffee_farms': 'xc_downstream_class_reps',
-        'hawaii': 'xc_downstream_class_reps',
-    }[location]
-
+    class_representative_dataset_name = 'xc_class_reps'
     class_name_regexp = '|'.join(class_names)
 
     return cls(
@@ -761,7 +783,8 @@ def compute_metrics(
     computed for each species in the given eval set and writes these to a csv
     for each eval set.
   """
-
+  # TODO(hamer): consider moving eval_set_name metadata (i.e. # exemplars, seed)
+  # to separate columns in the metric results
   species_metric_eval_set = list()
   for eval_species, eval_results in eval_set_results.items():
     eval_scores = eval_results['score'].values

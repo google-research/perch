@@ -95,7 +95,9 @@ class TaxonomyModelCallback:
     learned_representation_blocklist: Species codes for learned representations
       which should *not* appear in the `learned_representations` mapping. This
       is analogous in result to having an allowlist for which species codes use
-      the `learned_representations`.
+      the `learned_representations`. By default, this is set to False so that
+      all eval sets use embedded class representatives with which to form
+      species queries.
     model_callback: the fprop function used as part of the model callback,
       created automatically post-initialization.
     learned_representations: mapping from class name to its learned
@@ -107,7 +109,7 @@ class TaxonomyModelCallback:
 
   init_config: ConfigDict
   workdir: str
-  use_learned_representations: bool = True
+  use_learned_representations: bool = False
   learned_representation_blocklist: Sequence[str] = dataclasses.field(
       default_factory=list
   )

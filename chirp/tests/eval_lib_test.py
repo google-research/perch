@@ -418,11 +418,13 @@ class TaxonomyModelCallbackTest(absltest.TestCase):
     all_species = db.class_lists['xenocanto'].classes
     downstream_species = db.class_lists['downstream_species_v2'].classes
 
-    # By default, the model callback should load all available learned
-    # representations.
+    # The model callback should load all available learned representations when
+    # use_learned_representations is set to True (by default, set to False).
     self.assertLen(
         callbacks.TaxonomyModelCallback(
-            init_config=init_config, workdir=workdir
+            init_config=init_config,
+            workdir=workdir,
+            use_learned_representations=True,
         ).learned_representations,
         len(all_species),
     )
@@ -432,6 +434,7 @@ class TaxonomyModelCallbackTest(absltest.TestCase):
         callbacks.TaxonomyModelCallback(
             init_config=init_config,
             workdir=workdir,
+            use_learned_representations=True,
             learned_representation_blocklist=downstream_species,
         ).learned_representations.keys(),
         downstream_species,
