@@ -40,6 +40,7 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
           'tiny' in config.name
           or 'upstream' in config.name
           or 'downstream' in config.name
+          or 'representative' in config.name
       )
   ]
   EXAMPLE_DIR = DATASET_CLASS.code_path.parent / 'placeholder_data'

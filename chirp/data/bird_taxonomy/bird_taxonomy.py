@@ -77,7 +77,7 @@ class BirdTaxonomyConfig(tfds.core.BuilderConfig):
 class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   """DatasetBuilder for the bird taxonomy dataset."""
 
-  VERSION = tfds.core.Version('2.0.0')
+  VERSION = tfds.core.Version('2.1.0')
   RELEASE_NOTES = {
       '1.0.0': 'Initial release.',
       '1.1.0': (
@@ -119,6 +119,11 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       '2.0.0': (
           "Updated the upstream split to align with Coffee Farms and Hawai'i."
       ),
+      '2.1.0': (
+          "Added a 'class_representatives_slice_peaked' variant which contains "
+          'recordings for High Sierras, Sierra Nevada, and Peru species in '
+          'addition to recordings for artificially-rare and downstream species.'
+      ),
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
@@ -145,11 +150,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
               fsu.filter_in_class_list('species_code', 'tiny_species'),
               fsu.scrub_all_but_class_list('bg_species_codes', 'tiny_species'),
           ]),
-          metadata_processing_query=fsu.QuerySequence(
-              [
-                  fsu.filter_in_class_list('species_code', 'tiny_species'),
-              ]
-          ),
+          metadata_processing_query=fsu.QuerySequence([
+              fsu.filter_in_class_list('species_code', 'tiny_species'),
+          ]),
       ),
       BirdTaxonomyConfig(
           name='upstream_slice_peaked',
@@ -185,6 +188,23 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           description=(
               'Downstream data version with chunked audio sequences '
               'processed with chirp.audio_utils.slice_peaked_audio.'
+          ),
+      ),
+      BirdTaxonomyConfig(
+          name='class_representatives_slice_peaked',
+          localization_fn=audio_utils.slice_peaked_audio,
+          interval_length_s=6.0,
+          data_processing_query=(
+              premade_queries.get_class_representatives_data_query()
+          ),
+          metadata_processing_query=(
+              premade_queries.get_class_representatives_metadata_query()
+          ),
+          description=(
+              'All recordings available to be used as class representatives '
+              '(namely recording for artificially-rare, downstream, High '
+              'Sierras, Sierra Nevada, and Peru), processed with '
+              'chirp.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
@@ -232,11 +252,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
                   'bg_species_codes', 'global_seabirds'
               ),
           ]),
-          metadata_processing_query=fsu.QuerySequence(
-              [
-                  fsu.filter_in_class_list('species_code', 'global_seabirds'),
-              ]
-          ),
+          metadata_processing_query=fsu.QuerySequence([
+              fsu.filter_in_class_list('species_code', 'global_seabirds'),
+          ]),
       ),
   ]
 
@@ -318,13 +336,11 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     dl_manager._force_checksums_validation = (
         False  # pylint: disable=protected-access
     )
-    paths = dl_manager.download_and_extract(
-        {
-            'taxonomy_info': (
-                self.GCS_URL / self.TAXONOMY_INFO_FILENAME
-            ).as_posix(),
-        }
-    )
+    paths = dl_manager.download_and_extract({
+        'taxonomy_info': (
+            self.GCS_URL / self.TAXONOMY_INFO_FILENAME
+        ).as_posix(),
+    })
     # Load taxonomy_info, which is a superset of taxonomy_metadata that also
     # includes information on the Xeno-Canto files associated with each
     # species.

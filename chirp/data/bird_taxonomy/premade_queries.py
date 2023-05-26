@@ -15,10 +15,6 @@
 
 """A set of premade queries to generate stable data configs."""
 
-import json
-import logging
-
-from chirp import path_utils
 from chirp.data import filter_scrub_utils as fsu
 from chirp.taxonomy import namespace_db
 
@@ -52,70 +48,6 @@ def get_upstream_metadata_query() -> fsu.QuerySequence:
           )
       ]
   )
-
-
-def get_artificially_rare_species_constraints(
-    num_foreground: int, num_background: int
-):
-  """Obtain feasible set of artifically rare species given constraints.
-
-  'Artifically rare' species are species for which we ony want to sample a small
-  number of foreground and background recordings. Those species will be useful
-  to evaluate long-tail performance of methods. Depending on the exact number
-  of fg/bg recordings, some species may not contain enough samples; we call
-  those `unfeasible species'. We need to know unfeasible species before-hand
-  so that we can (i) remove them for the label space (ii) exclude their
-  recordings when searching for a valid solution that satisfies the
-  above-mentioned constraints.
-
-  Args:
-    num_foreground: The number of foreground recordings we want for each
-      species.
-    num_background: The number of background recordings we want for each
-      species.
-
-  Returns:
-    target_fg: The corrected (removing unfeasible species) dictionary of
-        foreground constraints.
-    target_bg: The corrected (removing unfeasible species) dictionary of
-        foreground constraints.
-    feasible_ar_species: The set of feasible species.
-    unfeasible_ar_species: The set of unfeasible species.
-  """
-  with open(path_utils.get_absolute_epath(SSW_STATS_PATH), "rb") as f:
-    ssw_stats = json.load(f)
-
-  # Fix the target foreground/background for SSW species
-  target_fg = {k: num_foreground for k in ssw_stats}
-  target_bg = {k: num_background for k in ssw_stats}
-  feasible_ar_species = [
-      s
-      for s in ssw_stats
-      if ssw_stats[s]["fg"] >= target_fg[s]
-      and ssw_stats[s]["bg"] >= target_bg[s]
-  ]
-
-  # Re-adjust the target.
-  target_fg = {k: num_foreground for k in feasible_ar_species}
-  target_bg = {k: num_background for k in feasible_ar_species}
-
-  unfeasible_ar_species = list(
-      set(ssw_stats.keys()).difference(feasible_ar_species)
-  )
-  logging.info(
-      (
-          "Under constraints (num_foreground=%d, num_background=%d), %d out of"
-          " %dSSW species were feasible. The following species were"
-          " unfeasible: %s"
-      ),
-      num_foreground,
-      num_background,
-      len(feasible_ar_species),
-      len(ssw_stats),
-      str(unfeasible_ar_species),
-  )
-
-  return target_fg, target_bg, feasible_ar_species, unfeasible_ar_species
 
 
 def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
@@ -258,6 +190,75 @@ def get_downstream_data_query() -> fsu.QuerySequence:
           kwargs={
               "key": "species_code",
               "values": downstream_species + ar_species,
+          },
+      ),
+  ])
+
+
+def get_class_representatives_metadata_query() -> fsu.QuerySequence:
+  db = namespace_db.load_db()
+  species = list(
+      set(
+          list(db.class_lists[DOWNSTREAM_CLASS_LIST].classes)
+          + list(db.class_lists[AR_CLASS_LIST].classes)
+          + list(db.class_lists["high_sierras"].classes)
+          + list(db.class_lists["sierras_kahl"].classes)
+          + list(db.class_lists["peru"].classes)
+      )
+  )
+  return fsu.QuerySequence(
+      [
+          fsu.Query(
+              op=fsu.TransformOp.FILTER,
+              kwargs={
+                  "mask_op": fsu.MaskOp.IN,
+                  "op_kwargs": {
+                      "key": "species_code",
+                      "values": species,
+                  },
+              },
+          )
+      ]
+  )
+
+
+def get_class_representatives_data_query() -> fsu.QuerySequence:
+  """Produces the QuerySequence to generate class representatives data."""
+  db = namespace_db.load_db()
+  species = list(
+      set(
+          list(db.class_lists[DOWNSTREAM_CLASS_LIST].classes)
+          + list(db.class_lists["high_sierras"].classes)
+          + list(db.class_lists["sierras_kahl"].classes)
+          + list(db.class_lists["peru"].classes)
+      )
+  )
+  species_no_ar = [
+      s for s in species if s not in db.class_lists[AR_CLASS_LIST].classes
+  ]
+  return fsu.QuerySequence([
+      fsu.QueryParallel(
+          queries=[
+              fsu.Query(
+                  op=fsu.TransformOp.FILTER,
+                  kwargs={
+                      "mask_op": fsu.MaskOp.IN,
+                      "op_kwargs": {
+                          "key": "species_code",
+                          "values": species_no_ar,
+                      },
+                  },
+              ),
+              get_upstream_data_query(ar_only=True),
+          ],
+          merge_strategy=fsu.MergeStrategy.CONCAT_NO_DUPLICATES,
+      ),
+      # This scrubs all background labels except those with values in `species`.
+      fsu.Query(
+          op=fsu.TransformOp.SCRUB_ALL_BUT,
+          kwargs={
+              "key": "bg_species_codes",
+              "values": species,
           },
       ),
   ])
