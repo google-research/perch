@@ -784,16 +784,17 @@ def compute_metrics(
     for each eval set.
   """
   # TODO(hamer): consider moving eval_set_name metadata (i.e. # exemplars, seed)
-  # to separate columns in the metric results
+  # to separate columns in the metric results.
   species_metric_eval_set = list()
   for eval_species, eval_results in eval_set_results.items():
-    eval_scores = eval_results['score'].values
-    species_label_match = eval_results['species_match'].values
-    label_mask = eval_results['label_mask'].to_numpy().astype(eval_scores.dtype)
+    eval_scores = eval_results['score'].to_numpy()
+    species_label_match = eval_results['species_match'].to_numpy()
+    label_mask = eval_results['label_mask'].to_numpy().astype(np.int16)
 
     roc_auc = metrics.roc_auc(
         logits=eval_scores.reshape(-1, 1),
         labels=species_label_match.reshape(-1, 1),
+        label_mask=label_mask.reshape(-1, 1),
         sort_descending=sort_descending,
     )[
         'macro'

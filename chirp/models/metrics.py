@@ -58,12 +58,33 @@ def cmap(
 def roc_auc(
     logits: jnp.ndarray,
     labels: jnp.ndarray,
+    label_mask: jnp.ndarray | None = None,
     sort_descending: bool = True,
     sample_threshold: int = 0,
 ) -> Dict[str, Any]:
-  """Compute ROC-AUC scores."""
+  """Computes ROC-AUC scores.
+
+  Args:
+    logits: A score for each label which can be ranked.
+    labels: A multi-hot encoding of the ground truth positives. Must match the
+      shape of scores.
+    label_mask: A mask indicating which labels to involve in the calculation.
+    sort_descending: An indicator if the search result ordering is in descending
+      order (e.g. for evaluating over similarity metrics where higher scores are
+      preferred). If false, computes average_precision on descendingly sorted
+      inputs.
+    sample_threshold: Determines whether or not to compute the metric if there
+      are fewer than `sample_threshold` datapoints.
+
+  Returns:
+    A dictionary of ROC-AUC scores using the arithmetic ('macro') and
+    geometric means, along with individual class ('individual') ROC-AUC and its
+    variance.
+  """
+  if label_mask is not None:
+    label_mask = label_mask.T
   class_roc_auc, class_roc_auc_var = generalized_mean_rank(
-      logits.T, labels.T, sort_descending=sort_descending
+      logits.T, labels.T, label_mask=label_mask, sort_descending=sort_descending
   )
   mask = jnp.sum(labels, axis=0) > sample_threshold
   class_roc_auc = jnp.where(mask, class_roc_auc, jnp.nan)
