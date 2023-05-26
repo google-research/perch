@@ -35,7 +35,7 @@ _EVAL_REGIONS = (
     'coffee_farms',
     'hawaii',
     'high_sierras',
-    'sierra_nevada',
+    'sierras_kahl',  # Sierra Nevada region
     'peru',
 )
 _CORPUS_TYPES = ('xc_fg', 'xc_bg', 'soundscapes')

@@ -42,7 +42,7 @@ _EVAL_REGIONS = (
     'coffee_farms',
     'hawaii',
     'high_sierras',
-    'sierra_nevada',
+    'sierras_kahl',  # Sierra Nevada
     'peru',
 )
 
@@ -219,7 +219,7 @@ class EvalSetSpecification:
             for c in namespace_db.load_db().class_lists[ssw].classes
             if c not in _MISMATCHED_SPECIES_CODES
         ]
-      elif region in ('peru', 'high_sierras', 'sierra_nevada'):
+      elif region in ('peru', 'high_sierras', 'sierras_kahl'):
         species = [
             c
             for c in namespace_db.load_db().class_lists[region].classes
