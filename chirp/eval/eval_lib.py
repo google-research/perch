@@ -789,7 +789,7 @@ def compute_metrics(
   for eval_species, eval_results in eval_set_results.items():
     eval_scores = eval_results['score'].to_numpy()
     species_label_match = eval_results['species_match'].to_numpy()
-    label_mask = eval_results['label_mask'].to_numpy().astype(np.int16)
+    label_mask = eval_results['label_mask'].to_numpy().astype(np.int64)
 
     roc_auc = metrics.roc_auc(
         logits=eval_scores.reshape(-1, 1),
