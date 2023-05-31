@@ -169,17 +169,19 @@ class EmbeddingModel:
       window_size_s: float | None,
       hop_size_s: float,
   ) -> np.ndarray:
-    """Helper function for framing audio for inference."""
+    """Helper function for framing audio for inference along the last axis."""
     if window_size_s is None or window_size_s < 0:
-      return audio_array[np.newaxis, :]
+      return np.expand_dims(audio_array, axis=-2)
     frame_length = int(window_size_s * self.sample_rate)
     hop_length = int(hop_size_s * self.sample_rate)
-    if audio_array.shape[0] < frame_length:
-      audio_array = librosa.util.pad_center(audio_array, frame_length)
+    if audio_array.shape[-1] < frame_length:
+      audio_array = librosa.util.pad_center(audio_array, frame_length, axis=-1)
     # Librosa frames as [frame_length, batch], so need a transpose.
     framed_audio = librosa.util.frame(
-        audio_array, frame_length=frame_length, hop_length=hop_length
-    ).T
+        audio_array,
+        frame_length=frame_length,
+        hop_length=hop_length,
+    ).swapaxes(-1, -2)
     return framed_audio
 
   def normalize_audio(

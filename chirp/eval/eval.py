@@ -16,6 +16,7 @@
 """Evaluate a trained model."""
 
 from collections.abc import Sequence
+import os
 
 from absl import app
 from absl import flags
@@ -41,6 +42,14 @@ flags.mark_flags_as_required(['config'])
 def _main():
   """Main function."""
   logging.info(_CONFIG.value)
+  # We need to set Jax and TF GPU options before any other jax/tf calls.
+  # Since calls can potentially happen in parse_config, we'll handle GPU options
+  # before parsing the config.
+  if hasattr(_CONFIG.value, 'jax_mem_frac'):
+    os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = str(_CONFIG.value)
+  if hasattr(_CONFIG.value, 'tf_gpu_growth') and _CONFIG.value.tf_gpu_growth:
+    os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
   config = config_utils.parse_config(
       _CONFIG.value, config_globals.get_globals()
   )

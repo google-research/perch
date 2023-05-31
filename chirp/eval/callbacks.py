@@ -254,6 +254,7 @@ class EmbeddingModelCallback:
       chirp.inference.interface.InferenceOutputs.pooled_embeddings.
     loaded_model: The instantiated interface.EmbeddingModel.
     model_callback: Eval callback.
+    learned_representations: Empty learned_represenations map.
   """
 
   model_key: str
@@ -264,6 +265,11 @@ class EmbeddingModelCallback:
   # The following are populated during init.
   loaded_model: interface.EmbeddingModel = dataclasses.field(init=False)
   model_callback: eval_lib.EvalModelCallable = dataclasses.field(init=False)
+  # We don't use learned_representations with the simple wrapper, but need to
+  # provide an empty mapping for the API.
+  learned_representations: dict[str, np.ndarray] = dataclasses.field(
+      init=True, default_factory=dict
+  )
 
   def __post_init__(self):
     logging.info('Loading separation model...')
