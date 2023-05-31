@@ -37,6 +37,7 @@ class NRCLoss(clu_metrics.Metric):
   probabilities_sum: jnp.array
   nn_loss_sum: jnp.array
   extended_nn_loss_sum: jnp.array
+  label_mask: jnp.ndarray | None
   n_samples: int
 
   @classmethod
@@ -47,6 +48,7 @@ class NRCLoss(clu_metrics.Metric):
       extended_nn_probability: jnp.ndarray,
       nn_weight: jnp.ndarray,
       extended_nn_weight: jnp.ndarray,
+      label_mask: jnp.ndarray | None,
       **_,
   ) -> "NRCLoss":
     """Computes the standard extended nearest-neighbors loss.
@@ -65,18 +67,24 @@ class NRCLoss(clu_metrics.Metric):
     Returns:
       NRCLoss: An instance of NRCLoss.
     """
-
+    if label_mask is None:
+      label_mask = jnp.ones_like(probabilities)
     nn_loss = -(
-        nn_weight * (probabilities[:, None, :] * nn_probability).sum(axis=-1)
+        nn_weight
+        * (
+            label_mask[:, None, :] * probabilities[:, None, :] * nn_probability
+        ).sum(axis=-1)
     ).sum(
         axis=-1
     )  # [batch_size]
 
     extended_nn_loss = -(
         extended_nn_weight
-        * (probabilities[:, None, None, :] * extended_nn_probability).sum(
-            axis=-1
-        )
+        * (
+            label_mask[:, None, None, :]
+            * probabilities[:, None, None, :]
+            * extended_nn_probability
+        ).sum(axis=-1)
     ).sum(
         axis=1
     )  # [batch_size]
@@ -86,6 +94,7 @@ class NRCLoss(clu_metrics.Metric):
         probabilities_sum=probabilities_sum,
         nn_loss_sum=nn_loss.sum(),
         extended_nn_loss_sum=extended_nn_loss.sum(),
+        label_mask=label_mask,
         n_samples=probabilities.shape[0],
     )
 
@@ -96,13 +105,13 @@ class NRCLoss(clu_metrics.Metric):
         extended_nn_loss_sum=self.extended_nn_loss_sum
         + other.extended_nn_loss_sum,
         n_samples=self.n_samples + other.n_samples,
+        label_mask=other.label_mask,
     )
 
   def compute(self):
     probabilities_marginal = self.probabilities_sum / self.n_samples
-    # TODO(mboudiaf): fix the single-label case in the audio setting.
     marginal_entropy = losses.label_ent(
-        probabilities=probabilities_marginal, label_mask=None
+        probabilities=probabilities_marginal, label_mask=self.label_mask[0]
     )
     return (
         1 / self.n_samples * (self.nn_loss_sum + self.extended_nn_loss_sum)
@@ -455,6 +464,28 @@ class NRC(adapt.SFDAMethod):
         .at[batch_indices]
         .set(logit2proba(model_outputs.label))
     )
+
+    # Pad back to the original space
+    if "label_mask" in batch:
+      reference_label_mask = method_utils.get_label_mask(batch)
+      batch_size, nn, extended_nn, num_classes = extended_nn_probability.shape
+      nn_probability = method_utils.pad_pseudo_label(
+          reference_label_mask,
+          nn_probability.reshape(-1, num_classes),
+          adaptation_state,
+      )
+      extended_nn_probability = method_utils.pad_pseudo_label(
+          reference_label_mask,
+          extended_nn_probability.reshape(-1, num_classes),
+          adaptation_state,
+      )
+      if reference_label_mask is not None:
+        nn_probability = nn_probability.reshape(
+            batch_size, nn, reference_label_mask.shape[-1]
+        )
+        extended_nn_probability = extended_nn_probability.reshape(
+            batch_size, nn, extended_nn, reference_label_mask.shape[-1]
+        )
     return adaptation_state, {
         "nn_weight": flax_utils.replicate(nn_weight),
         "extended_nn_weight": flax_utils.replicate(extended_nn_weight),
