@@ -948,3 +948,15 @@ def batch_forward(
     return outputs
 
   return forward
+
+
+def get_dataset_length(dataset):
+  try:
+    return len(dataset)
+  except TypeError:
+    pass
+  # Dataset length is unknown, so let's just iterate over it once...
+  k = 0
+  for _ in dataset.as_numpy_iterator():
+    k += 1
+  return k + 1

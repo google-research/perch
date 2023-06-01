@@ -132,9 +132,7 @@ def forward_dataset(
 
   # Forward the whole dataset. Store embeddings, samples' ids, labels, and
   # model's probabilities.
-  for index, batch in tqdm.tqdm(
-      enumerate(dataset.as_numpy_iterator()), total=len(dataset)
-  ):
+  for index, batch in tqdm.tqdm(enumerate(dataset.as_numpy_iterator())):
     batch = jax.tree_map(np.asarray, batch)
     if key is not None:
       batch_key, key = jax.random.split(key)

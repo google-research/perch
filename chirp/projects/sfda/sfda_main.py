@@ -117,7 +117,7 @@ def main(argv: Sequence[str]) -> None:
           target_class_list=(
               init_target_class_list or config.init_config.target_class_list
           ),
-          adaptation_iterations=len(adaptation_dataset)
+          adaptation_iterations=adapt.get_dataset_length(adaptation_dataset)
           * method_config.num_epochs,
           modality=config.modality,
           optimizer_config=method_config.optimizer_config,
