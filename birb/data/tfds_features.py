@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Chirp custom TFDS Features."""
+"""BIRB custom TFDS Features."""
 
 
 import numpy as np
@@ -30,7 +30,7 @@ class Int16AsFloatTensor(tfds.features.Audio):
   """
 
   INT16_SCALE = float(1 << 15)
-  ALIASES = ['chirp.data.bird_taxonomy.bird_taxonomy.Int16AsFloatTensor']
+  ALIASES = ['birb.data.bird_taxonomy.bird_taxonomy.Int16AsFloatTensor']
 
   def __init__(
       self,

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,9 +21,9 @@ import os
 from absl import app
 from absl import flags
 from absl import logging
-from chirp import config_utils
-from chirp.configs import config_globals
-from chirp.eval import eval_lib
+from birb import config_utils
+from birb.configs import config_globals
+from birb.eval import eval_lib
 import jax
 from ml_collections.config_flags import config_flags
 

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 
 """Presets for the baseline experiments."""
 
-from chirp import config_utils
+from birb import config_utils
 from ml_collections import config_dict
 
 _c = config_utils.callable_config
@@ -88,8 +88,8 @@ def _compute_input_shape(
     config: config_dict.ConfigDict, window_size_ref: config_dict.FieldReference
 ) -> config_dict.ConfigDict:
   """Computes the models's input shape."""
-  # As explained in chirp.models.frontent.STFT, the output of
-  # chirp.data.pipeline.MelSpectrogram has shape [num_frames, num_channels], and
+  # As explained in birb.models.frontent.STFT, the output of
+  # birb.data.pipeline.MelSpectrogram has shape [num_frames, num_channels], and
   # num_frames is computed as
   #
   #   (num_samples + stride - (kernel_size % 2)) // stride - correction,

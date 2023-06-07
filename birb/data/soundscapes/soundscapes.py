@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@ from typing import Any, Callable, Sequence
 import warnings
 
 from absl import logging
-from chirp import audio_utils
-from chirp.data import tfds_features
-from chirp.data.bird_taxonomy import bird_taxonomy
-from chirp.data.soundscapes import dataset_fns
-from chirp.data.soundscapes import soundscapes_lib
+from birb import audio_utils
+from birb.data import tfds_features
+from birb.data.bird_taxonomy import bird_taxonomy
+from birb.data.soundscapes import dataset_fns
+from birb.data.soundscapes import soundscapes_lib
 from etils import epath
 import numpy as np
 import pandas as pd
@@ -93,7 +93,7 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
   keep_unknown_annotation: bool = False
   full_length_unknown_guard: bool = False
   supervised: bool = True
-  audio_dir = epath.Path('gs://chirp-public-bucket/soundscapes')
+  audio_dir = epath.Path('gs://birb-public-bucket/soundscapes')
 
 
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
@@ -134,29 +134,6 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
   }
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
-      SoundscapesConfig(
-          name='caples',  # TODO(mboudiaf) Try to interface caples metadata.
-          class_list_name='caples',
-          audio_glob='caples/audio/*',
-          interval_length_s=5.0,
-          localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_caples_annotations,
-          description='Annotated Caples recordings from 2018/2019.',
-      ),
-      SoundscapesConfig(
-          name='caples_full_length',
-          class_list_name='caples',
-          audio_glob='caples/audio/*',
-          annotation_filename='caples.csv',
-          annotation_load_fn=dataset_fns.load_caples_annotations,
-          keep_unknown_annotation=True,
-          # Some recordings in Caples are only partially-annotated, so to avoid
-          # scoring legitimate model predictions as false positives we pad with
-          # "unknown" annotations before the first annotation and after the last
-          # annotation.
-          full_length_unknown_guard=True,
-          description='Full-length annotated Caples recordings from 2018/2019.',
-      ),
       SoundscapesConfig(
           name='hawaii',
           audio_glob='hawaii/audio/*.flac',
@@ -394,7 +371,6 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         builder=self,
         features=tfds.features.FeaturesDict(common_features),
         supervised_keys=('audio', 'label'),
-        homepage='https://github.com/google-research/chirp',
         citation=_CITATION,
     )
 

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,11 +15,11 @@
 
 """A set of premade queries to generate stable data configs."""
 
-from chirp.data import filter_scrub_utils as fsu
-from chirp.taxonomy import namespace_db
+from birb.data import filter_scrub_utils as fsu
+from birb.taxonomy import namespace_db
 
 # SSW_STATS_PATH contains useful statistics for SSW species, used to guide our
-# DFS search in chirp.data.sampling_utils.sample_recordings_under_constraints.
+# DFS search in birb.data.sampling_utils.sample_recordings_under_constraints.
 # Those statistics were computed after removing all recordings with foreground
 # and background labels belonging to downstream_species.txt
 # (mimicking the conditions under which the sampling happens).

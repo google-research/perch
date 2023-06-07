@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 # limitations under the License.
 
 """Configuration to train the (small) Conformer baseline ablation."""
-from chirp import config_utils
-from chirp.configs.baselines import presets
+from birb import config_utils
+from birb.configs.baselines import presets
 from ml_collections import config_dict
 
 _c = config_utils.callable_config

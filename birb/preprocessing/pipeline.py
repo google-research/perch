@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ import dataclasses
 from typing import Iterable, Sequence
 
 from absl import logging
-from chirp import audio_utils
-from chirp.models import frontend
-from chirp.taxonomy import namespace
-from chirp.taxonomy import namespace_db
+from birb import audio_utils
+from birb.models import frontend
+from birb.taxonomy import namespace
+from birb.taxonomy import namespace_db
 import jax
 from jax import numpy as jnp
 import pandas as pd
@@ -588,7 +588,7 @@ class MelSpectrogram(FeaturesPreprocessOp):
       return scalar * tf.math.log(tf.maximum(x, floor) + offset)
 
     if isinstance(self.scaling_config, frontend.LogScalingConfig):
-      # TODO(bartvm): Probably needs standardization step to stabilize training.
+      # TODO: Probably needs standardization step to stabilize training.
       features[self.name] = log_scale(
           mel_spectrograms, **dataclasses.asdict(self.scaling_config)
       )
@@ -863,7 +863,7 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
     source_classes = namespace.ClassList(
         'dataset',
         self.source_namespace,
-        # TODO(vdumoulin): generalize this to labels beyond 'ignore'.
+        # TODO: generalize this to labels beyond 'ignore'.
         # Some dataset variants (e.g. bird_taxonomy/downstream_slice_peaked)
         # use an 'ignore' label which is not part of the eBirds taxonomy. We
         # ignore this label; the mapping tables return an 'unknown' default
@@ -1228,7 +1228,7 @@ class DenselyAnnotateWindows(DatasetPreprocessOp):
       example['label'] = tf.gather(example['label'], overlap_indices)
       return example
 
-    # TODO(tomdenton): We should refactor this into a FeaturesPreprocessOp.
+    # TODO: We should refactor this into a FeaturesPreprocessOp.
     # Refactoring will allow grouping it with other ops and
     # reduce the total number of dataset.map calls, thus saving parallelism.
     return dataset.map(map_fn)

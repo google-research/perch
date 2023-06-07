@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,20 +16,17 @@
 """Define the globals that can be used in configuration files."""
 from typing import Any
 
-from chirp import audio_utils
-from chirp import config_utils
-from chirp.eval import callbacks
-from chirp.eval import eval_lib
-from chirp.models import conformer
-from chirp.models import efficientnet
-from chirp.models import frontend
-from chirp.models import handcrafted_features
-from chirp.models import hubert
-from chirp.models import layers
-from chirp.models import quantizers
-from chirp.models import soundstream_unet
-from chirp.models import taxonomy_model
-from chirp.preprocessing import pipeline
+from birb import audio_utils
+from birb import config_utils
+from birb.eval import callbacks
+from birb.eval import eval_lib
+from birb.models import conformer
+from birb.models import efficientnet
+from birb.models import frontend
+from birb.models import handcrafted_features
+from birb.models import layers
+from birb.models import taxonomy_model
+from birb.preprocessing import pipeline
 from flax import linen as nn
 import optax
 
@@ -42,14 +39,11 @@ def get_globals() -> dict[str, Any]:
       "conformer": conformer,
       "efficientnet": efficientnet,
       "eval_lib": eval_lib,
-      "hubert": hubert,
-      "quantizers": quantizers,
       "frontend": frontend,
       "layers": layers,
       "nn": nn,
       "optax": optax,
       "pipeline": pipeline,
       "handcrafted_features": handcrafted_features,
-      "soundstream_unet": soundstream_unet,
       "taxonomy_model": taxonomy_model,
   }

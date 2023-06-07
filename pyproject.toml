@@ -1,8 +1,8 @@
 [tool.poetry]
-name = "chirp"
+name = "birb"
 version = "0.1.0"
-description = "A bioacoustics research project."
-authors = ["Chirp Team <chirp-bio@google.com>"]
+description = "Code for the BIRB benchmark."
+authors = ["Anonymous"]
 license = "Apache 2.0"
 
 [tool.poetry.dependencies]
@@ -21,10 +21,6 @@ tensorflow-io = "=0.31"
 tensorflow-datasets = {version = "^4.8.0", extras = ["dev"]}
 pandas = "1.5.1"
 etils = {version = "^0.9.0", extras = ["epath"]}
-ratelimiter = "^1.2.0.post0"
-SPARQLWrapper = "^2.0.0"
-scenic = {git = "https://github.com/google-research/scenic.git"}
-tensorflow-hub = "^0.12.0"
 
 [tool.poetry.group.dev.dependencies]
 librosa = "^0.9.2"

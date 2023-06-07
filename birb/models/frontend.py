@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,9 +24,9 @@ For some frontends it also defines inverses (e.g., for separation models).
 import dataclasses
 
 
-from chirp import audio_utils
-from chirp import signal
-from chirp.models import cwt
+from birb import audio_utils
+from birb import signal
+from birb.models import cwt
 from flax import linen as nn
 from jax import numpy as jnp
 from jax import scipy as jsp
@@ -92,7 +92,7 @@ class Frontend(nn.Module):
   features: int
   stride: int
 
-  # TODO(bartvm): Add ScalingConfig with kw_only=True in Python 3.10
+  # TODO: Add ScalingConfig with kw_only=True in Python 3.10
   def _magnitude_scale(self, inputs):
     # Apply frequency scaling
     scaling_config = self.scaling_config

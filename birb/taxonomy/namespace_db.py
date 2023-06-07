@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ import functools
 import os
 from typing import Sequence, Tuple
 
-from chirp import path_utils
-from chirp.taxonomy import generators
-from chirp.taxonomy import namespace
+from birb import path_utils
+from birb.taxonomy import generators
+from birb.taxonomy import namespace
 
 NAMESPACES_PATH = 'taxonomy/data/namespaces'
 MAPPINGS_PATH = 'taxonomy/data/mappings'

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@ import tempfile
 from typing import Any, Callable
 import warnings
 
-from chirp import audio_utils
-from chirp.data import filter_scrub_utils as fsu
-from chirp.data import tfds_features
-from chirp.data.bird_taxonomy import premade_queries
-from chirp.taxonomy import namespace_db
+from birb import audio_utils
+from birb.data import filter_scrub_utils as fsu
+from birb.data import tfds_features
+from birb.data.bird_taxonomy import premade_queries
+from birb.taxonomy import namespace_db
 from etils import epath
 from jax import numpy as jnp
 import numpy as np
@@ -133,7 +133,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           interval_length_s=6.0,
           description=(
               'Chunked audio sequences processed with '
-              'chirp.audio_utils.slice_peaked_audio.'
+              'birb.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
@@ -162,7 +162,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           metadata_processing_query=premade_queries.get_upstream_metadata_query(),
           description=(
               'Upstream data version with chunked audio sequences '
-              'processed with chirp.audio_utils.slice_peaked_audio.'
+              'processed with birb.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
@@ -176,7 +176,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           description=(
               'Upstream data version (AR-only) with chunked audio '
               'sequences processed with '
-              'chirp.audio_utils.slice_peaked_audio.'
+              'birb.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
@@ -187,7 +187,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           metadata_processing_query=premade_queries.get_downstream_metadata_query(),
           description=(
               'Downstream data version with chunked audio sequences '
-              'processed with chirp.audio_utils.slice_peaked_audio.'
+              'processed with birb.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
@@ -204,7 +204,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
               'All recordings available to be used as class representatives '
               '(namely recording for artificially-rare, downstream, High '
               'Sierras, Sierra Nevada, and Peru), processed with '
-              'chirp.audio_utils.slice_peaked_audio.'
+              'birb.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
@@ -244,7 +244,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           description=(
               'Seabird dataset consisting of data '
               'with chunked audio sequences processed with '
-              'chirp.audio_utils.slice_peaked_audio.'
+              'birb.audio_utils.slice_peaked_audio.'
           ),
           data_processing_query=fsu.QuerySequence([
               fsu.filter_in_class_list('species_code', 'global_seabirds'),
@@ -258,7 +258,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       ),
   ]
 
-  GCS_URL = epath.Path('gs://chirp-public-bucket/xeno-canto')
+  GCS_URL = epath.Path('gs://birb-public-bucket/xeno-canto')
   TAXONOMY_INFO_FILENAME = 'taxonomy_info_2022-07-18.json'
 
   def _load_taxonomy_metadata(self, disable_filtering: bool = False):
@@ -326,7 +326,6 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
             'sound_type': tfds.features.Text(),
         }),
         supervised_keys=('audio', 'label'),
-        homepage='https://github.com/google-research/chirp',
         citation=_CITATION,
     )
 

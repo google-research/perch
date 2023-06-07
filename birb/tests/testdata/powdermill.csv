@@ -1,6 +1,0 @@
-Selection,View,Channel,Begin Time (s),End Time (s),High Freq (Hz),Low Freq (Hz),Species,Filename
-114,Spectrogram 1,1,205.28147519799998,206.76783872200002,1389.4,4322.5,NOCA,Recording_1/Recording_1_Segment_05.wav
-115,Spectrogram 1,1,206.576929646,207.64056592900002,1080.6,6236.7,WOTH,Recording_1/Recording_1_Segment_05.wav
-116,Spectrogram 1,1,208.087520699,209.809316556,2254.0,5279.6,EATO,Recording_1/Recording_1_Segment_05.wav
-117,Spectrogram 1,1,209.829202127,210.99511113,1600.7,4018.0,EATO,Recording_1/Recording_1_Segment_05.wav
-118,Spectrogram 1,1,212.74093783599997,215.06252857,1420.2,5588.3,EATO,Recording_1/Recording_1_Segment_05.wav

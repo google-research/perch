@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ import enum
 import functools
 from typing import Any, Dict, NamedTuple, Sequence, Union
 
-from chirp.data import sampling_utils as su
-from chirp.taxonomy import namespace_db
+from birb.data import sampling_utils as su
+from birb.taxonomy import namespace_db
 import numpy as np
 import pandas as pd
 

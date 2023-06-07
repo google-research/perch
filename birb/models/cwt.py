@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ MATLAB package jLab.
 import enum
 from typing import Callable
 
-import chirp.signal
+import birb.signal
 from jax import lax
 from jax import numpy as jnp
 from jax import scipy as jsp
@@ -196,7 +196,7 @@ def morlet_wavelet(
     A function which calculates the filter over the time or frequency domain.
   """
   if normalization is Normalization.L1:
-    # TODO(bartvm): Does an expression exist for this?
+    # TODO: Does an expression exist for this?
     raise NotImplementedError
 
   # Follows notation from, e.g., https://en.wikipedia.org/wiki/Morlet_wavelet
@@ -315,8 +315,8 @@ def melspec_params(
     The central frequencies and the inverse bandwidth (normalized).
   """
   # The melspec triangle filters are equally spaced in the mel-scale
-  range_ = map(chirp.signal.hertz_to_mel, (lower_edge_hertz, upper_edge_hertz))  # pytype: disable=wrong-arg-types  # jax-ndarray
-  bands = chirp.signal.mel_to_hertz(jnp.linspace(*range_, num_mel_bins + 2))
+  range_ = map(birb.signal.hertz_to_mel, (lower_edge_hertz, upper_edge_hertz))  # pytype: disable=wrong-arg-types  # jax-ndarray
+  bands = birb.signal.mel_to_hertz(jnp.linspace(*range_, num_mel_bins + 2))
 
   # Convert from Hertz to normalized frequencies
   bands = bands / sample_rate * jnp.pi * 2
@@ -370,10 +370,10 @@ def convolve_filter(
   dn = lax.conv_dimension_numbers(
       signal.shape, sampled_filters.shape, ("NWC", "WIO", "NWC")
   )
-  # TODO(bartvm): Not all platforms (e.g., TF Lite) support complex inputs for
+  # TODO: Not all platforms (e.g., TF Lite) support complex inputs for
   # convolutions. Can be addressed by convolving with the real/imaginary parts
   # separately in the future if needed.
-  # TODO(bartvm): Converting signal to complex because JAX wants the input and
+  # TODO: Converting signal to complex because JAX wants the input and
   # filters to be the same type, but this results in 33% more multiplications
   # than necessary, so this is probably not the fastest option.
   signal = signal.astype(jnp.complex64)
@@ -406,9 +406,9 @@ def multiply_filter(
   *_, num_frames, _ = signal.shape
   fs = jnp.fft.fftfreq(num_frames)
   fs = fs[:, jnp.newaxis] * scale_factors
-  # TODO(bartvm): TF Lite might not support IFFT as a built-in operation, but
+  # TODO: TF Lite might not support IFFT as a built-in operation, but
   # IFFT is just an FFT with the sign of the inputs changed so easy to adapt to.
-  # TODO(bartvm): Note that the signal is real-valued, so using FFT might do
+  # TODO: Note that the signal is real-valued, so using FFT might do
   # unnecessary computation. Might be faster to use RFFT and then take the
   # complex conjugates manually.
   filtered_signal = jnp.fft.ifft(

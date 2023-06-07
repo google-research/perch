@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 """Taxonomy model."""
 import dataclasses
 
-from chirp.models import conformer
-from chirp.models import frontend
-from chirp.models import layers
-from chirp.models import output
+from birb.models import conformer
+from birb.models import frontend
+from birb.models import layers
+from birb.models import output
 from flax import linen as nn
 from jax import numpy as jnp
 

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ import time
 from typing import Callable
 
 from absl import logging
-from chirp import path_utils
-from chirp.models import output
-from chirp.taxonomy import namespace
+from birb import path_utils
+from birb.models import output
+from birb.taxonomy import namespace
 from clu import checkpoint
 from clu import metrics as clu_metrics
 import flax
@@ -191,7 +191,7 @@ class NestedCollection(clu_metrics.Collection):
 
   @classmethod
   def create(cls, **metrics):
-    # TODO(bartvm): This should be fixed in parent class
+    # TODO: This should be fixed in parent class
     return flax.struct.dataclass(
         type('_InlineCollection', (cls,), {'__annotations__': metrics})
     )

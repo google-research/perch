@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -672,7 +672,7 @@ class EarlyFeatureExtractor(nn.Module):
       if inputs.shape[-1] != model_dims:
         inputs = FeedForward(output_dims=model_dims)(inputs)
 
-    # TODO(etriantafillou): Experiment with adding residual connections.
+    # TODO: Experiment with adding residual connections.
     for i, (dim, k, stride) in enumerate(self.conv_layer_tuples):
       inputs = nn.Conv(
           features=dim,

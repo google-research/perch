@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,17 +28,12 @@ from typing import Protocol, Sequence
 from absl import app
 from absl import flags
 from absl import logging
-from chirp import config_utils
-from chirp.configs import config_globals
-from chirp.train import classifier
-from chirp.train import hubert
-from chirp.train import mae
-from chirp.train import separator
+from birb import config_utils
+from birb.configs import config_globals
+from birb.train import classifier
 from ml_collections import config_dict
 from ml_collections.config_flags import config_flags
 import tensorflow as tf
-
-from xmanager import xm  # pylint: disable=unused-import
 
 
 class Run(Protocol):
@@ -61,9 +56,6 @@ class Run(Protocol):
 
 TARGETS: dict[str, Run] = {
     "classifier": classifier.run,
-    "mae": mae.run,
-    "hubert": hubert.run,
-    "separator": separator.run,
 }
 
 _CONFIG = config_flags.DEFINE_config_file("config")

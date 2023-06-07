@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,6 +37,6 @@ def get_absolute_epath(relative_path: str) -> epath.Path:
 
 
 def listdir(relative_path: str) -> Iterable[str]:
-  """List the contents of a directory in the Chirp project."""
+  """List the contents of a directory in the BIRB project."""
   absolute_path = get_absolute_epath(relative_path).as_posix()
   return os.listdir(absolute_path)

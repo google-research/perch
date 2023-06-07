@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ import tempfile
 from typing import Generator, Sequence
 import warnings
 
-from chirp import path_utils
-from chirp import signal
+from birb import path_utils
+from birb import signal
 from etils import epath
 from jax import lax
 from jax import numpy as jnp
@@ -209,8 +209,8 @@ def stft_tf(
   )
   Zxx = tf.linalg.matrix_transpose(Zxx)
 
-  # TODO(bartvm): tf.signal.frame seems to have a bug which sometimes adds
-  # too many frames, so we strip those if necessary
+  # TODO: tf.signal.frame seems to have a bug which sometimes adds too many
+  # frames, so we strip those if necessary
   nadd = (-(input_length - nperseg) % nstep) % nperseg if padded else 0
   length = -((input_length + nadd - nperseg + 1) // (noverlap - nperseg))
   Zxx = Zxx[..., :length]

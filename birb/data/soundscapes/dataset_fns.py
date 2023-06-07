@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@
 import csv
 import os
 
-from chirp.data.soundscapes import soundscapes_lib
-from chirp.taxonomy import annotations
-from chirp.taxonomy import namespace_db
+from birb.data.soundscapes import soundscapes_lib
+from birb.taxonomy import annotations
+from birb.taxonomy import namespace_db
 from etils import epath
 import pandas as pd
 import tensorflow as tf
@@ -142,7 +142,7 @@ def load_cornell_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   return segments
 
 
-# TODO(tomdenton): Eliminate these 'combine' functions.
+# TODO: Eliminate these 'combine' functions.
 # Reading directly from the set of annotation files will be more direct and
 # less error prone when updating datasets.
 def combine_powdermill_annotations(

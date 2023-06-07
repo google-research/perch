@@ -1,8 +1,6 @@
-# Chirp
+# BIRB
 
-![CI](https://github.com/google-research/chirp/actions/workflows/ci.yml/badge.svg)
-
-A bioacoustics research project.
+The BIRB benchmark.
 
 ## Installation
 
@@ -20,10 +18,4 @@ poetry install
 ```
 
 Running `poetry install` creates a virtual environment and installs all
-dependencies, in which you can run the Chirp codebase. To run the tests, try
-
-```bash
-poetry run python -m unittest discover -s chirp/tests -p "*test.py"
-```
-
-*This is not an officially supported Google product.*
+dependencies, in which you can run the `birb` codebase.

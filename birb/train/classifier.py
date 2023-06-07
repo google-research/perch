@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,13 +19,12 @@ import functools
 from typing import Callable, Sequence
 
 from absl import logging
-from chirp import export_utils
-from chirp.data import utils as data_utils
-from chirp.models import metrics
-from chirp.models import output
-from chirp.models import taxonomy_model
-from chirp.taxonomy import class_utils
-from chirp.train import utils
+from birb.data import utils as data_utils
+from birb.models import metrics
+from birb.models import output
+from birb.models import taxonomy_model
+from birb.taxonomy import class_utils
+from birb.train import utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -397,15 +396,6 @@ def export_tf_model(
           variables, audio_batch, train=False
       )
       return model_outputs.label, model_outputs.embedding
-
-    # Note: Polymorphic batch size currently isn't working with the STFT op,
-    # so we provide a static batch size.
-    converted_model = export_utils.Jax2TfModelWrapper(
-        infer_fn, variables, (1,) + input_shape, False
-    )
-    converted_model.export_converted_model(
-        workdir, train_state.step, model_bundle.class_lists
-    )
 
 
 def run(

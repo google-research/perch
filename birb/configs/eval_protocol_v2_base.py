@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ evaluation is performed over the specified pre-trained model.
 
 import itertools
 from typing import Dict, Sequence
-from chirp import config_utils
+from birb import config_utils
 from ml_collections import config_dict
 
 _callable_config = config_utils.callable_config
@@ -266,7 +266,7 @@ def get_config(
   # Each should point to a local function, callable, or one of the provided
   # functions in
 
-  # google-research/chirp/eval/eval_lib.py.
+  # birb/eval/eval_lib.py.
   config.create_species_query = None
 
   # Determines the ordering of search results for use in average-precision based

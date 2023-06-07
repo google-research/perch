@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,9 +21,9 @@ import os
 from typing import Callable, Iterator, Mapping, Sequence, TypeVar
 
 from absl import logging
-from chirp.data import utils as data_utils
-from chirp.models import metrics
-from chirp.taxonomy import namespace_db
+from birb.data import utils as data_utils
+from birb.models import metrics
+from birb.taxonomy import namespace_db
 import jax
 import ml_collections
 import numpy as np
@@ -47,8 +47,7 @@ _EVAL_REGIONS = (
 )
 
 
-# TODO(bringingjoy): Update once mismatched species codes are resolved in our
-# class lists.
+# TODO: Update once mismatched species codes are resolved in our class lists.
 _MISMATCHED_SPECIES_CODES = [
     'reevir1',
     'gnwtea',
@@ -471,8 +470,8 @@ def _prepare_eval_set(
         ),
     )
 
-    # TODO(vdumoulin): fix the issue upstream to avoid having to skip
-    # classes in the first place.
+    # TODO: fix the issue upstream to avoid having to skip classes in the first
+    # place.
     if (
         num_representatives_per_class >= 0
         and class_representative_mask.sum() < num_representatives_per_class
@@ -500,8 +499,8 @@ def _prepare_eval_set(
     )
     search_corpus_mask = search_corpus_mask.loc[search_corpus_df.index]
 
-    # TODO(vdumoulin): fix the issue upstream to avoid having to skip classes
-    # in the first place.
+    # TODO: fix the issue upstream to avoid having to skip classes in the first
+    # place.
     if (
         search_corpus_df['label'][search_corpus_mask].str.contains(class_name)
         | search_corpus_df['bg_labels'][search_corpus_mask].str.contains(
@@ -783,8 +782,8 @@ def compute_metrics(
     computed for each species in the given eval set and writes these to a csv
     for each eval set.
   """
-  # TODO(hamer): consider moving eval_set_name metadata (i.e. # exemplars, seed)
-  # to separate columns in the metric results.
+  # TODO: consider moving eval_set_name metadata (i.e. # exemplars, seed) to
+  # separate columns in the metric results.
   species_metric_eval_set = list()
   for eval_species, eval_results in eval_set_results.items():
     eval_scores = eval_results['score'].to_numpy()
@@ -853,9 +852,9 @@ def write_results_to_csv(
 
 
 
-# TODO(bringingjoy): update return type to a Sequence of
-# np.ndarrays when extending create_species_query to support returning multiple
-# queries for a given eval species.
+# TODO: update return type to a Sequence of np.ndarrays when extending
+# create_species_query to support returning multiple queries for a given eval
+# species.
 def create_averaged_query(
     species_representatives: Sequence[np.ndarray],
 ) -> np.ndarray:

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 
 """Convenience utilities for handling class lists."""
 
-from chirp.taxonomy import namespace_db
+from birb.taxonomy import namespace_db
 
 
 def get_class_lists(species_class_list_name: str, add_taxonomic_labels: bool):

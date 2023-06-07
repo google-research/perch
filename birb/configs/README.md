@@ -1,4 +1,4 @@
-# Chirp Configurations
+# BIRB Configurations
 
 ## The Lifecycle of Configuration Objects
 

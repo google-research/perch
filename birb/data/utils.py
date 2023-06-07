@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@ import hashlib
 import os.path
 from typing import Any, Iterable
 
-import chirp.data.bird_taxonomy  # pylint: disable=unused-import
-import chirp.data.soundscapes  # pylint: disable=unused-import
-from chirp.preprocessing import pipeline as pipeline_
+import birb.data.bird_taxonomy  # pylint: disable=unused-import
+import birb.data.soundscapes  # pylint: disable=unused-import
+from birb.preprocessing import pipeline as pipeline_
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -102,7 +102,7 @@ def get_dataset(
         tf.data.experimental.service.distribute(
             processing_mode=tf.data.experimental.service.ShardingPolicy.OFF,
             service=tf_data_service_address,
-            job_name='chirp_job',
+            job_name='birb_job',
         )
     )
   ds = ds.prefetch(2)

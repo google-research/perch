@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The BIRB Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import dataclasses
 import math
 from typing import Callable
 
-from chirp.models import layers
+from birb.models import layers
 from flax import linen as nn
 from jax import numpy as jnp
 import numpy as np
