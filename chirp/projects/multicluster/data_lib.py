@@ -49,6 +49,7 @@ class MergedDataset:
   exclude_classes: Sequence[str] = ()
   exclude_eval_classes: Sequence[str] = ()
   negative_label: str = 'unknown'
+  load_audio: bool = True
 
   # The following are populated automatically.
   data: Optional[Dict[str, np.ndarray]] = None
@@ -64,6 +65,7 @@ class MergedDataset:
         self.embedding_model,
         self.time_pooling,
         self.exclude_classes,
+        self.load_audio,
     )
     elapsed = time.time() - st
     print(f'\n...embedded dataset in {elapsed:5.2f}s...')
@@ -173,6 +175,7 @@ def embed_dataset(
     embedding_model: interface.EmbeddingModel,
     time_pooling: str,
     exclude_classes: Sequence[str] = (),
+    load_audio: bool = True,
 ) -> Tuple[Sequence[str], Dict[str, np.ndarray]]:
   """Add embeddings to an eval dataset.
 
@@ -187,6 +190,7 @@ def embed_dataset(
     embedding_model: Model for computing audio embeddings.
     time_pooling: Key for time pooling strategy.
     exclude_classes: Classes to skip.
+    load_audio: Whether to load audio into memory.
 
   Returns:
     Ordered labels and a Dict contianing the entire embedded dataset.
@@ -222,21 +226,23 @@ def embed_dataset(
       audio_size = audio.shape[0]
       if window_size > audio_size:
         audio = _pad_audio(audio, window_size)
+      audio = audio.astype(np.float32)
       outputs = embedding_model.embed(audio)
       embeds = outputs.pooled_embeddings(time_pooling, 'squeeze')
       merged['embeddings'].append(embeds)
 
       filename = epath.Path(fp).name
       merged['filename'].append(f'{label}/{filename}')
-      # TODO(tomdenton): Make audio loading optional, for handling larger data.
-      merged['audio'].append(audio)
+      if load_audio:
+        merged['audio'].append(audio)
       merged['label'].append(label_idx)
       merged['label_str'].append(label)
       merged['label_hot'].append(label_hot)
 
-  # pad audio to ensure all the same length.
-  target_audio_len = np.max([a.shape[0] for a in merged['audio']])
-  merged['audio'] = [_pad_audio(a, target_audio_len) for a in merged['audio']]
+  if load_audio:
+    # pad audio to ensure all the same length.
+    target_audio_len = np.max([a.shape[0] for a in merged['audio']])
+    merged['audio'] = [_pad_audio(a, target_audio_len) for a in merged['audio']]
 
   outputs = {}
   for k in merged.keys():

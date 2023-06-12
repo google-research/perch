@@ -20,6 +20,7 @@ from typing import Sequence
 
 from chirp.models import metrics
 from chirp.projects.multicluster import data_lib
+import numpy as np
 import tensorflow as tf
 
 
@@ -33,14 +34,17 @@ class ClassifierMetrics:
 
 
 def get_two_layer_model(
-    num_hiddens: int, embedding_dim: int, num_classes: int
+    num_hiddens: int, embedding_dim: int, num_classes: int, batch_norm: bool
 ) -> tf.keras.Model:
   """Create a simple two-layer Keras model."""
-  model = tf.keras.Sequential([
-      tf.keras.Input(shape=[embedding_dim]),
+  layers = [tf.keras.Input(shape=[embedding_dim])]
+  if batch_norm:
+    layers.append(tf.keras.layers.BatchNormalization())
+  layers += [
       tf.keras.layers.Dense(num_hiddens, activation='relu'),
       tf.keras.layers.Dense(num_classes),
-  ])
+  ]
+  model = tf.keras.Sequential(layers)
   return model
 
 
@@ -73,7 +77,9 @@ def train_from_locs(
       loss=loss,
       metrics=[
           tf.keras.metrics.Precision(top_k=1, name='top1prec'),
-          tf.keras.metrics.AUC(curve='ROC', name='auc', from_logits=True),
+          tf.keras.metrics.AUC(
+              curve='ROC', name='auc', from_logits=True, multi_label=True
+          ),
           tf.keras.metrics.RecallAtPrecision(0.9, name='recall0.9'),
       ],
   )
@@ -82,13 +88,22 @@ def train_from_locs(
   test_ds = merged.create_keras_dataset(test_locs, False, batch_size)
 
   model.fit(train_ds, epochs=num_epochs, verbose=0)
-  _, acc, auc_roc, recall = model.evaluate(test_ds, verbose=1)
 
-  # Manually compute per-class mAP and CmAP scores.
+  # Compute overall metrics to avoid online approximation error in Keras.
   test_logits = model.predict(test_ds, verbose=0, batch_size=8)
-  test_labels = merged.data['label_hot'][test_locs]
-  cmap_value = metrics.cmap(test_logits, test_labels)['macro']
-  return ClassifierMetrics(acc, auc_roc, recall, cmap_value, {})
+  test_labels_hot = merged.data['label_hot'][test_locs]
+  test_labels = merged.data['label'][test_locs]
+
+  top_logit_idxs = np.argmax(test_logits, axis=1)
+  top1acc = np.mean(test_labels == top_logit_idxs)
+  # TODO(tomdenton): Implement recall@precision metric.
+  recall = -1.0
+
+  cmap_value = metrics.cmap(test_logits, test_labels_hot)['macro']
+  auc_roc = metrics.roc_auc(test_logits, test_labels_hot)
+  return ClassifierMetrics(
+      top1acc, auc_roc['macro'], recall, cmap_value, auc_roc['individual']
+  )
 
 
 def train_embedding_model(
