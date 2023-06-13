@@ -68,6 +68,16 @@ class TopKSearchResults:
     self.search_results.append(search_result)
     self._update_deseridata()
 
+  def will_filter(self, dist):
+    """Check whether a distance is relevant."""
+    if len(self.search_results) < self.top_k:
+      # Add the result, regardless of distance, until we have k results.
+      return False
+    elif dist > self.max_dist:
+      # Early return to save compute.
+      return True
+    return False
+
   def _update_deseridata(self):
     self._max_dist_idx = np.argmax([r.distance for r in self.search_results])
     self.max_dist = self.search_results[self._max_dist_idx].distance
@@ -143,17 +153,24 @@ def search_embeddings_parallel(
     dists = query_reduce_fn(dists, axis=0)  # Reduce over query batch
 
     ex['q_distance'] = dists
+    # Precompute the minimum distance in the example, allowing us to save
+    # time by skipping irrelevant examples.
+    ex['min_target_distance'] = tf.reduce_min(tf.abs(dists - target_dist))
     return ex
 
   embeddings_dataset = embeddings_dataset.map(
-      _q_dist, num_parallel_calls=tf.data.AUTOTUNE
-  )
+      _q_dist,
+      num_parallel_calls=tf.data.AUTOTUNE,
+      deterministic=False,
+  ).prefetch(1024)
 
   results = TopKSearchResults([], top_k=top_k, distance_offset=target_dist)
   all_distances = []
   try:
     for ex in tqdm.tqdm(embeddings_dataset.as_numpy_iterator()):
       all_distances.append(ex['q_distance'].reshape([-1]))
+      if results.will_filter(ex['min_target_distance']):
+        continue
       for t in range(ex[tf_examples.EMBEDDING].shape[0]):
         dist = np.abs(ex['q_distance'][0, t] - target_dist)
         offset = t * hop_size_s + ex[tf_examples.TIMESTAMP_S]
