@@ -209,8 +209,6 @@ def stft_tf(
   )
   Zxx = tf.linalg.matrix_transpose(Zxx)
 
-  # TODO: tf.signal.frame seems to have a bug which sometimes adds too many
-  # frames, so we strip those if necessary
   nadd = (-(input_length - nperseg) % nstep) % nperseg if padded else 0
   length = -((input_length + nadd - nperseg + 1) // (noverlap - nperseg))
   Zxx = Zxx[..., :length]

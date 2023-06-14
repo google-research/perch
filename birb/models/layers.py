@@ -672,7 +672,6 @@ class EarlyFeatureExtractor(nn.Module):
       if inputs.shape[-1] != model_dims:
         inputs = FeedForward(output_dims=model_dims)(inputs)
 
-    # TODO: Experiment with adding residual connections.
     for i, (dim, k, stride) in enumerate(self.conv_layer_tuples):
       inputs = nn.Conv(
           features=dim,

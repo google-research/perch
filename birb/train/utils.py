@@ -191,7 +191,6 @@ class NestedCollection(clu_metrics.Collection):
 
   @classmethod
   def create(cls, **metrics):
-    # TODO: This should be fixed in parent class
     return flax.struct.dataclass(
         type('_InlineCollection', (cls,), {'__annotations__': metrics})
     )

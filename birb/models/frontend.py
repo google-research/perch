@@ -92,7 +92,6 @@ class Frontend(nn.Module):
   features: int
   stride: int
 
-  # TODO: Add ScalingConfig with kw_only=True in Python 3.10
   def _magnitude_scale(self, inputs):
     # Apply frequency scaling
     scaling_config = self.scaling_config

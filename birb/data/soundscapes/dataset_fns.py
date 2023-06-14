@@ -142,9 +142,6 @@ def load_cornell_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   return segments
 
 
-# TODO: Eliminate these 'combine' functions.
-# Reading directly from the set of annotation files will be more direct and
-# less error prone when updating datasets.
 def combine_powdermill_annotations(
     dataset_path: epath.Path, output_filepath: epath.Path
 ) -> None:

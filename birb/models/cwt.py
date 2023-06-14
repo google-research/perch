@@ -196,7 +196,6 @@ def morlet_wavelet(
     A function which calculates the filter over the time or frequency domain.
   """
   if normalization is Normalization.L1:
-    # TODO: Does an expression exist for this?
     raise NotImplementedError
 
   # Follows notation from, e.g., https://en.wikipedia.org/wiki/Morlet_wavelet
@@ -370,12 +369,6 @@ def convolve_filter(
   dn = lax.conv_dimension_numbers(
       signal.shape, sampled_filters.shape, ("NWC", "WIO", "NWC")
   )
-  # TODO: Not all platforms (e.g., TF Lite) support complex inputs for
-  # convolutions. Can be addressed by convolving with the real/imaginary parts
-  # separately in the future if needed.
-  # TODO: Converting signal to complex because JAX wants the input and
-  # filters to be the same type, but this results in 33% more multiplications
-  # than necessary, so this is probably not the fastest option.
   signal = signal.astype(jnp.complex64)
   filtered_signal = lax.conv_general_dilated(
       signal, sampled_filters, stride, padding, (1,), (1,), dn
@@ -406,11 +399,6 @@ def multiply_filter(
   *_, num_frames, _ = signal.shape
   fs = jnp.fft.fftfreq(num_frames)
   fs = fs[:, jnp.newaxis] * scale_factors
-  # TODO: TF Lite might not support IFFT as a built-in operation, but
-  # IFFT is just an FFT with the sign of the inputs changed so easy to adapt to.
-  # TODO: Note that the signal is real-valued, so using FFT might do
-  # unnecessary computation. Might be faster to use RFFT and then take the
-  # complex conjugates manually.
   filtered_signal = jnp.fft.ifft(
       jnp.fft.fft(signal, axis=-2) * filter_(fs), axis=-2
   )
