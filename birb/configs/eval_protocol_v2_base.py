@@ -31,12 +31,12 @@ _object_config = config_utils.object_config
 
 _TFDS_DATA_DIR = None
 _EVAL_REGIONS = (
-    'ssw',
-    'coffee_farms',
-    'hawaii',
-    'high_sierras',
-    'sierras_kahl',  # Sierra Nevada region
-    'peru',
+    'ssw',           # New York State, USA
+    'coffee_farms',  # Colombia & Costa Rica
+    'hawaii',        # Island of Hawai'i, USA
+    'high_sierras',  # High Sierra Nevada, USA
+    'sierras_kahl',  # Sierra Nevada, USA
+    'peru',          # Peru
 )
 _CORPUS_TYPES = ('xc_fg', 'xc_bg', 'soundscapes')
 _NUM_REPS = (1, 2, 4, 8, 16)
