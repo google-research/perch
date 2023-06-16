@@ -20,6 +20,9 @@ from typing import Any, Callable
 
 from absl import logging
 import chex
+from chirp import config_utils
+from chirp.configs import config_globals
+from chirp.google import config_utils as google_config_utils
 from chirp.models import metrics
 from chirp.projects.sfda import data_utils
 from chirp.projects.sfda import models
@@ -470,15 +473,21 @@ def prepare_audio_model(
     # creation of a TaxonomyModel does not expect this argument. Therefore,
     # we delete it here to ensure compatibility.
     delattr(model_config, "pretrained_ckpt_dir")
+
+    kwargs = {
+        "model_config": model_config,
+        "rng_seed": rng_seed,
+        "input_shape": input_shape,
+        "learning_rate": 0.0,
+        "optimizer": optax.adam(learning_rate=0.0),
+    }
+
     model_bundle, train_state = classifier.initialize_model(
-        model_config=model_config,
-        rng_seed=rng_seed,
-        input_shape=input_shape,
-        learning_rate=0.0,
-        optimizer=optax.adam(learning_rate=0.0),
         workdir=ckpt_dir,
         target_class_list=target_class_list,
+        **kwargs,
     )
+
     train_state = model_bundle.ckpt.restore(train_state)
     params = train_state.params
     model_state = train_state.model_state
