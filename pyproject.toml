@@ -19,7 +19,7 @@ optax = "^0.1.4"
 tensorflow = "=2.11.0"
 tensorflow-io = "=0.31"
 tensorflow-datasets = {version = "^4.8.0", extras = ["dev"]}
-pandas = "1.5.1"
+pandas = {version = "2.0.2", extras=["gcp"]}
 etils = {version = "^0.9.0", extras = ["epath"]}
 
 [tool.poetry.group.dev.dependencies]
