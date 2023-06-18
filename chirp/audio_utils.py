@@ -68,7 +68,7 @@ def load_audio(
       return audio
 
 
-def load_audio_window(
+def load_audio_window_soundfile(
     filepath: str, offset_s: float, sample_rate: int, window_size_s: float
 ) -> jnp.ndarray:
   """Load an audio window using Soundfile.
@@ -99,6 +99,20 @@ def load_audio_window(
       y=a, orig_sr=sf.samplerate, target_sr=sample_rate, res_type='polyphase'
   )
   return a
+
+
+def load_audio_window(
+    filepath: str, offset_s: float, sample_rate: int, window_size_s: float
+) -> jnp.ndarray:
+  try:
+    return load_audio_window_soundfile(
+        filepath, offset_s, sample_rate, window_size_s
+    )
+  except soundfile.LibsndfileError:
+    audio = load_audio(filepath, sample_rate)
+    offset = int(offset_s * sample_rate)
+    window_size = int(window_size_s * sample_rate)
+    return audio[offset : offset + window_size]
 
 
 def multi_load_audio_window(
@@ -137,8 +151,8 @@ def multi_load_audio_window(
     for fp, offset in zip(filepaths, offsets):
       future = executor.submit(loader, offset_s=offset, filepath=fp)
       futures.append(future)
-    for f in futures:
-      yield f.result()
+    while futures:
+      yield futures.pop(0).result()
 
 
 # pylint: disable=g-doc-return-or-yield,g-doc-args,unused-argument
