@@ -430,6 +430,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           # Resampling can introduce artifacts that push the signal outside the
           # [-1, 1) interval.
           audio = np.clip(audio, -1.0, 1.0 - (1.0 / float(1 << 15)))
+      # Skip empty audio files.
+      if audio.shape[0] == 0 or np.max(np.abs(audio)) == 0.0:
+        return None
       # The scrubbed foreground annotations are replaced by ''. When this is the
       # case, we translate this annotation into []  rather than [''].
       foreground_label = (
@@ -458,7 +461,12 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           'sound_type': source['sound_type'],
       }
 
-    pipeline = beam.Create(source_info.iterrows()) | beam.Map(_process_example)
+    pipeline = (
+        beam.Create(source_info.iterrows())
+        | beam.Map(_process_example)
+        # Skip empty audio files.
+        | beam.Filter(lambda x: x is not None)
+    )
 
     if self.builder_config.localization_fn:
 
