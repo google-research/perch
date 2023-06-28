@@ -135,6 +135,22 @@ def get_config(
           'dataset_name': 'soundscapes_coffee_farms',
           'tfds_name': 'soundscapes/coffee_farms_full_length',
       },
+      {
+          'dataset_name': 'soundscapes_hawaii',
+          'tfds_name': 'soundscapes/hawaii_full_length',
+      },
+      {
+          'dataset_name': 'soundscapes_peru',
+          'tfds_name': 'soundscapes/peru_full_length',
+      },
+      {
+          'dataset_name': 'soundscapes_high_sierras',
+          'tfds_name': 'soundscapes/high_sierras_full_length',
+      },
+      {
+          'dataset_name': 'soundscapes_sierras_kahl',
+          'tfds_name': 'soundscapes/sierras_kahl_full_length',
+      },
   )
 
   # Construct Pipelines to process slice-peaked and full-length datasets.
