@@ -51,6 +51,9 @@ def load_audio(
 ) -> jnp.ndarray:
   """Read an audio file and resample it using librosa."""
   filepath = epath.Path(filepath)
+  if target_sample_rate <= 0:
+    # Use the native sample rate.
+    target_sample_rate = None
   with tempfile.NamedTemporaryFile(
       mode='w+b', suffix=os.path.splitext(filepath)[-1]
   ) as f:
@@ -95,9 +98,10 @@ def load_audio_window_soundfile(
   if len(a.shape) == 2:
     # Downstream ops expect mono audio, so reduce to mono.
     a = a[:, 0]
-  a = librosa.resample(
-      y=a, orig_sr=sf.samplerate, target_sr=sample_rate, res_type='polyphase'
-  )
+  if sample_rate > 0:
+    a = librosa.resample(
+        y=a, orig_sr=sf.samplerate, target_sr=sample_rate, res_type='polyphase'
+    )
   return a
 
 

@@ -50,6 +50,7 @@ class MergedDataset:
   exclude_eval_classes: Sequence[str] = ()
   negative_label: str = 'unknown'
   load_audio: bool = True
+  target_sample_rate: int = -2
 
   # The following are populated automatically.
   data: Optional[Dict[str, np.ndarray]] = None
@@ -66,6 +67,7 @@ class MergedDataset:
         self.time_pooling,
         self.exclude_classes,
         self.load_audio,
+        self.target_sample_rate,
     )
     elapsed = time.time() - st
     print(f'\n...embedded dataset in {elapsed:5.2f}s...')
@@ -176,6 +178,7 @@ def embed_dataset(
     time_pooling: str,
     exclude_classes: Sequence[str] = (),
     load_audio: bool = True,
+    target_sample_rate: int = -1,
 ) -> Tuple[Sequence[str], Dict[str, np.ndarray]]:
   """Add embeddings to an eval dataset.
 
@@ -191,6 +194,8 @@ def embed_dataset(
     time_pooling: Key for time pooling strategy.
     exclude_classes: Classes to skip.
     load_audio: Whether to load audio into memory.
+    target_sample_rate: Resample loaded audio to this sample rate. If -1, loads
+      raw audio with no resampling. If -2, uses the embedding_model sample rate.
 
   Returns:
     Ordered labels and a Dict contianing the entire embedded dataset.
@@ -212,14 +217,16 @@ def embed_dataset(
   else:
     window_size = -1
 
-  filepaths = []
+  if target_sample_rate == -2:
+    target_sample_rate = embedding_model.sample_rate
+
   merged = collections.defaultdict(list)
   for label_idx, label in enumerate(labels):
     label_hot = np.zeros([len(labels)], np.int32)
     label_hot[label_idx] = 1
     filepaths = [fp.as_posix() for fp in (base_dir / label).glob('*.wav')]
     audio_iterator = audio_utils.multi_load_audio_window(
-        filepaths, None, embedding_model.sample_rate, -1
+        filepaths, None, target_sample_rate, -1
     )
 
     for fp, audio in zip(filepaths, audio_iterator):
