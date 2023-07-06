@@ -87,6 +87,7 @@ class EmbedFn(beam.DoFn):
       embedding_model: interface.EmbeddingModel | None = None,
       speech_filter_threshold: float = -1.0,
       speech_filter_width: int = 5,
+      target_sample_rate: int = -2,
   ):
     """Initialize the embedding DoFn.
 
@@ -110,6 +111,9 @@ class EmbedFn(beam.DoFn):
         discarded.
       speech_filter_width: Number of timesteps to average when computing the
         speech score.
+      target_sample_rate: Target sample rate when loading audio. Set to -2 to
+        use the embedding model's native sample rate, or any positive number to
+        resample to a fixed rate.
     """
     self.model_key = model_key
     self.model_config = model_config
@@ -123,6 +127,7 @@ class EmbedFn(beam.DoFn):
     self.min_audio_s = min_audio_s
     self.speech_filter_threshold = speech_filter_threshold
     self.speech_filter_width = speech_filter_width
+    self.target_sample_rate = target_sample_rate
 
   def setup(self):
     if self.embedding_model is None:
@@ -135,22 +140,28 @@ class EmbedFn(beam.DoFn):
       del self.model_config
     if self.speech_filter_threshold > 0.0:
       self.yamnet = models.TFHubModel.yamnet()
+    if self.target_sample_rate == -2:
+      self.target_sample_rate = self.embedding_model.sample_rate
+    elif self.target_sample_rate > 0:
+      self.target_sample_rate = self.target_sample_rate
+    else:
+      raise ValueError('Invalid target_sample_rate.')
 
   def load_audio(
       self, filepath: str, offset_s: float, window_size_s: float
   ) -> np.ndarray | None:
     audio = np.array(
         audio_utils.load_audio(
-            filepath, target_sample_rate=self.embedding_model.sample_rate
+            filepath, target_sample_rate=self.target_sample_rate
         )
     )
     if offset_s > 0:
-      offset = int(offset_s * self.embedding_model.sample_rate)
+      offset = int(offset_s * self.target_sample_rate)
       if offset > audio.shape[0]:
         raise ValueError('Offset out of bounds.')
       audio = audio[offset:]
     if window_size_s > 0:
-      window_size = int(window_size_s * self.embedding_model.sample_rate)
+      window_size = int(window_size_s * self.target_sample_rate)
       audio = audio[:window_size]
 
     logging.warning('Audio loaded successfully.')
@@ -163,7 +174,7 @@ class EmbedFn(beam.DoFn):
     # resample audio to yamnet 16kHz target.
     audio = librosa.resample(
         audio,
-        self.embedding_model.sample_rate,
+        self.target_sample_rate,
         self.yamnet.sample_rate,
         res_type='polyphase',
     )
@@ -242,7 +253,7 @@ class EmbedFn(beam.DoFn):
     if audio is None:
       self._log_exception(source_info, 'no_exception', 'audio_empty')
       return
-    if audio.shape[0] < self.min_audio_s * self.embedding_model.sample_rate:
+    if audio.shape[0] < self.min_audio_s * self.target_sample_rate:
       self._log_exception(source_info, 'no_exception', 'audio_too_short')
       return
     speech_score = self.get_speech_score(audio)
