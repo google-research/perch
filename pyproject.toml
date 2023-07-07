@@ -11,7 +11,7 @@ absl-py = "^1.3.0"
 apache-beam = "^2.46.0"
 clu = "^0.0.8"
 flax = "^0.6.7"
-jax = "^0.4.1"
+jax = "^0.4.12"
 ml-collections = "^0.1.1"
 optax = "^0.1.4"
 # Note that tensorflow and tensorflow-io versions must be synchronized.
@@ -33,5 +33,5 @@ librosa = "^0.9.2"
 numpy = "^1.22.4"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=1.5.0"]
 build-backend = "poetry.core.masonry.api"

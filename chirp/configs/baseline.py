@@ -32,7 +32,7 @@ def get_config() -> config_dict.ConfigDict:
       train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
   )
   config.eval_dataset_config = presets.get_supervised_eval_pipeline(
-      config, 'soundscapes/caples:1.1.0'
+      config, 'soundscapes/powdermill:1.3.0'
   )
   # Configure the experiment setup
   config.init_config = presets.get_base_init_config(config)
@@ -42,10 +42,13 @@ def get_config() -> config_dict.ConfigDict:
   model_config = config_dict.ConfigDict()
   model_config.encoder = _c(
       'efficientnet.EfficientNet',
-      model=_c('efficientnet.EfficientNetModel', value='b1'),
+      model=_c(
+          'efficientnet.EfficientNetModel',
+          value='b1',
+      ),
   )
   model_config.taxonomy_loss_weight = 0.001
-  model_config.frontend = presets.get_pcen_melspec_config(config)
+  model_config.frontend = presets.get_bio_pcen_melspec_config(config)
   config.init_config.model_config = model_config
   # Configure the training loop
   config.train_config = presets.get_base_train_config(config)
@@ -61,4 +64,4 @@ def get_config() -> config_dict.ConfigDict:
 
 
 def get_hyper(hyper):
-  return hyper.sweep('config.init_config.learning_rate', hyper.discrete([1e-3]))
+  return hyper.sweep('config.batch_size', hyper.discrete([256]))

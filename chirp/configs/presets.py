@@ -26,7 +26,6 @@ Philosophy:
 
 from chirp import config_utils
 from ml_collections import config_dict
-
 _c = config_utils.callable_config
 _o = config_utils.object_config
 
@@ -47,8 +46,8 @@ def get_base_config(**kwargs):
   config.train_window_size_s = 5
   config.eval_window_size_s = 5
   config.frame_rate_hz = 100
-  config.num_channels = 160
-  config.batch_size = 64
+  config.num_channels = 128
+  config.batch_size = 256
   config.add_taxonomic_labels = True
   config.target_class_list = 'xenocanto'
   config.num_train_steps = 1_000_000
@@ -67,7 +66,7 @@ def get_base_init_config(
   init_config.input_shape = (
       config.get_ref('train_window_size_s') * config.get_ref('sample_rate_hz'),
   )
-  init_config.learning_rate = 0.0001
+  init_config.learning_rate = 0.001
   init_config.rng_seed = 0
   init_config.target_class_list = config.get_ref('target_class_list')
   init_config.update(**kwargs)
@@ -113,6 +112,77 @@ def get_pcen_melspec_config(
       sample_rate=config.get_ref('sample_rate_hz'),
       freq_range=(60, 10_000),
       scaling_config=_c('frontend.PCENScalingConfig', conv_width=256),
+  )
+
+
+def get_new_pcen_melspec_config(
+    config: config_dict.ConfigDict,
+) -> config_dict.ConfigDict:
+  """Get a hand-rolled PCEN Melspec configuration."""
+  frontend_stride = config.get_ref('sample_rate_hz') // config.get_ref(
+      'frame_rate_hz'
+  )
+  kernel_size, nfft = config_utils.get_melspec_defaults(config)
+
+  return _c(
+      'frontend.MelSpectrogram',
+      features=config.get_ref('num_channels'),
+      stride=frontend_stride,
+      kernel_size=kernel_size,
+      nfft=nfft,
+      sample_rate=config.get_ref('sample_rate_hz'),
+      freq_range=(50, config.get_ref('sample_rate_hz') // 2),
+      power=1.0,
+      scaling_config=_c(
+          'frontend.PCENScalingConfig',
+          smoothing_coef=0.01,
+          gain=0.8,
+          bias=0.01,
+          root=4.0,
+          eps=1e-6,
+          spcen=False,
+          conv_width=256,
+      ),
+  )
+
+
+def get_bio_pcen_melspec_config(
+    config: config_dict.ConfigDict,
+) -> config_dict.ConfigDict:
+  """Get PCEN Melspec configuration as in 'PCEN: Why and How'.
+
+  https://www.justinsalamon.com/uploads/4/3/9/4/4394963/lostanlen_pcen_spl2018.pdf
+
+  Args:
+    config: Configuration config_dict.
+
+  Returns:
+    Callable config.
+  """
+  frontend_stride = config.get_ref('sample_rate_hz') // config.get_ref(
+      'frame_rate_hz'
+  )
+  kernel_size, nfft = config_utils.get_melspec_defaults(config)
+
+  return _c(
+      'frontend.MelSpectrogram',
+      features=config.get_ref('num_channels'),
+      stride=frontend_stride,
+      kernel_size=kernel_size,
+      nfft=nfft,
+      sample_rate=config.get_ref('sample_rate_hz'),
+      freq_range=(50, config.get_ref('sample_rate_hz') // 2),
+      power=1.0,
+      scaling_config=_c(
+          'frontend.PCENScalingConfig',
+          smoothing_coef=0.145,
+          gain=0.8,
+          bias=10.0,
+          root=4.0,
+          eps=1e-6,
+          spcen=False,
+          conv_width=256,
+      ),
   )
 
 

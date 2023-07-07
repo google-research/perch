@@ -16,7 +16,7 @@
 """Interface for models producing embeddings."""
 
 import dataclasses
-from typing import Dict
+from typing import Any, Callable, Dict
 
 from chirp.taxonomy import namespace
 import librosa
@@ -92,9 +92,18 @@ class InferenceOutputs:
     return outputs
 
 
+EmbedFnType = Callable[[np.ndarray], InferenceOutputs]
+
+
 @dataclasses.dataclass
 class EmbeddingModel:
   """Wrapper for a model which produces audio embeddings.
+
+  It is encouraged to implement either the `embed` or `batch_embed` function
+  and use a convenience method (`batch_embed_from_embed_fn` or
+  `embed_from_batch_embed_fn`) to get the other. It is preferable to implement
+  `batch_embed` so long as the model accepts batch input, as batch input
+  inference can be much faster.
 
   Attributes:
     sample_rate: Sample rate in hz.
@@ -103,7 +112,7 @@ class EmbeddingModel:
   sample_rate: int
 
   def embed(self, audio_array: np.ndarray) -> InferenceOutputs:
-    """Create evenly-spaced embeddings for an audio array.
+    """Create InferenceOutputs from an audio array.
 
     Args:
       audio_array: An array with shape [Time] containing unit-scaled audio.
@@ -114,35 +123,15 @@ class EmbeddingModel:
     raise NotImplementedError
 
   def batch_embed(self, audio_batch: np.ndarray) -> InferenceOutputs:
-    """Embed a batch of audio."""
-    outputs = []
-    for audio in audio_batch:
-      outputs.append(self.embed(audio))
-    if outputs[0].embeddings is not None:
-      embeddings = np.stack([x.embeddings for x in outputs], axis=0)
-    else:
-      embeddings = None
+    """Create InferenceOutputs from a batch of audio arrays.
 
-    if outputs[0].logits is not None:
-      batched_logits = {}
-      for logit_key in outputs[0].logits:
-        batched_logits[logit_key] = np.stack(
-            [x.logits[logit_key] for x in outputs], axis=0
-        )
-    else:
-      batched_logits = None
+    Args:
+      audio_batch: An array with shape [Time] containing unit-scaled audio.
 
-    if outputs[0].separated_audio is not None:
-      separated_audio = np.stack([x.separated_audio for x in outputs], axis=0)
-    else:
-      separated_audio = None
-
-    return InferenceOutputs(
-        embeddings=embeddings,
-        logits=batched_logits,
-        separated_audio=separated_audio,
-        batched=True,
-    )
+    Returns:
+      An InferenceOutputs object.
+    """
+    raise NotImplementedError
 
   def convert_logits(
       self,
@@ -176,11 +165,12 @@ class EmbeddingModel:
     hop_length = int(hop_size_s * self.sample_rate)
     if audio_array.shape[-1] < frame_length:
       audio_array = librosa.util.pad_center(audio_array, frame_length, axis=-1)
-    # Librosa frames as [frame_length, batch], so need a transpose.
+    # Librosa frames as [..., frame_length, frames], so we need a transpose.
     framed_audio = librosa.util.frame(
         audio_array,
         frame_length=frame_length,
         hop_length=hop_length,
+        axis=-1,
     ).swapaxes(-1, -2)
     return framed_audio
 
@@ -189,10 +179,74 @@ class EmbeddingModel:
       framed_audio: np.ndarray,
       target_peak: float,
   ) -> np.ndarray:
-    """Normalizes audio to match the target_peak value."""
+    """Normalizes audio with shape [..., T] to match the target_peak value."""
     framed_audio = framed_audio.copy()
-    framed_audio -= np.mean(framed_audio, axis=1, keepdims=True)
-    peak_norm = np.max(np.abs(framed_audio), axis=1, keepdims=True)
+    framed_audio -= np.mean(framed_audio, axis=-1, keepdims=True)
+    peak_norm = np.max(np.abs(framed_audio), axis=-1, keepdims=True)
     framed_audio = np.divide(framed_audio, peak_norm, where=(peak_norm > 0.0))
     framed_audio = framed_audio * target_peak
     return framed_audio
+
+
+def embed_from_batch_embed_fn(
+    embed_fn: EmbedFnType, audio_array: np.ndarray
+) -> InferenceOutputs:
+  """Embed a single example using a batch_embed_fn."""
+  audio_batch = audio_array[np.newaxis, :]
+  outputs = embed_fn(audio_batch)
+
+  if outputs.embeddings is not None:
+    embeddings = outputs.embeddings[0]
+  else:
+    embeddings = None
+  if outputs.logits is not None:
+    logits = {}
+    for k, v in outputs.logits.items():
+      logits[k] = v[0]
+  else:
+    logits = None
+  if outputs.separated_audio is not None:
+    separated_audio = outputs.separated_audio[0]
+  else:
+    separated_audio = None
+
+  return InferenceOutputs(
+      embeddings=embeddings,
+      logits=logits,
+      separated_audio=separated_audio,
+      batched=False,
+  )
+
+
+def batch_embed_from_embed_fn(
+    embed_fn: EmbedFnType, audio_batch: np.ndarray
+) -> InferenceOutputs:
+  """Embed a batch of audio using a single-example embed_fn."""
+  outputs = []
+  for audio in audio_batch:
+    outputs.append(embed_fn(audio))
+  if outputs[0].embeddings is not None:
+    embeddings = np.stack([x.embeddings for x in outputs], axis=0)
+  else:
+    embeddings = None
+
+  if outputs[0].logits is not None:
+    batched_logits = {}
+    for logit_key in outputs[0].logits:
+      batched_logits[logit_key] = np.stack(
+          [x.logits[logit_key] for x in outputs], axis=0
+      )
+  else:
+    batched_logits = None
+
+  if outputs[0].separated_audio is not None:
+    separated_audio = np.stack([x.separated_audio for x in outputs], axis=0)
+  else:
+    separated_audio = None
+
+  return InferenceOutputs(
+      embeddings=embeddings,
+      logits=batched_logits,
+      separated_audio=separated_audio,
+      batched=True,
+  )

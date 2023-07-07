@@ -189,6 +189,9 @@ class BirbSepModelTF1(interface.EmbeddingModel):
       )
     return interface.InferenceOutputs(separated_audio=sep_chunks)
 
+  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
+    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+
 
 @dataclasses.dataclass
 class TaxonomyModelTF(interface.EmbeddingModel):
@@ -202,6 +205,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     target_class_list: If provided, restricts logits to this ClassList.
     model: Loaded TF SavedModel.
     class_list: Loaded class_list for the model's output logits.
+    batchable: Whether the model supports batched input.
   """
 
   model_path: str
@@ -213,6 +217,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   # The following are populated during init.
   model: Any | None = None  # TF SavedModel
   class_list: namespace.ClassList | None = None
+  batchable: bool = False
 
   def __post_init__(self):
     logging.info('Loading taxonomy model...')
@@ -233,7 +238,14 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     with label_csv_path.open('r') as f:
       self.class_list = namespace.ClassList.from_csv('label', f)
 
+    # Check whether the model support polymorphic batch shape.
+    sig = self.model.signatures['serving_default']
+    self.batchable = sig.inputs[0].shape[0] is None
+
   def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
+    if self.batchable:
+      return interface.embed_from_batch_embed_fn(self.batch_embed, audio_array)
+
     # Process one example at a time.
     # This should be fine on CPU, but may be somewhat inefficient for large
     # arrays on GPU or TPU.
@@ -255,6 +267,32 @@ class TaxonomyModelTF(interface.EmbeddingModel):
 
     return interface.InferenceOutputs(
         all_embeddings, {self.class_list.name: all_logits}, None
+    )
+
+  def batch_embed(
+      self, audio_batch: np.ndarray[Any, Any]
+  ) -> interface.InferenceOutputs:
+    if not self.batchable:
+      return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+
+    framed_audio = self.frame_audio(
+        audio_batch, self.window_size_s, self.hop_size_s
+    )
+    if self.target_peak is not None:
+      framed_audio = self.normalize_audio(framed_audio, self.target_peak)
+
+    rebatched_audio = framed_audio.reshape([-1, framed_audio.shape[-1]])
+    logits, embeddings = self.model.infer_tf(rebatched_audio)
+    logits = self.convert_logits(
+        logits, self.class_list, self.target_class_list
+    )
+    logits = np.reshape(logits, framed_audio.shape[:2] + (logits.shape[-1],))
+    embeddings = np.reshape(
+        embeddings, framed_audio.shape[:2] + (embeddings.shape[-1],)
+    )
+
+    return interface.InferenceOutputs(
+        embeddings, {self.class_list.name: logits}, None
     )
 
 
@@ -326,6 +364,9 @@ class SeparatorModelTF(interface.EmbeddingModel):
     return interface.InferenceOutputs(
         all_embeddings, {self.class_list.name: all_logits}, sep_audio
     )
+
+  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
+    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
 
 
 @dataclasses.dataclass
@@ -419,6 +460,9 @@ class BirdNet(interface.EmbeddingModel):
     else:
       return self.embed_saved_model(framed_audio)
 
+  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
+    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+
 
 @dataclasses.dataclass
 class HandcraftedFeaturesModel(interface.EmbeddingModel):
@@ -471,6 +515,9 @@ class HandcraftedFeaturesModel(interface.EmbeddingModel):
     features = features[:, np.newaxis, :]
     return interface.InferenceOutputs(features, None, None)
 
+  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
+    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+
 
 @dataclasses.dataclass
 class TFHubModel(interface.EmbeddingModel):
@@ -514,6 +561,9 @@ class TFHubModel(interface.EmbeddingModel):
     embeddings = embeddings[:, np.newaxis, :]
     return interface.InferenceOutputs(embeddings, logits, None, False)
 
+  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
+    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+
 
 @dataclasses.dataclass
 class PlaceholderModel(interface.EmbeddingModel):
@@ -552,3 +602,6 @@ class PlaceholderModel(interface.EmbeddingModel):
           [2, audio_array.shape[-1]], np.float32
       )
     return interface.InferenceOutputs(**outputs)
+
+  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
+    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)

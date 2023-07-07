@@ -92,6 +92,7 @@ def initialize_model(
       pre-trained models for inference.
     for_inference: Indicates whether the model is being initialized for
       inference (if false, initialzed for training).
+
   Note: learning_rate is unused (it's expected to be used in constructing the
     `optimizer` argument), but it's left part of the function signature for
     backwards compatibility with the config utils.
@@ -385,6 +386,7 @@ def export_tf_model(
     input_shape: tuple[int, ...],
     num_train_steps: int,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
+    polymorphic_batch: bool = True,
 ):
   """Export SavedModel and TFLite."""
   for train_state in utils.checkpoint_iterator(
@@ -398,10 +400,12 @@ def export_tf_model(
       )
       return model_outputs.label, model_outputs.embedding
 
-    # Note: Polymorphic batch size currently isn't working with the STFT op,
-    # so we provide a static batch size.
+    if polymorphic_batch:
+      shape = (None,) + input_shape
+    else:
+      shape = (1,) + input_shape
     converted_model = export_utils.Jax2TfModelWrapper(
-        infer_fn, variables, (1,) + input_shape, False
+        infer_fn, variables, shape, False
     )
     converted_model.export_converted_model(
         workdir, train_state.step, model_bundle.class_lists
