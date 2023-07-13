@@ -48,7 +48,16 @@ class BootstrapState:
     """Create a TF Dataset of the embeddings."""
     if self.embeddings_dataset:
       return self.embeddings_dataset
-    ds = tf_examples.create_embeddings_dataset(self.config.embeddings_glob)
+    if '*' not in self.config.embeddings_glob:
+      ds = tf_examples.create_embeddings_dataset(self.config.embeddings_glob)
+    else:
+      # find the first segment with a *.
+      dirs = self.config.embeddings_glob.split('/')
+      has_wildcard = ['*' in d for d in dirs]
+      first_wildcard = has_wildcard.index(True)
+      dirs = '/'.join(dirs[:first_wildcard])
+      glob = '/'.join(dirs[first_wildcard:])
+      ds = tf_examples.create_embeddings_dataset(dirs, glob)
     self.embeddings_dataset = ds
     return ds
 

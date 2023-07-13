@@ -19,6 +19,7 @@ General utilities for processing audio and spectrograms.
 """
 import concurrent
 import functools
+import logging
 import os
 import tempfile
 from typing import Generator, Sequence
@@ -108,15 +109,24 @@ def load_audio_window_soundfile(
 def load_audio_window(
     filepath: str, offset_s: float, sample_rate: int, window_size_s: float
 ) -> jnp.ndarray:
-  try:
-    return load_audio_window_soundfile(
-        filepath, offset_s, sample_rate, window_size_s
-    )
-  except soundfile.LibsndfileError:
-    audio = load_audio(filepath, sample_rate)
-    offset = int(offset_s * sample_rate)
-    window_size = int(window_size_s * sample_rate)
-    return audio[offset : offset + window_size]
+  """Load a slice of audio from a file, hopefully efficiently."""
+  # TODO(tomdenton): Fine a reliable way to load a flac audio window.
+  # If a flac file has the incorrect length in its header, seeking past the
+  # end of the file causes the system to hang. This is a bad enough outcome
+  # that we don't risk it.
+  if not filepath.endswith('.flac'):
+    try:
+      return load_audio_window_soundfile(
+          filepath, offset_s, sample_rate, window_size_s
+      )
+    except soundfile.LibsndfileError:
+      logging.warning('Failed to load audio with libsndfile: %s', filepath)
+  # This fail-over is much slower but more reliable; the entire audio file
+  # is loaded (and possible resampled) and then we extract the target audio.
+  audio = load_audio(filepath, sample_rate)
+  offset = int(offset_s * sample_rate)
+  window_size = int(window_size_s * sample_rate)
+  return audio[offset : offset + window_size]
 
 
 def multi_load_audio_window(

@@ -15,6 +15,8 @@
 
 """Utilities for manipulating TF Examples."""
 
+import dataclasses
+import os
 from typing import Sequence
 
 from chirp.inference import interface
@@ -98,10 +100,12 @@ def get_example_parser(logit_names: Sequence[str] | None = None):
   return _parser
 
 
-def create_embeddings_dataset(embeddings_glob, prefetch: int = 128):
+def create_embeddings_dataset(
+    embeddings_dir, file_glob: str = '*', prefetch: int = 128
+):
   """Create a TF Dataset of the embeddings."""
-  embeddings_glob = epath.Path(embeddings_glob)
-  embeddings_files = [fn.as_posix() for fn in embeddings_glob.glob('')]
+  embeddings_dir = epath.Path(embeddings_dir)
+  embeddings_files = [fn.as_posix() for fn in embeddings_dir.glob(file_glob)]
   ds = tf.data.TFRecordDataset(
       embeddings_files, num_parallel_reads=tf.data.AUTOTUNE
   )
@@ -112,7 +116,7 @@ def create_embeddings_dataset(embeddings_glob, prefetch: int = 128):
   return ds
 
 
-def serialize_tensor(tensor: tf.Tensor) -> np.ndarray:
+def serialize_tensor(tensor: np.ndarray) -> np.ndarray:
   serialized = tf.io.serialize_tensor(tensor)
   return serialized.numpy()
 
@@ -155,6 +159,45 @@ def model_outputs_to_tf_example(
     feature[RAW_AUDIO_SHAPE] = int_feature(audio.shape)
   ex = tf.train.Example(features=tf.train.Features(feature=feature))
   return ex
+
+
+@dataclasses.dataclass
+class EmbeddingsTFRecordMultiWriter:
+  """A sharded TFRecord writer."""
+
+  output_dir: str
+  filename_pattern: str = 'embeddings-%05d-of-%05d'
+  num_files: int = 10
+  _writer_index: int = 0
+
+  def write(self, record: str):
+    """Write a serialized record."""
+    writer = self.writers[self._writer_index]
+    writer.write(record)
+    self._writer_index = (self._writer_index + 1) % self.num_files
+
+  def flush(self):
+    """Flush all files."""
+    for writer in self.writers:
+      writer.flush()
+
+  def close(self):
+    """Close all files."""
+    for writer in self.writers:
+      writer.close()
+
+  def __enter__(self):
+    self.writers = []
+    for i in range(self.num_files):
+      filepath = os.path.join(
+          self.output_dir, self.filename_pattern % (i, self.num_files)
+      )
+      self.writers.append(tf.io.TFRecordWriter(filepath))
+    return self
+
+  def __exit__(self, *args):
+    self.flush()
+    self.close()
 
 
 def bytes_feature(x, default=''):

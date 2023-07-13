@@ -27,8 +27,10 @@ from chirp.inference import models
 from chirp.inference import tf_examples
 from chirp.models import frontend
 from chirp.taxonomy import namespace_db
+from etils import epath
 from ml_collections import config_dict
 import numpy as np
+import tensorflow as tf
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -155,6 +157,44 @@ class InferenceTest(parameterized.TestCase):
     self.assertSequenceEqual(
         embedding.shape, got_example[tf_examples.EMBEDDING_SHAPE]
     )
+
+  def test_tfrecord_multiwriter(self):
+    output_dir = epath.Path(tempfile.TemporaryDirectory().name)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fake_examples = []
+    for idx in range(20):
+      outputs = interface.InferenceOutputs(
+          embeddings=np.zeros([10, 2, 8], dtype=np.float32), batched=False
+      )
+      fake_examples.append(
+          tf_examples.model_outputs_to_tf_example(
+              model_outputs=outputs,
+              file_id=f'fake_audio_{idx:02d}',
+              audio=np.zeros([100]),
+              timestamp_offset_s=0.0,
+              write_embeddings=True,
+              write_logits=False,
+              write_separated_audio=False,
+              write_raw_audio=False,
+          )
+      )
+    with tf_examples.EmbeddingsTFRecordMultiWriter(
+        output_dir.as_posix()
+    ) as writer:
+      for ex in fake_examples:
+        serialized = ex.SerializeToString()
+        writer.write(serialized)
+
+    fns = [fn for fn in output_dir.glob('embeddings-*')]
+    ds = tf.data.TFRecordDataset(fns)
+    parser = tf_examples.get_example_parser()
+    ds = ds.map(parser)
+
+    got_examples = [ex for ex in ds.as_numpy_iterator()]
+    self.assertEqual(len(got_examples), len(fake_examples))
+    want_ids = [f'fake_audio_{idx:02d}' for idx in range(20)]
+    got_ids = sorted([ex['filename'].decode('utf-8') for ex in got_examples])
+    self.assertSequenceEqual(want_ids, got_ids)
 
   @parameterized.product(
       config_name=(
@@ -318,7 +358,7 @@ class InferenceTest(parameterized.TestCase):
     metrics = embed_lib.build_run_pipeline(
         base_pipeline, output_dir, source_infos, embed_fn
     )
-    counter = counter = metrics.query(
+    counter = metrics.query(
         beam.metrics.MetricsFilter().with_name('examples_processed')
     )['counters']
     self.assertEqual(counter[0].result, 1)

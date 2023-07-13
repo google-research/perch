@@ -16,6 +16,7 @@
 """Create embeddings for an audio corpus."""
 
 import dataclasses
+import os
 from typing import Any, Sequence
 
 from absl import logging
@@ -150,22 +151,12 @@ class EmbedFn(beam.DoFn):
   def load_audio(
       self, filepath: str, offset_s: float, window_size_s: float
   ) -> np.ndarray | None:
-    audio = np.array(
-        audio_utils.load_audio(
-            filepath, target_sample_rate=self.target_sample_rate
-        )
+    audio = audio_utils.load_audio_window(
+        filepath, offset_s, self.target_sample_rate, window_size_s
     )
-    if offset_s > 0:
-      offset = int(offset_s * self.target_sample_rate)
-      if offset > audio.shape[0]:
-        raise ValueError('Offset out of bounds.')
-      audio = audio[offset:]
-    if window_size_s > 0:
-      window_size = int(window_size_s * self.target_sample_rate)
-      audio = audio[:window_size]
-
     logging.warning('Audio loaded successfully.')
-    return audio
+    # Convert audio from jax array to numpy array.
+    return np.array(audio)
 
   def get_speech_score(self, audio: np.ndarray) -> float:
     """Check whether the audio contains human speech."""
@@ -297,6 +288,17 @@ def get_config(config_key: str):
   return config
 
 
+def maybe_write_config(parsed_config, output_dir):
+  config_json = parsed_config.to_json(indent=2)
+  if (output_dir / 'config.json').exists():
+    with (output_dir / 'config.json').open('r') as f:
+      got_json = f.read()
+    if config_json == got_json:
+      return
+  with (output_dir / 'config.json').open('w') as f:
+    f.write(config_json)
+
+
 def build_run_pipeline(base_pipeline, output_dir, source_infos, embed_fn):
   """Create and run a beam pipeline."""
   _ = (
@@ -309,7 +311,7 @@ def build_run_pipeline(base_pipeline, output_dir, source_infos, embed_fn):
       | beam.Filter(lambda x: x)
       | beam.Reshuffle()
       | beam.io.tfrecordio.WriteToTFRecord(
-          output_dir,
+          os.path.join(output_dir, 'embeddings'),
           coder=beam.coders.ProtoCoder(tf.train.Example),
       )
   )

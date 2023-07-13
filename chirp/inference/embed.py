@@ -65,9 +65,6 @@ def main(unused_argv: Sequence[str]) -> None:
   config = config_utils.parse_config(config, config_globals.get_globals())
 
   logging.info('Locating source files...')
-  output_dir = epath.Path(config.output_dir)
-  output_dir.parent.mkdir(exist_ok=True, parents=True)
-
   # Create and run the beam pipeline.
   source_infos = embed_lib.create_source_infos(
       config.source_file_patterns,
@@ -79,6 +76,10 @@ def main(unused_argv: Sequence[str]) -> None:
   if _DRY_RUN_ONLY.value:
     dry_run(config, source_infos)
     return
+
+  output_dir = epath.Path(config.output_dir)
+  output_dir.mkdir(exist_ok=True, parents=True)
+  embed_lib.maybe_write_config(config, output_dir)
 
   options = beam.options.pipeline_options.PipelineOptions(
       runner='DirectRunner',
