@@ -254,7 +254,7 @@ class TrainSeparationTest(absltest.TestCase):
         ],
     )
     self.assertSequenceEqual(
-        logits.shape, [1, 15, model_bundle.class_lists['label'].size]
+        logits.shape, [1, 15, len(model_bundle.class_lists['label'].classes)]
     )
     self.assertSequenceEqual(
         embeddings.shape,

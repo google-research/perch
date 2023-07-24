@@ -343,7 +343,8 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         self.builder_config.keep_unknown_annotation,
     )
     logging.info(
-        'Currently considering a total of %s species.', dataset_class_list.size
+        'Currently considering a total of %s species.',
+        len(dataset_class_list.classes),
     )
     full_length = self.builder_config.localization_fn is None
     if full_length:

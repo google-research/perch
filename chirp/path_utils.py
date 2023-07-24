@@ -18,12 +18,10 @@
 General utilities to help with handling paths.
 """
 import os
-from typing import Iterable
-from absl import logging
-from etils import epath
+import pathlib
 
 
-def get_absolute_epath(relative_path: str) -> epath.Path:
+def get_absolute_path(relative_path: os.PathLike[str] | str) -> pathlib.Path:
   """Returns the absolute epath.Path associated with the relative_path.
 
   Args:
@@ -32,11 +30,5 @@ def get_absolute_epath(relative_path: str) -> epath.Path:
   Returns:
     The absolute path to the resource.
   """
-  file_path = epath.Path(__file__).parent / relative_path
+  file_path = pathlib.Path(__file__).parent / relative_path
   return file_path
-
-
-def listdir(relative_path: str) -> Iterable[str]:
-  """List the contents of a directory in the Chirp project."""
-  absolute_path = get_absolute_epath(relative_path).as_posix()
-  return os.listdir(absolute_path)

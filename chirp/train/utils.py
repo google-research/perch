@@ -16,6 +16,7 @@
 """Shared utilities for training scripts."""
 
 import itertools
+import os
 import time
 from typing import Callable
 

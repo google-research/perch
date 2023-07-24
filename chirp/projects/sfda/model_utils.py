@@ -458,7 +458,7 @@ def prepare_audio_model(
   class_lists = class_utils.get_class_lists(
       target_class_list, add_taxonomic_labels=False
   )
-  num_classes = {k: v.size for (k, v) in class_lists.items()}
+  num_classes = {k: len(v.classes) for (k, v) in class_lists.items()}
   model = taxonomy_model.TaxonomyModel(
       num_classes=num_classes,
       encoder=model_config.encoder,

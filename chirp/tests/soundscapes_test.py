@@ -82,7 +82,6 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     cls.loc_patcher.start()
     mock_load_class_list = cls.metadata_patcher.start()
     mock_load_class_list.return_value = namespace.ClassList(
-        'testlist',
         'test_namespace',
         ['fakecode1', 'fakecode2', 'superrare', 'superfly'],
     )

@@ -51,7 +51,7 @@ class SoundscapesLibTest(parameterized.TestCase):
     tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
         audio_filepath, format=extension
     )
-    logging.info('created audio file : %s', audio_filepath.as_posix())
+    logging.info('created audio file : %s', audio_filepath)
     all_audio_filepaths.append(audio_filepath)
     return audio_filepath
 
@@ -60,12 +60,12 @@ class SoundscapesLibTest(parameterized.TestCase):
     self.data_dir = tempfile.TemporaryDirectory('data_dir').name
     os.mkdir(self.data_dir)
     # We use the 'caples.csv' only to get the parent directory's path.
-    self.testdata_dir = path_utils.get_absolute_epath(
+    self.testdata_dir = path_utils.get_absolute_path(
         'tests/testdata/caples.csv'
     ).parent
 
   def test_load_caples_annotations(self):
-    annos_csv_path = path_utils.get_absolute_epath('tests/testdata/caples.csv')
+    annos_csv_path = path_utils.get_absolute_path('tests/testdata/caples.csv')
     annos = dataset_fns.load_caples_annotations(annos_csv_path)
     # There are six lines in the example file, but one contains a 'comros'
     # annotation which should be dropped.
@@ -106,7 +106,7 @@ class SoundscapesLibTest(parameterized.TestCase):
       ),
   ])
   def test_load_cornell_annotations(self, csv_name, expected_labels):
-    annos_csv_path = path_utils.get_absolute_epath('tests/testdata/' + csv_name)
+    annos_csv_path = path_utils.get_absolute_path('tests/testdata/' + csv_name)
     annos = dataset_fns.load_cornell_annotations(annos_csv_path)
     self.assertLen(annos, len(expected_labels))
     for expected_label, (_, anno) in zip(expected_labels, annos.iterrows()):
@@ -122,7 +122,7 @@ class SoundscapesLibTest(parameterized.TestCase):
         self.testdata_dir / 'powdermill', combined_csv_path
     )
 
-    annos_csv_path = path_utils.get_absolute_epath(
+    annos_csv_path = path_utils.get_absolute_path(
         'tests/testdata/powdermill.csv'
     )
     for csv_path in [combined_csv_path, annos_csv_path]:

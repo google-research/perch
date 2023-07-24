@@ -197,11 +197,11 @@ class PipelineTest(parameterized.TestCase):
         )
 
   def test_convert_bird_taxonomy_labels(self):
-    db = namespace_db.NamespaceDatabase.load_csvs()
+    db = namespace_db.load_db()
     source_class_set = db.class_lists['caples']
     target_class_set = db.class_lists['xenocanto']
-    self.assertEqual(source_class_set.size, 79)
-    self.assertEqual(target_class_set.size, 10932)
+    self.assertEqual(len(source_class_set.classes), 79)
+    self.assertEqual(len(target_class_set.classes), 10932)
 
     # example labels include three 'good' labels and many out of range labels.
     # Good classes are 'amedip', 'comnig', 'macwar', and 'yerwar'.

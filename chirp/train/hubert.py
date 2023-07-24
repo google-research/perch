@@ -395,7 +395,7 @@ def initialize_model(
   # Load model
   model_init_key, mask_key = random.split(key)
   class_lists = class_utils.get_class_lists(target_class_list, True)
-  num_classes = {k: v.size for (k, v) in class_lists.items()}
+  num_classes = {k: len(v.classes) for (k, v) in class_lists.items()}
 
   # Initialize the quantizer.
   if quantizer_config.use_entropy_quantizer:

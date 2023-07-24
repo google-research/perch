@@ -96,7 +96,8 @@ def initialize_model(
   model_init_key, key = random.split(key)
   class_lists = class_utils.get_class_lists(target_class_list, True)
   model = separation_model.SeparationModel(
-      num_classes={k: v.size for (k, v) in class_lists.items()}, **model_config
+      num_classes={k: len(v.classes) for (k, v) in class_lists.items()},
+      **model_config,
   )
   variables = model.init(
       model_init_key, jnp.zeros((1,) + input_shape), train=False

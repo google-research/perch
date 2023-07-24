@@ -189,9 +189,9 @@ def load_powdermill_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   filter_fn = lambda row: False
 
   # Convert dataset labels to ebird2021.
-  db = namespace_db.NamespaceDatabase.load_csvs()
+  db = namespace_db.load_db()
   ebird_mapping = db.mappings['ibp2019_to_ebird2021']
-  ebird_mapping_dict = ebird_mapping.to_dict()
+  ebird_mapping_dict = ebird_mapping.mapped_pairs
   class_fn = lambda row: [  # pylint: disable=g-long-lambda
       ebird_mapping_dict.get(row['Species'].strip(), row['Species'].strip())
   ]

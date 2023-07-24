@@ -174,7 +174,7 @@ class SeparatorTFCallback:
     """Loads classifier output weights from the separator."""
     label_csv_path = epath.Path(self.model_path) / 'label.csv'
     with label_csv_path.open('r') as f:
-      class_list = namespace.ClassList.from_csv('label', f)
+      class_list = namespace.ClassList.from_csv(f)
     # Load the output layer weights.
     variables_path = (
         epath.Path(self.model_path) / 'savedmodel/variables/variables'
@@ -187,7 +187,7 @@ class SeparatorTFCallback:
       if (
           len(v_shape) == 3
           and v_shape[0] == 1
-          and v_shape[-1] == class_list.size
+          and v_shape[-1] == len(class_list.classes)
       ):
         candidates.append(v)
     if not candidates:

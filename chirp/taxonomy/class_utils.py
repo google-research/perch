@@ -20,7 +20,7 @@ from chirp.taxonomy import namespace_db
 
 def get_class_lists(species_class_list_name: str, add_taxonomic_labels: bool):
   """Get the number of classes for the target class outputs."""
-  db = namespace_db.NamespaceDatabase.load_csvs()
+  db = namespace_db.load_db()
   species_classes = db.class_lists[species_class_list_name]
   class_lists = {
       "label": species_classes,
@@ -28,8 +28,6 @@ def get_class_lists(species_class_list_name: str, add_taxonomic_labels: bool):
   if add_taxonomic_labels:
     for name in ["genus", "family", "order"]:
       mapping_name = f"{species_classes.namespace}_to_{name}"
-      if mapping_name not in db.mappings:
-        continue
       mapping = db.mappings[mapping_name]
       taxa_class_list = species_classes.apply_namespace_mapping(mapping)
       class_lists[name] = taxa_class_list

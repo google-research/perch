@@ -120,6 +120,9 @@ class Jax2TfModelWrapper(tf.Module):
     if class_lists is not None:
       for key, class_list in class_lists.items():
         with tf.io.gfile.GFile(os.path.join(workdir, f'{key}.csv'), 'w') as f:
+          # NOTE: Although the namespace is written to the file, there is no
+          # guarantee that the class list will still be compatible with the
+          # namespace if the latter gets updated.
           f.write(class_list.to_csv())
 
     if not export_tf_lite:

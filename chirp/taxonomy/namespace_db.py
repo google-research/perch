@@ -14,159 +14,120 @@
 # limitations under the License.
 
 """Database of bioacoustic label domains."""
-
 import dataclasses
 import functools
-import os
-from typing import Sequence, Tuple
+import json
+import typing
 
-from chirp import path_utils
-from chirp.taxonomy import generators
 from chirp.taxonomy import namespace
 
-NAMESPACES_PATH = 'taxonomy/data/namespaces'
-MAPPINGS_PATH = 'taxonomy/data/mappings'
-CLASS_LISTS_PATH = 'taxonomy/data/class_lists'
-
-
-@functools.lru_cache(maxsize=1)
-def load_db() -> 'NamespaceDatabase':
-  """Loads the NamespaceDatabase and caches the result.
-
-  The cache can be cleared with 'namespace_db.load_db.clear_cache()', which
-  may be helpful when adding new data in a colab session.
-
-  Returns:
-    A NamespaceDatabase.
-  """
-  return NamespaceDatabase.load_csvs()
+import pathlib
+TAXONOMY_DATABASE_FILENAME = (
+    pathlib.Path(__file__).parent / "taxonomy_database.json"
+)
 
 
 @dataclasses.dataclass
-class NamespaceDatabase:
-  """A database of Namespaces, Mappings, and ClassLists."""
-
+class TaxonomyDatabase:
   namespaces: dict[str, namespace.Namespace]
-  mappings: dict[str, namespace.Mapping]
   class_lists: dict[str, namespace.ClassList]
+  mappings: dict[str, namespace.Mapping]
 
-  def __repr__(self):
-    return 'NamespaceDatabase'
 
-  @classmethod
-  def load_csvs(cls) -> 'NamespaceDatabase':
-    """Load the database from CSVs."""
-    namespaces = {}
-    mappings = {}
-    class_lists = {}
+def validate_taxonomy_database(taxonomy_database: TaxonomyDatabase) -> None:
+  """Validate the taxonomy database.
 
-    # Load generated ebird data.
-    for version in (2021, 2022):
-      generated_data = generators.generate_ebird(version=version)
-      for ns in generated_data.namespaces:
-        namespaces[ns.name] = ns
-      for mapping in generated_data.mappings:
-        mappings[mapping.name] = mapping
-      for class_list in generated_data.class_lists:
-        class_lists[class_list.name] = class_list
+  This ensures that all class lists, namespaces, and mappings are consistent.
 
-    # Load CSV data.
-    namespace_csvs = path_utils.listdir(NAMESPACES_PATH)
-    namespace_csvs = [p for p in namespace_csvs if p.endswith('.csv')]
-    for c in namespace_csvs:
-      filepath = path_utils.get_absolute_epath(os.path.join(NAMESPACES_PATH, c))
-      with open(filepath, 'r') as f:
-        space = namespace.Namespace.from_csv(f)
-        namespaces[space.name] = space
+  Args:
+    taxonomy_database: A taxonomy database structure to validate.
 
-    mappings_csvs = path_utils.listdir(MAPPINGS_PATH)
-    mappings_csvs = [p for p in mappings_csvs if p.endswith('.csv')]
-    for c in mappings_csvs:
-      filepath = path_utils.get_absolute_epath(os.path.join(MAPPINGS_PATH, c))
-      with open(filepath, 'r') as f:
-        mapping = namespace.Mapping.from_csv(c[:-4], f)
-        mappings[mapping.name] = mapping
+  Raises:
+    ValueError or KeyError when the database is invalid.
+  """
+  namespaces = taxonomy_database.namespaces
 
-    class_list_csvs = path_utils.listdir(CLASS_LISTS_PATH)
-    class_list_csvs = [p for p in class_list_csvs if p.endswith('.csv')]
-    for c in class_list_csvs:
-      filepath = path_utils.get_absolute_epath(
-          os.path.join(CLASS_LISTS_PATH, c)
+  for _, mapping in taxonomy_database.mappings.items():
+    if (
+        set(mapping.mapped_pairs.keys())
+        - namespaces[mapping.source_namespace].classes
+    ):
+      raise ValueError("unknown class in source")
+    if (
+        set(mapping.mapped_pairs.values())
+        - namespaces[mapping.target_namespace].classes
+    ):
+      raise ValueError("unknown class in target")
+
+  for _, class_list in taxonomy_database.class_lists.items():
+    classes = class_list.classes
+    if set(classes) - namespaces[class_list.namespace].classes > {
+        namespace.UNKNOWN_LABEL
+    }:
+      raise ValueError("unknown class in class list")
+
+
+def load_taxonomy_database(
+    taxonomy_database: dict[str, typing.Any]
+) -> TaxonomyDatabase:
+  """Construct a taxonomy database from a dictionary.
+
+  Args:
+    taxonomy_database: The database as loaded from a JSON file.
+
+  Returns:
+    A taxonomy database.
+
+  Raises:
+    TypeError when the database contains unknown keys.
+  """
+  namespaces = {
+      name: namespace.Namespace(
+          classes=frozenset(namespace_.pop("classes")), **namespace_
       )
-      with open(filepath, 'r') as f:
-        class_list = namespace.ClassList.from_csv(c[:-4], f)
-        class_lists[class_list.name] = class_list
+      for name, namespace_ in taxonomy_database.pop("namespaces").items()
+  }
+  class_lists = {
+      name: namespace.ClassList(
+          classes=tuple(class_list.pop("classes")), **class_list
+      )
+      for name, class_list in taxonomy_database.pop("class_lists").items()
+  }
+  mappings = {
+      name: namespace.Mapping(**mapping)
+      for name, mapping in taxonomy_database.pop("mappings").items()
+  }
+  return TaxonomyDatabase(
+      namespaces=namespaces,
+      class_lists=class_lists,
+      mappings=mappings,
+      **taxonomy_database
+  )
 
-    # Create a ClassList for each namespace.
-    for space in namespaces.values():
-      class_lists[space.name] = space.to_class_list()
 
-    # Check consistency.
-    for space in namespaces.values():
-      if space.name in namespaces and space != namespaces[space.name]:
-        raise ValueError(f'Multiple definitions for namespace {space.name}')
-    for mapping in mappings.values():
-      if mapping.source_namespace not in namespaces:
-        raise ValueError(
-            f'Mapping {mapping.name} has an unknown source '
-            f'namespace {mapping.source_namespace}.'
-        )
-      if mapping.target_namespace not in namespaces:
-        raise ValueError(
-            f'Mapping {mapping.name} has an unknown target '
-            f'namespace {mapping.target_namespace}.'
-        )
-    for class_list in class_lists.values():
-      if class_list.namespace not in namespaces:
-        raise ValueError(
-            f'ClassList {class_list.name} has an unknown '
-            f'namespace {class_list.namespace}.'
-        )
+class TaxonomyDatabaseEncoder(json.JSONEncoder):
 
-    db = NamespaceDatabase(namespaces, mappings, class_lists)
-    return db
+  def default(self, o):
+    if isinstance(o, frozenset):
+      return sorted(o)
+    return super().default(o)
 
-  def generate_xenocanto_10_1_to_ebird2021(
-      self, xenocanto_species: Sequence[str]
-  ) -> Tuple[namespace.Mapping, Sequence[str]]:
-    r"""Generates a mapping from xenocanto scientific names to ebird2021.
 
-    As of January 2023, Xeno Canto is using the IOC 10.1 taxonomy. We don't have
-    access to a good mapping from this to ebird2021, so we have to roll one from
-    multiple sources. We have a good mapping from IOC 12.2->ebird2021.
+def dump_db(taxonomy_database: TaxonomyDatabase) -> str:
+  validate_taxonomy_database(taxonomy_database)
+  return json.dumps(
+      dataclasses.asdict(taxonomy_database),
+      cls=TaxonomyDatabaseEncoder,
+      indent=2,
+      sort_keys=True,
+  )
 
-    There are two kinds of problems which arise: Updates between IOC 10.1
-    and 12.2 (described at worldbirdnames.com), and species in IOC which map to
-    subspecies in Clements/ebird.
 
-    To handle this, we first 'update' XenoCanto scientific names to IOC 12.2.
-    Where needed, we convert IOC to ebird issf's, then to species. Otherwise, we
-    convert directly to species. Here's a diagram:
-
-    +----+   +------+   +-----------+
-    | XC |-->| 12.2 |-->| ebird2021 |
-    +----+   +------+   +-----------+
-
-    Args:
-      xenocanto_species: A sequence of species from Xeno-Canto.
-
-    Returns:
-      Mapping for provided XC Species to ebird2021 codes, and a list of species
-      which could not be mapped successfully.
-    """
-    xc_updates = self.mappings['xenocanto_to_ioc_12_2'].to_dict()
-    ioc_to_ebird = self.mappings['ioc_12_2_to_ebird2021'].to_dict()
-    composite = {}
-    misses = []
-
-    for sp in xenocanto_species:
-      sp = sp.lower()
-      sp = xc_updates.get(sp, sp)
-      if sp in ioc_to_ebird:
-        composite[sp] = ioc_to_ebird[sp]
-      else:
-        misses.append(sp)
-    composite = namespace.Mapping.from_dict(
-        'xc_to_ebird2021', 'xenocanto_10_1', 'ebird2021', composite
-    )
-    return composite, misses
+@functools.cache
+def load_db(path: str = TAXONOMY_DATABASE_FILENAME) -> TaxonomyDatabase:
+  fileobj = open(path, "r")
+  with fileobj as f:
+    data = json.load(f)
+  taxonomy_database = load_taxonomy_database(data)
+  validate_taxonomy_database(taxonomy_database)
+  return taxonomy_database

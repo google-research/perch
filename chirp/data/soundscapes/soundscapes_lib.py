@@ -70,7 +70,7 @@ def load_class_list(
   Returns:
     The desired ClassList.
   """
-  db = namespace_db.NamespaceDatabase.load_csvs()
+  db = namespace_db.load_db()
   dataset_class_list = db.class_lists[class_list_name]
 
   if (
@@ -79,9 +79,8 @@ def load_class_list(
   ):
     # Create a new class list which includes the 'unknown' class.
     dataset_class_list = namespace.ClassList(
-        dataset_class_list.name + '_' + UNKNOWN_LABEL,
         dataset_class_list.namespace,
-        [UNKNOWN_LABEL] + list(dataset_class_list.classes),
+        (UNKNOWN_LABEL,) + dataset_class_list.classes,
     )
   return dataset_class_list
 
@@ -419,7 +418,7 @@ def get_labeled_intervals(
         continue
       # found an overlap!
       for label in seg['label']:
-        if label in class_list:
+        if label in class_list.classes:
           interval_labels.add(label)
         else:
           logging.info('dropping label not in class list: %s', str(label))

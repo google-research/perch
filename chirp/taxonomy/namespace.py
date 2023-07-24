@@ -14,166 +14,131 @@
 # limitations under the License.
 
 """Tools for handling namespaces of classes."""
+from __future__ import annotations
 
 import csv
 import dataclasses
-from typing import Dict, Iterable, Sequence, Set
+import io
+from typing import Iterable
 
 from jax import numpy as jnp
 import tensorflow as tf
 
-UNKNOWN_LABEL = 'unknown'
+UNKNOWN_LABEL = "unknown"
 
 
 @dataclasses.dataclass
 class Namespace:
-  """An unordered collection of classes."""
+  """A namespace is simply a set of labels.
 
-  name: str
-  classes: Set[str]
+  Note that unknown labels cannot be in a namespace.
 
-  def __contains__(self, other) -> bool:
-    return other == UNKNOWN_LABEL or other in self.classes
+  Attributes:
+    classes: A frozenset of labels.
+  """
 
-  def __repr__(self) -> str:
-    return f'Namespace_{self.name}'
+  classes: frozenset[str]
 
-  @property
-  def size(self) -> int:
-    return len(self.classes)
-
-  def __eq__(self, other) -> bool:
-    if not isinstance(other, Namespace):
-      return False
-    return sorted(self.classes) == sorted(other.classes)
-
-  @classmethod
-  def from_csv(cls, csv_data: Iterable[str]) -> 'Namespace':
-    reader = csv.DictReader(csv_data)
-    name = reader.fieldnames[0]
-    classes = []
-    for row in reader:
-      classes.append(row[name].strip())
-    return Namespace(name, set(classes))
-
-  def to_class_list(self) -> 'ClassList':
-    return ClassList(self.name, self.name, sorted(self.classes))
+  def __post_init__(self):
+    if UNKNOWN_LABEL in self.classes:
+      raise ValueError("unknown class")
 
 
 @dataclasses.dataclass
 class Mapping:
-  """A mapping between two Namespaces."""
+  """A mapping maps labels from one namespace to labels in another.
 
-  name: str
+  Note that this is a n:1 mapping, i.e., multiple labels in the source namespace
+  can map to the same label in the target namespace.
+
+  The source and target namespace are referred to by their name. This name must
+  be resolved using the taxonomy database.
+
+  Note that labels cannot be mapped to unknown. Instead, these labels should be
+  simply excluded from the mapping. The end-user is responsible for deciding
+  whether to map missing keys to unknown or whether to raise an error, e.g.,
+  by using:
+
+    mapping.mapped_pairs.get(source_label, namespace.UNKNOWN_LABEL)
+
+  Attributes:
+    source_namespace: The name of the source namespace.
+    target_namespace: The name of the target namespace.
+    mapped_pairs: The mapping from labels in the source namespace to labels in
+      the target namespace.
+  """
+
   source_namespace: str
   target_namespace: str
-  mapped_pairs: Sequence[tuple[str, str]]
+  mapped_pairs: dict[str, str]
 
-  def __repr__(self) -> str:
-    return (
-        f'Mapping {self.name} from {self.source_namespace} '
-        f'to {self.target_namespace}'
-    )
-
-  def __eq__(self, other) -> bool:
-    if not isinstance(other, Mapping):
-      return False
-    elif self.source_namespace != other.source_namespace:
-      return False
-    elif self.target_namespace != other.target_namespace:
-      return False
-    elif sorted(self.mapped_pairs) != sorted(other.mapped_pairs):
-      return False
-    if len(self.mapped_pairs) != len(other.mapped_pairs):
-      return False
-    for pair_self, pair_other in zip(
-        sorted(self.mapped_pairs), sorted(other.mapped_pairs)
-    ):
-      if pair_self[0] != pair_other[0] or pair_self[1] != pair_other[1]:
-        return False
-    return True
-
-  @classmethod
-  def from_dict(
-      cls,
-      name: str,
-      source_namespace: str,
-      target_namespace: str,
-      mapped_pairs: Dict[str, str],
-  ) -> 'Mapping':
-    pairs = tuple((k, v) for (k, v) in mapped_pairs.items())
-    return Mapping(name, source_namespace, target_namespace, pairs)
-
-  @classmethod
-  def from_csv(cls, name: str, csv_data: Iterable[str]) -> 'Mapping':
-    reader = csv.DictReader(csv_data)
-    source_namespace = reader.fieldnames[0]
-    target_namespace = reader.fieldnames[1]
-    pairs = []
-    for row in reader:
-      pairs.append((row[source_namespace], row[target_namespace]))
-    return Mapping(
-        name, source_namespace.strip(), target_namespace.strip(), pairs
-    )
-
-  def to_dict(self) -> dict[str, str]:
-    return {m[0]: m[1] for m in self.mapped_pairs}
-
-  def to_tf_lookup(self) -> tf.lookup.StaticHashTable:
-    keys = [m[0] for m in self.mapped_pairs]
-    values = [m[1] for m in self.mapped_pairs]
-    table = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(keys, values),
-        default_value=UNKNOWN_LABEL,
-    )
-    return table
+  def __post_init__(self):
+    if UNKNOWN_LABEL in self.mapped_pairs.values():
+      raise ValueError("unknown target class")
 
 
 @dataclasses.dataclass
 class ClassList:
-  """An ordered set of classes from a specific Domain."""
+  """A list of labels.
 
-  name: str
+  A class list is a list of labels in a particular order, e.g., to reflect the
+  output of a model.
+
+  Class lists can contain the unknown label. All other labels must belong to a
+  namespace.
+
+  Class lists cannot contain duplicate entries.
+
+  Attributes:
+    namespace: The name of the namespace these class labels belong to.
+    classes: The list of classes.
+  """
+
   namespace: str
-  classes: Sequence[str]
+  classes: tuple[str, ...]
 
-  def __contains__(self, other) -> bool:
-    return other == UNKNOWN_LABEL or other in self.classes
-
-  def __repr__(self) -> str:
-    return f'ClassList {self.name} in {self.namespace}'
-
-  def __eq__(self, other):
-    if not isinstance(other, ClassList):
-      return False
-    return sorted(self.classes) == sorted(other.classes)
+  def __post_init__(self):
+    if len(set(self.classes)) != len(self.classes):
+      raise ValueError("duplicate entries in class list")
 
   @classmethod
-  def from_csv(cls, name: str, csv_data: Iterable[str]) -> 'ClassList':
-    """Parse a ClassList from a CSV."""
-    reader = csv.DictReader(csv_data)
-    namespace = reader.fieldnames[0].strip()
-    classes = []
-    for row in reader:
-      classes.append(row[namespace].strip())
-    return ClassList(name, namespace, classes)
+  def from_csv(cls, csv_data: Iterable[str]) -> "ClassList":
+    """Parse a class list from a CSV file.
+
+    The file must contain the namespace in the first column of the first row.
+    The first column of the remaining rows are assumed to contain the classes.
+
+    Args:
+      csv_data: Any iterable which can be passed on to `csv.reader`.
+
+    Returns:
+      The parsed class list.
+    """
+    reader = csv.reader(csv_data)
+    namespace = next(reader)[0]
+    classes = tuple(row[0].strip() for row in reader)
+    return ClassList(namespace, classes)
 
   def to_csv(self) -> str:
-    """Serialize to CSV string."""
-    output_rows = [f'{self.namespace},comment']
-    for cl in self.classes:
-      output_rows.append(f'{cl},')
-    return '\n'.join(output_rows) + '\n'
+    """Write a class list to a CSV file.
 
-  @property
-  def size(self) -> int:
-    return len(self.classes)
+    See `from_csv` for a description of the file format.
 
-  def get_index_lookup(self) -> dict[str, int]:
-    return {self.classes[i]: i for i in range(self.size)}
+    It can be useful to write the class lists to disk so that the model can be
+    loaded correctly, even if class lists change. However, note that in this
+    case none of the mappings are guaranteed to still work.
+
+    Returns:
+      A string containing the namespace and the class labels as rows.
+    """
+    buffer = io.StringIO(newline="")
+    writer = csv.writer(buffer)
+    writer.writerow(self.namespace)
+    writer.writerows(self.classes)
+    return buffer.getvalue()
 
   def get_class_map_tf_lookup(
-      self, target_class_list: 'ClassList'
+      self, target_class_list: ClassList
   ) -> tuple[tf.lookup.StaticHashTable, tf.Tensor]:
     """Create a static hash map for class indices.
 
@@ -191,26 +156,25 @@ class ClassList:
       the classlist mapping.
     """
     if self.namespace != target_class_list.namespace:
-      raise ValueError('Domains must match when creating a class map.')
-    intersection = [k for k in self.classes if k in target_class_list.classes]
-    source_idxs = self.get_index_lookup()
-    target_idxs = target_class_list.get_index_lookup()
-    keys = [source_idxs[k] for k in intersection]
-    values = [target_idxs[k] for k in intersection]
-    initializer = tf.lookup.KeyValueTensorInitializer(
-        keys, values, tf.int64, tf.int64
-    )
+      raise ValueError("namespaces must match when creating a class map.")
+    intersection = set(self.classes) & set(target_class_list.classes)
+    keys = [i for i, k in enumerate(self.classes) if k in intersection]
+    values = [
+        i for i, k in enumerate(target_class_list.classes) if k in intersection
+    ]
     table = tf.lookup.StaticHashTable(
-        initializer,
+        tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64, tf.int64),
         default_value=-1,
     )
-    image_mask = [k in source_idxs for k in target_class_list.classes]
-    image_mask = tf.constant(image_mask, tf.int64)
+    image_mask = tf.constant(
+        [k in self.classes for k in target_class_list.classes],
+        tf.int64,
+    )
     return table, image_mask
 
   def get_namespace_map_tf_lookup(
       self, mapping: Mapping
-  ) -> tuple[tf.lookup.StaticHashTable, 'ClassList']:
+  ) -> tf.lookup.StaticHashTable:
     """Create a tf.lookup.StaticHasTable for namespace mappings.
 
     Args:
@@ -220,56 +184,41 @@ class ClassList:
       A Tensorflow StaticHashTable and the image ClassList in the mapping's
       target namespace.
     """
-    mapping_dict = mapping.to_dict()
     target_class_list = self.apply_namespace_mapping(mapping)
-    target_class_idxs = target_class_list.get_index_lookup()
-    keys = []
-    values = []
-    for i, cl in enumerate(self.classes):
-      if cl in mapping_dict:
-        target_cl = mapping_dict[cl]
-        keys.append(i)
-        values.append(target_class_idxs[target_cl])
-    initializer = tf.lookup.KeyValueTensorInitializer(
-        keys, values, tf.int64, tf.int64
-    )
+    target_class_indices = {
+        k: i for i, k in enumerate(target_class_list.classes)
+    }
+    keys = list(range(len(self.classes)))
+    values = [
+        target_class_indices[mapping.mapped_pairs[k]] for k in self.classes
+    ]
     table = tf.lookup.StaticHashTable(
-        initializer=initializer,
+        tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64, tf.int64),
         default_value=-1,
     )
-    return table, target_class_list
+    return table
 
-  def apply_namespace_mapping(
-      self, mapping: Mapping, mapped_name: str | None = None
-  ) -> 'ClassList':
-    """Produces a new ClassList by applying a Mapping.
-
-    The output ClassList is in alphabetical order, and includes only the
-    elements of the target Domain in the image of the source ClassList.
-    (ie, sorted(D(self.classes)).)
-
-    Args:
-      mapping: The Mapping to apply.
-      mapped_name: Name for output ClassList.
-
-    Returns:
-      A new ClassList in the Mapping's target namespace.
-    """
-    if mapped_name is None:
-      mapped_name = self.name + '_' + mapping.target_namespace
-    mapping_dict = mapping.to_dict()
-    mapped_classes = sorted(
-        set([mapping_dict[cl] for cl in self.classes if cl in mapping_dict])
+  def apply_namespace_mapping(self, mapping: Mapping) -> ClassList:
+    if mapping.source_namespace != self.namespace:
+      raise ValueError("mapping source namespace does not match class list's")
+    return ClassList(
+        mapping.target_namespace,
+        tuple(
+            dict.fromkeys(
+                mapping.mapped_pairs[class_] for class_ in self.classes
+            )
+        ),
     )
-    return ClassList(mapped_name, mapping.target_namespace, mapped_classes)
 
   def get_class_map_matrix(
-      self, target_class_list: 'ClassList', mapping: Mapping | None = None
+      self,
+      target_class_list: ClassList,
+      mapping: Mapping | None = None,
   ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Construct a binary matrix for mapping to another ClassList.
+    """Construct a binary matrix for mapping to another class list.
 
     Args:
-      target_class_list: ClassList to map into.
+      target_class_list: Class list to map into.
       mapping: Namespace mapping, required if the source and target are in
         different namespaces.
 
@@ -279,27 +228,21 @@ class ClassList:
     """
     if self.namespace != target_class_list.namespace and mapping is None:
       raise ValueError(
-          'If source and target classes are from different '
-          'namespaces, a namespace mapping must be provided.'
+          "If source and target classes are from different namespaces, a"
+          " namespace mapping must be provided."
       )
-    elif mapping is not None:
-      mapping_dict = mapping.to_dict()
-    else:
-      mapping_dict = {}
-    matrix = jnp.zeros([self.size, target_class_list.size])
-    image_mask = jnp.zeros([target_class_list.size])
+    elif self.namespace == target_class_list.namespace and mapping is not None:
+      raise ValueError(
+          "If source and target classes are the same, no mapping should be"
+          " provided."
+      )
+    matrix = jnp.zeros([len(self.classes), len(target_class_list.classes)])
 
-    target_idxs = target_class_list.get_index_lookup()
-    for i, cl in enumerate(self.classes):
-      if mapping is not None and cl in mapping_dict:
-        # Consider the class as a member of the target namespace.
-        cl = mapping_dict[cl]
-      elif mapping is not None:
-        # Source class does not exist in the target namespace, so ignore it.
-        continue
-
-      if cl in target_class_list.classes:
-        j = target_idxs[cl]
+    target_idxs = {k: i for i, k in enumerate(target_class_list.classes)}
+    for i, class_ in enumerate(self.classes):
+      if mapping is not None:
+        class_ = mapping.mapped_pairs[class_]
+      if class_ in target_idxs:
+        j = target_idxs[class_]
         matrix = matrix.at[i, j].set(1)
-        image_mask = image_mask.at[j].set(1)
-    return matrix, image_mask
+    return matrix, jnp.any(matrix, axis=0)

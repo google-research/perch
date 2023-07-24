@@ -151,11 +151,11 @@ class Soundevents(tfds.core.GeneratorBasedBuilder):
   }
 
   def _info(self) -> tfds.core.DatasetInfo:
-    db = namespace_db.NamespaceDatabase.load_csvs()
+    db = namespace_db.load_db()
     dataset_class_list = db.class_lists[self.builder_config.class_list_name]
     logging.info(
         'Currently considering a total of %s soundevent.',
-        dataset_class_list.size,
+        len(dataset_class_list.classes),
     )
 
     full_length = self.builder_config.localization_fn is None

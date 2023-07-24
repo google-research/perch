@@ -703,7 +703,7 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
   output_masks: bool = True
 
   # The following members are for cached / stateful data.
-  db: namespace_db.NamespaceDatabase | None = None
+  db: namespace_db.TaxonomyDatabase | None = None
 
   def __post_init__(self):
     # Create NamespaceDatabase in post_init to avoid loading CSVs repeatedly.
@@ -713,7 +713,7 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
     # applied multiple times on different datasets. Otherwise, in subsequent
     # pipeline applications TF will attempt to re-use previous constants
     # belonging to a different tf.function.
-    self.db = namespace_db.NamespaceDatabase.load_csvs()
+    self.db = namespace_db.load_db()
 
   def load_tables(
       self, source_class_list: namespace.ClassList
@@ -756,7 +756,7 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
         target_taxa_classes = target_classes.apply_namespace_mapping(
             namespace_mapping
         )
-        namespace_table, _ = source_class_list.get_namespace_map_tf_lookup(
+        namespace_table = source_class_list.get_namespace_map_tf_lookup(
             namespace_mapping
         )
         class_table, label_mask = source_taxa_classes.get_class_map_tf_lookup(
@@ -861,7 +861,6 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
       self, features: Features, dataset_info: tfds.core.DatasetInfo
   ) -> Features:
     source_classes = namespace.ClassList(
-        'dataset',
         self.source_namespace,
         # TODO(vdumoulin): generalize this to labels beyond 'ignore'.
         # Some dataset variants (e.g. bird_taxonomy/downstream_slice_peaked)
@@ -869,11 +868,11 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
         # ignore this label; the mapping tables return an 'unknown' default
         # value, so all 'ignore' labels will naturally be converted to
         # 'unknown'.
-        [
+        tuple(
             n
             for n in dataset_info.features[self.species_feature_name].names
             if n != 'ignore'
-        ],
+        ),
     )
     output_features = self.convert_features(features, source_classes)
     return output_features

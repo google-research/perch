@@ -76,11 +76,13 @@ class InferenceTest(parameterized.TestCase):
     embed_fn.setup()
     self.assertIsNotNone(embed_fn.embedding_model)
 
-    test_wav_path = path_utils.get_absolute_epath(
-        'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+    test_wav_path = os.fspath(
+        path_utils.get_absolute_path(
+            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+        )
     )
 
-    source_info = embed_lib.SourceInfo(test_wav_path.as_posix(), 0, 10)
+    source_info = embed_lib.SourceInfo(test_wav_path, 0, 10)
     example = embed_fn.process(source_info, crop_s=10.0)[0]
     serialized = example.SerializeToString()
 
@@ -142,10 +144,12 @@ class InferenceTest(parameterized.TestCase):
     embed_fn.setup()
     self.assertIsNotNone(embed_fn.embedding_model)
 
-    test_wav_path = path_utils.get_absolute_epath(
-        'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+    test_wav_path = os.fspath(
+        path_utils.get_absolute_path(
+            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+        )
     )
-    source_info = embed_lib.SourceInfo(test_wav_path.as_posix(), 0, 10)
+    source_info = embed_lib.SourceInfo(test_wav_path, 0, 10)
     # Crop to 3.0s to ensure we can handle short audio examples.
     example = embed_fn.process(source_info, crop_s=3.0)[0]
     serialized = example.SerializeToString()
@@ -277,7 +281,7 @@ class InferenceTest(parameterized.TestCase):
     )
     # The Sep+Embed model takes the max logits over the channel dimension.
     self.assertSequenceEqual(
-        outputs.logits['label'].shape, [5, target_class_list.size]
+        outputs.logits['label'].shape, [5, len(target_class_list.classes)]
     )
 
   def test_pooled_embeddings(self):
@@ -331,10 +335,12 @@ class InferenceTest(parameterized.TestCase):
 
   def test_beam_pipeline(self):
     """Check that we can write embeddings to TFRecord file."""
-    test_wav_path = path_utils.get_absolute_epath(
-        'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+    test_wav_path = os.fspath(
+        path_utils.get_absolute_path(
+            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+        )
     )
-    source_infos = [embed_lib.SourceInfo(test_wav_path.as_posix(), 0, 10)]
+    source_infos = [embed_lib.SourceInfo(test_wav_path, 0, 10)]
     base_pipeline = test_pipeline.TestPipeline()
     tempdir = tempfile.gettempdir()
     output_dir = os.path.join(tempdir, 'testBeamStuff_output')

@@ -234,9 +234,9 @@ class TaxonomyModelTF(interface.EmbeddingModel):
       model_path = base_path / 'savedmodel'
       label_csv_path = base_path / 'label.csv'
 
-    self.model = tf.saved_model.load(model_path.as_posix())
+    self.model = tf.saved_model.load(model_path)
     with label_csv_path.open('r') as f:
-      self.class_list = namespace.ClassList.from_csv('label', f)
+      self.class_list = namespace.ClassList.from_csv(f)
 
     # Check whether the model support polymorphic batch shape.
     sig = self.model.signatures['serving_default']
@@ -266,7 +266,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     )
 
     return interface.InferenceOutputs(
-        all_embeddings, {self.class_list.name: all_logits}, None
+        all_embeddings, {'label': all_logits}, None
     )
 
   def batch_embed(
@@ -291,9 +291,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
         embeddings, framed_audio.shape[:2] + (embeddings.shape[-1],)
     )
 
-    return interface.InferenceOutputs(
-        embeddings, {self.class_list.name: logits}, None
-    )
+    return interface.InferenceOutputs(embeddings, {'label': logits}, None)
 
 
 @dataclasses.dataclass
@@ -325,7 +323,7 @@ class SeparatorModelTF(interface.EmbeddingModel):
     self.model = tf.saved_model.load(epath.Path(self.model_path) / 'savedmodel')
     label_csv_path = epath.Path(self.model_path) / 'label.csv'
     with label_csv_path.open('r') as f:
-      self.class_list = namespace.ClassList.from_csv('label', f)
+      self.class_list = namespace.ClassList.from_csv(f)
 
   def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
     # Drop samples to allow reshaping to frame_size
@@ -362,7 +360,7 @@ class SeparatorModelTF(interface.EmbeddingModel):
     )
     all_embeddings = np.reshape(all_embeddings, [-1, all_embeddings.shape[-1]])
     return interface.InferenceOutputs(
-        all_embeddings, {self.class_list.name: all_logits}, sep_audio
+        all_embeddings, {'label': all_logits}, sep_audio
     )
 
   def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
@@ -592,7 +590,9 @@ class PlaceholderModel(interface.EmbeddingModel):
       )
     if self.make_logits:
       outputs['logits'] = {
-          'label': np.zeros([time_size, self.class_list.size], np.float32),
+          'label': np.zeros(
+              [time_size, len(self.class_list.classes)], np.float32
+          ),
       }
       outputs['logits']['label'] = self.convert_logits(
           outputs['logits']['label'], self.class_list, self.target_class_list

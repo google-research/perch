@@ -101,7 +101,7 @@ def initialize_finetune_model(
   # Load model
   model_init_key, key = random.split(key)
   model = taxonomy_model.TaxonomyModel(
-      num_classes={k: v.size for (k, v) in class_lists.items()},
+      num_classes={k: len(v.classes) for (k, v) in class_lists.items()},
       encoder=mae.Embedder(encoder=mae.Encoder(mask_rate=0.75)),
       taxonomy_loss_weight=0.0,
   )
