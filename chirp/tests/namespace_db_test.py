@@ -29,9 +29,9 @@ class NamespaceDbTest(absltest.TestCase):
     db = namespace_db.load_db()
     for namespace_name in [
         'ebird2021',
-        'bird_genera',
-        'bird_families',
-        'bird_orders',
+        'ebird2021_genera',
+        'ebird2021_families',
+        'ebird2021_orders',
     ]:
       self.assertIn(namespace_name, db.namespaces)
       # Also check that each namespace is represented as a ClassList.
@@ -45,17 +45,17 @@ class NamespaceDbTest(absltest.TestCase):
 
     genus_mapping = db.mappings['ebird2021_to_genus']
     caples_genera = caples_list.apply_namespace_mapping(genus_mapping)
-    self.assertEqual(caples_genera.namespace, 'bird_genera')
+    self.assertEqual(caples_genera.namespace, 'ebird2021_genera')
     self.assertLen(caples_genera.classes, 62)
 
     family_mapping = db.mappings['ebird2021_to_family']
     caples_families = caples_list.apply_namespace_mapping(family_mapping)
-    self.assertEqual(caples_families.namespace, 'bird_families')
+    self.assertEqual(caples_families.namespace, 'ebird2021_families')
     self.assertLen(caples_families.classes, 30)
 
     order_mapping = db.mappings['ebird2021_to_order']
     caples_orders = caples_list.apply_namespace_mapping(order_mapping)
-    self.assertEqual(caples_orders.namespace, 'bird_orders')
+    self.assertEqual(caples_orders.namespace, 'ebird2021_orders')
     self.assertLen(caples_orders.classes, 11)
 
   def test_class_maps(self):

@@ -247,13 +247,17 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
               'chirp.audio_utils.slice_peaked_audio.'
           ),
           data_processing_query=fsu.QuerySequence([
-              fsu.filter_in_class_list('species_code', 'global_seabirds'),
+              fsu.filter_in_class_list(
+                  'species_code', 'ebird2021_global_seabirds'
+              ),
               fsu.scrub_all_but_class_list(
-                  'bg_species_codes', 'global_seabirds'
+                  'bg_species_codes', 'ebird2021_global_seabirds'
               ),
           ]),
           metadata_processing_query=fsu.QuerySequence([
-              fsu.filter_in_class_list('species_code', 'global_seabirds'),
+              fsu.filter_in_class_list(
+                  'species_code', 'ebird2021_global_seabirds'
+              ),
           ]),
       ),
   ]
