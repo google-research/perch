@@ -113,8 +113,9 @@ class TaxonomyDatabaseEncoder(json.JSONEncoder):
     return super().default(o)
 
 
-def dump_db(taxonomy_database: TaxonomyDatabase) -> str:
-  validate_taxonomy_database(taxonomy_database)
+def dump_db(taxonomy_database: TaxonomyDatabase, validate: bool = True) -> str:
+  if validate:
+    validate_taxonomy_database(taxonomy_database)
   return json.dumps(
       dataclasses.asdict(taxonomy_database),
       cls=TaxonomyDatabaseEncoder,
@@ -124,10 +125,26 @@ def dump_db(taxonomy_database: TaxonomyDatabase) -> str:
 
 
 @functools.cache
-def load_db(path: str = TAXONOMY_DATABASE_FILENAME) -> TaxonomyDatabase:
+def load_db(
+    path: str = TAXONOMY_DATABASE_FILENAME, validate: bool = True
+) -> TaxonomyDatabase:
+  """Load the taxonomy database.
+
+  This loads the taxonomy database from the given JSON file. It converts the
+  database into Python data structures and optionally validates that the
+  database is consistent.
+
+  Args:
+    path: The JSON file to load.
+    validate: If true, it validates the database.
+
+  Returns:
+    The taxonomy database.
+  """
   fileobj = open(path, "r")
   with fileobj as f:
     data = json.load(f)
   taxonomy_database = load_taxonomy_database(data)
-  validate_taxonomy_database(taxonomy_database)
+  if validate:
+    validate_taxonomy_database(taxonomy_database)
   return taxonomy_database
