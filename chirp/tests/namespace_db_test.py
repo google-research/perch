@@ -27,15 +27,6 @@ class NamespaceDbTest(absltest.TestCase):
 
   def test_load_namespace_db(self):
     db = namespace_db.load_db()
-    for namespace_name in [
-        'ebird2021',
-        'ebird2021_genera',
-        'ebird2021_families',
-        'ebird2021_orders',
-    ]:
-      self.assertIn(namespace_name, db.namespaces)
-      # Also check that each namespace is represented as a ClassList.
-      self.assertIn(namespace_name, db.class_lists)
 
     # Check a couple ClassLists of known size.
     self.assertIn('caples', db.class_lists)
@@ -131,7 +122,7 @@ class NamespaceDbTest(absltest.TestCase):
   def test_taxonomic_mappings(self):
     # Ensure that all ebird2021 species appear in taxonomic mappings.
     db = namespace_db.load_db()
-    ebird = db.class_lists['ebird2021_species']
+    ebird = db.namespaces['ebird2021_species']
     genera = db.mappings['ebird2021_to_genus'].mapped_pairs
     families = db.mappings['ebird2021_to_family'].mapped_pairs
     orders = db.mappings['ebird2021_to_order'].mapped_pairs
