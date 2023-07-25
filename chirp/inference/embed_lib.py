@@ -16,6 +16,7 @@
 """Create embeddings for an audio corpus."""
 
 import dataclasses
+import json
 import os
 from typing import Any, Sequence
 
@@ -46,6 +47,12 @@ class SourceInfo:
   filepath: str
   shard_num: int
   shard_len_s: float
+
+  def file_id(self, file_id_depth: int) -> str:
+    file_id = epath.Path(
+        *epath.Path(self.filepath).parts[-(file_id_depth + 1) :]
+    ).as_posix()
+    return file_id
 
 
 def create_source_infos(
@@ -190,6 +197,25 @@ class EmbedFn(beam.DoFn):
         exception,
     )
 
+  def audio_to_example(
+      self, file_id: str, timestamp_offset_s: float, audio: np.ndarray
+  ) -> tf.train.Example:
+    """Embed audio and create a TFExample."""
+    if self.embedding_model is None:
+      raise ValueError('Embedding model undefined.')
+    model_outputs = self.embedding_model.embed(audio)
+    example = tf_examples.model_outputs_to_tf_example(
+        model_outputs=model_outputs,
+        file_id=file_id,
+        audio=audio,
+        timestamp_offset_s=timestamp_offset_s,
+        write_raw_audio=self.write_raw_audio,
+        write_separated_audio=self.write_separated_audio,
+        write_embeddings=self.write_embeddings,
+        write_logits=self.write_logits,
+    )
+    return example
+
   @beam.typehints.with_output_types(Any)
   def process(self, source_info: SourceInfo, crop_s: float = -1.0):
     """Process a source.
@@ -202,9 +228,7 @@ class EmbedFn(beam.DoFn):
     Returns:
       A TFExample.
     """
-    file_id = epath.Path(
-        *epath.Path(source_info.filepath).parts[-(self.file_id_depth + 1) :]
-    ).as_posix()
+    file_id = source_info.file_id(self.file_id_depth)
 
     logging.info('...loading audio (%s)', source_info.filepath)
     timestamp_offset_s = source_info.shard_num * source_info.shard_len_s
@@ -255,17 +279,7 @@ class EmbedFn(beam.DoFn):
     logging.info(
         '...creating embeddings (%s / %d)', file_id, timestamp_offset_s
     )
-    model_outputs = self.embedding_model.embed(audio)
-    example = tf_examples.model_outputs_to_tf_example(
-        model_outputs=model_outputs,
-        file_id=file_id,
-        audio=audio,
-        timestamp_offset_s=timestamp_offset_s,
-        write_raw_audio=self.write_raw_audio,
-        write_separated_audio=self.write_separated_audio,
-        write_embeddings=self.write_embeddings,
-        write_logits=self.write_logits,
-    )
+    example = self.audio_to_example(file_id, timestamp_offset_s, audio)
     beam.metrics.Metrics.counter('beaminference', 'examples_processed').inc()
     return [example]
 
@@ -297,6 +311,14 @@ def maybe_write_config(parsed_config, output_dir):
       return
   with (output_dir / 'config.json').open('w') as f:
     f.write(config_json)
+
+
+def load_embedding_config(embeddings_path):
+  """Loads the configuration to generate unlabeled embeddings."""
+  embeddings_path = epath.Path(embeddings_path)
+  with (embeddings_path / 'config.json').open() as f:
+    embedding_config = config_dict.ConfigDict(json.loads(f.read()))
+  return embedding_config
 
 
 def build_run_pipeline(base_pipeline, output_dir, source_infos, embed_fn):

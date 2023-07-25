@@ -107,8 +107,23 @@ def display_search_results(
     print(f'offset:      {offset_s:6.2f}')
     print(f'distance:    {(r.distance + results.distance_offset):6.2f}')
     label_widgets = []
+
+    def button_callback(x):
+      x.value = not x.value
+      if x.value:
+        x.button_style = 'success'
+      else:
+        x.button_style = ''
+
     for lbl in checkbox_labels:
-      check = ipywidgets.Checkbox(description=lbl, value=False)
+      check = ipywidgets.Button(
+          description=lbl,
+          disabled=False,
+          button_style='',
+      )
+      check.value = False
+      check.on_click(button_callback)
+
       label_widgets.append(check)
       ipy_display(check)
     # Attach audio and widgets to the SearchResult.

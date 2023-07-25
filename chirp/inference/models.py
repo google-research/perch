@@ -38,9 +38,11 @@ def model_class_map() -> dict[str, Any]:
   return {
       'taxonomy_model_tf': TaxonomyModelTF,
       'separator_model_tf': SeparatorModelTF,
+      'birb_separator_model_tf1': BirbSepModelTF1,
       'birdnet': BirdNet,
       'placeholder_model': PlaceholderModel,
       'separate_embed_model': SeparateEmbedModel,
+      'tfhub_model': TFHubModel,
   }
 
 

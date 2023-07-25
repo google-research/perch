@@ -48,16 +48,9 @@ class BootstrapState:
     """Create a TF Dataset of the embeddings."""
     if self.embeddings_dataset:
       return self.embeddings_dataset
-    if '*' not in self.config.embeddings_glob:
-      ds = tf_examples.create_embeddings_dataset(self.config.embeddings_glob)
-    else:
-      # find the first segment with a *.
-      dirs = self.config.embeddings_glob.split('/')
-      has_wildcard = ['*' in d for d in dirs]
-      first_wildcard = has_wildcard.index(True)
-      dirs = '/'.join(dirs[:first_wildcard])
-      glob = '/'.join(dirs[first_wildcard:])
-      ds = tf_examples.create_embeddings_dataset(dirs, glob)
+    ds = tf_examples.create_embeddings_dataset(
+        self.config.embeddings_path, 'embeddings-*'
+    )
     self.embeddings_dataset = ds
     return ds
 
@@ -86,15 +79,40 @@ class BootstrapConfig:
   """Configuration for Search Bootstrap project."""
 
   # Embeddings dataset info.
-  embeddings_glob: str
-  embedding_hop_size_s: float
-  file_id_depth: int
-  audio_globs: Sequence[str] | None
+  embeddings_path: str
 
   # Annotations info.
-  # TODO(tomdenton): Write handling for the annotated data.
   annotated_path: str
 
-  # Model info. Should match the model used for creating embeddings.
-  model_key: str
-  model_config: config_dict.ConfigDict
+  # The following are populated automatically from the embedding config.
+  embedding_hop_size_s: float | None = None
+  file_id_depth: int | None = None
+  audio_globs: Sequence[str] | None = None
+  model_key: str | None = None
+  model_config: config_dict.ConfigDict | None = None
+
+  @classmethod
+  def load_from_embedding_config(
+      cls, embeddings_path: str, annotated_path: str
+  ):
+    """Instantiate from a configuration written alongside embeddings."""
+    embedding_config = embed_lib.load_embedding_config(embeddings_path)
+    embed_fn_config = embedding_config.embed_fn_config
+
+    # Extract the embedding model config from the embedding_config.
+    if embed_fn_config.model_key == 'separate_embed_model':
+      # If a separation model was applied, get the embedding model config only.
+      model_key = 'taxonomy_model_tf_config'
+      model_config = embed_fn_config.model_config.taxonomy_model_tf_config
+    else:
+      model_key = embed_fn_config.model_key
+      model_config = embed_fn_config.model_config
+    return BootstrapConfig(
+        embeddings_path=embeddings_path,
+        annotated_path=annotated_path,
+        model_key=model_key,
+        model_config=model_config,
+        embedding_hop_size_s=model_config.hop_size_s,
+        file_id_depth=embed_fn_config.file_id_depth,
+        audio_globs=embedding_config.source_file_patterns,
+    )

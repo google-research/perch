@@ -15,6 +15,7 @@
 
 """Tools for searching an embeddings dataset."""
 
+import collections
 import dataclasses
 from typing import Any, Callable, List, Sequence
 
@@ -92,6 +93,7 @@ class TopKSearchResults:
   def write_labeled_data(self, labeled_data_path: str, sample_rate: int):
     """Write labeled results to the labeled data collection."""
     labeled_data_path = epath.Path(labeled_data_path)
+    counts = collections.defaultdict(int)
     for r in self.search_results:
       labels = [ch.description for ch in r.label_widgets if ch.value]
       if not labels:
@@ -104,6 +106,9 @@ class TopKSearchResults:
         output_path.mkdir(parents=True, exist_ok=True)
         output_filepath = output_path / output_filename
         wavfile.write(output_filepath, sample_rate, r.audio)
+        counts[label] += 1
+    for label, count in counts.items():
+      print(f'Wrote {count} examples for label {label}')
 
 
 @dataclasses.dataclass
@@ -213,9 +218,12 @@ def classifer_search_embeddings_parallel(
 
   def classify_batch(batch):
     emb = batch[tf_examples.EMBEDDING]
-    # This seems to 'just work' when the classifier input shape is [None, D]
-    # and the embeddings shape is [B, C, D].
-    logits = embeddings_classifier(emb)
+    emb_shape = tf.shape(emb)
+    flat_emb = tf.reshape(emb, [-1, emb_shape[-1]])
+    logits = embeddings_classifier(flat_emb)
+    logits = tf.reshape(
+        logits, [emb_shape[0], emb_shape[1], tf.shape(logits)[-1]]
+    )
     # Restrict to target class.
     logits = logits[..., target_index]
     # Take the maximum logit over channels.
