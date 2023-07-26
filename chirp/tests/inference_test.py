@@ -258,6 +258,31 @@ class InferenceTest(parameterized.TestCase):
         embedding.shape, got_example[tf_examples.EMBEDDING_SHAPE]
     )
 
+  def test_create_source_infos(self):
+    # Just one file, but it's all good.
+    globs = [
+        path_utils.get_absolute_path(
+            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+        )
+    ]
+    got_infos = embed_lib.create_source_infos(
+        globs, shard_len_s=10, max_shards_per_file=10
+    )
+    # The test file is ~21s long, so we should get three shards.
+    self.assertLen(got_infos, 3)
+
+    # Allow unlimited shards, check we get three.
+    got_infos = embed_lib.create_source_infos(
+        globs, shard_len_s=10, max_shards_per_file=-1
+    )
+    self.assertLen(got_infos, 3)
+
+    # Limit to two shards.
+    got_infos = embed_lib.create_source_infos(
+        globs, shard_len_s=10, max_shards_per_file=2
+    )
+    self.assertLen(got_infos, 2)
+
   def test_tfrecord_multiwriter(self):
     output_dir = epath.Path(tempfile.TemporaryDirectory().name)
     output_dir.mkdir(parents=True, exist_ok=True)

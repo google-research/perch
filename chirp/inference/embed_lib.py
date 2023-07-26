@@ -56,11 +56,22 @@ class SourceInfo:
 
 def create_source_infos(
     source_file_patterns: Sequence[str],
-    num_shards_per_file: int,
     shard_len_s: float,
+    max_shards_per_file: int = -1,
+    fixed_shards_per_file: int = -1,
 ) -> Sequence[SourceInfo]:
-  """Expand source file patterns into a list of SourceInfos."""
-  # TODO(tomdenton): probe each file and create work units in a new Beam stage.
+  """Expand source file patterns into a list of SourceInfos.
+
+  Args:
+    source_file_patterns: Sequence of file patterns to glob.
+    shard_len_s: Length in seconds of each TFExample.
+    max_shards_per_file: Limits number of shards per file.
+    fixed_shards_per_file: If greater than zero, will automatically generate
+      this many shards per file instead of automatically detecting.
+
+  Returns:
+    Sequence of SourceInfo objects.
+  """
   source_files = []
   for pattern in source_file_patterns:
     for source_file in epath.Path('').glob(pattern):
@@ -68,7 +79,20 @@ def create_source_infos(
 
   source_file_splits = []
   for source in source_files:
-    for i in range(num_shards_per_file):
+    if fixed_shards_per_file > 0:
+      num_shards = fixed_shards_per_file
+    else:
+      try:
+        sf = soundfile.SoundFile(source)
+        file_length_s = sf.frames / sf.samplerate
+        num_shards = int(file_length_s // shard_len_s + 1)
+      except Exception as exc:  # pylint: disable=broad-exception-caught
+        logging.error('Failed to parse audio file (%s) : %s.', source, exc)
+        continue
+
+    if max_shards_per_file > 0:
+      num_shards = min(num_shards, max_shards_per_file)
+    for i in range(num_shards):
       source_file_splits.append(SourceInfo(source.as_posix(), i, shard_len_s))
   return source_file_splits
 

@@ -34,8 +34,9 @@ def get_config() -> config_dict.ConfigDict:
   # file or the directory contraining the 'saved_model.pb'.
   model_path = ''
 
-  config.num_shards_per_file = 1
   config.shard_len_s = 60
+  config.max_shards_per_file = -1
+  config.fixed_shards_per_file = -1
   # Number of workers when using the Beam DirectRunner on a single machine.
   config.num_direct_workers = 8
   config.embed_fn_config = {
