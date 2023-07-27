@@ -464,7 +464,7 @@ def _prepare_eval_set(
   for class_name in eval_set_specification.class_names:
     choice_key, rng_key = jax.random.split(rng_key)
 
-    class_representative_mask = global_class_representative_mask & _df_eval(  # pytype: disable=unsupported-operands  # typed-pandas
+    class_representative_mask = global_class_representative_mask & _df_eval(
         embeddings_df,
         eval_set_specification.class_representative_classwise_mask_fn(
             class_name
@@ -490,7 +490,7 @@ def _prepare_eval_set(
     )
 
     search_corpus_mask = (
-        global_search_corpus_mask  # pytype: disable=unsupported-operands  # typed-pandas
+        global_search_corpus_mask
         & _df_eval(
             embeddings_df,
             eval_set_specification.search_corpus_classwise_mask_fn(class_name),
