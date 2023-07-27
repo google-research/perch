@@ -198,14 +198,38 @@ class ClassList:
     )
     return table
 
-  def apply_namespace_mapping(self, mapping: Mapping) -> ClassList:
+  def apply_namespace_mapping(
+      self, mapping: Mapping, keep_unknown: bool | None = None
+  ) -> ClassList:
+    """Apply a namespace mapping to this class list.
+
+    Args:
+      mapping: The mapping to apply.
+      keep_unknown: How to handle unknowns. If true, then unknown labels in the
+        class list are maintained as unknown in the mapped values. If false then
+        the unknown value is discarded. The default (`None`) will raise an error
+        if an unknown value is in the source classt list.
+
+    Returns:
+      A class list which is the result of applying the given mapping to this
+      class list.
+
+    Raises:
+      KeyError: If a class in not the mapping, or if the class list contains
+      an unknown token and `keep_unknown` was not specified.
+    """
     if mapping.source_namespace != self.namespace:
       raise ValueError("mapping source namespace does not match class list's")
+    mapped_pairs = mapping.mapped_pairs
+    if keep_unknown:
+      mapped_pairs = mapped_pairs | {UNKNOWN_LABEL: UNKNOWN_LABEL}
     return ClassList(
         mapping.target_namespace,
         tuple(
             dict.fromkeys(
-                mapping.mapped_pairs[class_] for class_ in self.classes
+                mapped_pairs[class_]
+                for class_ in self.classes
+                if class_ != UNKNOWN_LABEL or keep_unknown in (True, None)
             )
         ),
     )
