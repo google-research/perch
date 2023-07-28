@@ -131,10 +131,9 @@ def initialize_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  if not for_inference:
-    train_state = utils.TrainState(
-        step=0, params=params, opt_state=opt_state, model_state=model_state
-    )
+  train_state = utils.TrainState(
+      step=0, params=params, opt_state=opt_state, model_state=model_state
+  )
   return (
       utils.ModelBundle(
           model=model,
@@ -432,12 +431,16 @@ def run(
         tf_data_service_address=tf_data_service_address,
         **config.train_dataset_config,
     )
+    valid_dataset = None
   elif mode == "eval":
     valid_dataset, dataset_info = data_utils.get_dataset(
         **config.eval_dataset_config
     )
+    train_dataset = None
   elif mode == "export":
-    valid_dataset, dataset_info = None, None
+    train_dataset, valid_dataset, dataset_info = None, None, None
+  else:
+    raise ValueError(f"unknown mode ({mode})")
 
   if (
       dataset_info is not None
