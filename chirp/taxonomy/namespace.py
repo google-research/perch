@@ -159,10 +159,12 @@ class ClassList:
     if self.namespace != target_class_list.namespace:
       raise ValueError("namespaces must match when creating a class map.")
     intersection = set(self.classes) & set(target_class_list.classes)
-    keys = [i for i, k in enumerate(self.classes) if k in intersection]
-    values = [
-        i for i, k in enumerate(target_class_list.classes) if k in intersection
-    ]
+    keys, values = zip(
+        *(
+            (self.classes.index(c), target_class_list.classes.index(c))
+            for c in intersection
+        )
+    )
     table = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64, tf.int64),
         default_value=-1,
