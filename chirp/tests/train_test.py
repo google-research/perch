@@ -27,6 +27,7 @@ from chirp.data import utils as data_utils
 from chirp.models import efficientnet
 from chirp.models import frontend
 from chirp.preprocessing import pipeline
+from chirp.taxonomy import namespace
 from chirp.tests import fake_dataset
 from chirp.train import classifier
 from clu import checkpoint
@@ -183,6 +184,11 @@ class TrainTest(parameterized.TestCase):
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "label.csv"))
     )
+    with open(os.path.join(self.train_dir, "label.csv")) as f:
+      got_class_list = namespace.ClassList.from_csv(f.readlines())
+    # Check equality of the ClassList with the Model Bundle.
+    self.assertEqual(model_bundle.class_lists["label"], got_class_list)
+
     self.assertTrue(
         tf.io.gfile.exists(
             os.path.join(self.train_dir, "savedmodel/saved_model.pb")

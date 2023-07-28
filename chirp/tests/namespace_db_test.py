@@ -15,7 +15,11 @@
 
 """Tests for namespace_db."""
 
+import io
+import tempfile
+
 from absl import logging
+from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 import numpy as np
 import tensorflow as tf
@@ -61,6 +65,26 @@ class NamespaceDbTest(absltest.TestCase):
       self.assertGreaterEqual(
           table.lookup(tf.constant([i], dtype=tf.int64)).numpy()[0], 0
       )
+
+  def test_class_map_csv(self):
+    cl = namespace.ClassList(
+        'ebird2021', ('amecro', 'amegfi', 'amered', 'amerob')
+    )
+    cl_csv = cl.to_csv()
+    with io.StringIO(cl_csv) as f:
+      got_cl = namespace.ClassList.from_csv(f)
+    self.assertEqual(got_cl.namespace, 'ebird2021')
+    self.assertEqual(got_cl.classes, ('amecro', 'amegfi', 'amered', 'amerob'))
+
+    # Check that writing with tf.io.gfile behaves as expected, as newline
+    # behavior may be different than working with StringIO.
+    with tempfile.NamedTemporaryFile(suffix='.csv') as f:
+      with tf.io.gfile.GFile(f.name, 'w') as gf:
+        gf.write(cl_csv)
+      with open(f.name, 'r') as f:
+        got_cl = namespace.ClassList.from_csv(f.readlines())
+    self.assertEqual(got_cl.namespace, 'ebird2021')
+    self.assertEqual(got_cl.classes, ('amecro', 'amegfi', 'amered', 'amerob'))
 
   def test_namespace_class_list_closure(self):
     # Ensure that all classes in class lists appear in their namespace.

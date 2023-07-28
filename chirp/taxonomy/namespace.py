@@ -54,10 +54,10 @@ class Mapping:
   The source and target namespace are referred to by their name. This name must
   be resolved using the taxonomy database.
 
-  Note that labels cannot be mapped to unknown. Instead, these labels should be
-  simply excluded from the mapping. The end-user is responsible for deciding
-  whether to map missing keys to unknown or whether to raise an error, e.g.,
-  by using:
+  Note that labels (other than unknown) cannot be mapped to unknown. Instead,
+  these labels should be simply excluded from the mapping. The end-user is
+  responsible for deciding whether to map missing keys to unknown or whether to
+  raise an error, e.g., by using:
 
     mapping.mapped_pairs.get(source_label, namespace.UNKNOWN_LABEL)
 
@@ -116,7 +116,7 @@ class ClassList:
     """
     reader = csv.reader(csv_data)
     namespace = next(reader)[0]
-    classes = tuple(row[0].strip() for row in reader)
+    classes = tuple(row[0].strip() for row in reader if row)
     return ClassList(namespace, classes)
 
   def to_csv(self) -> str:
@@ -133,8 +133,9 @@ class ClassList:
     """
     buffer = io.StringIO(newline="")
     writer = csv.writer(buffer)
-    writer.writerow(self.namespace)
-    writer.writerows(self.classes)
+    writer.writerow([self.namespace])
+    for class_ in self.classes:
+      writer.writerow([class_])
     return buffer.getvalue()
 
   def get_class_map_tf_lookup(
@@ -173,24 +174,39 @@ class ClassList:
     return table, image_mask
 
   def get_namespace_map_tf_lookup(
-      self, mapping: Mapping
+      self, mapping: Mapping, keep_unknown: bool | None = None
   ) -> tf.lookup.StaticHashTable:
     """Create a tf.lookup.StaticHasTable for namespace mappings.
 
     Args:
       mapping: Mapping to apply.
+      keep_unknown: How to handle unknowns. If true, then unknown labels in the
+        class list are maintained as unknown in the mapped values. If false then
+        the unknown value is discarded. The default (`None`) will raise an error
+        if an unknown value is in the source classt list.
 
     Returns:
       A Tensorflow StaticHashTable and the image ClassList in the mapping's
       target namespace.
+
+    Raises:
+      KeyError: If a class in not the mapping, or if the class list contains
+      an unknown token and `keep_unknown` was not specified.
     """
-    target_class_list = self.apply_namespace_mapping(mapping)
+    target_class_list = self.apply_namespace_mapping(
+        mapping, keep_unknown=keep_unknown
+    )
     target_class_indices = {
         k: i for i, k in enumerate(target_class_list.classes)
     }
+    mapped_pairs = mapping.mapped_pairs
+    if keep_unknown:
+      mapped_pairs = mapped_pairs | {UNKNOWN_LABEL: UNKNOWN_LABEL}
     keys = list(range(len(self.classes)))
     values = [
-        target_class_indices[mapping.mapped_pairs[k]] for k in self.classes
+        target_class_indices[mapped_pairs[k]]
+        for k in self.classes
+        if k != UNKNOWN_LABEL or keep_unknown in (True, None)
     ]
     table = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64, tf.int64),
@@ -198,14 +214,38 @@ class ClassList:
     )
     return table
 
-  def apply_namespace_mapping(self, mapping: Mapping) -> ClassList:
+  def apply_namespace_mapping(
+      self, mapping: Mapping, keep_unknown: bool | None = None
+  ) -> ClassList:
+    """Apply a namespace mapping to this class list.
+
+    Args:
+      mapping: The mapping to apply.
+      keep_unknown: How to handle unknowns. If true, then unknown labels in the
+        class list are maintained as unknown in the mapped values. If false then
+        the unknown value is discarded. The default (`None`) will raise an error
+        if an unknown value is in the source classt list.
+
+    Returns:
+      A class list which is the result of applying the given mapping to this
+      class list.
+
+    Raises:
+      KeyError: If a class in not the mapping, or if the class list contains
+      an unknown token and `keep_unknown` was not specified.
+    """
     if mapping.source_namespace != self.namespace:
       raise ValueError("mapping source namespace does not match class list's")
+    mapped_pairs = mapping.mapped_pairs
+    if keep_unknown:
+      mapped_pairs = mapped_pairs | {UNKNOWN_LABEL: UNKNOWN_LABEL}
     return ClassList(
         mapping.target_namespace,
         tuple(
             dict.fromkeys(
-                mapping.mapped_pairs[class_] for class_ in self.classes
+                mapped_pairs[class_]
+                for class_ in self.classes
+                if class_ != UNKNOWN_LABEL or keep_unknown in (True, None)
             )
         ),
     )

@@ -751,13 +751,13 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
             self.source_namespace + '_to_' + key
         ]
         source_taxa_classes = source_class_list.apply_namespace_mapping(
-            namespace_mapping
+            namespace_mapping, keep_unknown=True
         )
         target_taxa_classes = target_classes.apply_namespace_mapping(
-            namespace_mapping
+            namespace_mapping, keep_unknown=True
         )
         namespace_table = source_class_list.get_namespace_map_tf_lookup(
-            namespace_mapping
+            namespace_mapping, keep_unknown=True
         )
         class_table, label_mask = source_taxa_classes.get_class_map_tf_lookup(
             target_taxa_classes
