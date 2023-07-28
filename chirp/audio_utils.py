@@ -34,6 +34,7 @@ from jax import random
 from jax import scipy as jsp
 import librosa
 import numpy as np
+import requests
 from scipy import signal as scipy_signal
 import soundfile
 import tensorflow as tf
@@ -167,6 +168,35 @@ def multi_load_audio_window(
       futures.append(future)
     while futures:
       yield futures.pop(0).result()
+
+
+def load_xc_audio(xc_id: str, sample_rate: int) -> jnp.ndarray | None:
+  """Load audio from Xeno-Canto given an ID like 'xc12345'."""
+  if not xc_id.startswith('xc'):
+    raise ValueError(f'XenoCanto id {xc_id} does not start with "xc".')
+  xc_id = xc_id[2:]
+  try:
+    int(xc_id)
+  except ValueError as exc:
+    raise ValueError(f'XenoCanto id xc{xc_id} is not an integer.') from exc
+  session = requests.Session()
+  session.mount(
+      'https://',
+      requests.adapters.HTTPAdapter(
+          max_retries=requests.adapters.Retry(total=5, backoff_factor=0.1)
+      ),
+  )
+  url = f'https://xeno-canto.org/{xc_id}/download'
+  try:
+    data = session.get(url=url).content
+  except requests.exceptions.RequestException as e:
+    print(f'Failed to load audio from Xeno-Canto {xc_id}')
+    return None
+  with tempfile.NamedTemporaryFile(suffix='.mp3', mode='wb') as f:
+    f.write(data)
+    f.flush()
+    audio = load_audio(f.name, target_sample_rate=sample_rate)
+  return audio
 
 
 # pylint: disable=g-doc-return-or-yield,g-doc-args,unused-argument
