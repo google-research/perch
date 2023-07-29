@@ -19,10 +19,11 @@ General utilities to help with handling paths.
 """
 import os
 import pathlib
+Path = pathlib.Path
 
 
-def get_absolute_path(relative_path: os.PathLike[str] | str) -> pathlib.Path:
-  """Returns the absolute epath.Path associated with the relative_path.
+def get_absolute_path(relative_path: os.PathLike[str] | str) -> Path:
+  """Returns the absolute Path associated with the relative_path.
 
   Args:
     relative_path: The relative path (w.r.t. root) to the resource.
@@ -30,5 +31,5 @@ def get_absolute_path(relative_path: os.PathLike[str] | str) -> pathlib.Path:
   Returns:
     The absolute path to the resource.
   """
-  file_path = pathlib.Path(__file__).parent / relative_path
+  file_path = Path(__file__).parent / relative_path
   return file_path

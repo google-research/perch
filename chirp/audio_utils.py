@@ -47,12 +47,12 @@ _BOUNDARY_TO_PADDING_MODE = {'zeros': 'CONSTANT'}
 
 
 def load_audio(
-    filepath: str | epath.Path,
+    filepath: str | path_utils.Path,
     target_sample_rate: int,
     resampling_type: str = 'polyphase',
 ) -> jnp.ndarray:
   """Read an audio file and resample it using librosa."""
-  filepath = epath.Path(filepath)
+  filepath = path_utils.Path(filepath)
   if target_sample_rate <= 0:
     # Use the native sample rate.
     target_sample_rate = None
@@ -87,7 +87,7 @@ def load_audio_window_soundfile(
   Returns:
     Numpy array of loaded audio.
   """
-  with epath.Path(filepath).open('rb') as f:
+  with path_utils.Path(filepath).open('rb') as f:
     sf = soundfile.SoundFile(f)
     if offset_s > 0:
       offset = int(offset_s * sf.samplerate)

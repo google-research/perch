@@ -32,7 +32,6 @@ from chirp.inference.configs import birdnet_soundscapes
 from chirp.inference.configs import raw_soundscapes
 from chirp.inference.configs import reef
 from chirp.inference.configs import separate_soundscapes
-from etils import epath
 import librosa
 from ml_collections import config_dict
 import numpy as np
@@ -49,8 +48,8 @@ class SourceInfo:
   shard_len_s: float
 
   def file_id(self, file_id_depth: int) -> str:
-    file_id = epath.Path(
-        *epath.Path(self.filepath).parts[-(file_id_depth + 1) :]
+    file_id = path_utils.Path(
+        *path_utils.Path(self.filepath).parts[-(file_id_depth + 1) :]
     ).as_posix()
     return file_id
 
@@ -64,7 +63,7 @@ def create_source_infos(
   # TODO(tomdenton): probe each file and create work units in a new Beam stage.
   source_files = []
   for pattern in source_file_patterns:
-    for source_file in epath.Path('').glob(pattern):
+    for source_file in path_utils.Path('').glob(pattern):
       source_files.append(source_file)
 
   source_file_splits = []
@@ -315,7 +314,7 @@ def maybe_write_config(parsed_config, output_dir):
 
 def load_embedding_config(embeddings_path):
   """Loads the configuration to generate unlabeled embeddings."""
-  embeddings_path = epath.Path(embeddings_path)
+  embeddings_path = path_utils.Path(embeddings_path)
   with (embeddings_path / 'config.json').open() as f:
     embedding_config = config_dict.ConfigDict(json.loads(f.read()))
   return embedding_config

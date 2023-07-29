@@ -16,7 +16,7 @@
 """Interface for models producing embeddings."""
 
 import dataclasses
-from typing import Any, Callable, Dict
+from typing import Callable, Dict
 
 from chirp.taxonomy import namespace
 import librosa

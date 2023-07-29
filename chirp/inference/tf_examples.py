@@ -19,8 +19,8 @@ import dataclasses
 import os
 from typing import Sequence
 
+from chirp import path_utils
 from chirp.inference import interface
-from etils import epath
 import numpy as np
 import tensorflow as tf
 
@@ -104,7 +104,7 @@ def create_embeddings_dataset(
     embeddings_dir, file_glob: str = '*', prefetch: int = 128
 ):
   """Create a TF Dataset of the embeddings."""
-  embeddings_dir = epath.Path(embeddings_dir)
+  embeddings_dir = path_utils.Path(embeddings_dir)
   embeddings_files = [fn.as_posix() for fn in embeddings_dir.glob(file_glob)]
   ds = tf.data.TFRecordDataset(
       embeddings_files, num_parallel_reads=tf.data.AUTOTUNE

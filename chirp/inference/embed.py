@@ -23,9 +23,9 @@ from absl import flags
 from absl import logging
 import apache_beam as beam
 from chirp import config_utils
+from chirp import path_utils
 from chirp.configs import config_globals
 from chirp.inference import embed_lib
-from etils import epath
 import numpy as np
 
 FLAGS = flags.FLAGS
@@ -77,7 +77,7 @@ def main(unused_argv: Sequence[str]) -> None:
     dry_run(config, source_infos)
     return
 
-  output_dir = epath.Path(config.output_dir)
+  output_dir = path_utils.Path(config.output_dir)
   output_dir.mkdir(exist_ok=True, parents=True)
   embed_lib.maybe_write_config(config, output_dir)
 

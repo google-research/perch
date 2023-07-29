@@ -20,12 +20,12 @@ import tempfile
 from typing import Any
 
 from absl import logging
+from chirp import path_utils
 from chirp.inference import interface
 from chirp.models import frontend
 from chirp.models import handcrafted_features
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
-from etils import epath
 from ml_collections import config_dict
 import numpy as np
 import tensorflow as tf
@@ -149,7 +149,7 @@ class BirbSepModelTF1(interface.EmbeddingModel):
 
   def __post_init__(self):
     """Load model files and create TF1 session graph."""
-    metagraph_path_ns = epath.Path(self.model_path) / 'inference.meta'
+    metagraph_path_ns = path_utils.Path(self.model_path) / 'inference.meta'
     checkpoint_path = tf.train.latest_checkpoint(self.model_path)
     graph_ns = tf.Graph()
     sess_ns = tf1.Session(graph=graph_ns)
@@ -224,13 +224,13 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   def __post_init__(self):
     logging.info('Loading taxonomy model...')
 
-    base_path = epath.Path(self.model_path)
+    base_path = path_utils.Path(self.model_path)
     if (base_path / 'saved_model.pb').exists() and (
         base_path / 'assets'
     ).exists():
       # This looks like a TFHub downloaded model.
       model_path = base_path
-      label_csv_path = epath.Path(self.model_path) / 'assets' / 'label.csv'
+      label_csv_path = path_utils.Path(self.model_path) / 'assets' / 'label.csv'
     else:
       # Probably a savedmodel distributed directly.
       model_path = base_path / 'savedmodel'
@@ -322,8 +322,10 @@ class SeparatorModelTF(interface.EmbeddingModel):
 
   def __post_init__(self):
     logging.info('Loading taxonomy model...')
-    self.model = tf.saved_model.load(epath.Path(self.model_path) / 'savedmodel')
-    label_csv_path = epath.Path(self.model_path) / 'label.csv'
+    self.model = tf.saved_model.load(
+        path_utils.Path(self.model_path) / 'savedmodel'
+    )
+    label_csv_path = path_utils.Path(self.model_path) / 'label.csv'
     with label_csv_path.open('r') as f:
       self.class_list = namespace.ClassList.from_csv(f)
 
@@ -401,7 +403,7 @@ class BirdNet(interface.EmbeddingModel):
     if self.model_path.endswith('.tflite'):
       self.tflite = True
       with tempfile.NamedTemporaryFile() as tmpf:
-        model_file = epath.Path(self.model_path)
+        model_file = path_utils.Path(self.model_path)
         model_file.copy(tmpf.name, overwrite=True)
         self.model = tf.lite.Interpreter(
             tmpf.name, num_threads=self.num_tflite_threads
