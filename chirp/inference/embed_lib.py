@@ -16,6 +16,7 @@
 """Create embeddings for an audio corpus."""
 
 import dataclasses
+import importlib
 import json
 import os
 from typing import Any, Sequence
@@ -28,16 +29,15 @@ from chirp import path_utils
 from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
-from chirp.inference.configs import birdnet_soundscapes
-from chirp.inference.configs import raw_soundscapes
-from chirp.inference.configs import reef
-from chirp.inference.configs import separate_soundscapes
 from etils import epath
 import librosa
 from ml_collections import config_dict
 import numpy as np
 import soundfile
 import tensorflow as tf
+
+
+INFERENCE_CONFIGS_PKG = 'chirp.inference.configs.'
 
 
 @dataclasses.dataclass
@@ -286,17 +286,11 @@ class EmbedFn(beam.DoFn):
 
 def get_config(config_key: str):
   """Get a config given its keyed name."""
-  # TODO(tomdenton): Find a way to feed new configs without code changes.
-  if config_key == 'birdnet_soundscapes':
-    config = birdnet_soundscapes.get_config()
-  elif config_key == 'raw_soundscapes':
-    config = raw_soundscapes.get_config()
-  elif config_key == 'separate_soundscapes':
-    config = separate_soundscapes.get_config()
-  elif config_key == 'reef':
-    config = reef.get_config()
-  else:
-    raise ValueError('Unknown config.')
+  module_key = '..{}'.format(config_key)
+  config = importlib.import_module(
+      module_key, INFERENCE_CONFIGS_PKG
+  ).get_config()
+
   logging.info('Loaded config %s', config_key)
   logging.info('Config output location : %s', config.output_dir)
   return config
