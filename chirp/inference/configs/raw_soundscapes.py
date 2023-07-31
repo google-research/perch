@@ -28,7 +28,7 @@ def get_config() -> config_dict.ConfigDict:
   config = config_dict.ConfigDict()
 
   config.output_dir = ''
-  config.source_file_patterns = ['soundscapes/*.wav']
+  config.source_file_patterns = []
   model_checkpoint_path = ''
 
   config.num_shards_per_file = 120

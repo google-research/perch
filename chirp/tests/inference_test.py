@@ -205,7 +205,6 @@ class InferenceTest(parameterized.TestCase):
           'raw_soundscapes',
           'separate_soundscapes',
           'birdnet_soundscapes',
-          'reef',
       ),
   )
   def test_load_configs(self, config_name):
