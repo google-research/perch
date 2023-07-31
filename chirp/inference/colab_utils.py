@@ -15,6 +15,8 @@
 
 """Helper functions for user-facing colab notebooks."""
 
+import json
+import sys
 import warnings
 
 from absl import logging
