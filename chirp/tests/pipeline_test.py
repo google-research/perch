@@ -17,9 +17,11 @@
 import os
 import tempfile
 from unittest import mock
+
 from chirp.data import utils as data_utils
 from chirp.models import frontend
 from chirp.preprocessing import pipeline
+from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 from chirp.tests import fake_dataset
 from jax import numpy as jnp
@@ -198,10 +200,15 @@ class PipelineTest(parameterized.TestCase):
 
   def test_convert_bird_taxonomy_labels(self):
     db = namespace_db.load_db()
-    source_class_set = db.class_lists['caples']
-    target_class_set = db.class_lists['xenocanto']
-    self.assertEqual(len(source_class_set.classes), 79)
-    self.assertEqual(len(target_class_set.classes), 10932)
+    np.random.seed(42)
+    source_class_list = db.class_lists['caples']
+    # Create a shuffled version of the source class list.
+    source_classes = list(source_class_list.classes)
+    np.random.shuffle(source_classes)
+    source_class_list = namespace.ClassList('ebird2021', source_classes)
+    target_class_list = db.class_lists['xenocanto']
+    self.assertLen(source_class_list.classes, 79)
+    self.assertLen(target_class_list.classes, 10932)
 
     # example labels include three 'good' labels and many out of range labels.
     # Good classes are 'amedip', 'comnig', 'macwar', and 'yerwar'.
@@ -212,13 +219,30 @@ class PipelineTest(parameterized.TestCase):
     # 40 macwar geothlypis parulidae     passeriformes
     # 78 yerwar setophaga  parulidae     passeriformes
     example = {
-        'label': tf.constant([0, 20, 40, 78, 79, 10655, 10932, -1], tf.int64),
+        'label': tf.constant(
+            [
+                source_class_list.classes.index('amedip'),
+                source_class_list.classes.index('comnig'),
+                source_class_list.classes.index('macwar'),
+                source_class_list.classes.index('yerwar'),
+                79,
+                10655,
+                10932,
+                -1,
+            ],
+            tf.int64,
+        ),
         'bg_labels': tf.constant([18, 1000], tf.int64),
     }
     converter = pipeline.ConvertBirdTaxonomyLabels(
         target_class_list='xenocanto'
     )
-    converted = converter.convert_features(example, source_class_set)
+    converted = converter.convert_features(example, source_class_list)
+    # Check species labels are correct.
+    for species in ('amedip', 'comnig', 'macwar', 'yerwar'):
+      target_idx = target_class_list.classes.index(species)
+      self.assertEqual(converted['label'][target_idx], 1)
+
     for name, shape, num in (
         ('label', 10932, 4),
         ('bg_labels', 10932, 1),
