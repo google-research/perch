@@ -18,10 +18,11 @@
 General utilities to help with handling paths.
 """
 import os
-import pathlib
+
+from etils import epath
 
 
-def get_absolute_path(relative_path: os.PathLike[str] | str) -> pathlib.Path:
+def get_absolute_path(relative_path: os.PathLike[str] | str) -> epath.Path:
   """Returns the absolute epath.Path associated with the relative_path.
 
   Args:
@@ -30,5 +31,5 @@ def get_absolute_path(relative_path: os.PathLike[str] | str) -> pathlib.Path:
   Returns:
     The absolute path to the resource.
   """
-  file_path = pathlib.Path(__file__).parent / relative_path
+  file_path = epath.Path(__file__).parent / relative_path
   return file_path

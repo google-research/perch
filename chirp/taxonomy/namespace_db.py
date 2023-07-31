@@ -17,13 +17,14 @@
 import dataclasses
 import functools
 import json
+import os
 import typing
 
+from chirp import path_utils
 from chirp.taxonomy import namespace
 
-import pathlib
-TAXONOMY_DATABASE_FILENAME = (
-    pathlib.Path(__file__).parent / "taxonomy_database.json"
+TAXONOMY_DATABASE_FILENAME = os.fspath(
+    path_utils.get_absolute_path("taxonomy/taxonomy_database.json")
 )
 
 
