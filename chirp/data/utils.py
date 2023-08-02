@@ -60,6 +60,7 @@ def get_dataset(
     The placeholder dataset.
   Raises:
     ValueError: If no initialized Pipeline is passed.
+    RuntimeError: If no datasets are loaded.
   """
   if isinstance(dataset_directory, str):
     dataset_directory = [dataset_directory]
@@ -72,6 +73,7 @@ def get_dataset(
   read_config = tfds.ReadConfig(add_tfds_id=True)
 
   datasets = []
+  dataset_info = None
   for dataset_dir in dataset_directory:
     if tfds_data_dir:
       tfds.core.add_data_dir(tfds_data_dir)
@@ -106,6 +108,8 @@ def get_dataset(
         )
     )
   ds = ds.prefetch(2)
+  if dataset_info is None:
+    raise RuntimeError('No datasets loaded.')
   return ds, dataset_info
 
 
