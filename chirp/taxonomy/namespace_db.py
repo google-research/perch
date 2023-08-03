@@ -48,24 +48,33 @@ def validate_taxonomy_database(taxonomy_database: TaxonomyDatabase) -> None:
   """
   namespaces = taxonomy_database.namespaces
 
-  for _, mapping in taxonomy_database.mappings.items():
+  for mapping_name, mapping in taxonomy_database.mappings.items():
     if (
         set(mapping.mapped_pairs.keys())
         - namespaces[mapping.source_namespace].classes
     ):
-      raise ValueError("unknown class in source")
+      raise ValueError(
+          f"Mapping {mapping_name} contains a source class not in "
+          f"the namespace ({mapping.source_namespace})."
+      )
     if (
         set(mapping.mapped_pairs.values())
         - namespaces[mapping.target_namespace].classes
     ):
-      raise ValueError("unknown class in target")
+      raise ValueError(
+          f"Mapping {mapping_name} contains a target class not in "
+          f"the namespace ({mapping.source_namespace})."
+      )
 
-  for _, class_list in taxonomy_database.class_lists.items():
+  for class_name, class_list in taxonomy_database.class_lists.items():
     classes = class_list.classes
     if set(classes) - namespaces[class_list.namespace].classes > {
         namespace.UNKNOWN_LABEL
     }:
-      raise ValueError("unknown class in class list")
+      raise ValueError(
+          f"ClassList {class_name} contains a class not in "
+          f"the namespace ({class_list.namespace})."
+      )
 
 
 def load_taxonomy_database(

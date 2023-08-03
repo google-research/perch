@@ -335,6 +335,30 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           ),
           class_list_name='peru',
       ),
+      SoundscapesConfig(
+          name='weldy_calltype_full_length',
+          audio_glob='weldy_calltype/annotated_recordings/*.wav',
+          annotation_load_fn=dataset_fns.load_weldy_annotations,
+          annotation_filename='annotations.csv',
+          keep_unknown_annotation=True,
+          description=(
+              'Full-length annotated bird call types from the PNW. '
+              'https://zenodo.org/record/8047850'
+          ),
+          class_list_name='weldy_calltype',
+      ),
+      SoundscapesConfig(
+          name='anuraset_full_length',
+          audio_glob='anuraset/raw_data/*/*.wav',
+          annotation_load_fn=dataset_fns.load_anuraset_annotations,
+          annotation_filename='annotations.csv',
+          keep_unknown_annotation=True,
+          description=(
+              'Full-length annotated frog vocalizations. '
+              'https://zenodo.org/record/8056090'
+          ),
+          class_list_name='anuraset',
+      ),
   ]
 
   def _info(self) -> tfds.core.DatasetInfo:

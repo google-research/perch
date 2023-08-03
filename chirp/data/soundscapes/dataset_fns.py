@@ -209,3 +209,53 @@ def load_powdermill_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   )
   segments = annotations.annotations_to_dataframe(annos)
   return segments
+
+
+def load_weldy_annotations(annotations_path: epath.Path) -> pd.DataFrame:
+  """Loads a dataframe of all annotations from the Weldy Calltype dataset."""
+  filename_fn = lambda _, row: 'annotated_recordings/' + row['file'].strip()
+  start_time_fn = lambda row: float(row['start'])
+  end_time_fn = lambda row: float(row['end'])
+  filter_fn = lambda row: False
+  class_fn = lambda row: (  # pylint: disable=g-long-lambda
+      row['label']
+      .replace('unk', 'unknown')
+      .replace('impossible', 'unknown')
+      .replace('unknown_chip', 'unknown')
+      .split(' ')
+  )
+  annos = annotations.read_dataset_annotations_csvs(
+      [epath.Path(annotations_path)],
+      filename_fn=filename_fn,
+      namespace='weldy_calltype',
+      class_fn=class_fn,
+      start_time_fn=start_time_fn,
+      end_time_fn=end_time_fn,
+      filter_fn=filter_fn,
+  )
+  segments = annotations.annotations_to_dataframe(annos)
+  return segments
+
+
+def load_anuraset_annotations(annotations_path: epath.Path) -> pd.DataFrame:
+  """Loads a dataframe of all annotations."""
+  filename_fn = lambda _, row: os.path.join(  # pylint: disable=g-long-lambda
+      row['filename'].split('_')[0], row['filename'].strip()
+  )
+  start_time_fn = lambda row: float(row['start_time_s'])
+  end_time_fn = lambda row: float(row['end_time_s'])
+  # There are a few SPECIES_LALSE labels which according to the authors should
+  # be ignored.
+  filter_fn = lambda row: '_LALSE' in row['label']
+  class_fn = lambda row: row['label'].split(' ')
+  annos = annotations.read_dataset_annotations_csvs(
+      [epath.Path(annotations_path)],
+      filename_fn=filename_fn,
+      namespace='anuraset',
+      class_fn=class_fn,
+      start_time_fn=start_time_fn,
+      end_time_fn=end_time_fn,
+      filter_fn=filter_fn,
+  )
+  segments = annotations.annotations_to_dataframe(annos)
+  return segments

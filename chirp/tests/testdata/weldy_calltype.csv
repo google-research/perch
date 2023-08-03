@@ -1,0 +1,5 @@
+file,clip_complete,start,end,eBird_2021,label
+Site_001_Rep_A.wav,TRUE,4,6,empty,empty
+Site_001_Rep_A.wav,TRUE,6,8,spotow,spotow_song_1
+Site_001_Rep_A.wav,TRUE,6,8,complete,complete
+Site_001_Rep_A.wav,TRUE,8,10,olsfly,olsfly_song_1
