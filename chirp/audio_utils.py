@@ -19,6 +19,7 @@ General utilities for processing audio and spectrograms.
 """
 import concurrent
 import functools
+import io
 import logging
 import os
 import tempfile
@@ -46,7 +47,17 @@ _WINDOW_FNS = {
 _BOUNDARY_TO_PADDING_MODE = {'zeros': 'CONSTANT'}
 
 
-def load_audio(
+def load_audio(path: str, target_sample_rate: int, **kwargs) -> jnp.ndarray:
+  """Load a general audio resource."""
+  if path.startswith('xc'):
+    return load_xc_audio(path, target_sample_rate)
+  elif path.startswith('http'):
+    return load_url_audio(path, target_sample_rate)
+  else:
+    return load_audio_file(path, target_sample_rate, **kwargs)
+
+
+def load_audio_file(
     filepath: str | epath.Path,
     target_sample_rate: int,
     resampling_type: str = 'polyphase',
@@ -170,7 +181,7 @@ def multi_load_audio_window(
       yield futures.pop(0).result()
 
 
-def load_xc_audio(xc_id: str, sample_rate: int) -> jnp.ndarray | None:
+def load_xc_audio(xc_id: str, sample_rate: int) -> jnp.ndarray:
   """Load audio from Xeno-Canto given an ID like 'xc12345'."""
   if not xc_id.startswith('xc'):
     raise ValueError(f'XenoCanto id {xc_id} does not start with "xc".')
@@ -190,12 +201,25 @@ def load_xc_audio(xc_id: str, sample_rate: int) -> jnp.ndarray | None:
   try:
     data = session.get(url=url).content
   except requests.exceptions.RequestException as e:
-    print(f'Failed to load audio from Xeno-Canto {xc_id}')
-    return None
+    raise requests.exceptions.RequestException(
+        f'Failed to load audio from Xeno-Canto {xc_id}'
+    ) from e
   with tempfile.NamedTemporaryFile(suffix='.mp3', mode='wb') as f:
     f.write(data)
     f.flush()
-    audio = load_audio(f.name, target_sample_rate=sample_rate)
+    audio = load_audio_file(f.name, target_sample_rate=sample_rate)
+  return audio
+
+
+def load_url_audio(url: str, sample_rate: int) -> jnp.ndarray:
+  """Load audio from a URL."""
+  data = requests.get(url).content
+  with io.BytesIO(data) as f:
+    sf = soundfile.SoundFile(f)
+    audio = sf.read(dtype='float32')
+  audio = librosa.resample(
+      audio, sf.samplerate, sample_rate, res_type='polyphase'
+  )
   return audio
 
 
