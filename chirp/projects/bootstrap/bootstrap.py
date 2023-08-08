@@ -102,7 +102,7 @@ class BootstrapConfig:
     # Extract the embedding model config from the embedding_config.
     if embed_fn_config.model_key == 'separate_embed_model':
       # If a separation model was applied, get the embedding model config only.
-      model_key = 'taxonomy_model_tf_config'
+      model_key = 'taxonomy_model_tf'
       model_config = embed_fn_config.model_config.taxonomy_model_tf_config
     else:
       model_key = embed_fn_config.model_key

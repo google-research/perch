@@ -23,7 +23,7 @@ _object_config = config_utils.object_config
 
 
 def get_config() -> config_dict.ConfigDict:
-  """Create the Caples inference config."""
+  """Create the Separated Seabird inference config."""
   # Attention-based 5s model.
   config = config_dict.ConfigDict()
 
@@ -32,15 +32,17 @@ def get_config() -> config_dict.ConfigDict:
   sep_model_checkpoint_path = ''
   emb_model_checkpoint_path = ''
 
-  config.num_shards_per_file = 15
+  # Raw audio files are several hours long each
+  config.num_shards_per_file = 720
   config.shard_len_s = 60
   # Number of workers when using the Beam DirectRunner on a single machine.
   config.num_direct_workers = 8
   config.embed_fn_config = {
+      'file_id_depth': 0,
       'write_embeddings': True,
       'write_logits': False,
-      'write_separated_audio': True,
-      'write_raw_audio': True,
+      'write_separated_audio': False,
+      'write_raw_audio': False,
       'model_key': 'separate_embed_model',
       'model_config': {
           'sample_rate': 32000,
@@ -56,6 +58,6 @@ def get_config() -> config_dict.ConfigDict:
               'frame_size': 32000,
           },
       },
-      'speech_filter_threshold': 0.95,
+      'speech_filter_threshold': 0.0,
   }
   return config

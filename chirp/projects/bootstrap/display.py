@@ -103,7 +103,7 @@ def display_search_results(
     plot_audio_melspec(result_audio_window, embedding_sample_rate)
     plt.show()
     print(f'source file: {r.filename}')
-    offset_s = r.timestamp_offset / embedding_sample_rate
+    offset_s = r.timestamp_offset
     print(f'offset:      {offset_s:6.2f}')
     print(f'distance:    {(r.distance + results.distance_offset):6.2f}')
     label_widgets = []
