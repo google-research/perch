@@ -43,7 +43,7 @@ ForwardStepType = Callable[
 
 
 @jax.jit
-def jax_cdist(features_a: jnp.array, features_b: jnp.array) -> jnp.array:
+def jax_cdist(features_a: jnp.ndarray, features_b: jnp.ndarray) -> jnp.ndarray:
   """A jax equivalent of scipy.spatial.distance.cdist.
 
   Computes the pairwise squared euclidean distance between each pair of features

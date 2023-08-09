@@ -335,7 +335,9 @@ class QueryTest(DataProcessingTest):
     new_df = fsu.apply_query(self.toy_df, append_query)
     self.assertEqual(
         new_df.to_dict(),
-        self.toy_df.append(new_row, ignore_index=True).to_dict(),
+        pd.concat(
+            [self.toy_df, pd.Series(new_row)], ignore_index=True
+        ).to_dict(),
     )
 
     # Append query with keys not matching the dataframe

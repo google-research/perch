@@ -49,9 +49,9 @@ import tensorflow as tf
 class NRCLoss(clu_metrics.Metric):
   """Computes NRC's loss for the standard single-label case."""
 
-  probabilities_sum: jnp.array
-  nn_loss_sum: jnp.array
-  extended_nn_loss_sum: jnp.array
+  probabilities_sum: jnp.ndarray
+  nn_loss_sum: jnp.ndarray
+  extended_nn_loss_sum: jnp.ndarray
   label_mask: jnp.ndarray | None
   n_samples: int
 
@@ -138,10 +138,10 @@ class NRCLoss(clu_metrics.Metric):
 class NRCMultiLoss(clu_metrics.Metric):
   """Computes NRC's loss for the multi-label case."""
 
-  probabilities_sum: jnp.array
-  nn_loss_sum: jnp.array
-  extended_nn_loss_sum: jnp.array
-  label_mask: jnp.array
+  probabilities_sum: jnp.ndarray
+  nn_loss_sum: jnp.ndarray
+  extended_nn_loss_sum: jnp.ndarray
+  label_mask: jnp.ndarray
   n_samples: int
 
   @classmethod
