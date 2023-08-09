@@ -314,7 +314,7 @@ def is_not_in(
 def append(df: pd.DataFrame, row: dict[str, Any]):
   if set(row.keys()) != set(df.columns):
     raise ValueError
-  new_df = df.append(row, ignore_index=True)
+  new_df = pd.concat([df, pd.DataFrame(pd.Series(row))], ignore_index=True)
   return new_df
 
 
