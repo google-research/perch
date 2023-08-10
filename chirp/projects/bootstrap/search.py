@@ -104,8 +104,9 @@ class TopKSearchResults:
       for label in labels:
         output_path = labeled_data_path / label
         output_path.mkdir(parents=True, exist_ok=True)
-        output_filepath = output_path / output_filename
-        wavfile.write(output_filepath, sample_rate, r.audio)
+        output_filepath = epath.Path(output_path / output_filename)
+        with output_filepath.open('wb') as f:
+          wavfile.write(f, sample_rate, r.audio)
         counts[label] += 1
     for label, count in counts.items():
       print(f'Wrote {count} examples for label {label}')
