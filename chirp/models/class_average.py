@@ -30,8 +30,8 @@ class ClassAverage(metrics.Metric):
   form a multi-hot encoding.
   """
 
-  total: jnp.array
-  count: jnp.array
+  total: jnp.ndarray
+  count: jnp.ndarray
 
   @classmethod
   def empty(cls):

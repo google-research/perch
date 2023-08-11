@@ -151,8 +151,8 @@ def _audio_and_spectrogram_summaries(
     writer: metric_writers.MetricWriter,
     step: int,
     title: str,
-    batch: Dict[str, jnp.array],
-    separated_audio: jnp.array,
+    batch: Dict[str, jnp.ndarray],
+    separated_audio: jnp.ndarray,
     sample_rate: int = 16000,
     max_outputs: int = 5,
 ):
