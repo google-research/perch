@@ -35,10 +35,10 @@ import tqdm
 class SHOTMultiLabelLoss(clu_metrics.Metric):
   """Computes the loss used in SHOT-full for the multi-label case."""
 
-  probabilities_sum: jnp.array
-  entropy_sum: jnp.array
-  pl_xent_sum: jnp.array
-  label_mask: jnp.array
+  probabilities_sum: jnp.ndarray
+  entropy_sum: jnp.ndarray
+  pl_xent_sum: jnp.ndarray
+  label_mask: jnp.ndarray
   n_samples: int
   beta: float
 
@@ -109,9 +109,9 @@ class SHOTMultiLabelLoss(clu_metrics.Metric):
 class SHOTLoss(clu_metrics.Metric):
   """Computes the loss used in SHOT-full for the single-label case."""
 
-  probabilities_sum: jnp.array
-  entropy_sum: jnp.array
-  pl_xent_sum: jnp.array
+  probabilities_sum: jnp.ndarray
+  entropy_sum: jnp.ndarray
+  pl_xent_sum: jnp.ndarray
   label_mask: jnp.ndarray | None
   n_samples: int
   beta: float
@@ -121,7 +121,7 @@ class SHOTLoss(clu_metrics.Metric):
       cls,
       probabilities: jnp.ndarray,
       pseudo_label: jnp.ndarray,
-      label_mask: jnp.array,
+      label_mask: jnp.ndarray,
       beta: float,
       **_
   ) -> "SHOTLoss":
