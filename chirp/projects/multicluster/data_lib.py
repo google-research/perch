@@ -179,14 +179,15 @@ def embed_dataset(
     exclude_classes: Sequence[str] = (),
     load_audio: bool = True,
     target_sample_rate: int = -1,
+    audio_file_pattern: str = '*.wav',
 ) -> Tuple[Sequence[str], Dict[str, np.ndarray]]:
   """Add embeddings to an eval dataset.
 
   Embed a dataset, creating an in-memory copy of all data with embeddings added.
   The base_dir should contain folders corresponding to classes, and each
-  sub-folder should contina wav files for the respective class.
+  sub-folder should contina audio files for the respective class.
 
-  Note that any wav files in the base_dir directly will be ignored.
+  Note that any audio files in the base_dir directly will be ignored.
 
   Args:
     base_dir: Directory contianing audio data.
@@ -196,6 +197,8 @@ def embed_dataset(
     load_audio: Whether to load audio into memory.
     target_sample_rate: Resample loaded audio to this sample rate. If -1, loads
       raw audio with no resampling. If -2, uses the embedding_model sample rate.
+    audio_file_pattern: The glob pattern to use for finding audio files within
+      the sub-folders.
 
   Returns:
     Ordered labels and a Dict contianing the entire embedded dataset.
@@ -224,7 +227,18 @@ def embed_dataset(
   for label_idx, label in enumerate(labels):
     label_hot = np.zeros([len(labels)], np.int32)
     label_hot[label_idx] = 1
-    filepaths = [fp.as_posix() for fp in (base_dir / label).glob('*.wav')]
+
+    filepaths = [
+        fp.as_posix() for fp in (base_dir / label).glob(audio_file_pattern)
+    ]
+
+    if not filepaths:
+      raise ValueError(
+          'No files matching {} were found in directory {}'.format(
+              audio_file_pattern, base_dir / label
+          )
+      )
+
     audio_iterator = audio_utils.multi_load_audio_window(
         filepaths, None, target_sample_rate, -1
     )
@@ -235,7 +249,18 @@ def embed_dataset(
         audio = _pad_audio(audio, window_size)
       audio = audio.astype(np.float32)
       outputs = embedding_model.embed(audio)
-      embeds = outputs.pooled_embeddings(time_pooling, 'squeeze')
+
+      if not outputs.embeddings:
+        raise ValueError('Embedding model did not produce any embeddings!')
+
+      # If the audio was separated then the raw audio is in the first channel.
+      # Embedding shape is either [B, F, C, D] or [F, C, D] so channel is
+      # always -2.
+      channel_pooling = (
+          'squeeze' if outputs.embeddings.shape[-2] == 1 else 'first'
+      )
+
+      embeds = outputs.pooled_embeddings(time_pooling, channel_pooling)
       merged['embeddings'].append(embeds)
 
       filename = epath.Path(fp).name
