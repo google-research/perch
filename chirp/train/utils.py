@@ -58,8 +58,8 @@ class ModelBundle:
 class MultiAverage(clu_metrics.Average):
   """Computes the average of all values on the last dimension."""
 
-  total: jnp.array
-  count: jnp.array
+  total: jnp.ndarray
+  count: jnp.ndarray
 
   @classmethod
   def create(cls, n: int):

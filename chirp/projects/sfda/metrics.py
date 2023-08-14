@@ -52,7 +52,7 @@ class MarginalEntropy(clu_metrics.Metric):
   non-`averageable` metric, which is why we dedicate a separate metric for it.
   """
 
-  probability_sum: jnp.array
+  probability_sum: jnp.ndarray
   n_samples: int
   multi_label: bool
   label_mask: jnp.ndarray | None
@@ -87,7 +87,7 @@ class MarginalEntropy(clu_metrics.Metric):
 
   @classmethod
   def empty(cls) -> "MarginalEntropy":
-    return cls(
+    return cls(  # pytype: disable=wrong-arg-types  # jnp-array
         probability_sum=0.0, n_samples=0, multi_label=False, label_mask=None
     )
 
@@ -100,9 +100,9 @@ class MarginalBinaryEntropy(clu_metrics.Metric):
   multi_label.
   """
 
-  probability_sum: jnp.array
+  probability_sum: jnp.ndarray
   n_samples: int
-  label_mask: jnp.array
+  label_mask: jnp.ndarray
   multi_label: bool
 
   @classmethod
@@ -140,6 +140,6 @@ class MarginalBinaryEntropy(clu_metrics.Metric):
 
   @classmethod
   def empty(cls) -> "MarginalBinaryEntropy":
-    return cls(
+    return cls(  # pytype: disable=wrong-arg-types  # jnp-array
         probability_sum=0.0, n_samples=0, label_mask=0.0, multi_label=False
     )

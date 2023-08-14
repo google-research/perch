@@ -44,7 +44,7 @@ class MCA(clu_metrics.Metric):
 
   @classmethod
   def from_model_output(
-      cls, scores: jnp.array, label: jnp.array, **_
+      cls, scores: jnp.ndarray, label: jnp.ndarray, **_
   ) -> clu_metrics.Metric:
     num_classes = label.shape[-1]
     if scores.shape[-1] != num_classes:
