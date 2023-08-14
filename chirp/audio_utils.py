@@ -19,7 +19,6 @@ General utilities for processing audio and spectrograms.
 """
 import concurrent
 import functools
-import io
 import logging
 import os
 import tempfile
@@ -126,13 +125,12 @@ def load_audio_window(
   # If a flac file has the incorrect length in its header, seeking past the
   # end of the file causes the system to hang. This is a bad enough outcome
   # that we don't risk it.
-  if not filepath.endswith('.flac'):
-    try:
-      return load_audio_window_soundfile(
-          filepath, offset_s, sample_rate, window_size_s
-      )
-    except soundfile.LibsndfileError:
-      logging.warning('Failed to load audio with libsndfile: %s', filepath)
+  try:
+    return load_audio_window_soundfile(
+        filepath, offset_s, sample_rate, window_size_s
+    )
+  except soundfile.LibsndfileError:
+    logging.warning('Failed to load audio with libsndfile: %s', filepath)
   # This fail-over is much slower but more reliable; the entire audio file
   # is loaded (and possible resampled) and then we extract the target audio.
   audio = load_audio(filepath, sample_rate)
@@ -214,12 +212,10 @@ def load_xc_audio(xc_id: str, sample_rate: int) -> jnp.ndarray:
 def load_url_audio(url: str, sample_rate: int) -> jnp.ndarray:
   """Load audio from a URL."""
   data = requests.get(url).content
-  with io.BytesIO(data) as f:
-    sf = soundfile.SoundFile(f)
-    audio = sf.read(dtype='float32')
-  audio = librosa.resample(
-      audio, sf.samplerate, sample_rate, res_type='polyphase'
-  )
+  with tempfile.NamedTemporaryFile(mode='wb') as f:
+    f.write(data)
+    f.flush()
+    audio = load_audio_file(f.name, target_sample_rate=sample_rate)
   return audio
 
 
