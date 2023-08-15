@@ -17,6 +17,7 @@
 
 import collections
 import dataclasses
+import functools
 from typing import Any, Callable, List, Sequence
 
 from chirp.inference import tf_examples
@@ -29,13 +30,21 @@ import tqdm
 
 @dataclasses.dataclass
 class SearchResult:
+  """Container for a single search result."""
+  # Embedding vector.
   embedding: np.ndarray
-  distance: float
+  # Raw score for this result.
+  score: float
+  # Score used for sorting the result.
+  sort_score: float
+  # Source file contianing corresponding audio.
   filename: str
+  # Time offset for audio.
   timestamp_offset: int
-  # Audio and label_widgets are populated as needed.
+
+  # The following are populated as needed.
   audio: np.ndarray | None = None
-  labels_widgets: Sequence[Any] = ()
+  label_widgets: Sequence[Any] = ()
 
   def __hash__(self):
     """Return an identifier for this result."""
@@ -48,45 +57,41 @@ class TopKSearchResults:
 
   search_results: List[SearchResult]
   top_k: int
-  distance_offset: float = 0.0
-  max_dist: float = -1.0
-  _max_dist_idx: int = -1
+  min_score: float = -1.0
+  _min_score_idx: int = -1
 
   def __iter__(self):
     for r in self.search_results:
       yield r
 
-  def update(self, search_result):
+  def update(self, search_result: SearchResult) -> None:
     """Update Results with the new result."""
     if len(self.search_results) < self.top_k:
-      # Add the result, regardless of distance, until we have k results.
+      # Add the result, regardless of score, until we have k results.
       pass
-    elif search_result.distance > self.max_dist:
+    elif search_result.sort_score < self.min_score:
       # Early return to save compute.
       return
     elif len(self.search_results) >= self.top_k:
-      self.search_results.pop(self._max_dist_idx)
+      self.search_results.pop(self._min_score_idx)
     self.search_results.append(search_result)
     self._update_deseridata()
 
-  def will_filter(self, dist):
-    """Check whether a distance is relevant."""
+  def will_filter(self, score: float) -> bool:
+    """Check whether a score is relevant."""
     if len(self.search_results) < self.top_k:
-      # Add the result, regardless of distance, until we have k results.
+      # Add the result, regardless of score, until we have k results.
       return False
-    elif dist > self.max_dist:
-      # Early return to save compute.
-      return True
-    return False
+    return score < self.min_score
 
   def _update_deseridata(self):
-    self._max_dist_idx = np.argmax([r.distance for r in self.search_results])
-    self.max_dist = self.search_results[self._max_dist_idx].distance
+    self._min_score_idx = np.argmin([r.sort_score for r in self.search_results])
+    self.min_score = self.search_results[self._min_score_idx].sort_score
 
   def sort(self):
     """Sort the results."""
-    distances = np.array([r.distance for r in self.search_results])
-    idxs = np.argsort(distances)
+    scores = np.array([r.sort_score for r in self.search_results])
+    idxs = np.argsort(-scores)
     self.search_results = [self.search_results[idx] for idx in idxs]
     self._update_deseridata()
 
@@ -105,9 +110,13 @@ class TopKSearchResults:
         output_path = labeled_data_path / label
         output_path.mkdir(parents=True, exist_ok=True)
         output_filepath = epath.Path(output_path / output_filename)
+        if output_filepath.exists():
+          counts[f'{label} exists'] += 1
+          continue
+        else:
+          counts[label] += 1
         with output_filepath.open('wb') as f:
           wavfile.write(f, sample_rate, r.audio)
-        counts[label] += 1
     for label, count in counts.items():
       print(f'Wrote {count} examples for label {label}')
 
@@ -121,13 +130,87 @@ class DistanceStats:
   num_windows: int
 
 
+def _euclidean_score(ex, query_embedding_batch):
+  """Update example with Euclidean distance scores."""
+  # Expand queries from shape [B, D] to shape [B, 1, 1, D]
+  queries = query_embedding_batch[:, np.newaxis, np.newaxis, :]
+  # Expand embedding from shape [T, C, D] to [1, T, C, D].
+  dists = (ex[tf_examples.EMBEDDING][tf.newaxis, :, :, :] - queries) ** 2
+  # Take min distance over channels and queries, leaving only time.
+  dists = tf.reduce_sum(dists, axis=-1)  # Reduce over vector depth
+  dists = tf.reduce_min(dists, axis=-1)  # Reduce over channels
+  dists = tf.math.sqrt(dists)
+  dists = tf.reduce_min(dists, axis=0)  # Reduce over query batch
+  ex['scores'] = dists
+  return ex
+
+
+def _mip_score(ex, query_embedding_batch):
+  """Update example with MIP distance scores."""
+  # embedding shape is [T, C, D].
+  # queries have shape [B, D]
+  keys = ex[tf_examples.EMBEDDING]
+  scores = tf.matmul(keys, query_embedding_batch, transpose_b=True)
+  # Product has shape [T, C, B]
+  # Take max score over channels and queries, leaving only time.
+  scores = tf.reduce_max(scores, axis=-1)  # Reduce over query batch
+  scores = tf.reduce_max(scores, axis=-1)  # Reduce over channels
+  ex['scores'] = scores
+  return ex
+
+
+def _cosine_score(ex, query_embedding_batch):
+  """Update example with MIP distance scores."""
+  # embedding shape is [T, C, D].
+  # queries have shape [B, D]
+  keys = ex[tf_examples.EMBEDDING]
+  keys_norm = tf.norm(keys, axis=-1, keepdims=True)
+  query_norm = tf.norm(query_embedding_batch, axis=-1, keepdims=True)
+  keys = keys / keys_norm
+  query = query_embedding_batch / query_norm
+  scores = tf.matmul(keys, query, transpose_b=True)
+
+  # Product has shape [T, C, B]
+  # Take max score over channels and queries, leaving only time.
+  scores = tf.reduce_max(scores, axis=-1)  # Reduce over query batch
+  scores = tf.reduce_max(scores, axis=-1)  # Reduce over channels
+  ex['scores'] = scores
+  return ex
+
+
+def _update_sort_scores(ex, invert: bool, target_score: float | None):
+  """Update example with sort scores."""
+  if target_score is not None:
+    # We need large values to be good, so we use the inverse distance to the
+    # target score as our sorting score.
+    ex['sort_scores'] = 1.0 / (tf.abs(ex['scores'] - target_score) + 1e-12)
+  elif invert:
+    ex['sort_scores'] = -ex['scores']
+  else:
+    ex['sort_scores'] = ex['scores']
+  # Precompute the max score in the example, allowing us to save
+  # time by skipping irrelevant examples.
+  ex['max_sort_score'] = tf.reduce_max(ex['sort_scores'])
+  return ex
+
+
+def _random_sort_scores(ex):
+  ex['sort_scores'] = tf.random.uniform(
+      [tf.shape(ex[tf_examples.EMBEDDING])[0]]
+  )
+  ex['max_sort_score'] = tf.reduce_max(ex['sort_scores'])
+  return ex
+
+
 def search_embeddings_parallel(
     embeddings_dataset: tf.data.Dataset,
-    query_embedding_batch: np.ndarray,
+    query_embedding_batch: np.ndarray | None,
     hop_size_s: int,
     top_k: int = 10,
-    target_dist: float = 0.0,
-    query_reduce_fn: Callable = tf.reduce_min,  # pylint: disable=g-bare-generic
+    target_score: float | None = None,
+    score_fn: Callable[[Any, np.ndarray], Any] | str = 'euclidean',  # pylint: disable=g-bare-generic
+    random_sample: bool = False,
+    invert_sort_score: bool = False,
 ):
   """Run a brute-force search.
 
@@ -135,56 +218,69 @@ def search_embeddings_parallel(
 
   Args:
     embeddings_dataset: tf.data.Dataset over embeddings
-    query_embedding_batch: Batch of query embeddings with shape [Batch, Depth].
+    query_embedding_batch: Batch of query embeddings with shape [Batch, Depth],
+      or None if the metric does not require queries.
     hop_size_s: Embedding hop size in seconds.
     top_k: Number of results desired.
-    target_dist: Get results closest to the target_dist. Set to 0.0 for standard
-      nearest-neighbor search.
-    query_reduce_fn: Tensorflow op for reducing embedding distances to queries.
-      One of tf.reduce_min or tf.reduce_mean is probably what you want.
+    target_score: Get results closest to the target_score.
+    score_fn: Scoring function to use.
+    random_sample: If True, obtain a uniformly random sample of data.
+    invert_sort_score: Set to True if low scores are preferable to high scores.
+      Ignored if a string score_fn is given.
 
   Returns:
     TopKSearchResults and distance statistics reduced per-file.
   """
-  # Expand from shape [B, D] to shape [B, T', C', D]
-  queries = query_embedding_batch[:, np.newaxis, np.newaxis, :]
 
-  def _q_dist(ex):
-    # exapand embedding from [T, C, D] to [B', T, C, D].
-    dists = (ex[tf_examples.EMBEDDING][tf.newaxis, :, :, :] - queries) ** 2
-    # Take min distance over channels and queries, leaving only time.
-    dists = tf.reduce_sum(dists, axis=-1)  # Reduce over vector depth
-    dists = tf.reduce_min(dists, axis=-1)  # Reduce over channels
-    dists = tf.math.sqrt(dists)
-    dists = query_reduce_fn(dists, axis=0)  # Reduce over query batch
+  # Convert string to score_fn.
+  if score_fn == 'euclidean':
+    score_fn = _euclidean_score
+    invert_sort_score = True
+  elif score_fn == 'mip':
+    score_fn = _mip_score
+    invert_sort_score = False
+  elif score_fn == 'cosine':
+    score_fn = _cosine_score
+    invert_sort_score = False
+  elif isinstance(score_fn, str):
+    raise ValueError(f'Unknown score_fn: {score_fn}')
 
-    ex['q_distance'] = dists
-    # Precompute the minimum distance in the example, allowing us to save
-    # time by skipping irrelevant examples.
-    ex['min_target_distance'] = tf.reduce_min(tf.abs(dists - target_dist))
-    return ex
+  score_fn = functools.partial(
+      score_fn, query_embedding_batch=query_embedding_batch
+  )
+  if random_sample:
+    sort_scores_fn = _random_sort_scores
+  else:
+    sort_scores_fn = functools.partial(
+        _update_sort_scores, target_score=target_score, invert=invert_sort_score
+    )
 
-  embeddings_dataset = embeddings_dataset.map(
-      _q_dist,
-      num_parallel_calls=tf.data.AUTOTUNE,
-      deterministic=False,
-  ).prefetch(1024)
+  ex_map_fn = lambda ex: sort_scores_fn(score_fn(ex))
+  embeddings_dataset = (
+      embeddings_dataset.shuffle(1024)
+      .map(
+          ex_map_fn,
+          num_parallel_calls=tf.data.AUTOTUNE,
+          deterministic=False,
+      )
+      .prefetch(1024)
+  )
 
-  results = TopKSearchResults([], top_k=top_k, distance_offset=target_dist)
+  results = TopKSearchResults([], top_k=top_k)
   all_distances = []
   try:
     for ex in tqdm.tqdm(embeddings_dataset.as_numpy_iterator()):
-      all_distances.append(ex['q_distance'].reshape([-1]))
-      if results.will_filter(ex['min_target_distance']):
+      all_distances.append(ex['scores'].reshape([-1]))
+      if results.will_filter(ex['max_sort_score']):
         continue
       for t in range(ex[tf_examples.EMBEDDING].shape[0]):
-        dist = np.abs(ex['q_distance'][0, t] - target_dist)
-        offset = t * hop_size_s + ex[tf_examples.TIMESTAMP_S]
+        offset_s = t * hop_size_s + ex[tf_examples.TIMESTAMP_S]
         result = SearchResult(
             ex[tf_examples.EMBEDDING][t, :, :],
-            dist,
+            ex['scores'][t],
+            ex['sort_scores'][t],
             ex['filename'].decode(),
-            offset,
+            offset_s,
         )
         results.update(result)
   except KeyboardInterrupt:
@@ -195,29 +291,23 @@ def search_embeddings_parallel(
 
 
 def classifer_search_embeddings_parallel(
-    embeddings_dataset: tf.data.Dataset,
     embeddings_classifier: tf.keras.Model,
     target_index: int,
-    hop_size_s: int,
-    top_k: int = 10,
-    target_logit: float = 0.0,
+    **kwargs,
 ):
   """Get examples for a target class with logit near the target logit.
 
   Args:
-    embeddings_dataset: tf.data.Dataset over embeddings
     embeddings_classifier: Keras model turning embeddings into logits.
     target_index: Choice of class index.
-    hop_size_s: Embedding hop size in seconds.
-    top_k: Number of results desired.
-    target_logit: Get results near the target logit.
+    **kwargs: Arguments passed on to search_embeddings_parallel.
 
   Returns:
     TopKSearchResults and all logits.
   """
-  results = TopKSearchResults([], top_k=top_k, distance_offset=target_logit)
 
-  def classify_batch(batch):
+  def classify_batch(batch, query_embedding_batch):
+    del query_embedding_batch
     emb = batch[tf_examples.EMBEDDING]
     emb_shape = tf.shape(emb)
     flat_emb = tf.reshape(emb, [-1, emb_shape[-1]])
@@ -229,28 +319,9 @@ def classifer_search_embeddings_parallel(
     logits = logits[..., target_index]
     # Take the maximum logit over channels.
     logits = tf.reduce_max(logits, axis=-1)
-    batch['logits'] = logits
+    batch['scores'] = logits
     return batch
 
-  ds = embeddings_dataset.map(
-      classify_batch, num_parallel_calls=tf.data.AUTOTUNE
+  return search_embeddings_parallel(
+      score_fn=classify_batch, query_embedding_batch=None, **kwargs
   )
-
-  all_logits = []
-  try:
-    for ex in tqdm.tqdm(ds.as_numpy_iterator()):
-      emb = ex[tf_examples.EMBEDDING]
-      logits = ex['logits']
-      all_logits.append(logits)
-      for t in range(emb.shape[0]):
-        dist = np.abs(logits[t] - target_logit)
-        offset = t * hop_size_s + ex[tf_examples.TIMESTAMP_S]
-        result = SearchResult(
-            emb[t, :, :], dist, ex['filename'].decode(), offset
-        )
-        results.update(result)
-  except KeyboardInterrupt:
-    pass
-  results.sort()
-  all_logits = np.concatenate(all_logits)
-  return results, all_logits

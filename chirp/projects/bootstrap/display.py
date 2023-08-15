@@ -94,18 +94,21 @@ def display_search_results(
   # Parallel load the audio windows.
   filepaths = [source_map[r.filename] for r in results]
   offsets = [r.timestamp_offset for r in results]
-  for r, result_audio_window in zip(
-      results,
-      audio_utils.multi_load_audio_window(
-          filepaths, offsets, embedding_sample_rate, window_s, max_workers
-      ),
+  for rank, (r, result_audio_window) in enumerate(
+      zip(
+          results,
+          audio_utils.multi_load_audio_window(
+              filepaths, offsets, embedding_sample_rate, window_s, max_workers
+          ),
+      )
   ):
     plot_audio_melspec(result_audio_window, embedding_sample_rate)
     plt.show()
-    print(f'source file: {r.filename}')
+    print(f'rank        : {rank}')
+    print(f'source file : {r.filename}')
     offset_s = r.timestamp_offset
-    print(f'offset:      {offset_s:6.2f}')
-    print(f'distance:    {(r.distance + results.distance_offset):6.2f}')
+    print(f'offset_s    : {offset_s:.2f}')
+    print(f'score       : {(r.score):.2f}')
     label_widgets = []
 
     def button_callback(x):

@@ -19,9 +19,10 @@ from chirp.projects.bootstrap import search
 import numpy as np
 
 from absl.testing import absltest
+from absl.testing import parameterized
 
 
-class SearchTest(absltest.TestCase):
+class SearchTest(parameterized.TestCase):
 
   def test_top_k_search_results(self):
     np.random.seed(42)
@@ -33,31 +34,84 @@ class SearchTest(absltest.TestCase):
     for i in range(100):
       r = search.SearchResult(
           random_embeddings[i],
-          dists[i],
+          score=dists[i],
+          # Sort with negative distance so that the high score is best.
+          sort_score=-dists[i],
           filename=f'result_{i:03d}',
           timestamp_offset=i,
       )
       fake_results.append(r)
 
-    results = search.TopKSearchResults([], top_k=10, distance_offset=0.0)
+    results = search.TopKSearchResults([], top_k=10)
     for i, r in enumerate(fake_results):
       results.update(r)
       self.assertLen(results.search_results, min([i + 1, 10]))
       # Get the 10th largest value amongst the dists seen so far.
-      true_max_dist = np.max(sorted(dists[: i + 1])[:10])
-      arg_max_dist = np.argmax([r.distance for r in results])
-      self.assertEqual(results.max_dist, true_max_dist)
+      true_min_neg_dist = -np.max(sorted(dists[: i + 1])[:10])
+      arg_min_dist = np.argmin([r.sort_score for r in results])
+      self.assertEqual(results.min_score, true_min_neg_dist)
       self.assertEqual(
-          results.search_results[arg_max_dist].distance, results.max_dist
+          results.search_results[arg_min_dist].sort_score, results.min_score
       )
 
     self.assertLen(results.search_results, results.top_k)
     results.sort()
     for i in range(1, 10):
       self.assertGreater(
-          results.search_results[i].distance,
-          results.search_results[i - 1].distance,
+          results.search_results[i - 1].sort_score,
+          results.search_results[i].sort_score,
       )
+
+  @parameterized.product(
+      metric_name=('euclidean', 'cosine', 'mip'),
+  )
+  def test_metric_apis(self, metric_name):
+    example = {
+        'embedding': np.random.normal(size=[12, 5, 128]),
+    }
+    query = np.random.normal(size=[3, 128])
+    if metric_name == 'euclidean':
+      got = search._euclidean_score(example, query)
+    elif metric_name == 'cosine':
+      got = search._cosine_score(example, query)
+    elif metric_name == 'mip':
+      got = search._mip_score(example, query)
+    else:
+      raise ValueError(f'Unknown metric: {metric_name}')
+    self.assertIn('scores', got)
+    self.assertSequenceEqual(got['scores'].shape, (12,))
+    # Embeddings should be unchanged.
+    self.assertEqual(np.max(np.abs(got['embedding'] - example['embedding'])), 0)
+
+  def test_update_sort_scores(self):
+    example = {
+        'embedding': np.random.normal(size=[12, 5, 128]),
+        'scores': np.random.normal(size=[12]),
+    }
+    got = search._update_sort_scores(example, invert=False, target_score=None)
+    self.assertIn('sort_scores', got)
+    self.assertSequenceEqual(got['sort_scores'].shape, got['scores'].shape)
+    self.assertIn('max_sort_score', got)
+    self.assertEqual(np.max(example['scores']), got['max_sort_score'])
+    # Embeddings should be unchanged.
+    self.assertEqual(np.max(np.abs(got['embedding'] - example['embedding'])), 0)
+
+    got = search._update_sort_scores(example, invert=True, target_score=None)
+    self.assertIn('sort_scores', got)
+    self.assertSequenceEqual(got['sort_scores'].shape, got['scores'].shape)
+    self.assertIn('max_sort_score', got)
+    self.assertEqual(-np.min(example['scores']), got['max_sort_score'])
+    # Embeddings should be unchanged.
+    self.assertEqual(np.max(np.abs(got['embedding'] - example['embedding'])), 0)
+
+    got = search._update_sort_scores(example, invert=False, target_score=1.0)
+    self.assertIn('sort_scores', got)
+    self.assertSequenceEqual(got['sort_scores'].shape, got['scores'].shape)
+    self.assertIn('max_sort_score', got)
+    expect_max_score = np.max(1.0 / (np.abs(example['scores'] - 1.0) + 1e-12))
+    self.assertEqual(got['max_sort_score'], expect_max_score)
+    # Embeddings should be unchanged.
+    self.assertEqual(np.max(np.abs(got['embedding'] - example['embedding'])), 0)
 
 
 if __name__ == '__main__':
