@@ -25,7 +25,6 @@ from chirp.inference import embed_lib
 from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
-from chirp.models import frontend
 from chirp.taxonomy import namespace_db
 from etils import epath
 from ml_collections import config_dict
@@ -212,29 +211,9 @@ class InferenceTest(parameterized.TestCase):
     self.assertIsNotNone(config)
 
   def test_handcrafted_features(self):
-    sample_rate = 32000
-    frame_rate = 100
-    mel_config = {
-        'sample_rate': sample_rate,
-        'features': 160,
-        'stride': sample_rate // frame_rate,
-        'kernel_size': int(0.08 * sample_rate),
-        'freq_range': (60.0, sample_rate / 2.0),
-        'scaling_config': frontend.LogScalingConfig(),
-    }
-    features_config = {
-        'compute_mfccs': True,
-        'aggregation': 'beans',
-    }
-    model = models.HandcraftedFeaturesModel(
-        sample_rate=sample_rate,
-        window_size_s=1.0,
-        hop_size_s=1.0,
-        melspec_config=mel_config,
-        features_config=features_config,
-    )
+    model = models.HandcraftedFeaturesModel.beans_baseline()
 
-    audio = np.zeros([5 * sample_rate], dtype=np.float32)
+    audio = np.zeros([5 * 32000], dtype=np.float32)
     outputs = model.embed(audio)
     # Five frames because we have 5s of audio with window 1.0 and hope 1.0.
     # Beans aggrregation with mfccs creates 20 MFCC channels, and then computes
@@ -303,7 +282,7 @@ class InferenceTest(parameterized.TestCase):
       if pooling_method == 'squeeze':
         # The 'squeeze' pooling method throws an exception if axis size is > 1.
         with self.assertRaises(ValueError):
-          time_pooled = outputs.pooled_embeddings(pooling_method, '')
+          outputs.pooled_embeddings(pooling_method, '')
         continue
       elif pooling_method == 'flatten':
         # Concatenates over the target axis.

@@ -139,9 +139,8 @@ class EmbedFn(beam.DoFn):
 
   def setup(self):
     if self.embedding_model is None:
-      self.embedding_model = models.model_class_map()[self.model_key](
-          **self.model_config
-      )
+      model_class = models.model_class_map()[self.model_key]
+      self.embedding_model = model_class.from_config(self.model_config)
     if hasattr(self, 'model_key'):
       del self.model_key
     if hasattr(self, 'model_config'):

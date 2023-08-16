@@ -38,9 +38,9 @@ class BootstrapState:
 
   def __post_init__(self):
     if self.embedding_model is None:
-      self.embedding_model = models.model_class_map()[self.config.model_key](
-          **self.config.model_config
-      )
+      self.embedding_model = models.model_class_map()[
+          self.config.model_key
+      ].from_config(self.config.model_config)
     self.create_embeddings_dataset()
     self.create_source_map()
 

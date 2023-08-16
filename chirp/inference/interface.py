@@ -16,10 +16,11 @@
 """Interface for models producing embeddings."""
 
 import dataclasses
-from typing import Any, Callable, Dict
+from typing import Callable, Dict
 
 from chirp.taxonomy import namespace
 import librosa
+from ml_collections import config_dict
 import numpy as np
 
 LogitType = Dict[str, np.ndarray]
@@ -110,6 +111,13 @@ class EmbeddingModel:
   """
 
   sample_rate: int
+
+  @classmethod
+  def from_config(
+      cls, model_config: config_dict.ConfigDict
+  ) -> 'EmbeddingModel':
+    """Load the model from a configuration dict."""
+    raise NotImplementedError
 
   def embed(self, audio_array: np.ndarray) -> InferenceOutputs:
     """Create InferenceOutputs from an audio array.

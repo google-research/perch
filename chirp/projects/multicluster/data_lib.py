@@ -179,7 +179,7 @@ def embed_dataset(
     exclude_classes: Sequence[str] = (),
     load_audio: bool = True,
     target_sample_rate: int = -1,
-    audio_file_pattern: str = '*.wav',
+    audio_file_pattern: str = '*',
 ) -> Tuple[Sequence[str], Dict[str, np.ndarray]]:
   """Add embeddings to an eval dataset.
 
@@ -250,7 +250,7 @@ def embed_dataset(
       audio = audio.astype(np.float32)
       outputs = embedding_model.embed(audio)
 
-      if not outputs.embeddings:
+      if outputs.embeddings is None:
         raise ValueError('Embedding model did not produce any embeddings!')
 
       # If the audio was separated then the raw audio is in the first channel.
