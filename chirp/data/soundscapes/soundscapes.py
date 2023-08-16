@@ -604,7 +604,6 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           beam.metrics.Metrics.counter('soundscapes', 'examples').inc()
         return valid_segments
 
-    pipeline = beam.Create(
-        enumerate(segments.groupby('filename'))
-    ) | beam.FlatMap(_process_group)
-    return pipeline
+    for group in enumerate(segments.groupby('filename')):
+      for key, example in _process_group(group):
+        yield key, example

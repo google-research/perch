@@ -76,9 +76,15 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
     subdir = epath.Path(cls.tempdir) / 'audio-data' / 'comter'
     subdir.mkdir(parents=True)
     for i in range(4):
-      tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(
-          subdir / f'XC{i:05d}.mp3', format='mp3'
-      )
+      tfds.core.lazy_imports.pydub.AudioSegment(
+          b'\0\1' * int(10_000 * 10),
+          metadata={
+              'channels': 1,
+              'sample_width': 2,
+              'frame_rate': 10_000,
+              'frame_width': 2,
+          },
+      ).export(subdir / f'XC{i:05d}.mp3', format='mp3')
 
   @classmethod
   def tearDownClass(cls):

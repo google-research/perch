@@ -17,6 +17,7 @@
 
 import dataclasses
 import functools
+import resource
 import tempfile
 from typing import Any, Callable
 import warnings
@@ -27,6 +28,7 @@ from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import premade_queries
 from chirp.taxonomy import namespace_db
 from etils import epath
+import jax
 from jax import numpy as jnp
 import numpy as np
 import pandas as pd
@@ -49,6 +51,10 @@ Credit for individual audio recordings can be viewed by visiting
 https://xeno-canto.org/{xeno_canto_id}, and a given example's Xeno-Canto ID can
 be retrieved from the 'filename' feature: 'XC{xeno_canto_id}.mp3'.
 """
+
+# The maximum audio sequence length to consider if a localization function is
+# provided. This is 5 * 60 seconds = 5 minutes.
+_MAX_LOCALIZATION_LENGTH_S = 5 * 60
 
 LocalizationFn = Callable[[Any, int, float], jnp.ndarray]
 
@@ -335,6 +341,11 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
     )
 
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
+    # Increase the file handle resource soft limit to the hard limit. The
+    # dataset is large enough that it causes TFDS to hit the soft limit.
+    _low, _high = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (_high, _high))
+
     # No checksum is found for the new taxonomy_info. dl_manager may raise
     # an error when removing the line below.
     dl_manager._force_checksums_validation = (
@@ -435,6 +446,9 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           # Resampling can introduce artifacts that push the signal outside the
           # [-1, 1) interval.
           audio = np.clip(audio, -1.0, 1.0 - (1.0 / float(1 << 15)))
+      # Skip empty audio files.
+      if audio.shape[0] == 0 or np.max(np.abs(audio)) == 0.0:
+        return None
       # The scrubbed foreground annotations are replaced by ''. When this is the
       # case, we translate this annotation into []  rather than [''].
       foreground_label = (
@@ -463,19 +477,24 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           'sound_type': source['sound_type'],
       }
 
-    pipeline = beam.Create(source_info.iterrows()) | beam.Map(_process_example)
-
     if self.builder_config.localization_fn:
 
-      def _localize_intervals(args):
+      def localize_intervals_fn(args):
         key, example = args
         sample_rate_hz = self.builder_config.sample_rate_hz
         interval_length_s = self.builder_config.interval_length_s
         target_length = int(sample_rate_hz * interval_length_s)
 
-        audio = audio_utils.pad_to_length_if_shorter(
-            example['audio'], target_length
-        )
+        audio = example['audio']
+
+        # We limit audio sequence length to _MAX_LOCALIZATION_LENGTH_S when
+        # localizing intervals because the localization function can result in
+        # very large memory consumption for long audio sequences.
+        max_length = sample_rate_hz * _MAX_LOCALIZATION_LENGTH_S
+        if audio.shape[0] > max_length:
+          audio = audio[:max_length]
+
+        audio = audio_utils.pad_to_length_if_shorter(audio, target_length)
         # Pass padded audio to avoid localization_fn having to pad again
         audio_intervals = self.builder_config.localization_fn(
             audio, sample_rate_hz, interval_length_s
@@ -499,6 +518,23 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           ))
         return interval_examples
 
-      pipeline = pipeline | beam.FlatMap(_localize_intervals)
+    else:
+      localize_intervals_fn = None
 
-    return pipeline
+    for i, key_and_example in enumerate(
+        map(_process_example, source_info.iterrows())
+    ):
+      # Since the audio files have variable length, the JAX compilation cache
+      # can use up a large amount of memory after a while.
+      if i % 100 == 0:
+        jax.clear_caches()
+
+      # Skip empty audio files.
+      if key_and_example is None:
+        continue
+
+      if localize_intervals_fn:
+        for key_and_example in localize_intervals_fn(key_and_example):
+          yield key_and_example
+      else:
+        yield key_and_example

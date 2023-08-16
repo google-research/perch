@@ -8,7 +8,7 @@ license = "Apache 2.0"
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"
 absl-py = "^1.3.0"
-apache-beam = "^2.46.0"
+apache-beam = {version = "^2.46.0", extras = ["gcp"]}
 clu = "^0.0.8"
 flax = "^0.6.7"
 jax = "^0.4.12"
@@ -19,7 +19,7 @@ optax = "^0.1.4"
 tensorflow = "=2.11.0"
 tensorflow-io = "=0.31"
 tensorflow-datasets = {version = "^4.8.0", extras = ["dev"]}
-pandas = "1.5.1"
+pandas = {version = "2.0.2", extras=["gcp"]}
 etils = {version = "^0.9.0", extras = ["epath"]}
 ratelimiter = "^1.2.0.post0"
 SPARQLWrapper = "^2.0.0"

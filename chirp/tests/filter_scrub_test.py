@@ -458,7 +458,10 @@ class QueryParallelTest(DataProcessingTest):
     # of .to_dict().
     self.assertTrue(
         fsu.apply_parallel(self.toy_df, query_parallel).equals(
-            self.toy_df.loc[[0]].append([scrubbed_r0, self.toy_df.loc[1]])
+            pd.concat([
+                self.toy_df.loc[[0]],
+                pd.DataFrame([scrubbed_r0, self.toy_df.loc[1]]),
+            ])
         )
     )
 
