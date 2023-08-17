@@ -116,7 +116,7 @@ class TopKSearchResults:
         else:
           counts[label] += 1
         with output_filepath.open('wb') as f:
-          wavfile.write(f, sample_rate, r.audio)
+          wavfile.write(f, sample_rate, np.float32(r.audio))
     for label, count in counts.items():
       print(f'Wrote {count} examples for label {label}')
 
@@ -135,11 +135,13 @@ def _euclidean_score(ex, query_embedding_batch):
   # Expand queries from shape [B, D] to shape [B, 1, 1, D]
   queries = query_embedding_batch[:, np.newaxis, np.newaxis, :]
   # Expand embedding from shape [T, C, D] to [1, T, C, D].
-  dists = (ex[tf_examples.EMBEDDING][tf.newaxis, :, :, :] - queries) ** 2
+  embeddings = ex[tf_examples.EMBEDDING][tf.newaxis, :, :, :]
+
+  dists = (embeddings - queries) ** 2
   # Take min distance over channels and queries, leaving only time.
   dists = tf.reduce_sum(dists, axis=-1)  # Reduce over vector depth
-  dists = tf.reduce_min(dists, axis=-1)  # Reduce over channels
   dists = tf.math.sqrt(dists)
+  dists = tf.reduce_min(dists, axis=-1)  # Reduce over channels
   dists = tf.reduce_min(dists, axis=0)  # Reduce over query batch
   ex['scores'] = dists
   return ex
@@ -244,6 +246,16 @@ def search_embeddings_parallel(
     invert_sort_score = False
   elif isinstance(score_fn, str):
     raise ValueError(f'Unknown score_fn: {score_fn}')
+
+  if query_embedding_batch is None:
+    pass
+  elif len(query_embedding_batch.shape) == 1:
+    query_embedding_batch = query_embedding_batch[np.newaxis, :]
+  elif len(query_embedding_batch.shape) > 2:
+    raise ValueError(
+        'query_embedding_batch should be rank 1 or 2, but has shape '
+        f'{query_embedding_batch.shape}'
+    )
 
   score_fn = functools.partial(
       score_fn, query_embedding_batch=query_embedding_batch
