@@ -36,6 +36,7 @@ from chirp.inference import interface
 from etils import epath
 import numpy as np
 import tensorflow as tf
+import tqdm
 
 
 @dataclasses.dataclass
@@ -243,7 +244,9 @@ def embed_dataset(
         filepaths, None, target_sample_rate, -1
     )
 
-    for fp, audio in zip(filepaths, audio_iterator):
+    for fp, audio in tqdm.tqdm(
+        zip(filepaths, audio_iterator), total=len(filepaths)
+    ):
       audio_size = audio.shape[0]
       if window_size > audio_size:
         audio = _pad_audio(audio, window_size)
