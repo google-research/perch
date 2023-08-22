@@ -46,8 +46,11 @@ _WINDOW_FNS = {
 _BOUNDARY_TO_PADDING_MODE = {'zeros': 'CONSTANT'}
 
 
-def load_audio(path: str, target_sample_rate: int, **kwargs) -> jnp.ndarray:
+def load_audio(
+    path: epath.PathLike, target_sample_rate: int, **kwargs
+) -> jnp.ndarray:
   """Load a general audio resource."""
+  path = os.fspath(path)
   if path.startswith('xc'):
     return load_xc_audio(path, target_sample_rate)
   elif path.startswith('http'):
