@@ -92,7 +92,7 @@ class CMAP(clu_metrics.Metric):
 
   @classmethod
   def from_model_output(
-      cls, values: tuple[jnp.array, jnp.array], **_
+      cls, values: tuple[jnp.ndarray, jnp.ndarray], **_
   ) -> clu_metrics.Metric:
     scores, labels = values
     return cls(scores=scores, labels=labels)

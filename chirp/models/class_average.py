@@ -39,7 +39,7 @@ class ClassAverage(metrics.Metric):
 
   @classmethod
   def from_model_output(
-      cls, values: tuple[jnp.array, jnp.array], **_
+      cls, values: tuple[jnp.ndarray, jnp.ndarray], **_
   ) -> metrics.Metric:
     return cls(total=values[0] @ values[1], count=jnp.sum(values[1], axis=0))
 
