@@ -30,7 +30,6 @@ from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
 from etils import epath
-import librosa
 from ml_collections import config_dict
 import numpy as np
 import soundfile
@@ -84,7 +83,7 @@ class EmbedFn(beam.DoFn):
   def __init__(
       self,
       write_embeddings: bool,
-      write_logits: bool,
+      write_logits: bool | Sequence[str],
       write_separated_audio: bool,
       write_raw_audio: bool,
       model_key: str,
@@ -93,15 +92,15 @@ class EmbedFn(beam.DoFn):
       file_id_depth: int = 0,
       min_audio_s: float = 5.0,
       embedding_model: interface.EmbeddingModel | None = None,
-      speech_filter_threshold: float = -1.0,
-      speech_filter_width: int = 5,
       target_sample_rate: int = -2,
+      logits_head_config: config_dict.ConfigDict | None = None,
   ):
     """Initialize the embedding DoFn.
 
     Args:
       write_embeddings: Whether to write embeddings.
-      write_logits: Whether to write output logits.
+      write_logits: Whether to write output logits. Alternatively, a sequence of
+        logit keys to write.
       write_separated_audio: Whether to write out separated audio tracks.
       write_raw_audio: If true, will add the original audio to the output.
       model_key: String indicating which model wrapper to use. See MODEL_KEYS.
@@ -114,14 +113,11 @@ class EmbedFn(beam.DoFn):
         then the file_id will be `file/is/awesome.wav`.
       min_audio_s: Minimum allowed audio length, in seconds.
       embedding_model: Pre-loaded embedding model.
-      speech_filter_threshold: Filter threshold for yamnet voice activation. Any
-        work unit which contians audio exceeding this threshold will be
-        discarded.
-      speech_filter_width: Number of timesteps to average when computing the
-        speech score.
       target_sample_rate: Target sample rate when loading audio. Set to -2 to
         use the embedding model's native sample rate, or any positive number to
         resample to a fixed rate.
+      logits_head_config: Optional configuration for a secondary
+        interface.LogitsOutputHead classifying the model embeddings.
     """
     self.model_key = model_key
     self.model_config = model_config
@@ -133,9 +129,9 @@ class EmbedFn(beam.DoFn):
     self.embedding_model = embedding_model
     self.file_id_depth = file_id_depth
     self.min_audio_s = min_audio_s
-    self.speech_filter_threshold = speech_filter_threshold
-    self.speech_filter_width = speech_filter_width
     self.target_sample_rate = target_sample_rate
+    self.logits_head_config = logits_head_config
+    self.logits_head = None
 
   def setup(self):
     if self.embedding_model is None:
@@ -145,14 +141,16 @@ class EmbedFn(beam.DoFn):
       del self.model_key
     if hasattr(self, 'model_config'):
       del self.model_config
-    if self.speech_filter_threshold > 0.0:
-      self.yamnet = models.TFHubModel.yamnet()
     if self.target_sample_rate == -2:
       self.target_sample_rate = self.embedding_model.sample_rate
     elif self.target_sample_rate > 0:
       self.target_sample_rate = self.target_sample_rate
     else:
       raise ValueError('Invalid target_sample_rate.')
+    if self.logits_head_config is not None:
+      self.logits_head = interface.LogitsOutputHead.from_config(
+          self.logits_head_config
+      )
 
   def load_audio(
       self, filepath: str, offset_s: float, window_size_s: float
@@ -163,27 +161,6 @@ class EmbedFn(beam.DoFn):
     logging.warning('Audio loaded successfully.')
     # Convert audio from jax array to numpy array.
     return np.array(audio)
-
-  def get_speech_score(self, audio: np.ndarray) -> float:
-    """Check whether the audio contains human speech."""
-    if self.speech_filter_threshold <= 0.0:
-      return -1.0
-    # resample audio to yamnet 16kHz target.
-    audio = librosa.resample(
-        audio,
-        self.target_sample_rate,
-        self.yamnet.sample_rate,
-        res_type='polyphase',
-    )
-    speech_logits = self.yamnet.embed(audio).logits['label'][..., 0]
-
-    # Apply a low-pass filter over the yamnet speech logits.
-    # This ensures that transient false positives don't ruin our day.
-    width = self.speech_filter_width
-    speech_logits = (
-        np.convolve(speech_logits, np.ones([width]), 'valid') / width
-    )
-    return speech_logits.max()
 
   def _log_exception(self, source_info, exception, counter_name):
     beam.metrics.Metrics.counter('beaminference', counter_name).inc()
@@ -203,6 +180,10 @@ class EmbedFn(beam.DoFn):
     if self.embedding_model is None:
       raise ValueError('Embedding model undefined.')
     model_outputs = self.embedding_model.embed(audio)
+    if self.logits_head is not None:
+      # Update model outputs with logits from the secondary classifier.
+      model_outputs = self.logits_head.add_logits(model_outputs)
+
     example = tf_examples.model_outputs_to_tf_example(
         model_outputs=model_outputs,
         file_id=file_id,
@@ -269,10 +250,6 @@ class EmbedFn(beam.DoFn):
       return
     if audio.shape[0] < self.min_audio_s * self.target_sample_rate:
       self._log_exception(source_info, 'no_exception', 'audio_too_short')
-      return
-    speech_score = self.get_speech_score(audio)
-    if 0 < self.speech_filter_threshold < speech_score:
-      self._log_exception(source_info, 'no_exception', 'contains_speech')
       return
 
     logging.info(
