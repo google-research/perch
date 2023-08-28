@@ -100,7 +100,7 @@ loaded separator and ensemble:
 
 ```
 melspecs, logits = separate_classify(long_audio, ensemble, separator, hints,
-    hop_size=5.0)
+    hop_size_s=5.0)
 ```
 
 This uses the method in the paper: The raw audio is stacked on the separated
