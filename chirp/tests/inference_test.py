@@ -25,6 +25,7 @@ from chirp.inference import embed_lib
 from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
+from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 from etils import epath
 from ml_collections import config_dict
@@ -33,6 +34,18 @@ import tensorflow as tf
 
 from absl.testing import absltest
 from absl.testing import parameterized
+
+
+def _make_output_head_model(model_path: str, embedding_dim: int = 1280):
+  classes = ('speech', 'birdsong', 'unknown')
+  model = tf.keras.Sequential([
+      tf.keras.Input(shape=[embedding_dim]),
+      tf.keras.layers.Dense(len(classes)),
+  ])
+  class_list = namespace.ClassList('custom', classes)
+  return interface.LogitsOutputHead(
+      model_path, 'other_label', model, class_list
+  )
 
 
 class InferenceTest(parameterized.TestCase):
@@ -85,7 +98,9 @@ class InferenceTest(parameterized.TestCase):
     example = embed_fn.process(source_info, crop_s=10.0)[0]
     serialized = example.SerializeToString()
 
-    parser = tf_examples.get_example_parser(logit_names=['label'])
+    parser = tf_examples.get_example_parser(
+        logit_names=['label', 'other_label']
+    )
     got_example = parser(serialized)
     self.assertIsNotNone(got_example)
     self.assertEqual(got_example[tf_examples.FILE_NAME], 'clap.wav')
@@ -100,6 +115,9 @@ class InferenceTest(parameterized.TestCase):
     if make_logits and write_logits:
       self.assertSequenceEqual(
           got_example['label'].shape, got_example['label_shape']
+      )
+      self.assertSequenceEqual(
+          got_example['other_label'].shape, got_example['other_label_shape']
       )
     else:
       self.assertEqual(got_example['label'].shape, (0,))
@@ -119,6 +137,85 @@ class InferenceTest(parameterized.TestCase):
       )
     else:
       self.assertEqual(got_example[tf_examples.RAW_AUDIO].shape, (0,))
+
+  def test_keyed_write_logits(self):
+    """Test that EmbedFn writes only the desired logits if specified."""
+    write_logits = ('other_label',)
+    model_kwargs = {
+        'sample_rate': 16000,
+        'embedding_size': 128,
+        'make_embeddings': True,
+        'make_logits': ('label', 'other_label'),
+        'make_separated_audio': False,
+    }
+    embed_fn = embed_lib.EmbedFn(
+        write_embeddings=True,
+        write_logits=write_logits,
+        write_separated_audio=False,
+        write_raw_audio=False,
+        model_key='placeholder_model',
+        model_config=model_kwargs,
+        file_id_depth=0,
+    )
+    embed_fn.setup()
+    self.assertIsNotNone(embed_fn.embedding_model)
+
+    test_wav_path = os.fspath(
+        path_utils.get_absolute_path(
+            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+        )
+    )
+
+    source_info = embed_lib.SourceInfo(test_wav_path, 0, 10)
+    example = embed_fn.process(source_info, crop_s=10.0)[0]
+    serialized = example.SerializeToString()
+
+    parser = tf_examples.get_example_parser(
+        logit_names=['label', 'other_label']
+    )
+    got_example = parser(serialized)
+    self.assertIsNotNone(got_example)
+    self.assertEqual(got_example[tf_examples.FILE_NAME], 'clap.wav')
+    self.assertSequenceEqual(
+        got_example['other_label'].shape, got_example['other_label_shape']
+    )
+    self.assertEqual(got_example['label'].shape, (0,))
+
+  def test_logits_output_head(self):
+    base_model = models.PlaceholderModel(
+        sample_rate=22050,
+        make_embeddings=True,
+        make_logits=False,
+        make_separated_audio=True,
+    )
+    logits_model = _make_output_head_model(
+        '/tmp/logits_model', embedding_dim=128
+    )
+    base_outputs = base_model.embed(np.zeros(5 * 22050))
+    updated_outputs = logits_model.add_logits(base_outputs)
+    self.assertSequenceEqual(
+        updated_outputs.logits['other_label'].shape,
+        (5, 3),
+    )
+    # Check that we /only/ have the new logits, since make_logits=False
+    self.assertNotIn('label', updated_outputs.logits)
+
+    # Save and restore the model.
+    with tempfile.TemporaryDirectory() as logits_model_dir:
+      logits_model.save_model(logits_model_dir, '')
+      restore_config = config_dict.ConfigDict({
+          'model_path': logits_model_dir,
+          'logits_key': 'other_label',
+      })
+      restored_model = interface.LogitsOutputHead.from_config(restore_config)
+    reupdated_outputs = restored_model.add_logits(base_outputs)
+    error = np.mean(
+        np.abs(
+            reupdated_outputs.logits['other_label']
+            - updated_outputs.logits['other_label']
+        )
+    )
+    self.assertLess(error, 1e-5)
 
   def test_embed_short_audio(self):
     """Test that EmbedFn handles audio shorter than the model window_size_s."""

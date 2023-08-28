@@ -810,7 +810,7 @@ def perform_adaptation(
 
 def logit2proba(
     logits: jnp.ndarray, label_mask: jnp.ndarray | None, multi_label: bool
-) -> jnp.array:
+) -> jnp.ndarray:
   """Converts model logits to valid probabilities.
 
   When multi_label=False, uses label_mask to select classes that will be used

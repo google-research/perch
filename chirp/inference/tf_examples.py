@@ -127,7 +127,7 @@ def model_outputs_to_tf_example(
     audio: np.ndarray,
     timestamp_offset_s: float,
     write_embeddings: bool,
-    write_logits: bool,
+    write_logits: bool | Sequence[str],
     write_separated_audio: bool,
     write_raw_audio: bool,
 ) -> tf.train.Example:
@@ -141,10 +141,18 @@ def model_outputs_to_tf_example(
         serialize_tensor(model_outputs.embeddings)
     )
     feature[EMBEDDING_SHAPE] = (int_feature(model_outputs.embeddings.shape),)
-  if write_logits and model_outputs.logits is not None:
-    for logits_key, value in model_outputs.logits.items():
-      feature[logits_key] = bytes_feature(serialize_tensor(value))
-      feature[logits_key + '_shape'] = int_feature(value.shape)
+
+  # Handle writing logits.
+  if model_outputs.logits is not None and write_logits:
+    logit_keys = tuple(model_outputs.logits.keys())
+    if not isinstance(write_logits, bool):
+      # Then it's a Sequence[str], so we only keep the relevant keys.
+      logit_keys = tuple(k for k in logit_keys if k in write_logits)
+    for logits_key in logit_keys:
+      logits = model_outputs.logits[logits_key]
+      feature[logits_key] = bytes_feature(serialize_tensor(logits))
+      feature[logits_key + '_shape'] = int_feature(logits.shape)
+
   if write_separated_audio and model_outputs.separated_audio is not None:
     feature[SEPARATED_AUDIO] = bytes_feature(
         serialize_tensor(model_outputs.separated_audio)

@@ -650,6 +650,9 @@ class PlaceholderModel(interface.EmbeddingModel):
           'label': np.zeros(
               [time_size, len(self.class_list.classes)], np.float32
           ),
+          'other_label': np.ones(
+              [time_size, len(self.class_list.classes)], np.float32
+          ),
       }
       outputs['logits']['label'] = self.convert_logits(
           outputs['logits']['label'], self.class_list, self.target_class_list

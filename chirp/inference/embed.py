@@ -72,6 +72,8 @@ def main(unused_argv: Sequence[str]) -> None:
       config.shard_len_s,
   )
   logging.info('Found %d source infos.', len(source_infos))
+  if not source_infos:
+    raise ValueError('No source infos found.')
 
   if _DRY_RUN_ONLY.value:
     dry_run(config, source_infos)
