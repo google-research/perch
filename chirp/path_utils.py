@@ -18,6 +18,7 @@
 General utilities to help with handling paths.
 """
 import os
+from typing import BinaryIO, TextIO
 
 from etils import epath
 
@@ -33,3 +34,7 @@ def get_absolute_path(relative_path: os.PathLike[str] | str) -> epath.Path:
   """
   file_path = epath.Path(__file__).parent / relative_path
   return file_path
+
+
+def open_file(relative_path: os.PathLike[str] | str, mode) -> TextIO | BinaryIO:
+  return open(get_absolute_path(relative_path), mode)

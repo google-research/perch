@@ -22,10 +22,9 @@ import typing
 
 from chirp import path_utils
 from chirp.taxonomy import namespace
+from etils import epath
 
-TAXONOMY_DATABASE_FILENAME = os.fspath(
-    path_utils.get_absolute_path("taxonomy/taxonomy_database.json")
-)
+TAXONOMY_DATABASE_FILENAME = "taxonomy/taxonomy_database.json"
 
 
 @dataclasses.dataclass
@@ -136,7 +135,8 @@ def dump_db(taxonomy_database: TaxonomyDatabase, validate: bool = True) -> str:
 
 @functools.cache
 def load_db(
-    path: str = TAXONOMY_DATABASE_FILENAME, validate: bool = True
+    path: os.PathLike[str] | str = TAXONOMY_DATABASE_FILENAME,
+    validate: bool = True,
 ) -> TaxonomyDatabase:
   """Load the taxonomy database.
 
@@ -151,8 +151,7 @@ def load_db(
   Returns:
     The taxonomy database.
   """
-  fileobj = open(path, "r")
-  with fileobj as f:
+  with path_utils.open_file(path, "r") as f:
     data = json.load(f)
   taxonomy_database = load_taxonomy_database(data)
   if validate:
