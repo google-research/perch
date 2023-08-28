@@ -56,6 +56,5 @@ def get_config() -> config_dict.ConfigDict:
               'frame_size': 32000,
           },
       },
-      'speech_filter_threshold': 0.95,
   }
   return config
