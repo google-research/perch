@@ -55,6 +55,14 @@ class FrontendTest(parameterized.TestCase):
               },
           },
           {
+              "module_type": frontend.SimpleMelspec,
+              "module_kwargs": {
+                  "kernel_size": 128,
+                  "sample_rate": 11_025,
+                  "freq_range": (60, 5_000),
+              },
+          },
+          {
               "module_type": frontend.LearnedFrontend,
               "module_kwargs": {
                   "kernel_size": 256,
@@ -116,6 +124,17 @@ class FrontendTest(parameterized.TestCase):
       },
       {
           "module_type": frontend.MelSpectrogram,
+          "module_kwargs": {
+              "features": 32,
+              "stride": 64,
+              "kernel_size": 64,
+              "sample_rate": 22_025,
+              "freq_range": (60, 10_000),
+          },
+          "atol": 1e-4,
+      },
+      {
+          "module_type": frontend.SimpleMelspec,
           "module_kwargs": {
               "features": 32,
               "stride": 64,
@@ -192,6 +211,52 @@ class FrontendTest(parameterized.TestCase):
     # Check approximate agreement of TFLite output with the jax function.
     output_jax = fe.apply(params, signal)
     np.testing.assert_allclose(output_tflite, output_jax, atol=1e-4)
+
+  def test_simple_melspec(self):
+    frontend_args = {
+        "features": 32,
+        "stride": 64,
+        "kernel_size": 64,
+        "sample_rate": 22_025,
+        "freq_range": (60, 10_000),
+    }
+    simple_mel = frontend.SimpleMelspec(**frontend_args)
+    simple_mel_params = simple_mel.init(random.PRNGKey(0), self.audio)
+    got_simple = simple_mel.apply(simple_mel_params, self.audio)
+
+    # Check that export works without SELECT_TF_OPS.
+    tf_predict = tf.function(
+        jax2tf.convert(
+            lambda signal: simple_mel.apply(simple_mel_params, signal),
+            enable_xla=False,
+        ),
+        input_signature=[
+            tf.TensorSpec(
+                shape=self.audio.shape, dtype=tf.float32, name="input"
+            )
+        ],
+        autograph=False,
+    )
+    converter = tf.lite.TFLiteConverter.from_concrete_functions(
+        [tf_predict.get_concrete_function()], tf_predict
+    )
+    converter.target_spec.supported_ops = [
+        # Look, ma, no tf.lite.OpsSet.SELECT_TF_OPS!
+        tf.lite.OpsSet.TFLITE_BUILTINS,  # enable TensorFlow Lite ops.
+    ]
+    tflite_float_model = converter.convert()
+
+    # Use the converted TFLite model.
+    interpreter = tf.lite.Interpreter(model_content=tflite_float_model)
+    interpreter.allocate_tensors()
+    input_tensor = interpreter.get_input_details()[0]
+    output_tensor = interpreter.get_output_details()[0]
+    interpreter.set_tensor(input_tensor["index"], self.audio)
+    interpreter.invoke()
+    output_tflite = interpreter.get_tensor(output_tensor["index"])
+
+    # Check approximate agreement of TFLite output with the jax function.
+    np.testing.assert_allclose(output_tflite, got_simple, atol=1e-4)
 
 
 if __name__ == "__main__":

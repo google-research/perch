@@ -23,11 +23,12 @@ For some frontends it also defines inverses (e.g., for separation models).
 """
 import dataclasses
 
-
 from chirp import audio_utils
 from chirp import signal
 from chirp.models import cwt
 from flax import linen as nn
+import jax
+from jax import lax
 from jax import numpy as jnp
 from jax import scipy as jsp
 
@@ -238,7 +239,7 @@ class MelSpectrogram(Frontend):
 
   kernel_size: int
   sample_rate: int
-  freq_range: tuple[int, int]
+  freq_range: tuple[float, float]
   power: float = 2.0
   scaling_config: ScalingConfig | None = None
   nfft: int | None = None
@@ -264,8 +265,58 @@ class MelSpectrogram(Frontend):
     mel_matrix = signal.linear_to_mel_weight_matrix(
         self.features, num_spectrogram_bins, self.sample_rate, *self.freq_range
     )
-    mel_spectrograms = magnitude_spectrograms @ mel_matrix
-    return self._magnitude_scale(mel_spectrograms)
+    output = magnitude_spectrograms @ mel_matrix
+    return self._magnitude_scale(output)
+
+
+class SimpleMelspec(Frontend):
+  """Minimal RFFT-based Melspec implementation."""
+
+  kernel_size: int
+  sample_rate: int
+  freq_range: tuple[int, int]
+  power: float = 2.0
+  scaling_config: ScalingConfig | None = None
+  nfft: int | None = None
+
+  @nn.compact
+  def __call__(self, inputs: jnp.ndarray, train: bool = True) -> jnp.ndarray:
+    flat_inputs = jnp.reshape(inputs, (-1,) + inputs.shape[-1:] + (1,))
+    # Note that Scipy uses VALID padding, with additional padding logic.
+    # As a result, the outputs are numerically inequivalent.
+    framed = jax.lax.conv_general_dilated_patches(
+        flat_inputs,
+        (self.kernel_size,),
+        (self.stride,),
+        "SAME",
+        dimension_numbers=("NTC", "OIT", "NTC"),
+    )
+
+    window = jnp.hanning(self.kernel_size)
+    # The scipy stft default scaling resolves down to this...
+    # For the stft, the scalar is squared then sqrt'ed.
+    window *= 1.0 / window.sum()
+    windowed = window[jnp.newaxis, jnp.newaxis, :] * framed
+    stfts = jnp.fft.rfft(windowed, n=self.nfft, axis=-1)
+    mags = stfts.real**2 + stfts.imag**2
+    if self.power == 1.0:
+      mags = jnp.sqrt(mags)
+    elif self.power == 2.0:
+      pass
+    else:
+      mags = mags ** (self.power / 2.0)
+
+    n_bins = mags.shape[-1]
+    mel_matrix = signal.linear_to_mel_weight_matrix(
+        num_mel_bins=self.features,
+        num_spectrogram_bins=n_bins,
+        sample_rate=self.sample_rate,
+        lower_edge_hertz=self.freq_range[0],
+        upper_edge_hertz=self.freq_range[1],
+    )
+    output = mags @ mel_matrix
+    output = jnp.reshape(output, inputs.shape[:-1] + output.shape[-2:])
+    return self._magnitude_scale(output)
 
 
 class MFCC(Frontend):

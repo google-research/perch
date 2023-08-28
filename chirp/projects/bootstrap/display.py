@@ -34,7 +34,7 @@ def get_melspec_layer(sample_rate: int, root=4.0):
   """Creates a melspec layer for easy visualization."""
   # Usage: melspec_layer.apply({}, audio)
   stride = sample_rate // 100
-  melspec_layer = frontend.MelSpectrogram(  # pytype: disable=wrong-arg-types  # typed-pandas
+  melspec_layer = frontend.MelSpectrogram(
       96,
       stride,
       4 * stride,
