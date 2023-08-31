@@ -17,7 +17,7 @@
 
 import dataclasses
 import tempfile
-from typing import Any, Callable
+from typing import Any, Callable, cast
 import warnings
 
 from absl import logging
@@ -243,7 +243,12 @@ class Soundevents(tfds.core.GeneratorBasedBuilder):
     source_info = fsu.apply_sequence(
         source_info, self.builder_config.data_processing_query
     )
-    return source_info  # pytype: disable=bad-return-type  # typed-pandas
+    if source_info is pd.Series:
+      source_info = source_info.to_frame()
+    else:
+      assert type(source_info) is pd.DataFrame
+      source_info = cast(pd.DataFrame, source_info)
+    return source_info
 
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
     # Defined as part of the tfds API for dividing the dataset into splits.
