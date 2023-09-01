@@ -29,7 +29,7 @@ training small classifiers or evaluating clustering methods.
 import collections
 import dataclasses
 import time
-from typing import Dict, Optional, Sequence, Tuple
+from typing import Dict, Sequence, Tuple
 
 from chirp import audio_utils
 from chirp.inference import interface
@@ -41,51 +41,81 @@ import tqdm
 
 @dataclasses.dataclass
 class MergedDataset:
-  """In-memory dataset of labeled audio with embeddings."""
+  """In-memory dataset of labeled audio with embeddings.
 
-  base_dir: str
-  embedding_model: interface.EmbeddingModel
-  num_splits: int = 5
-  time_pooling: str = 'mean'
-  exclude_classes: Sequence[str] = ()
-  exclude_eval_classes: Sequence[str] = ()
-  negative_label: str = 'unknown'
-  load_audio: bool = True
-  target_sample_rate: int = -2
+  Attributes:
+    data: Dictionary of embedding outputs.
+    num_classes: Number of classes.
+    embedding_dim: Dimension of embeddings.
+    labels: Tuple with the labels for each file.
+  """
 
-  # The following are populated automatically.
-  data: Optional[Dict[str, np.ndarray]] = None
-  num_classes: Optional[int] = None
-  data_sample_rate: Optional[int] = None
-  embedding_dim: Optional[int] = None
-  labels: Optional[Tuple[str, ...]] = None
+  # The following are populated automatically from one of two classmethods.
+  data: Dict[str, np.ndarray]
+  num_classes: int
+  embedding_dim: int
+  labels: Tuple[str, ...]
 
-  def __post_init__(self):
+  @classmethod
+  def from_folder_of_folders(
+      cls,
+      base_dir: str,
+      embedding_model: interface.EmbeddingModel,
+      time_pooling: str = 'mean',
+      exclude_classes: Sequence[str] = (),
+      load_audio: bool = True,
+      target_sample_rate: int = -2,
+      audio_file_pattern: str = '*',
+  ) -> 'MergedDataset':
+    """Generating MergedDataset via folder-of-folders method.
+
+    Args:
+      base_dir: Base directory where either folder-of-folders of audio or
+        tfrecord embeddings are stored.
+      embedding_model: EmbeddingModel used to produce embeddings.
+      time_pooling: Key for time pooling strategy.
+      exclude_classes: Classes to skip.
+      load_audio: Whether to load audio into memory.
+      target_sample_rate: Resample loaded audio to this sample rate. If -1,
+        loads raw audio with no resampling. If -2, uses the embedding_model
+        sample rate.
+      audio_file_pattern: The glob pattern to use for finding audio files within
+        the sub-folders.
+
+    Returns:
+      MergedDataset
+    """
+    print('Embedding from Folder of Folders...')
+
     st = time.time()
     labels, merged = embed_dataset(
-        self.base_dir,
-        self.embedding_model,
-        self.time_pooling,
-        self.exclude_classes,
-        self.load_audio,
-        self.target_sample_rate,
+        base_dir=base_dir,
+        embedding_model=embedding_model,
+        time_pooling=time_pooling,
+        exclude_classes=exclude_classes,
+        load_audio=load_audio,
+        target_sample_rate=target_sample_rate,
+        audio_file_pattern=audio_file_pattern,
     )
     elapsed = time.time() - st
     print(f'\n...embedded dataset in {elapsed:5.2f}s...')
-    self.data = merged
-    self.embedding_dim = merged['embeddings'].shape[-1]
+    data = merged
+    embedding_dim = merged['embeddings'].shape[-1]
 
-    self.labels = tuple(labels)
-    self.num_classes = len(self.labels)
-    print(f'    found {self.num_classes} classes.')
+    labels = tuple(labels)
+    num_classes = len(labels)
+    print(f'    found {num_classes} classes.')
     class_counts = collections.defaultdict(int)
     for cl, cl_str in zip(merged['label'], merged['label_str']):
       class_counts[(cl, cl_str)] += 1
     for (cl, cl_str), count in sorted(class_counts.items()):
       print(f'    class {cl_str} / {cl} : {count}')
-    self.class_names = {
-        cl_str: cl for cl, cl_str in zip(merged['label'], merged['label_str'])
-    }
+    return cls(
+        data=data,
+        embedding_dim=embedding_dim,
+        num_classes=num_classes,
+        labels=labels,
+    )
 
   def create_random_train_test_split(
       self,
