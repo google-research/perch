@@ -238,7 +238,7 @@ class MelSpectrogram(Frontend):
 
   kernel_size: int
   sample_rate: int
-  freq_range: tuple[int, int]
+  freq_range: tuple[float, float]
   power: float = 2.0
   scaling_config: ScalingConfig | None = None
   nfft: int | None = None
