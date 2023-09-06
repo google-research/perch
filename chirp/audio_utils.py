@@ -77,6 +77,7 @@ def load_audio_file(
     # librosa outputs lots of warnings which we can safely ignore when
     # processing all Xeno-Canto files and PySoundFile is unavailable.
     with warnings.catch_warnings():
+      # Blah blah this warning is dumb.
       warnings.simplefilter('ignore')
       audio, _ = librosa.load(
           f.name,
