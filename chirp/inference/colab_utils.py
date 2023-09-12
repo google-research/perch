@@ -15,14 +15,13 @@
 
 """Helper functions for user-facing colab notebooks."""
 
-import json
-import sys
 import warnings
 
 from absl import logging
 from chirp import config_utils
 from chirp.configs import config_globals
 from chirp.inference import embed_lib
+import numpy as np
 import tensorflow as tf
 
 
@@ -45,3 +44,14 @@ def initialize(use_tf_gpu: bool = True, disable_warnings: bool = True):
   else:
     for gpu in tf.config.list_physical_devices('GPU'):
       tf.config.experimental.set_memory_growth(gpu, True)
+
+
+def prstats(title: str, ar: np.ndarray):
+  """Print summary statistics for an array."""
+  tmpl = (
+      '% 16s : \tshape: % 16s\tmin: %6.2f\tmean: %6.2f\tmax: %6.2f\tstd: %6.2f'
+  )
+  print(
+      tmpl
+      % (title, np.shape(ar), np.min(ar), np.mean(ar), np.max(ar), np.std(ar))
+  )

@@ -119,16 +119,33 @@ class MergedDataset:
 
   def create_random_train_test_split(
       self,
-      examples_per_class: int,
+      train_ratio: float | None,
+      train_examples_per_class: int | None,
       seed: int,
       exclude_classes: Sequence[int] = (),
       exclude_eval_classes: Sequence[int] = (),
   ):
     """Generate a train/test split with a target number of train examples."""
+    if train_ratio is None and train_examples_per_class is None:
+      raise ValueError(
+          'Must specify one of train_ratio and examples_per_class.'
+      )
+    elif train_ratio is not None and train_examples_per_class is not None:
+      raise ValueError(
+          'Must specify only one of train_ratio and examples_per_class.'
+      )
+
     # Use a seeded shuffle to get a random ordering of the data.
     locs = list(range(self.data['label'].shape[0]))
     np.random.seed(seed)
     np.random.shuffle(locs)
+
+    classes = set(self.data['label'])
+    class_counts = {cl: np.sum(self.data['label'] == cl) for cl in classes}
+    if train_examples_per_class is not None:
+      class_limits = {cl: train_examples_per_class for cl in classes}
+    else:
+      class_limits = {cl: train_ratio * class_counts[cl] for cl in classes}
 
     classes = set(self.data['label'])
     class_locs = {cl: [] for cl in classes}
@@ -138,7 +155,7 @@ class MergedDataset:
       cl = self.data['label'][loc]
       if cl in exclude_classes:
         continue
-      if len(class_locs[cl]) < examples_per_class:
+      if len(class_locs[cl]) < class_limits[cl]:
         class_locs[cl].append(loc)
         train_locs.append(loc)
       elif cl not in exclude_eval_classes:
