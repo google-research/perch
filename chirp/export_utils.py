@@ -101,6 +101,8 @@ class Jax2TfModelWrapper(tf.Module):
       train_step: int,
       class_lists: dict[str, namespace.ClassList] | None = None,
       export_tf_lite: bool = True,
+      tf_lite_dtype: str = 'float16',
+      tf_lite_select_ops: bool = True,
   ):
     """Export converted TF models."""
     fake_inputs = self.get_tf_zero_inputs()
@@ -135,10 +137,22 @@ class Jax2TfModelWrapper(tf.Module):
         [concrete_fn], self
     )
 
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    if tf_lite_dtype == 'float16':
+      converter.target_spec.supported_types = [tf.float16]
+    elif tf_lite_dtype == 'float32':
+      converter.target_spec.supported_types = [tf.float32]
+    elif tf_lite_dtype == 'auto':
+      # Note that the default with optimizations is int8, which requires further
+      # tuning.
+      pass
+    else:
+      raise ValueError(f'Unsupported dtype: {tf_lite_dtype}')
     converter.target_spec.supported_ops = [
         tf.lite.OpsSet.TFLITE_BUILTINS,  # enable TensorFlow Lite ops.
-        tf.lite.OpsSet.SELECT_TF_OPS,  # enable TensorFlow ops.
     ]
+    if tf_lite_select_ops:
+      converter.target_spec.supported_ops += [tf.lite.OpsSet.SELECT_TF_OPS]
     tflite_float_model = converter.convert()
 
     if not tf.io.gfile.exists(workdir):
@@ -147,4 +161,5 @@ class Jax2TfModelWrapper(tf.Module):
       f.write(tflite_float_model)
     with tf.io.gfile.GFile(os.path.join(workdir, 'tflite_ckpt.txt'), 'w') as f:
       f.write(f'train_state.step: {train_step}\n')
+
     logging.info('Export complete.')
