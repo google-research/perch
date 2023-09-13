@@ -104,7 +104,7 @@ def get_pcen_melspec_config(
   kernel_size, nfft = config_utils.get_melspec_defaults(config)
 
   return _c(
-      'frontend.MelSpectrogram',
+      'frontend.SimpleMelspec',
       features=config.get_ref('num_channels'),
       stride=frontend_stride,
       kernel_size=kernel_size,
@@ -125,7 +125,7 @@ def get_new_pcen_melspec_config(
   kernel_size, nfft = config_utils.get_melspec_defaults(config)
 
   return _c(
-      'frontend.MelSpectrogram',
+      'frontend.SimpleMelspec',
       features=config.get_ref('num_channels'),
       stride=frontend_stride,
       kernel_size=kernel_size,
@@ -165,7 +165,7 @@ def get_bio_pcen_melspec_config(
   kernel_size, nfft = config_utils.get_melspec_defaults(config)
 
   return _c(
-      'frontend.MelSpectrogram',
+      'frontend.SimpleMelspec',
       features=config.get_ref('num_channels'),
       stride=frontend_stride,
       kernel_size=kernel_size,

@@ -31,6 +31,7 @@ class ClassifierMetrics:
   recall: float
   cmap_value: float
   class_maps: dict[str, float]
+  test_logits: dict[str, np.ndarray]
 
 
 def get_two_layer_model(
@@ -94,6 +95,12 @@ def train_from_locs(
   test_labels_hot = merged.data['label_hot'][test_locs]
   test_labels = merged.data['label'][test_locs]
 
+  # Create a dictionary of test logits for each class.
+  test_logits_dict = {}
+  for k in set(test_labels):
+    lbl_locs = np.argwhere(test_labels == k)[:, 0]
+    test_logits_dict[k] = test_logits[lbl_locs, k]
+
   top_logit_idxs = np.argmax(test_logits, axis=1)
   top1acc = np.mean(test_labels == top_logit_idxs)
   # TODO(tomdenton): Implement recall@precision metric.
@@ -102,14 +109,20 @@ def train_from_locs(
   cmap_value = metrics.cmap(test_logits, test_labels_hot)['macro']
   auc_roc = metrics.roc_auc(test_logits, test_labels_hot)
   return ClassifierMetrics(
-      top1acc, auc_roc['macro'], recall, cmap_value, auc_roc['individual']
+      top1acc,
+      auc_roc['macro'],
+      recall,
+      cmap_value,
+      auc_roc['individual'],
+      test_logits_dict,
   )
 
 
 def train_embedding_model(
     model: tf.keras.Model,
     merged: data_lib.MergedDataset,
-    num_training_examples: int,
+    train_ratio: float | None,
+    train_examples_per_class: int | None,
     num_epochs: int,
     random_seed: int,
     batch_size: int,
@@ -117,7 +130,7 @@ def train_embedding_model(
 ) -> ClassifierMetrics:
   """Trains a classification model over embeddings and labels."""
   train_locs, test_locs, _ = merged.create_random_train_test_split(
-      num_training_examples, random_seed
+      train_ratio, train_examples_per_class, random_seed
   )
   test_metrics = train_from_locs(
       model=model,
