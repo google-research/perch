@@ -146,7 +146,21 @@ class SeparateEmbedModel(interface.EmbeddingModel):
 
 @dataclasses.dataclass
 class BirbSepModelTF1(interface.EmbeddingModel):
-  """Separation model from the Bird MixIT paper."""
+  """Separation model from the Bird MixIT paper.
+
+  Example usage:
+  ```
+  from chirp.inference import models
+  birbsep1_config = config_dict.ConfigDict({
+    'model_path': $MODEL_PATH,
+    'window_size_s': 60.0,
+    'keep_raw_channel': False,
+    'sample_rate': 22050,
+  })
+  birbsep1 = models.BirbSepModelTF1.from_config(birbsep1_config)
+  outputs = birbsep1.embed($SOME_AUDIO)
+  ```
+  """
 
   model_path: str
   window_size_s: float
@@ -156,10 +170,22 @@ class BirbSepModelTF1(interface.EmbeddingModel):
   output_tensor_ns: Any
 
   @classmethod
+  def _find_checkpoint(cls, model_path: str) -> str:
+    # Publicly released model does not have a checkpoints directory file.
+    ckpt = None
+    for ckpt in sorted(
+        tuple(epath.Path(model_path).glob('model.ckpt-*.index'))
+    ):
+      ckpt = ckpt.as_posix()[: -len('.index')]
+    if ckpt is None:
+      raise FileNotFoundError('Could not find checkpoint file.')
+    return ckpt
+
+  @classmethod
   def from_config(cls, config: config_dict.ConfigDict) -> 'BirbSepModelTF1':
     """Load model files and create TF1 session graph."""
     metagraph_path_ns = epath.Path(config.model_path) / 'inference.meta'
-    checkpoint_path = tf.train.latest_checkpoint(config.model_path)
+    checkpoint_path = cls._find_checkpoint(config.model_path)
     graph_ns = tf.Graph()
     sess_ns = tf1.Session(graph=graph_ns)
     with graph_ns.as_default():

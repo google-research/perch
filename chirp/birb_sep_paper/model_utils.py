@@ -22,6 +22,7 @@ import os
 
 from absl import logging
 from chirp.birb_sep_paper import audio_ops
+from etils import epath
 from ml_collections import config_dict
 import numpy as np
 import tensorflow
@@ -156,10 +157,20 @@ def map_k(labels_onehot, logits, k=1, name=''):
   return final_map_k
 
 
+def _find_checkpoint(model_path: str) -> str:
+  # Publicly released model does not have a checkpoints directory file.
+  ckpt = None
+  for ckpt in sorted(tuple(epath.Path(model_path).glob('model.ckpt-*.index'))):
+    ckpt = ckpt.as_posix()[: -len('.index')]
+  if ckpt is None:
+    raise FileNotFoundError('Could not find checkpoint file.')
+  return ckpt
+
+
 def load_separation_model(model_path):
   """Loads a separation model graph for inference."""
   metagraph_path_ns = os.path.join(model_path, 'inference.meta')
-  checkpoint_path = tf.train.latest_checkpoint(model_path)
+  checkpoint_path = _find_checkpoint(model_path)
   graph_ns = tf.Graph()
   sess_ns = tf.compat.v1.Session(graph=graph_ns)
   with graph_ns.as_default():
