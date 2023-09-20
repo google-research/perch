@@ -1,4 +1,4 @@
-# Chirp
+# Perch
 
 ![CI](https://github.com/google-research/perch/actions/workflows/ci.yml/badge.svg)
 
