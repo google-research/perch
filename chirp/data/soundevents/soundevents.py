@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The Perch Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,31 +35,31 @@ import tensorflow_datasets as tfds
 _DESCRIPTION = """
 Sound events dataset from FSD50K Audioset dataset.
 
-FSD50K is an open dataset of human-labeled sound events containing 51,197 
-Freesound clips unequally distributed in 200 classes drawn from the 
+FSD50K is an open dataset of human-labeled sound events containing 51,197
+Freesound clips unequally distributed in 200 classes drawn from the
 AudioSet Ontology. (https://zenodo.org/record/4060432#.Y4PE5-xKjzc)
 
-Freesound Dataset 50k (or FSD50K for short) is an open dataset of human-labeled 
-sound events containing 51,197 Freesound clips unequally distributed in 200 
-classes drawn from the AudioSet Ontology 
+Freesound Dataset 50k (or FSD50K for short) is an open dataset of human-labeled
+sound events containing 51,197 Freesound clips unequally distributed in 200
+classes drawn from the AudioSet Ontology
 
-We use a slightly different format than AudioSet for the naming of class labels 
-in order to avoid potential problems with spaces, commas, etc. 
-Example: Accelerating_and_revving_and_vroom instead of the original 
-Accelerating, revving, vroom. You can go back to the original AudioSet naming 
-using the information provided in vocabulary.csv (class label and mid for the 
+We use a slightly different format than AudioSet for the naming of class labels
+in order to avoid potential problems with spaces, commas, etc.
+Example: Accelerating_and_revving_and_vroom instead of the original
+Accelerating, revving, vroom. You can go back to the original AudioSet naming
+using the information provided in vocabulary.csv (class label and mid for the
 200 classes of FSD50K) and the AudioSet Ontology specification.
 
-Audioset  consists of an expanding ontology of 632 audio event classes and a 
-collection of 2,084,320 human-labeled 10-second sound clips drawn from 
+Audioset  consists of an expanding ontology of 632 audio event classes and a
+collection of 2,084,320 human-labeled 10-second sound clips drawn from
 YouTube videos (https://research.google.com/audioset/index.html)
 
-The AudioSet ontology is a collection of sound events organized in a hierarchy. 
+The AudioSet ontology is a collection of sound events organized in a hierarchy.
 https://research.google.com/audioset/ontology/index.html
 
-The AudioSet dataset is a large-scale collection of human-labeled 10-second 
-sound clips drawn from YouTube videos. To collect all our data we worked with 
-human annotators who verified the presence of sounds they heard within 
+The AudioSet dataset is a large-scale collection of human-labeled 10-second
+sound clips drawn from YouTube videos. To collect all our data we worked with
+human annotators who verified the presence of sounds they heard within
 YouTube segments. (https://research.google.com/audioset/dataset/index.html)
 
 """
@@ -67,7 +67,7 @@ YouTube segments. (https://research.google.com/audioset/dataset/index.html)
 _CITATION = """
 @inproceedings{fonseca2022FSD50K,
   title={{FSD50K}: an open dataset of human-labeled sound events},
-  author={Fonseca, Eduardo and Favory, Xavier and Pons, Jordi and Font, Frederic 
+  author={Fonseca, Eduardo and Favory, Xavier and Pons, Jordi and Font, Frederic
   and Serra, Xavier},
   journal={IEEE/ACM Transactions on Audio, Speech, and Language Processing},
   volume={30},
@@ -188,7 +188,7 @@ class Soundevents(tfds.core.GeneratorBasedBuilder):
             'class_name': tfds.features.Text(),
         }),
         supervised_keys=('audio', 'label'),
-        homepage='https://github.com/google-research/chirp',
+        homepage='https://github.com/google-research/perch',
         citation=_CITATION,
     )
 

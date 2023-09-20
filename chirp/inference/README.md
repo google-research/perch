@@ -50,7 +50,7 @@ labeled dataset, and iterate quickly.
 
 ### Installation (Linux)
 
-Install the main repository, following the [instructions](https://github.com/google-research/chirp) in the main README.md, and check that the tests pass.
+Install the main repository, following the [instructions](https://github.com/google-research/perch) in the main README.md, and check that the tests pass.
 
 Separately, install [Jupyter](https://jupyter.org/). Once Jupyter and Chirp are
 installed, use the command line to navigate to the directory where Chirp is

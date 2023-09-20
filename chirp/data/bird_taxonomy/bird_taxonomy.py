@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The Perch Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -336,7 +336,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
             'sound_type': tfds.features.Text(),
         }),
         supervised_keys=('audio', 'label'),
-        homepage='https://github.com/google-research/chirp',
+        homepage='https://github.com/google-research/perch',
         citation=_CITATION,
     )
 

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Chirp Authors.
+# Copyright 2023 The Perch Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -173,7 +173,7 @@ def get_config() -> config_dict.ConfigDict:
   # and each point to a local function, callable, or to one of the functions
   # provided in
 
-  # google-research/chirp/eval/eval_lib.py.
+  # google-research/perch/eval/eval_lib.py.
   config.create_species_query = None
 
   # Determines the ordering of search results for use in average-precision based

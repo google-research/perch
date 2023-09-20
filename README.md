@@ -1,6 +1,6 @@
 # Chirp
 
-![CI](https://github.com/google-research/chirp/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/google-research/perch/actions/workflows/ci.yml/badge.svg)
 
 A bioacoustics research project.
 
