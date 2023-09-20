@@ -178,7 +178,9 @@ class EmbedFn(beam.DoFn):
   ) -> tf.train.Example:
     """Embed audio and create a TFExample."""
     if self.embedding_model is None:
-      raise ValueError('Embedding model undefined.')
+      raise ValueError(
+          'Embedding model undefined; you must run setup to load the model.'
+      )
     model_outputs = self.embedding_model.embed(audio)
     if self.logits_head is not None:
       # Update model outputs with logits from the secondary classifier.
