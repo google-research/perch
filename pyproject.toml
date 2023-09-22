@@ -6,31 +6,32 @@ authors = ["Chirp Team <chirp-bio@google.com>"]
 license = "Apache 2.0"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.11"
-absl-py = "^1.3.0"
-apache-beam = {version = "^2.46.0", extras = ["gcp"]}
-clu = "^0.0.8"
-flax = "^0.6.7"
-jax = "^0.4.12"
+python = ">=3.10,<3.12"
+absl-py = "^1.4.0"
+apache-beam = {version = "^2.50.0", extras = ["gcp"]}
+clu = "^0.0.9"
+flax = "^0.7.4"
+jax = "^0.4.16"
 ml-collections = "^0.1.1"
-optax = "^0.1.4"
+optax = "^0.1.7"
 # Note that tensorflow and tensorflow-io versions must be synchronized.
 # See: https://github.com/tensorflow/io#tensorflow-version-compatibility
-tensorflow = "=2.11.0"
-tensorflow-io = "=0.31"
-tensorflow-datasets = {version = "^4.8.0", extras = ["dev"]}
-pandas = {version = "2.0.2", extras=["gcp"]}
-etils = {version = "^0.9.0", extras = ["epath"]}
+tensorflow = "=2.13.0"
+tensorflow-io = "=0.33"
+tensorflow-datasets = {version = "^4.9.3", extras = ["dev"]}
+pandas = {version = "^2.1.1", extras=["gcp"]}
+etils = {version = "^1.5.0", extras = ["epath"]}
 ratelimiter = "^1.2.0.post0"
 SPARQLWrapper = "^2.0.0"
 scenic = {git = "https://github.com/google-research/scenic.git"}
-tensorflow-hub = "^0.12.0"
+tensorflow-hub = "^0.14.0"
 imageio = "^2.5.0"
 matplotlib = "^3.6.1"
+notebook = "^7.0.4"
 
 [tool.poetry.group.dev.dependencies]
-librosa = "^0.9.2"
-numpy = "^1.22.4"
+librosa = "^0.10.1"
+numpy = "^1.24.0"
 
 [build-system]
 requires = ["poetry-core>=1.5.0"]
