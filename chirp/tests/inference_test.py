@@ -258,6 +258,33 @@ class InferenceTest(parameterized.TestCase):
         embedding.shape, got_example[tf_examples.EMBEDDING_SHAPE]
     )
 
+  def test_frame_audio(self):
+    """Test that EmbedModel correctly frames a short audio chunk."""
+    model_kwargs = {
+        'sample_rate': 200,
+        'embedding_size': 128,
+        'make_embeddings': True,
+        'make_logits': False,
+        'make_separated_audio': False,
+        'do_frame_audio': True,
+        'window_size_s': 5.0,
+    }
+    embed_fn = embed_lib.EmbedFn(
+        write_embeddings=True,
+        write_logits=False,
+        write_separated_audio=False,
+        write_raw_audio=False,
+        model_key='placeholder_model',
+        model_config=model_kwargs,
+        min_audio_s=1.0,
+        file_id_depth=0,
+    )
+    embed_fn.setup()
+    self.assertIsNotNone(embed_fn.embedding_model)
+
+    framed = embed_fn.embedding_model.frame_audio(np.ones(100), 1.0, 5.0)
+    self.assertEqual(framed.shape, (1, 200))
+
   def test_tfrecord_multiwriter(self):
     output_dir = epath.Path(tempfile.TemporaryDirectory().name)
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -650,6 +650,7 @@ class PlaceholderModel(interface.EmbeddingModel):
   make_embeddings: bool = True
   make_logits: bool = True
   make_separated_audio: bool = True
+  do_frame_audio: bool = False
   target_class_list: namespace.ClassList | None = None
   window_size_s: float = 1.0
   hop_size_s: float = 1.0
@@ -664,6 +665,10 @@ class PlaceholderModel(interface.EmbeddingModel):
 
   def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
     outputs = {}
+    if self.do_frame_audio:
+      audio_array = self.frame_audio(
+          audio_array, self.window_size_s, self.hop_size_s
+      )
     time_size = audio_array.shape[0] // int(
         self.window_size_s * self.sample_rate
     )
