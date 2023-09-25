@@ -32,6 +32,8 @@ import tensorflow as tf
 import tensorflow.compat.v1 as tf1
 import tensorflow_hub as hub
 
+PERCH_TF_HUB_URL = 'https://tfhub.dev/google/bird-vocalization-classifier/'
+
 
 def model_class_map() -> dict[str, Any]:
   """Get the mapping of model keys to classes."""
@@ -258,16 +260,49 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   batchable: bool
   target_class_list: namespace.ClassList | None = None
   target_peak: float | None = 0.25
+  tfhub_version: int | None = None
+
+  @classmethod
+  def is_batchable(cls, model: Any) -> bool:
+    sig = model.signatures['serving_default']
+    return sig.inputs[0].shape[0] is None
+
+  @classmethod
+  def from_tfhub(cls, config: config_dict.ConfigDict) -> 'TaxonomyModelTF':
+    if config.tfhub_version is None:
+      raise ValueError('tfhub_version is required to load from TFHub.')
+    if config.model_path:
+      raise ValueError(
+          'Exactly one of tfhub_version and model_path should be set.'
+      )
+
+    model_url = f'{PERCH_TF_HUB_URL}/{config.tfhub_version}'
+    # This model behaves exactly like the usual saved_model.
+    model = hub.load(model_url)
+
+    # Check whether the model support polymorphic batch shape.
+    batchable = cls.is_batchable(model)
+
+    # Get the labels CSV from TFHub.
+    labels_path = epath.Path(hub.resolve(f'{model_url}/assets/label.csv'))
+    with labels_path.open('r') as f:
+      class_list = namespace.ClassList.from_csv(f)
+    return cls(
+        model=model, class_list=class_list, batchable=batchable, **config
+    )
 
   @classmethod
   def from_config(cls, config: config_dict.ConfigDict) -> 'TaxonomyModelTF':
     logging.info('Loading taxonomy model...')
 
+    if config.tfhub_version is not None:
+      return cls.from_tfhub(config)
+
     base_path = epath.Path(config.model_path)
     if (base_path / 'saved_model.pb').exists() and (
         base_path / 'assets'
     ).exists():
-      # This looks like a TFHub downloaded model.
+      # This looks like a downloaded TFHub model.
       model_path = base_path
       label_csv_path = epath.Path(config.model_path) / 'assets' / 'label.csv'
     else:
@@ -280,8 +315,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
       class_list = namespace.ClassList.from_csv(f)
 
     # Check whether the model support polymorphic batch shape.
-    sig = model.signatures['serving_default']
-    batchable = sig.inputs[0].shape[0] is None
+    batchable = cls.is_batchable(model)
     return cls(
         model=model, class_list=class_list, batchable=batchable, **config
     )
