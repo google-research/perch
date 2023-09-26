@@ -121,7 +121,7 @@ def quantizer_loss(
   del unused_kwargs
   # [bsz, sz, csz] or [bsz, sz, 1] (depending on the quantizer).
   quant_loss = outputs.quantization_loss
-  quant_loss = jnp.squeeze(jnp.mean(quant_loss, -1))
+  quant_loss = jnp.squeeze(jnp.mean(quant_loss, -1))  # pytype: disable=wrong-arg-types  # jnp-type
   # [bsz, sz].
   return quant_loss * quant_loss_mult
 

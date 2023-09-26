@@ -676,4 +676,4 @@ class HuBERTModel(nn.Module):
         jnp.stack(quant_losses, axis=0), axis=0
     )
 
-    return HubertOutput(**model_outputs)
+    return HubertOutput(**model_outputs)  # pytype: disable=wrong-arg-types  # jnp-type

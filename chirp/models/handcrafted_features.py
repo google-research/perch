@@ -54,7 +54,7 @@ class HandcraftedFeatures(nn.Module):
     del use_running_average
 
     # Reshape from [B, T, D, 1] to [B, T, D]
-    outputs = jnp.squeeze(inputs, axis=[-1])
+    outputs = jnp.squeeze(inputs, axis=[-1])  # pytype: disable=wrong-arg-types  # jnp-type
 
     if self.compute_mfccs:
       outputs = jsp.fft.dct(
