@@ -32,7 +32,7 @@ import tensorflow as tf
 import tensorflow.compat.v1 as tf1
 import tensorflow_hub as hub
 
-PERCH_TF_HUB_URL = 'https://tfhub.dev/google/bird-vocalization-classifier/'
+PERCH_TF_HUB_URL = 'https://tfhub.dev/google/bird-vocalization-classifier'
 
 
 def model_class_map() -> dict[str, Any]:
@@ -269,7 +269,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
 
   @classmethod
   def from_tfhub(cls, config: config_dict.ConfigDict) -> 'TaxonomyModelTF':
-    if config.tfhub_version is None:
+    if not hasattr(config, 'tfhub_version') or config.tfhub_version is None:
       raise ValueError('tfhub_version is required to load from TFHub.')
     if config.model_path:
       raise ValueError(
@@ -295,7 +295,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   def from_config(cls, config: config_dict.ConfigDict) -> 'TaxonomyModelTF':
     logging.info('Loading taxonomy model...')
 
-    if config.tfhub_version is not None:
+    if hasattr(config, 'tfhub_version') and config.tfhub_version is not None:
       return cls.from_tfhub(config)
 
     base_path = epath.Path(config.model_path)
