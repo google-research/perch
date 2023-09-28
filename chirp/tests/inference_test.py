@@ -323,6 +323,59 @@ class InferenceTest(parameterized.TestCase):
     got_ids = sorted([ex['filename'].decode('utf-8') for ex in got_examples])
     self.assertSequenceEqual(want_ids, got_ids)
 
+  def test_get_existing_source_ids(self):
+    output_dir = epath.Path(tempfile.TemporaryDirectory().name)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fake_examples = []
+    for idx in range(20):
+      outputs = interface.InferenceOutputs(
+          embeddings=np.zeros([10, 2, 8], dtype=np.float32), batched=False
+      )
+      fake_examples.append(
+          tf_examples.model_outputs_to_tf_example(
+              model_outputs=outputs,
+              file_id=f'fake_audio_{idx:02d}',
+              audio=np.zeros([100]),
+              timestamp_offset_s=float(idx),
+              write_embeddings=False,
+              write_logits=False,
+              write_separated_audio=False,
+              write_raw_audio=False,
+          )
+      )
+    with tf_examples.EmbeddingsTFRecordMultiWriter(
+        output_dir.as_posix()
+    ) as writer:
+      for ex in fake_examples:
+        serialized = ex.SerializeToString()
+        writer.write(serialized)
+
+    actual_ids = embed_lib.get_existing_source_ids(output_dir, 'embeddings-*')
+
+    expected_ids = set(
+        [
+            embed_lib.SourceId(f'fake_audio_{idx:02d}', float(idx))
+            for idx in range(20)
+        ]
+    )
+    self.assertSetEqual(expected_ids, actual_ids)
+
+  def test_get_new_source_ids(self):
+    all_infos = [
+        embed_lib.SourceInfo(f'fake_audio_{idx:02d}', idx, shard_len_s=1.0)
+        for idx in range(20)
+    ]
+    existing_ids = set(
+        [
+            embed_lib.SourceId(f'fake_audio_{idx:02d}', float(idx))
+            for idx in range(10)
+        ]
+    )
+
+    actual_infos = embed_lib.get_new_source_infos(all_infos, existing_ids, 0)
+    expected_infos = all_infos[10:]
+    self.assertSequenceEqual(expected_infos, actual_infos)
+
   @parameterized.product(
       config_name=(
           'raw_soundscapes',

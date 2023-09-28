@@ -19,7 +19,7 @@ import dataclasses
 import importlib
 import json
 import os
-from typing import Any, Sequence
+from typing import Any, Sequence, Set
 
 from absl import logging
 import apache_beam as beam
@@ -54,6 +54,16 @@ class SourceInfo:
     return file_id
 
 
+@dataclasses.dataclass(frozen=True)
+class SourceId:
+  """Source information identifier."""
+
+  # This filepath is a truncated version of the SourceInfo.filepath using
+  # file_id().
+  filepath: str
+  offset: float
+
+
 def create_source_infos(
     source_file_patterns: Sequence[str],
     num_shards_per_file: int,
@@ -71,6 +81,41 @@ def create_source_infos(
     for i in range(num_shards_per_file):
       source_file_splits.append(SourceInfo(source.as_posix(), i, shard_len_s))
   return source_file_splits
+
+
+def get_existing_source_ids(
+    output_dir: epath.Path, file_pattern: str
+) -> Set[SourceId]:
+  """Return existing SourceInfos from the matching output dir and pattern."""
+  existing_source_ids = set([])
+  if not output_dir.exists:
+    return existing_source_ids
+  filenames = [fn for fn in output_dir.glob(file_pattern)]
+  dataset = tf.data.TFRecordDataset(filenames)
+  parser = tf_examples.get_example_parser()
+  dataset = dataset.map(parser)
+  for e in dataset.as_numpy_iterator():
+    existing_source_ids.add(
+        SourceId(str(e['filename'], 'UTF_8'), e['timestamp_s'])
+    )
+
+  return existing_source_ids
+
+
+def get_new_source_infos(
+    source_infos: Sequence[SourceInfo],
+    existing_source_ids: Set[SourceId],
+    file_id_depth: int,
+) -> Sequence[SourceInfo]:
+  """Returns unprocessed SourceInfos given a set of SourceIds."""
+  new_source_infos = []
+  for s in source_infos:
+    offset = s.shard_num * s.shard_len_s
+    i = SourceId(s.file_id(file_id_depth), offset)
+    if i not in existing_source_ids:
+      new_source_infos.append(s)
+
+  return new_source_infos
 
 
 class EmbedFn(beam.DoFn):

@@ -124,7 +124,7 @@ def load_audio_window(
     filepath: str, offset_s: float, sample_rate: int, window_size_s: float
 ) -> jnp.ndarray:
   """Load a slice of audio from a file, hopefully efficiently."""
-  # TODO(tomdenton): Fine a reliable way to load a flac audio window.
+  # TODO(tomdenton): Find a reliable way to load a flac audio window.
   # If a flac file has the incorrect length in its header, seeking past the
   # end of the file causes the system to hang. This is a bad enough outcome
   # that we don't risk it.

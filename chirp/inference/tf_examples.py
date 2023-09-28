@@ -16,6 +16,7 @@
 """Utilities for manipulating TF Examples."""
 
 import dataclasses
+import datetime
 import os
 from typing import Sequence
 
@@ -174,7 +175,7 @@ class EmbeddingsTFRecordMultiWriter:
   """A sharded TFRecord writer."""
 
   output_dir: str
-  filename_pattern: str = 'embeddings-%05d-of-%05d'
+  filename_pattern: str = 'embeddings-%d-%05d-of-%05d'
   num_files: int = 10
   _writer_index: int = 0
 
@@ -196,9 +197,11 @@ class EmbeddingsTFRecordMultiWriter:
 
   def __enter__(self):
     self.writers = []
+    timestamp = int(datetime.datetime.now().timestamp())
     for i in range(self.num_files):
       filepath = os.path.join(
-          self.output_dir, self.filename_pattern % (i, self.num_files)
+          self.output_dir,
+          self.filename_pattern % (timestamp, i, self.num_files),
       )
       self.writers.append(tf.io.TFRecordWriter(filepath))
     return self
