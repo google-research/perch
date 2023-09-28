@@ -47,8 +47,6 @@ _CITATION = """
   organization={CEUR}
 }
 """
-
-
 @dataclasses.dataclass
 class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
   """Dataset configuration for Soundscape datasets.
@@ -94,7 +92,6 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
   full_length_unknown_guard: bool = False
   supervised: bool = True
   audio_dir = epath.Path('gs://chirp-public-bucket/soundscapes')
-
 
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
   """DatasetBuilder for soundscapes data."""

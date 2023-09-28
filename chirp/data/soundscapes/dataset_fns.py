@@ -16,6 +16,7 @@
 """Config utils specific to BirdClef Soundscape datasets."""
 
 import csv
+import json
 import os
 
 from chirp.data.soundscapes import soundscapes_lib
@@ -258,4 +259,44 @@ def load_anuraset_annotations(annotations_path: epath.Path) -> pd.DataFrame:
       filter_fn=filter_fn,
   )
   segments = annotations.annotations_to_dataframe(annos)
+  return segments
+
+
+def load_reef_annotations(annotations_path: epath.Path) -> pd.DataFrame:
+  """Loads a dataframe of all annotations from the reefs JSON file.
+
+  Args:
+    annotations_path: path to dataset_v*.json.
+
+  Returns:
+    DataFrame of metadata parsed from the datasets
+    Reef specific stuff:
+    - All clips are 1.88sec long, so we fix all start and end times accordingly
+    - We only take entries for which the dataset_type is sound_event_dataset, as
+    other entries are only soundscape (habitat level) labels or just unlabeled
+    completely
+    - In future, should this add a header to the df that species the region
+    somehow? Allowing selection by regional datasets
+  """
+  # Read the JSON file
+  with annotations_path.open() as f:
+    data = json.load(f)
+  # Prepare a list of dictionaries for creating a DataFrame
+  rows = []
+  for entry in data:
+    # Include only entries with "dataset_type": "sound_event_dataset"
+    if entry.get('dataset_type') == 'sound_event_dataset':
+      label = entry.get('label', '')
+      # to use region.label format use:
+      # label = f"{entry.get('region', '')}.{entry.get('label', '')}"
+      row = {
+          'filename': entry.get('file_name', ''),
+          'start_time_s': 0.0,
+          'end_time_s': 1.88,
+          'namespace': 'reefs',
+          'label': [label],
+      }
+      rows.append(row)
+  # Create a DataFrame
+  segments = pd.DataFrame(rows)
   return segments

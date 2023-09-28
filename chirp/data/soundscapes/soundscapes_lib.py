@@ -201,7 +201,8 @@ def add_annotated_urls(
   # multiple levels of file organization.
   stem_to_filepath = {}
   for fp in all_audio_filepaths:
-    stem = fp.stem.split('.')[0]
+    # Select filestem. Handles files with and without extension.
+    stem = os.path.splitext(fp.name)[0]
     if stem in stem_to_filepath:
       raise ValueError(
           'Found two files (%s vs %s) with the same stem.'
@@ -210,8 +211,9 @@ def add_annotated_urls(
     stem_to_filepath[stem] = fp
 
   segments['stem'] = segments['filename'].apply(
-      lambda filename: os.path.basename(filename).split('.')[0]
+      lambda filename: os.path.splitext(os.path.basename(filename))[0]
   )
+
   # Log all segments that could not be matched to an actual audio file.
   audio_not_found = segments[
       segments['stem'].apply(lambda stem: stem not in stem_to_filepath)
@@ -219,7 +221,6 @@ def add_annotated_urls(
   logging.info(
       'Audios that could not be found: %s.', audio_not_found['stem'].unique()
   )
-
   segments['url'] = segments.apply(
       lambda rec: stem_to_filepath.get(rec['stem'], ''), axis=1
   )

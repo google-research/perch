@@ -1,0 +1,102 @@
+[
+    {
+        "id": 62238,
+        "file_path": "E:/cv4eco/data/full_dataset/train_data.convmet.044652.hawaii_himb.bioph_knock_croak_c.wav",
+        "file_name": "train_data.convmet.044652.hawaii_himb.bioph_knock_croak_c.wav",
+        "data_type": "train_data",
+        "annotation_provider": "conservation_metrics",
+        "label": "bioph_knock_croak_c",
+        "region": "hawaii_himb",
+        "dataset_type": "sound_event_dataset"
+    },
+    {
+        "id": 65452,
+        "file_path": "E:/cv4eco/data/full_dataset/train_data.convmet.049117.usvi_butlerbay.bioph_megnov.wav",
+        "file_name": "train_data.convmet.049117.usvi_butlerbay.bioph_megnov.wav",
+        "data_type": "train_data",
+        "annotation_provider": "conservation_metrics",
+        "label": "bioph_megnov",
+        "region": "usvi_butler-bay",
+        "dataset_type": "sound_event_dataset"
+    },
+    {
+        "id": 41619,
+        "file_path": "E:/cv4eco/data/full_dataset/train_data.convmet.015217.hawaii_himb.bioph_knock_croak_c.wav",
+        "file_name": "train_data.convmet.015217.hawaii_himb.bioph_knock_croak_c.wav",
+        "data_type": "train_data",
+        "annotation_provider": "conservation_metrics",
+        "label": "bioph_knock_croak_c",
+        "region": "hawaii_himb",
+        "dataset_type": "sound_event_dataset"
+    },
+    {
+        "id": 16498,
+        "file_path": "E:/cv4eco/data/full_dataset/test_data.french_polynesia.class0.sitezday2.805322778.210316164013.wav",
+        "file_name": "test_data.french_polynesia.class0.sitezday2.805322778.210316164013.wav",
+        "data_type": "test_data",
+        "annotation_provider": null,
+        "label": "deep",
+        "region": "french-polynesia_mesophotic",
+        "dataset_type": "soundscape_dataset"
+    },
+    {
+        "id": 25984,
+        "file_path": "E:/cv4eco/data/full_dataset/train_data.callingcoral.Aust00925_5.76_2.wav",
+        "file_name": "train_data.callingcoral.Aust00925_5.76_2.wav",
+        "data_type": "train_data",
+        "annotation_provider": "calling_in_our_corals",
+        "label": null,
+        "region": "australia_richardson",
+        "dataset_type": "unlabeled"
+    },
+    {
+        "id": 22990,
+        "file_path": "E:/cv4eco/data/full_dataset/test_data.indonesia.class0.01205_m12_20220909_151400.wav",
+        "file_name": "test_data.indonesia.class0.01205_m12_20220909_151400.wav",
+        "data_type": "test_data",
+        "annotation_provider": "b_williams_ucl",
+        "label": "unknown",
+        "region": "indonesia_bombs",
+        "dataset_type": "sound_event_dataset"
+    },
+    {
+        "id": 17302,
+        "file_path": "E:/cv4eco/data/full_dataset/test_data.french_polynesia.class0.sitezday4.805322778.210319115052.wav",
+        "file_name": "test_data.french_polynesia.class0.sitezday4.805322778.210319115052.wav",
+        "data_type": "test_data",
+        "annotation_provider": null,
+        "label": "deep",
+        "region": "french-polynesia_mesophotic",
+        "dataset_type": "soundscape_dataset"
+    },
+    {
+        "id": 32247,
+        "file_path": "E:/cv4eco/data/full_dataset/train_data.convmet.001365.florida_keys.bioph_pulse.wav",
+        "file_name": "train_data.convmet.001365.florida_keys.bioph_pulse.wav",
+        "data_type": "train_data",
+        "annotation_provider": "conservation_metrics",
+        "label": "bioph_pulse",
+        "region": "florida_cmi",
+        "dataset_type": "sound_event_dataset"
+    },
+    {
+        "id": 74920,
+        "file_path": "E:/cv4eco/data/full_dataset/train_data.convmet.062971.usvi_butlerbay.anthrop_mechanical.wav",
+        "file_name": "train_data.convmet.062971.usvi_butlerbay.anthrop_mechanical.wav",
+        "data_type": "train_data",
+        "annotation_provider": "conservation_metrics",
+        "label": "anthrop_mechanical",
+        "region": "usvi_butler-bay",
+        "dataset_type": "sound_event_dataset"
+    },
+    {
+        "id": 27511,
+        "file_path": "E:/cv4eco/data/full_dataset/train_data.callingcoral.Indo00199_5.76_2.wav",
+        "file_name": "train_data.callingcoral.Indo00199_5.76_2.wav",
+        "data_type": "train_data",
+        "annotation_provider": "calling_in_our_corals",
+        "label": null,
+        "region": "indonesia_mars",
+        "dataset_type": "unlabeled"
+    }
+]
