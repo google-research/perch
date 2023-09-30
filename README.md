@@ -1,4 +1,4 @@
-# Chirp
+# Perch
 
 ![CI](https://github.com/google-research/perch/actions/workflows/ci.yml/badge.svg)
 
@@ -20,7 +20,7 @@ poetry install
 ```
 
 Running `poetry install` creates a virtual environment and installs all
-dependencies, in which you can run the Chirp codebase. To run the tests, try
+dependencies, in which you can run the Perch codebase. To run the tests, try
 
 ```bash
 poetry run python -m unittest discover -s chirp/tests -p "*test.py"
