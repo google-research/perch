@@ -28,6 +28,8 @@ tensorflow-hub = "^0.14.0"
 imageio = "^2.5.0"
 matplotlib = "^3.6.1"
 notebook = "^7.0.4"
+chex = "^0.1.7"
+numba = "^0.57"
 
 [tool.poetry.group.dev.dependencies]
 librosa = "^0.10.1"
