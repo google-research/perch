@@ -284,7 +284,8 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     batchable = cls.is_batchable(model)
 
     # Get the labels CSV from TFHub.
-    labels_path = epath.Path(hub.resolve(f'{model_url}/assets/label.csv'))
+    model_path = hub.resolve(model_url)
+    labels_path = epath.Path(model_path) / 'assets/label.csv'
     with labels_path.open('r') as f:
       class_list = namespace.ClassList.from_csv(f)
     return cls(
