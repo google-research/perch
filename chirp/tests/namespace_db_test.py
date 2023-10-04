@@ -16,6 +16,7 @@
 """Tests for namespace_db."""
 
 import io
+import random
 import tempfile
 
 from absl import logging
@@ -163,6 +164,48 @@ class NamespaceDbTest(absltest.TestCase):
     self.assertEmpty(missing_genera)
     self.assertEmpty(missing_families)
     self.assertEmpty(missing_orders)
+
+  def test_reef_label_converting(self):
+    """Test operations used in ConvertReefLabels class.
+
+    Part 1: Get the index of a sample in source_classes and the corresponding
+     index from lookup table so that we can check the look up table returns
+     the right soundtype e.g 'bioph' for the label 'bioph_rattle_response'.
+    Part 2: Iterate over labels in a shuffled version of source_classes
+     and check if each label maps correctly to its expected sound type.
+    """
+    # Set up
+    db = namespace_db.load_db()
+    mapping = db.mappings['reef_class_to_soundtype']
+    source_classes = db.class_lists['all_reefs']
+    target_classes = db.class_lists['all_reefs']
+    soundtype_table = source_classes.get_namespace_map_tf_lookup(
+        mapping, target_class_list=target_classes, keep_unknown=True
+    )
+    # Part 1
+    test_labels = ['geoph_waves', 'bioph_rattle_response', 'anthrop_bomb']
+    expected_results = ['geoph', 'bioph', 'anthrop']
+    for test_label, expected_result in zip(test_labels, expected_results):
+      classlist_index = source_classes.classes.index(test_label)
+      lookup_index = soundtype_table.lookup(
+          tf.constant(classlist_index, dtype=tf.int64)
+      ).numpy()
+      lookup_label = target_classes.classes[lookup_index]
+      self.assertEqual(expected_result, lookup_label)
+    # Part 2
+    shuffled_classes = list(source_classes.classes)
+    np.random.seed(42)
+    random.shuffle(shuffled_classes)
+    for label in shuffled_classes:
+      # Every reef label is prefixed with either 'bioph', 'geoph', 'anthrop'
+      prefix = label.split('_')[0]
+      # Now mirror Part 1, by checking label against the prefix
+      classlist_index = source_classes.classes.index(label)
+      lookup_index = soundtype_table.lookup(
+          tf.constant(classlist_index, dtype=tf.int64)
+      ).numpy()
+      lookup_label = target_classes.classes[lookup_index]
+      self.assertEqual(prefix, lookup_label)
 
 
 if __name__ == '__main__':

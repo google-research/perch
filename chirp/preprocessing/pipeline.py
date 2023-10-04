@@ -16,7 +16,7 @@
 """Data pipeline functions."""
 
 import dataclasses
-from typing import Iterable, Sequence
+from typing import Iterable, Sequence, Tuple
 
 from absl import logging
 from chirp import audio_utils
@@ -687,6 +687,86 @@ class LabelConversionConstants:
 
   tables: dict[str, tf.lookup.StaticHashTable]
   masks: dict[str, tf.Tensor]
+
+
+@dataclasses.dataclass
+class ConvertReefLabels(FeaturesPreprocessOp):
+  """Convert reef labels to multihot encoded labels that include soundtype.
+
+  A data preprocessing operation to convert reef labels from a source set of
+  classes to a target set and then generate multi-hot encoded labels which
+  include an encoding for the original label and also its soundtype (e.g
+  'bioph').
+
+  Attributes:
+    source_namespace (str): The namespace of the source classes. Defaults to
+      'all_reefs'.
+    target_class_list (str): The target set of classes. Defaults to 'all_reefs'.
+    db (namespace_db.TaxonomyDatabase | None): A database containing mappings
+      and classlists. Loaded during post-initialization.
+
+  Usage:
+  After creating an instance of ConvertReefLabels, it can be used as a callable
+    to preprocess a batch of dataset features.
+  The output will have labels mapped to the target set and encoded in multi-hot
+    format.
+  """
+
+  source_namespace: str = 'all_reefs'
+  target_class_list: str = 'all_reefs'
+  db: namespace_db.TaxonomyDatabase | None = None
+
+  def __post_init__(self) -> None:
+    """Loads the taxonomy database used for mapping and class lists."""
+    self.db = namespace_db.load_db()
+
+  def load_tables(
+      self, source_classes: namespace.ClassList
+  ) -> Tuple[tf.lookup.StaticHashTable, tf.Tensor]:
+    """Return a TensorFlow lookup table and a mask from source classes."""
+    mapping = self.db.mappings['reef_class_to_soundtype']
+    target_classes = self.db.class_lists[self.target_class_list]
+    soundtype_table = source_classes.get_namespace_map_tf_lookup(
+        mapping, target_class_list=target_classes, keep_unknown=True
+    )
+    # Mask is all 1's. So everything multiplied by 1. Add 0's for a real mask.
+    mask = tf.ones([len(target_classes.classes)])
+    return soundtype_table, mask
+
+  def map_and_encode(
+      self, features: Features, source_classes: namespace.ClassList
+  ) -> Features:
+    """Map input feature labels to target set then  multihot encode."""
+    output_features = features.copy()
+    int_labels_batch = output_features['label']
+    soundtype_table, mask = self.load_tables(source_classes)
+    # Note, soundtype_table will set -1 for anything not in source_classes.
+    soundtype_labels = soundtype_table.lookup(int_labels_batch)
+    soundtype_labels = tf.gather(
+        soundtype_labels, tf.where(soundtype_labels >= 0)[:, 0]
+    )
+    output_labels = tf.concat([soundtype_labels, int_labels_batch], axis=0)
+    # Apply multihot encoding to the int's. Clip to be sure no 2's
+    class_list_size = mask.shape[0]
+    output_labels = tf.clip_by_value(
+        tf.reduce_sum(
+            tf.one_hot(output_labels, class_list_size, dtype=tf.int64), axis=0
+        ),
+        0,
+        1,
+    )
+    output_features.update({'label': output_labels, 'label_mask': mask})
+    return output_features
+
+  def __call__(
+      self, features: Features, dataset_info: tfds.core.DatasetInfo
+  ) -> Features:
+    """Primary method to trigger the necesary opetions in this preprocessing."""
+    source_classes = namespace.ClassList(
+        self.source_namespace, dataset_info.features['label'].feature.names
+    )
+    output_features = self.map_and_encode(features, source_classes)
+    return output_features
 
 
 @dataclasses.dataclass

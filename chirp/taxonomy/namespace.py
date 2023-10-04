@@ -174,7 +174,10 @@ class ClassList:
     return table, image_mask
 
   def get_namespace_map_tf_lookup(
-      self, mapping: Mapping, keep_unknown: bool | None = None
+      self,
+      mapping: Mapping,
+      keep_unknown: bool | None = None,
+      target_class_list: ClassList | None = None,
   ) -> tf.lookup.StaticHashTable:
     """Create a tf.lookup.StaticHasTable for namespace mappings.
 
@@ -184,30 +187,55 @@ class ClassList:
         class list are maintained as unknown in the mapped values. If false then
         the unknown value is discarded. The default (`None`) will raise an error
         if an unknown value is in the source classt list.
+      target_class_list: Optional class list for ordering of mapping output. If
+        not provided, a class list consisting of the alphabetized image set of
+        the mapping will be used.
 
     Returns:
       A Tensorflow StaticHashTable and the image ClassList in the mapping's
       target namespace.
 
     Raises:
-      KeyError: If a class in not the mapping, or if the class list contains
-      an unknown token and `keep_unknown` was not specified.
+      ValueError: If 'unknown' label is in source classes and keep_unknown was
+      not specified.
+      ValueError: If a target class list was passed and the namespace of this
+      does not match the mapping target namespace.
     """
-    target_class_list = self.apply_namespace_mapping(
-        mapping, keep_unknown=keep_unknown
-    )
+    if UNKNOWN_LABEL in self.classes and keep_unknown is None:
+      raise ValueError(
+          "'unknown' found in source classes. Explicitly set keep_unknown to"
+          " True or False. Alternatively, remove 'unknown' from source classes"
+      )
+    # If no target_class_list is passed, default to apply_namespace_mapping
+    if target_class_list is None:
+      target_class_list = self.apply_namespace_mapping(
+          mapping, keep_unknown=keep_unknown
+      )
+    else:
+      if target_class_list.namespace != mapping.target_namespace:
+        raise ValueError(
+            f"target class list namespace ({target_class_list.namespace}) "
+            "does not match mapping target namespace "
+            f"({mapping.target_namespace})"
+        )
+    # Now check if 'unknown' label present in target_class_list.classes
+    keep_unknown = keep_unknown and UNKNOWN_LABEL in target_class_list.classes
+    # Dict which maps classes to an index
     target_class_indices = {
         k: i for i, k in enumerate(target_class_list.classes)
     }
-    mapped_pairs = mapping.mapped_pairs
-    if keep_unknown:
-      mapped_pairs = mapped_pairs | {UNKNOWN_LABEL: UNKNOWN_LABEL}
+    # Add unknown to mapped pairs
+    mapped_pairs = mapping.mapped_pairs | {UNKNOWN_LABEL: UNKNOWN_LABEL}
+    # If keep unknown==False, set unknown index to -1 to discard unknowns
+    if not keep_unknown:
+      target_class_indices[UNKNOWN_LABEL] = -1
+    # Get keys and values to be used in the lookup table
     keys = list(range(len(self.classes)))
     values = [
         target_class_indices[mapped_pairs[k]]
         for k in self.classes
-        if k != UNKNOWN_LABEL or keep_unknown in (True, None)
     ]
+    # Create the static hash table. If a key doesnt exist, set as -1.
     table = tf.lookup.StaticHashTable(
         tf.lookup.KeyValueTensorInitializer(keys, values, tf.int64, tf.int64),
         default_value=-1,
