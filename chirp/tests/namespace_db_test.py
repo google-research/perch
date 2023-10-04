@@ -26,9 +26,10 @@ import numpy as np
 import tensorflow as tf
 
 from absl.testing import absltest
+from absl.testing import parameterized
 
 
-class NamespaceDbTest(absltest.TestCase):
+class NamespaceDbTest(parameterized.TestCase):
 
   def test_load_namespace_db(self):
     db = namespace_db.load_db()
@@ -94,9 +95,9 @@ class NamespaceDbTest(absltest.TestCase):
     all_missing_classes = set()
     for list_name, class_list in db.class_lists.items():
       missing_classes = set()
-      namespace = db.namespaces[class_list.namespace]
+      namespace_ = db.namespaces[class_list.namespace]
       for cl in class_list.classes:
-        if cl not in namespace.classes:
+        if cl not in namespace_.classes:
           missing_classes.add(cl)
           all_missing_classes.add(cl)
       if missing_classes:
@@ -206,6 +207,50 @@ class NamespaceDbTest(absltest.TestCase):
       ).numpy()
       lookup_label = target_classes.classes[lookup_index]
       self.assertEqual(prefix, lookup_label)
+
+  @parameterized.parameters(True, False, None)
+  def test_namespace_map_tf_lookup(self, keep_unknown):
+    source = namespace.ClassList(
+        'ebird2021', ('amecro', 'amegfi', 'amered', 'amerob', 'unknown')
+    )
+    mapping = namespace.Mapping(
+        'ebird2021',
+        'ebird2021',
+        {
+            'amecro': 'amered',
+            'amegfi': 'amerob',
+            'amered': 'amerob',
+            'amerob': 'amerob',
+        },
+    )
+    if keep_unknown is None:
+      self.assertRaises(
+          ValueError,
+          source.get_namespace_map_tf_lookup,
+          mapping=mapping,
+          keep_unknown=keep_unknown,
+      )
+      return
+
+    output_class_list = source.apply_namespace_mapping(
+        mapping, keep_unknown=keep_unknown
+    )
+    if keep_unknown:
+      expect_classes = ('amered', 'amerob', 'unknown')
+    else:
+      expect_classes = ('amered', 'amerob')
+    self.assertSequenceEqual(output_class_list.classes, expect_classes)
+    lookup = source.get_namespace_map_tf_lookup(
+        mapping, keep_unknown=keep_unknown
+    )
+    got = lookup.lookup(
+        tf.constant(list(range(len(source.classes))), dtype=tf.int64)
+    ).numpy()
+    if keep_unknown:
+      expect_idxs = (0, 1, 1, 1, 2)
+    else:
+      expect_idxs = (0, 1, 1, 1, -1)
+    self.assertSequenceEqual(tuple(got), expect_idxs)
 
 
 if __name__ == '__main__':
