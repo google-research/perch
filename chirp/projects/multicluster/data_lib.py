@@ -33,6 +33,7 @@ from typing import Dict, Sequence, Tuple
 
 from chirp import audio_utils
 from chirp.inference import interface
+from chirp.inference import tf_examples
 from etils import epath
 import numpy as np
 import tensorflow as tf
@@ -99,6 +100,53 @@ class MergedDataset:
     )
     elapsed = time.time() - st
     print(f'\n...embedded dataset in {elapsed:5.2f}s...')
+    data = merged
+    embedding_dim = merged['embeddings'].shape[-1]
+
+    labels = tuple(labels)
+    num_classes = len(labels)
+    print(f'    found {num_classes} classes.')
+    class_counts = collections.defaultdict(int)
+    for cl, cl_str in zip(merged['label'], merged['label_str']):
+      class_counts[(cl, cl_str)] += 1
+    for (cl, cl_str), count in sorted(class_counts.items()):
+      print(f'    class {cl_str} / {cl} : {count}')
+    return cls(
+        data=data,
+        embedding_dim=embedding_dim,
+        num_classes=num_classes,
+        labels=labels,
+    )
+
+  @classmethod
+  def from_tfrecords(
+      cls,
+      base_dir: str,
+      embeddings_path: str,
+      time_pooling: str,
+      exclude_classes: Sequence[str] = (),
+  ) -> 'MergedDataset':
+    """Generating MergedDataset via reading existing embeddings.
+
+    Note: this assumes the embeddings were run with folder_of_folders
+    with file_id_depth=1 in the embeddings export. This classmethod can/will be
+    updated for allowing a few options for specifying labels.
+
+    Args:
+      base_dir: Base directory (folder of folders of original audio)
+      embeddings_path: Location of the existing embeddings.
+      time_pooling: Method of time pooling.
+      exclude_classes: List of classes to exclude.
+
+    Returns:
+      MergedDataset
+    """
+    labels, merged = read_embedded_dataset(
+        base_dir=base_dir,
+        embeddings_path=embeddings_path,
+        time_pooling=time_pooling,
+        exclude_classes=exclude_classes,
+    )
     data = merged
     embedding_dim = merged['embeddings'].shape[-1]
 
@@ -325,6 +373,84 @@ def embed_dataset(
     # pad audio to ensure all the same length.
     target_audio_len = np.max([a.shape[0] for a in merged['audio']])
     merged['audio'] = [_pad_audio(a, target_audio_len) for a in merged['audio']]
+
+  outputs = {}
+  for k in merged.keys():
+    outputs[k] = np.stack(merged[k])
+  return labels, outputs
+
+
+def read_embedded_dataset(
+    base_dir: str,
+    embeddings_path: str,
+    time_pooling: str,
+    exclude_classes: Sequence[str] = (),
+):
+  """Read pre-saved embeddings to memory from storage.
+
+  This function reads a set of embeddings that has already been generated
+  to load as a MergedDataset via from_tfrecords(). The embeddings could be saved
+  in one folder or be contained in multiple subdirectories. This function
+  produces the same output as embed_dataset(), except (for now) we don't allow
+  for the optional loading of the audio (.wav files). However, for labeled data,
+  we still require the base directory containing the folder-of-folders with the
+  audio data to produce the labels. If there are no subfolders, no labels will
+  be created.
+
+  Args:
+    base_dir: Base directory where audio may be stored in a subdirectories,
+      where the folder represents the label
+    embeddings_path: Location of the existing embeddings as TFRecordDataset.
+    time_pooling: Method of time pooling.
+    exclude_classes: List of classes to exclude.
+
+  Returns:
+    Ordered labels and a Dict contianing the entire embedded dataset.
+  """
+
+  output_dir = epath.Path(embeddings_path)
+  fns = [fn for fn in output_dir.glob('embeddings-*')]
+  ds = tf.data.TFRecordDataset(fns)
+  parser = tf_examples.get_example_parser()
+  ds = ds.map(parser)
+
+  # Loading the lables assuming a folder-of-folder structure
+  # TODO: add alternative labeling strategies as options
+  base_dir = epath.Path(base_dir)
+  labels = sorted([p.name for p in base_dir.glob('*') if p.is_dir()])
+  if not labels:
+    raise ValueError(
+        'No subfolders found in base directory. Audio will be '
+        'matched as "base_dir/*/*.wav", with the subfolders '
+        'indicating class names.'
+    )
+  labels = [label for label in labels if label not in exclude_classes]
+
+  merged = collections.defaultdict(list)
+  label_dict = collections.defaultdict(dict)
+
+  for label_idx, label in enumerate(labels):
+    label_hot = np.zeros([len(labels)], np.int32)
+    label_hot[label_idx] = 1
+
+    label_dict[label]['label_hot'] = label_hot
+    label_dict[label]['label_idx'] = label_idx
+    label_dict[label]['label_str'] = label
+
+  for ex in ds.as_numpy_iterator():
+    outputs = interface.pool_axis(ex['embedding'], -3, time_pooling)
+    if ex['embedding'].shape[-2] == 1:
+      channel_pooling = 'squeeze'
+    else:
+      channel_pooling = 'first'
+    outputs = interface.pool_axis(outputs, -2, channel_pooling)
+
+    merged['embeddings'].append(outputs)
+    merged['filename'].append(ex['filename'].decode())
+    file_label = ex['filename'].decode().split('/')[0]
+    merged['label'].append(label_dict[file_label]['label_idx'])
+    merged['label_str'].append(label_dict[file_label]['label_str'])
+    merged['label_hot'].append(label_dict[file_label]['label_hot'])
 
   outputs = {}
   for k in merged.keys():
