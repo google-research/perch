@@ -48,7 +48,7 @@ ForwardStepType = Callable[
         dict[str, jnp.ndarray],
         flax.core.scope.FrozenVariableDict,
         flax.core.scope.VariableDict,
-        jax.random.PRNGKeyArray | None,
+        jax.Array | None,
     ],
     output.ClassifierOutput,
 ]
@@ -120,7 +120,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
   ) -> tuple[
       model_utils.ModelBundle,
       AdaptationState,
-      jax.random.PRNGKeyArray,
+      jax.Array,
       Callable[[Any, Any, str], Any],
       Callable[[Any], Any],
   ]:
@@ -213,7 +213,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
   def before_run(
       self,
-      key: jax.random.PRNGKeyArray,
+      key: jax.Array,
       model_bundle: model_utils.ModelBundle,
       adaptation_state: AdaptationState,
       adaptation_dataset: tf.data.Dataset,
@@ -249,7 +249,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
   def before_epoch(
       self,
-      key: jax.random.PRNGKeyArray,
+      key: jax.Array,
       model_bundle: model_utils.ModelBundle,
       adaptation_state: AdaptationState,
       adaptation_dataset: tf.data.Dataset,
@@ -318,7 +318,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
   def before_iter(
       self,
-      key: jax.random.PRNGKeyArray,
+      key: jax.Array,
       model_bundle: model_utils.ModelBundle,
       adaptation_state: AdaptationState,
       batch: dict[str, np.ndarray],
@@ -351,7 +351,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
   def do_epoch(
       self,
-      key: jax.random.PRNGKeyArray,
+      key: jax.Array,
       model_bundle: model_utils.ModelBundle,
       adaptation_state: AdaptationState,
       rename_fn: Callable[[Any, Any, str], Any],
@@ -458,7 +458,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
     def update_step(
         batch: dict[str, jnp.ndarray],
         adaptation_state: AdaptationState,
-        key: jax.random.PRNGKeyArray,
+        key: jax.Array,
         **method_gather_args,
     ) -> tuple[dict[str, jnp.ndarray], AdaptationState]:
       """Updates the model's state and params using the given batch."""
@@ -655,7 +655,7 @@ class SFDAMethod(metaclass=abc.ABCMeta):
 
 
 def perform_adaptation(
-    key: jax.random.PRNGKeyArray,
+    key: jax.Array,
     sfda_method: SFDAMethod,
     adaptation_state: AdaptationState,
     rename_fn: Callable[[Any, Any, str], Any],

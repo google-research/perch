@@ -255,7 +255,7 @@ class SHOT(adapt.SFDAMethod):
 
   def before_epoch(
       self,
-      key: jax.random.PRNGKeyArray,
+      key: jax.Array,
       model_bundle: model_utils.ModelBundle,
       adaptation_state: adapt.AdaptationState,
       adaptation_dataset: tf.data.Dataset,
@@ -308,7 +308,7 @@ class SHOT(adapt.SFDAMethod):
 
   def before_iter(
       self,
-      key: jax.random.PRNGKeyArray,
+      key: jax.Array,
       batch: dict[str, np.ndarray],
       adaptation_state: adapt.AdaptationState,
       model_bundle: model_utils.ModelBundle,

@@ -36,7 +36,7 @@ ForwardStepType = Callable[
         dict[str, jnp.ndarray],
         flax.core.scope.FrozenVariableDict,
         flax.core.scope.VariableDict,
-        jax.random.PRNGKeyArray | None,
+        jax.Array | None,
     ],
     output.ClassifierOutput,
 ]
@@ -89,7 +89,7 @@ def forward_dataset(
     multi_label: bool,
     use_batch_statistics: bool = False,
     train: bool = False,
-    key: jax.random.PRNGKeyArray | None = None,
+    key: jax.Array | None = None,
 ) -> dict[str, jnp.ndarray | np.ndarray]:
   """Fowards a dataset through a given model.
 

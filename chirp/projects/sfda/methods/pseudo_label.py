@@ -41,7 +41,7 @@ class PseudoLabel(adapt.SFDAMethod):
 
   def before_iter(
       self,
-      key: jax.random.PRNGKeyArray,
+      key: jax.Array,
       batch: dict[str, np.ndarray],
       adaptation_state: adapt.AdaptationState,
       model_bundle: model_utils.ModelBundle,

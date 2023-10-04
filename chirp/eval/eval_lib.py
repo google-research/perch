@@ -354,7 +354,7 @@ def _get_class_representatives_df(
     embeddings_df: pd.DataFrame,
     class_representative_mask: pd.Series,
     num_representatives_per_class: int,
-    rng_key: jax.random.KeyArray,
+    rng_key: jax.Array,
 ) -> pd.DataFrame:
   """Creates a class representatives DataFrame, possibly downsampling at random.
 
@@ -425,7 +425,7 @@ def _df_eval(hashable_df: _HashedEmbeddingsDataFrame, expr: str) -> pd.Series:
 def _prepare_eval_set(
     embeddings_df: _HashedEmbeddingsDataFrame,
     eval_set_specification: EvalSetSpecification,
-    rng_key: jax.random.KeyArray,
+    rng_key: jax.Array,
 ) -> tuple[pd.DataFrame, tuple[ClasswiseEvalSet, ...]]:
   """Prepares a single eval set.
 
