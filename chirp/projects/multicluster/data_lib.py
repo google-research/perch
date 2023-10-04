@@ -67,6 +67,7 @@ class MergedDataset:
       load_audio: bool = True,
       target_sample_rate: int = -2,
       audio_file_pattern: str = '*',
+      pad_type: str = 'zeros',
   ) -> 'MergedDataset':
     """Generating MergedDataset via folder-of-folders method.
 
@@ -82,6 +83,7 @@ class MergedDataset:
         sample rate.
       audio_file_pattern: The glob pattern to use for finding audio files within
         the sub-folders.
+      pad_type: Padding strategy for short audio.
 
     Returns:
       MergedDataset
@@ -97,6 +99,7 @@ class MergedDataset:
         load_audio=load_audio,
         target_sample_rate=target_sample_rate,
         audio_file_pattern=audio_file_pattern,
+        pad_type=pad_type,
     )
     elapsed = time.time() - st
     print(f'\n...embedded dataset in {elapsed:5.2f}s...')
@@ -257,15 +260,27 @@ def pool_time_axis(embeddings, pool_method, axis=1):
   raise ValueError('Unrecognized reduction method.')
 
 
-def _pad_audio(audio: np.ndarray, target_length: int) -> np.ndarray:
+def _pad_audio(
+    audio: np.ndarray, target_length: int, pad_type: str = 'zeros'
+) -> np.ndarray:
+  """Pad audio to target_length."""
   if len(audio.shape) > 1:
     raise ValueError('audio should be a flat array.')
   if audio.shape[0] > target_length:
     return audio
-  pad_amount = target_length - audio.shape[0]
-  front = pad_amount // 2
-  back = pad_amount - front
-  return np.pad(audio, [(front, back)], 'constant')
+  if pad_type == 'zeros':
+    pad_amount = target_length - audio.shape[0]
+    front = pad_amount // 2
+    back = pad_amount - front
+    return np.pad(audio, [(front, back)], 'constant')
+  elif pad_type == 'repeat':
+    # repeat audio until longer than target_length.
+    num_repeats = target_length // audio.shape[0] + 1
+    repeated_audio = np.repeat(audio, num_repeats, axis=0)
+    start = repeated_audio.shape[0] - target_length // 2
+    padded = repeated_audio[start : start + target_length]
+    return padded
+  raise ValueError('Unrecognized padding method.')
 
 
 def embed_dataset(
@@ -276,6 +291,7 @@ def embed_dataset(
     load_audio: bool = True,
     target_sample_rate: int = -1,
     audio_file_pattern: str = '*',
+    pad_type: str = 'zeros',
 ) -> Tuple[Sequence[str], Dict[str, np.ndarray]]:
   """Add embeddings to an eval dataset.
 
@@ -295,6 +311,7 @@ def embed_dataset(
       raw audio with no resampling. If -2, uses the embedding_model sample rate.
     audio_file_pattern: The glob pattern to use for finding audio files within
       the sub-folders.
+    pad_type: Padding style for short audio.
 
   Returns:
     Ordered labels and a Dict contianing the entire embedded dataset.
@@ -344,7 +361,7 @@ def embed_dataset(
     ):
       audio_size = audio.shape[0]
       if window_size > audio_size:
-        audio = _pad_audio(audio, window_size)
+        audio = _pad_audio(audio, window_size, pad_type)
       audio = audio.astype(np.float32)
       outputs = embedding_model.embed(audio)
 
