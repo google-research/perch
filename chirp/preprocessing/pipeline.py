@@ -1040,11 +1040,10 @@ class FilterByFeature(DatasetPreprocessOp):
     (feature_name,) = df.columns
     feature_dtype = df[feature_name].dtype
     feature_values = df[feature_name].values
-
     feature_values_table = tf.lookup.StaticHashTable(
         initializer=tf.lookup.KeyValueTensorInitializer(
             keys=tf.constant(feature_values, dtype=feature_dtype),
-            values=tf.range(len(feature_values), dtype=feature_dtype),
+            values=tf.range(len(feature_values), dtype=tf.int32),
         ),
         default_value=-1,
     )
