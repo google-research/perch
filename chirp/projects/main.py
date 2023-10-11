@@ -21,6 +21,9 @@ arguments `mode` (e.g., `train`, `eval`, `finetune`), a `config` in the form of
 a `ConfigDict`, and a `workdir` where temporary files can be stored. Finally,
 the `tf_data_service_address` argument is a string which is empty or contains
 the address of the tf.data service dispatcher.
+
+If the target does not use TensorFlow at all (i.e., no TFDS or `tf.data`) then
+pass `--notf` to avoid importing TensorFlow.
 """
 
 from typing import Protocol, Sequence
@@ -36,7 +39,6 @@ from chirp.train import mae
 from chirp.train import separator
 from ml_collections import config_dict
 from ml_collections.config_flags import config_flags
-import tensorflow as tf
 
 from xmanager import xm  # pylint: disable=unused-import
 
@@ -80,6 +82,7 @@ _TF_DATA_SERVICE_ADDRESS = flags.DEFINE_string(
     "The dispatcher's address.",
     allow_override_cpp=True,
 )
+_TF = flags.DEFINE_bool("tf", True, "Whether or not the script uses TF.")
 flags.mark_flags_as_required(["config", "workdir", "target", "mode"])
 
 
@@ -87,9 +90,12 @@ def main(argv: Sequence[str]) -> None:
   if len(argv) > 1:
     raise app.UsageError("Too many command-line arguments.")
   logging.info(_CONFIG.value)
-  # We assume that scripts use JAX, so here we prevent TensorFlow from reserving
-  # all the GPU memory (which leaves nothing for JAX to use).
-  tf.config.experimental.set_visible_devices([], "GPU")
+  if _TF.value:
+    # We assume that scripts use JAX, so here we prevent TensorFlow from
+    # reserving all the GPU memory (which leaves nothing for JAX to use).
+    import tensorflow as tf  # pylint: disable=g-import-not-at-top
+
+    tf.config.experimental.set_visible_devices([], "GPU")
   config = config_utils.parse_config(
       _CONFIG.value, config_globals.get_globals()
   )
