@@ -213,6 +213,7 @@ def search_embeddings_parallel(
     score_fn: Callable[[Any, np.ndarray], Any] | str = 'euclidean',  # pylint: disable=g-bare-generic
     random_sample: bool = False,
     invert_sort_score: bool = False,
+    filter_fn: Callable[[Any], bool] | None = None,
 ):
   """Run a brute-force search.
 
@@ -229,6 +230,7 @@ def search_embeddings_parallel(
     random_sample: If True, obtain a uniformly random sample of data.
     invert_sort_score: Set to True if low scores are preferable to high scores.
       Ignored if a string score_fn is given.
+    filter_fn: Optional predicate for filtering examples.
 
   Returns:
     TopKSearchResults and distance statistics reduced per-file.
@@ -268,15 +270,14 @@ def search_embeddings_parallel(
     )
 
   ex_map_fn = lambda ex: sort_scores_fn(score_fn(ex))
-  embeddings_dataset = (
-      embeddings_dataset.shuffle(1024)
-      .map(
-          ex_map_fn,
-          num_parallel_calls=tf.data.AUTOTUNE,
-          deterministic=False,
-      )
-      .prefetch(1024)
+  embeddings_dataset = embeddings_dataset.shuffle(1024).map(
+      ex_map_fn,
+      num_parallel_calls=tf.data.AUTOTUNE,
+      deterministic=False,
   )
+  if filter_fn is not None:
+    embeddings_dataset = embeddings_dataset.filter(filter_fn)
+  embeddings_dataset = embeddings_dataset.prefetch(1024)
 
   results = TopKSearchResults([], top_k=top_k)
   all_distances = []

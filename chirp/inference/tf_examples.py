@@ -102,7 +102,10 @@ def get_example_parser(logit_names: Sequence[str] | None = None):
 
 
 def create_embeddings_dataset(
-    embeddings_dir, file_glob: str = '*', prefetch: int = 128
+    embeddings_dir,
+    file_glob: str = '*',
+    prefetch: int = 128,
+    logit_names: Sequence[str] | None = None,
 ):
   """Create a TF Dataset of the embeddings."""
   embeddings_dir = epath.Path(embeddings_dir)
@@ -111,7 +114,7 @@ def create_embeddings_dataset(
       embeddings_files, num_parallel_reads=tf.data.AUTOTUNE
   )
 
-  parser = get_example_parser()
+  parser = get_example_parser(logit_names=logit_names)
   ds = ds.map(parser, num_parallel_calls=tf.data.AUTOTUNE)
   ds = ds.prefetch(prefetch)
   return ds
