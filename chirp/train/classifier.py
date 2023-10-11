@@ -78,6 +78,7 @@ def initialize_model(
     target_class_list: str,
     optimizer: optax.GradientTransformation | None = None,
     for_inference: bool = False,
+    add_taxonomic_labels: bool = True,
 ) -> tuple[utils.ModelBundle, utils.TrainState]:
   """Creates model for training, eval, or inference.
 
@@ -92,6 +93,7 @@ def initialize_model(
       pre-trained models for inference.
     for_inference: Indicates whether the model is being initialized for
       inference (if false, initialzed for training).
+    add_taxonomic_labels: Whether "genus", "family", "order" mapping to be used
 
   Note: learning_rate is unused (it's expected to be used in constructing the
     `optimizer` argument), but it's left part of the function signature for
@@ -107,7 +109,9 @@ def initialize_model(
 
   # Load model
   model_init_key, key = random.split(key)
-  class_lists = class_utils.get_class_lists(target_class_list, True)
+  class_lists = class_utils.get_class_lists(
+      target_class_list, add_taxonomic_labels
+  )
   model = taxonomy_model.TaxonomyModel(
       num_classes={k: len(v.classes) for (k, v) in class_lists.items()},
       **model_config,
@@ -454,7 +458,9 @@ def run(
     )
 
   model_bundle, train_state = initialize_model(
-      workdir=workdir, **config.init_config
+      workdir=workdir,
+      **config.init_config,
+      add_taxonomic_labels=config.add_taxonomic_labels,
   )
   if mode == "train":
     train_state = model_bundle.ckpt.restore_or_initialize(train_state)
