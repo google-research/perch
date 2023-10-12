@@ -160,7 +160,37 @@ def get_supervised_eval_pipeline(
   eval_dataset_config.pipeline = _c(
       'pipeline.Pipeline',
       ops=get_pipeline_ops(
-          filtering_df_path=None,
+          filtering_df_path=filtering_df_path,
+          filter_by_complement=filter_by_complement,
+          shuffle=False,
+          target_class_list=config.get_ref('target_class_list'),
+          mixup=False,
+          random_slice=False,
+          slice_window_size=config.get_ref('train_window_size_s'),
+          slice_start=slice_start,
+          random_normalize=False,
+          melspec_num_channels=config.get_ref('num_channels'),
+          melspec_frame_rate=config.get_ref('frame_rate_hz'),
+          melspec_kernel_size=_KERNEL_SIZE,
+          sample_rate=config.get_ref('sample_rate_hz'),
+          batch_size=config.get_ref('batch_size'),
+          repeat=False,
+      ),
+  )
+  eval_dataset_config.split = 'train'
+  eval_dataset_config.tfds_data_dir = config.get_ref('tfds_data_dir')
+  eval_dataset_config.dataset_directory = eval_dataset_dir
+  return eval_dataset_config
+
+
+def get_config() -> config_dict.ConfigDict:
+  """Creates the configuration dictionary for training and evaluation."""
+  config = presets.get_base_config()
+
+  # Configure the data
+  config.train_dataset_config = get_supervised_train_pipeline(
+      config,
+      filtering_df_path=None,
       filter_by_complement=True,
       train_dataset_dir='bird_taxonomy/slice_peaked:1.4.0',
   )
