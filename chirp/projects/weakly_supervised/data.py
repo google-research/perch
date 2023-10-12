@@ -59,3 +59,41 @@ def get_dataset(config: config_dict.ConfigDict) -> pygrain.DataLoader:
       worker_count=config.worker_count,
       shard_options=shard_options,
   )
+
+
+def get_validation_dataset(
+    config: config_dict.ConfigDict,
+) -> pygrain.DataLoader:
+  """Load the validation dataset using Grain."""
+  # Load the dataset
+  data_source = pygrain.ArrayRecordDataSource(config.validation_dataset)
+  num_records = len(data_source)
+
+  sampler = pygrain.SequentialSampler(
+      num_records=num_records, shard_options=pygrain.NoSharding()
+  )
+
+  # Pipeline
+  db = namespace_db.load_db()
+  mapping = db.mappings["ibp2019_to_ebird2022"]
+  operations = [
+      google_grain_utils.Parse(),
+      google_grain_utils.Window(
+          config.window_size,
+          config.hop_size,
+          apply_time_bounded_labels=True,
+          namespace=mapping.target_namespace,
+          class_list=tuple(sorted(mapping.mapped_pairs.values())),
+      ),
+  ]
+  return pygrain.DataLoader(
+      data_source=data_source,
+      sampler=sampler,
+      operations=operations,
+      worker_count=config.worker_count,
+      shard_options=pygrain.ShardOptions(
+          shard_index=jax.process_index(),
+          shard_count=jax.process_count(),
+          drop_remainder=False,
+      ),
+  )

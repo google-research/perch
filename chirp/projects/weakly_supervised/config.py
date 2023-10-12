@@ -21,9 +21,11 @@ def get_config() -> config_dict.ConfigDict:
   """Get the configuration."""
   config = config_dict.ConfigDict()
   config.dataset = ""
+  config.validation_dataset = ""
   config.source_class_list = "xenocanto_v3"
   config.window_size = 5
   config.hop_size = 2.5
   config.batch_size = 512
   config.worker_count = 8
+  config.num_one_shot_samples = 600
   return config
