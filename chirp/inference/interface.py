@@ -222,7 +222,7 @@ class LogitsOutputHead:
     with (output_path / 'class_list.csv').open('w') as f:
       f.write(self.class_list.to_csv())
 
-  def add_logits(self, model_outputs: InferenceOutputs):
+  def add_logits(self, model_outputs: InferenceOutputs, keep_original: bool):
     """Update the model_outputs to include logits from this output head."""
     embeddings = model_outputs.embeddings
     if embeddings is None:
@@ -247,7 +247,7 @@ class LogitsOutputHead:
         separated_audio=model_outputs.separated_audio,
         batched=model_outputs.batched,
     )
-    if new_outputs.logits is None:
+    if new_outputs.logits is None or not keep_original:
       new_outputs.logits = {}
     new_outputs.logits[self.logits_key] = logits
     return new_outputs

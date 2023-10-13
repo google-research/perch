@@ -192,7 +192,7 @@ class InferenceTest(parameterized.TestCase):
         '/tmp/logits_model', embedding_dim=128
     )
     base_outputs = base_model.embed(np.zeros(5 * 22050))
-    updated_outputs = logits_model.add_logits(base_outputs)
+    updated_outputs = logits_model.add_logits(base_outputs, keep_original=True)
     self.assertSequenceEqual(
         updated_outputs.logits['other_label'].shape,
         (5, 3),
@@ -208,7 +208,9 @@ class InferenceTest(parameterized.TestCase):
           'logits_key': 'other_label',
       })
       restored_model = interface.LogitsOutputHead.from_config(restore_config)
-    reupdated_outputs = restored_model.add_logits(base_outputs)
+    reupdated_outputs = restored_model.add_logits(
+        base_outputs, keep_original=True
+    )
     error = np.mean(
         np.abs(
             reupdated_outputs.logits['other_label']

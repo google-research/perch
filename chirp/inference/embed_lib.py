@@ -229,7 +229,12 @@ class EmbedFn(beam.DoFn):
     model_outputs = self.embedding_model.embed(audio)
     if self.logits_head is not None:
       # Update model outputs with logits from the secondary classifier.
-      model_outputs = self.logits_head.add_logits(model_outputs)
+      model_outputs = self.logits_head.add_logits(
+          model_outputs, keep_original=self.write_logits
+      )
+      write_logits = True
+    else:
+      write_logits = self.write_logits
 
     example = tf_examples.model_outputs_to_tf_example(
         model_outputs=model_outputs,
@@ -239,7 +244,7 @@ class EmbedFn(beam.DoFn):
         write_raw_audio=self.write_raw_audio,
         write_separated_audio=self.write_separated_audio,
         write_embeddings=self.write_embeddings,
-        write_logits=self.write_logits,
+        write_logits=write_logits,
     )
     return example
 
