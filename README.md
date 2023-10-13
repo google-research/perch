@@ -40,4 +40,19 @@ poetry run tfds build -i chirp.data.bird_taxonomy,chirp.data.soundscapes \
 
 The process should take 36 to 48 hours to complete and use around 256 GiB of disk space.
 
+
+## Using a container
+
+Alternatively, you can install and run this project using a container via
+`docker` or `podman`. To build a container using the tag `perch`, run:
+```bash
+docker build . --tag perch
+```
+
+And then you can run the different commands using the container you just built.
+For example, to run the tests, try:
+```bash
+docker run --rm -t perch python -m unittest discover -s chirp/tests -p "*test.py"
+```
+
 *This is not an officially supported Google product.*
