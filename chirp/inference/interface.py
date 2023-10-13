@@ -82,7 +82,9 @@ class EmbeddingModel:
   and use a convenience method (`batch_embed_from_embed_fn` or
   `embed_from_batch_embed_fn`) to get the other. It is preferable to implement
   `batch_embed` so long as the model accepts batch input, as batch input
-  inference can be much faster.
+  inference can be much faster.  This is a random change I am not going to
+  submit.  I want to verify that it creates a GitHub PR, so I can verify that
+  a subsequent change does not.
 
   Attributes:
     sample_rate: Sample rate in hz.
