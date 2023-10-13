@@ -176,6 +176,69 @@ class Pad(FeaturesPreprocessOp):
 
 
 @dataclasses.dataclass
+class RepeatPadding(FeaturesPreprocessOp):
+  """Repeats audio until it hits window size.
+
+  When audio clips are under the defined window size it is useful to repeat them
+  until they meet or exceed the set window size. For example if window size is
+  5s but audio is 2s, repeat the audio 3 times. Add Slice or RandomSlice classes
+  to the pipeline to then trim it to size.
+
+  Attributes:
+    pad_size: The window size we want to fill.
+    add_mask: Whether to add a new mask feature indicating where the padding
+      appears in the named features. This will be all 1's when repeating but
+      have retained it to be sure it doesn't break anything else down the line.
+    names: The name of the features to pad.
+    sample_rate: Optional sample rate. Reads from dataset_info if not provided.
+  """
+
+  pad_size: float
+  add_mask: bool = True
+  names: tuple[str, ...] = ('audio',)
+  sample_rate: int | None = None
+
+  def __call__(
+      self, features: Features, dataset_info: tfds.core.DatasetInfo
+  ) -> Features:
+    sample_rate = self.get_sample_rate(dataset_info)
+    window_size = tf.cast(self.pad_size * sample_rate, tf.int32)
+
+    features = features.copy()
+    for name in self.names:
+      if name not in features:
+        continue
+      # get the audio tensor
+      feature = features[name]
+      feature_length = tf.shape(feature)[-1]
+
+      # Calculate the number of times the feature needs to be repeated
+      num_repeats = (window_size + feature_length - 1) // feature_length
+      # Tile the feature tensor along the time axis
+      multiples = tf.concat(
+          [tf.ones(tf.rank(feature) - 1, dtype=tf.int32), [num_repeats]], axis=0
+      )
+      # Repeat the feature tensor along the last axis
+      repeated_feature = tf.tile(feature, multiples)
+
+      # Trim audio to window_size. Do at both ends to centre original audio.
+      excess_length = tf.shape(repeated_feature)[-1] - window_size
+      trim_start = excess_length // 2
+      trim_end = trim_start + window_size
+      trimmed_feature = repeated_feature[..., trim_start:trim_end]
+
+      # Mask indicates where audio data is vs zeros (is all audio if repeating)
+      if self.add_mask:
+        mask = tf.ones_like(repeated_feature)
+        features[f'{name}_mask'] = mask
+
+      # replace original audio tensor with repeated audio
+      features[name] = trimmed_feature
+
+    return features
+
+
+@dataclasses.dataclass
 class Slice(FeaturesPreprocessOp):
   """Slices a window of the input.
 
@@ -358,7 +421,7 @@ class MixAudio(DatasetPreprocessOp):
       sources. Does not have to be normalized. For example, (1., 1.) will result
       in half of the examples being raw examples, and the other half being
       mixtures of two examples.
-    name: The name of the featuere to be mixed.
+    name: The name of the feature to be mixed.
     source_name: The unmixed channels will be stored in this feature.
     pad_names: These labels must be padded to zeros.
     label_names: The names of the labels and masks, which will be combined using

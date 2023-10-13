@@ -525,6 +525,45 @@ class PipelineTest(parameterized.TestCase):
       print(key, expected_value, annotated_dataset[key])
       np.testing.assert_equal(expected_value, annotated_dataset[key])
 
+  def test_repeat_padding(self):
+    # Set some example values
+    sample_rate_hz = self._builder.info.features['audio'].sample_rate
+    audio_length_s = 2
+    audio_length_samples = sample_rate_hz * audio_length_s
+    window_size_s = 5
+
+    # Create a random audio tensor
+    example = {
+        'audio': tf.random.uniform(
+            [audio_length_samples],
+            dtype=tf.float32,
+        ),
+    }
+
+    # Apply RepeatPadding to the audio
+    repeat_padding_op = pipeline.RepeatPadding(
+        pad_size=window_size_s, sample_rate=sample_rate_hz
+    )
+    repeat_pad_example = repeat_padding_op(example, self._builder.info)
+
+    # Apply boring old zero padding
+    zero_pad_op = pipeline.Pad(
+        pad_size=window_size_s, sample_rate=sample_rate_hz
+    )
+    zero_pad_example = zero_pad_op(example, self._builder.info)
+
+    # Check repeat pad has the right output length
+    self.assertEqual(
+        tf.shape(repeat_pad_example['audio'])[-1],
+        window_size_s * sample_rate_hz,
+    )
+
+    # Check that both padding operations result in the same output length
+    self.assertEqual(
+        tf.shape(repeat_pad_example['audio'])[-1],
+        tf.shape(zero_pad_example['audio'])[-1],
+    )
+
 
 if __name__ == '__main__':
   absltest.main()
