@@ -40,13 +40,13 @@ def embed(
   for batch in data_loader:
     # Each element in the dataset is a recording that was turned into a batch
     # of windows.
-    embeddings.append(embed_fn(batch["audio"]))
+    embeddings.append(embed_fn(batch["windows"]))
     labels.append(batch["label"])
   return jnp.concatenate(embeddings, axis=0), jnp.concatenate(labels, axis=0)
 
 
 def sample_queries(
-    key: random.KeyArray, labels: jax.Array
+    key: jax.Array, labels: jax.Array
 ) -> tuple[jax.Array, jax.Array]:
   """Samples a one-shot retrieval query for each species.
 
@@ -73,9 +73,7 @@ def sample_queries(
 
 
 def one_shot_metric(
-    key: random.KeyArray,
-    normalized_embeddings: jax.Array,
-    labels: jax.Array,
+    key: jax.Array, normalized_embeddings: jax.Array, labels: jax.Array
 ) -> float:
   """Computes the species-aggregated ROC-AUC.
 
@@ -107,7 +105,7 @@ def one_shot_metric(
 
 
 def one_shot_validate(
-    key: random.KeyArray,
+    key: jax.Array,
     data_loader: pygrain.DataLoader,
     embed_fn: Callable[[jax.Array], jax.Array],
     num_samples: int,

@@ -44,7 +44,9 @@ def get_dataset(config: config_dict.ConfigDict) -> pygrain.DataLoader:
   class_list = db.class_lists[config.source_class_list]
   operations_ = [
       google_grain_utils.Parse(),
-      google_grain_utils.MultiHot(class_list.namespace, class_list.classes),
+      # TODO(bartvm): Can't use class_list.namespace since this is
+      # ebird2022_species for xenocanto_v3, whereas the dataset uses ebird2022
+      google_grain_utils.MultiHot("ebird2022", class_list.classes),
       google_grain_utils.Window(config.window_size, config.hop_size),
       google_grain_utils.BinPacking(
           batch_size=config.batch_size,
@@ -90,10 +92,6 @@ def get_validation_dataset(
       data_source=data_source,
       sampler=sampler,
       operations=operations,
-      worker_count=config.worker_count,
-      shard_options=pygrain.ShardOptions(
-          shard_index=jax.process_index(),
-          shard_count=jax.process_count(),
-          drop_remainder=False,
-      ),
+      worker_count=0,
+      shard_options=pygrain.NoSharding(),
   )

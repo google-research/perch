@@ -26,6 +26,11 @@ def get_config() -> config_dict.ConfigDict:
   config.window_size = 5
   config.hop_size = 2.5
   config.batch_size = 512
-  config.worker_count = 8
+  config.worker_count = 4
   config.num_one_shot_samples = 600
+  config.log_interval = 100
+  config.validation_interval = 1000
+  config.seed = 0
+  config.sample_rate = 32_000
+  config.learning_rate = 1e-3
   return config
