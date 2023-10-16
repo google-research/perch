@@ -87,7 +87,9 @@ def run(
 
     grad_fn = jax.value_and_grad(forward, has_aux=True)
 
-    @functools.partial(jax.pmap, axis_name="batch", in_axes=(0, 0, None))
+    @functools.partial(
+        jax.pmap, axis_name="batch", in_axes=(0, 0, None), out_axes=(None, 0)
+    )
     def step(state, batch, step_key):
       (loss, variables), grads = grad_fn(
           state.params,
@@ -172,8 +174,9 @@ def run(
     # Metrics writing
     writer = metric_writers.create_default_writer(workdir)
 
-    for batch in data_iter:
+    while True:
       with jax.profiler.StepTraceAnnotation("train", step_num=step_num):
+        batch = next(data_iter)
         key, step_key = random.split(key)
         loss, state = step(
             state,
@@ -185,7 +188,7 @@ def run(
             step_key,
         )
         if step_num % config.log_interval == 0:
-          writer.write_scalars(step_num, {"loss": loss[0]})
+          writer.write_scalars(step_num, {"loss": loss})
         if step_num % config.validation_interval == 0:
           score = validate.one_shot_validate(
               random.PRNGKey(config.seed),
@@ -198,5 +201,42 @@ def run(
               config.num_one_shot_samples,
           )
           writer.write_scalars(step_num, {"validation_score": score})
+        if step_num % config.checkpoint_interval == 0:
+          state_ = jax.tree_map(host_local_array_to_global_array, state)
+          checkpoint_manager.save(
+              step_num, dict(state=state_, data_iter=data_iter)
+          )
         step_num += 1
-        # TODO(bartvm): Figure out checkpointing with Orbax.
+
+
+def host_local_array_to_global_array(
+    arr: jax.Array,
+) -> jax.Array:
+  """Converts a host local array from to global jax.Array.
+
+  Copied from `fully_replicated_host_local_array_to_global_array` in Orbax, but
+  without the check that `arr.is_fully_replicated` is true. (For some reason
+  `is_fully_replicated == False` for the state array, even though it is clearly
+  replicated on all devices. Following advice from the JAXers chat group, we
+  just skip the check.)
+
+  See also the creation of a global device array:
+  https://jax.readthedocs.io/en/latest/jax_array_migration.html#creating-jax-array
+
+  Args:
+    arr: Host local array
+
+  Returns:
+    A global array.
+  """
+  global_shape = arr.device_buffers[0].shape
+  # Create a 1D mesh to create fully replicated global jax.Array.
+  sharding = jax.sharding.NamedSharding(
+      jax.sharding.Mesh(jax.devices(), axis_names=("x",)),
+      jax.sharding.PartitionSpec(None)
+      if global_shape
+      else jax.sharding.PartitionSpec(),
+  )
+  # pmap-produced Array has a "scrambled" device order.
+  dbs = sorted(arr.device_buffers, key=lambda x: x.device().id)
+  return jax.make_array_from_single_device_arrays(global_shape, sharding, dbs)
