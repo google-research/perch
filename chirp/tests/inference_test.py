@@ -516,6 +516,7 @@ class InferenceTest(parameterized.TestCase):
         write_raw_audio=False,
         model_key='placeholder_model',
         model_config=model_kwargs,
+        file_id_depth=0,
     )
 
     metrics = embed_lib.build_run_pipeline(

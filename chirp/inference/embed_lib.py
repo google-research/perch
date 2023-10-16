@@ -133,8 +133,8 @@ class EmbedFn(beam.DoFn):
       write_raw_audio: bool,
       model_key: str,
       model_config: config_dict.ConfigDict,
+      file_id_depth: int,
       crop_s: float = -1.0,
-      file_id_depth: int = 0,
       min_audio_s: float = 5.0,
       embedding_model: interface.EmbeddingModel | None = None,
       target_sample_rate: int = -2,
@@ -152,10 +152,10 @@ class EmbedFn(beam.DoFn):
         Only used for setting up the embedding model.
       model_config: Keyword arg dictionary for the model wrapper class. Only
         used for setting up the embedding model.
-      crop_s: If greater than zero, run on only the first crop_s seconds.
       file_id_depth: Number of parent directories to include in the file_id. eg,
         If file_id_depth=2 and the filename is `C://my/file/is/awesome.wav`,
         then the file_id will be `file/is/awesome.wav`.
+      crop_s: If greater than zero, run on only the first crop_s seconds.
       min_audio_s: Minimum allowed audio length, in seconds.
       embedding_model: Pre-loaded embedding model.
       target_sample_rate: Target sample rate when loading audio. Set to -2 to

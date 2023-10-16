@@ -42,6 +42,7 @@ def get_config() -> config_dict.ConfigDict:
       'write_separated_audio': False,
       'write_raw_audio': False,
       'model_key': 'separate_embed_model',
+      'file_id_depth': 1,
       'model_config': {
           'sample_rate': 32000,
           'taxonomy_model_tf_config': {

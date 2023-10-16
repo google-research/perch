@@ -40,9 +40,10 @@ def get_config() -> config_dict.ConfigDict:
   config.num_direct_workers = 8
   config.embed_fn_config = {
       'write_embeddings': True,
-      'write_logits': True,
+      'write_logits': False,
       'write_separated_audio': False,
-      'write_raw_audio': True,
+      'write_raw_audio': False,
+      'file_id_depth': 1,
       'model_key': 'birdnet',
       'model_config': {
           'model_path': model_path,
