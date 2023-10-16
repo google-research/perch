@@ -47,6 +47,7 @@ def get_dataset(config: config_dict.ConfigDict) -> pygrain.DataLoader:
       # TODO(bartvm): Can't use class_list.namespace since this is
       # ebird2022_species for xenocanto_v3, whereas the dataset uses ebird2022
       google_grain_utils.MultiHot("ebird2022", class_list.classes),
+      google_grain_utils.MixAudio([1, 1, 1]),
       google_grain_utils.Window(config.window_size, config.hop_size),
       google_grain_utils.BinPacking(
           batch_size=config.batch_size,
