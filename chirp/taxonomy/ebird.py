@@ -115,6 +115,9 @@ def parse_ebird(
           )['CATEGORY_y']
           == 'species'
       ][['SPECIES_CODE', 'REPORT_AS']],
+      ('clements_to_species', 'clements', 'species'): df[
+          df['CATEGORY'] == 'species'
+      ][['SCI_NAME', 'SPECIES_CODE']],
   }
 
   for mask, suffix in (
