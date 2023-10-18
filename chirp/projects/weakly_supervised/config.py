@@ -21,7 +21,8 @@ def get_config() -> config_dict.ConfigDict:
   """Get the configuration."""
   config = config_dict.ConfigDict()
   config.dataset = ""
-  config.validation_dataset = ""
+  config.powdermill_dataset = ""
+  config.caples_dataset = ""
   config.source_class_list = "xenocanto_v3"
   config.window_size = 5
   config.hop_size = 2.5

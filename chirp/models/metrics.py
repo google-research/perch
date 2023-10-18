@@ -60,7 +60,7 @@ def roc_auc(
     labels: jnp.ndarray,
     label_mask: jnp.ndarray | None = None,
     sort_descending: bool = True,
-    sample_threshold: int = 0,
+    sample_threshold: int = 1,
 ) -> Dict[str, Any]:
   """Computes ROC-AUC scores.
 
@@ -73,8 +73,9 @@ def roc_auc(
       order (e.g. for evaluating over similarity metrics where higher scores are
       preferred). If false, computes average_precision on descendingly sorted
       inputs.
-    sample_threshold: Determines whether or not to compute the metric if there
-      are fewer than `sample_threshold` datapoints.
+    sample_threshold: Only classes with at least this many samples will be used
+      in the calculation of the final metric. By default this is 1, which means
+      that classes without any positive examples will be ignored.
 
   Returns:
     A dictionary of ROC-AUC scores using the arithmetic ('macro') and
@@ -86,7 +87,7 @@ def roc_auc(
   class_roc_auc, class_roc_auc_var = generalized_mean_rank(
       logits.T, labels.T, label_mask=label_mask, sort_descending=sort_descending
   )
-  mask = jnp.sum(labels, axis=0) > sample_threshold
+  mask = jnp.sum(labels, axis=0) >= sample_threshold
   class_roc_auc = jnp.where(mask, class_roc_auc, jnp.nan)
   class_roc_auc_var = jnp.where(mask, class_roc_auc_var, jnp.nan)
   return {

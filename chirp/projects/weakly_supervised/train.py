@@ -125,7 +125,10 @@ def run(
     data_iter = iter(data_loader)
 
     # Load the validation set
-    validation_data_loader = data.get_validation_dataset(config)
+    validation_data_loaders = {
+        "powdermill": data.get_powdermill_dataset(config),
+        "caples": data.get_caples_dataset(config),
+    }
 
     # TODO(bartvm): This is likely a bit slow because audio consists of batches
     # of variable sizes (triggering recompilation), and is not pmapped.
@@ -190,17 +193,18 @@ def run(
         if step_num % config.log_interval == 0:
           writer.write_scalars(step_num, {"loss": loss})
         if step_num % config.validation_interval == 0:
-          score = validate.one_shot_validate(
-              random.PRNGKey(config.seed),
-              validation_data_loader,
-              functools.partial(
-                  embed_fn,
-                  jax_utils.unreplicate(state.params),
-                  jax_utils.unreplicate(state.variables),
-              ),
-              config.num_one_shot_samples,
-          )
-          writer.write_scalars(step_num, {"validation_score": score})
+          for name, validation_data_loader in validation_data_loaders.items():
+            score = validate.one_shot_validate(
+                random.PRNGKey(config.seed),
+                validation_data_loader,
+                functools.partial(
+                    embed_fn,
+                    jax_utils.unreplicate(state.params),
+                    jax_utils.unreplicate(state.variables),
+                ),
+                config.num_one_shot_samples,
+            )
+            writer.write_scalars(step_num, {f"{name}_validation_score": score})
         if step_num % config.checkpoint_interval == 0:
           state_ = jax.tree_map(host_local_array_to_global_array, state)
           checkpoint_manager.save(
