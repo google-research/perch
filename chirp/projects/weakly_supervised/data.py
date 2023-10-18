@@ -64,12 +64,15 @@ def get_dataset(config: config_dict.ConfigDict) -> pygrain.DataLoader:
   )
 
 
-def get_validation_dataset(
+def _get_validation_dataset(
+    dataset: str,
+    namespace: str,
+    class_list: tuple[str, ...],
     config: config_dict.ConfigDict,
 ) -> pygrain.DataLoader:
   """Load the validation dataset using Grain."""
   # Load the dataset
-  data_source = pygrain.ArrayRecordDataSource(config.validation_dataset)
+  data_source = pygrain.ArrayRecordDataSource(dataset)
   num_records = len(data_source)
 
   sampler = pygrain.SequentialSampler(
@@ -77,16 +80,14 @@ def get_validation_dataset(
   )
 
   # Pipeline
-  db = namespace_db.load_db()
-  mapping = db.mappings["ibp2019_to_ebird2022"]
   operations = [
       google_grain_utils.Parse(),
       google_grain_utils.Window(
           config.window_size,
           config.hop_size,
           apply_time_bounded_labels=True,
-          namespace=mapping.target_namespace,
-          class_list=tuple(sorted(mapping.mapped_pairs.values())),
+          namespace=namespace,
+          class_list=class_list,
       ),
   ]
   return pygrain.DataLoader(
@@ -95,4 +96,30 @@ def get_validation_dataset(
       operations=operations,
       worker_count=0,
       shard_options=pygrain.NoSharding(),
+  )
+
+
+def get_powdermill_dataset(
+    config: config_dict.ConfigDict,
+) -> pygrain.DataLoader:
+  db = namespace_db.load_db()
+  mapping = db.mappings["ibp2019_to_ebird2022"]
+  return _get_validation_dataset(
+      config.powdermill_dataset,
+      mapping.target_namespace,
+      tuple(sorted(mapping.mapped_pairs.values())),
+      config,
+  )
+
+
+def get_caples_dataset(
+    config: config_dict.ConfigDict,
+) -> pygrain.DataLoader:
+  db = namespace_db.load_db()
+  class_list = db.class_lists["caples"]
+  return _get_validation_dataset(
+      config.caples_dataset,
+      class_list.namespace,
+      class_list.classes,
+      config,
   )

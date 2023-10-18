@@ -81,10 +81,24 @@ def one_shot_metric(
   uses the cosine similarity to rank embeddings with respect to each retrieval
   query.
 
+  Note that when this metric constructs a one-shot retrieval task, it
+  effectively ignores all other labels. That is, when constructing a retrieval
+  task for class A, an example with label set A and B can be chosen as the
+  retrieval query (exemplar). Then, when an example with label B is returned it
+  is considered a false positive.
+
+  This function is also not aware of any "unknown" class. Consider removing
+  all examples with this label entirely, because it is often not sensible to
+  use examples with this label as retrieval queries, nor is it clear whether
+  such examples are false positives when retrieved.
+
   Args:
     key: Random key controlling the sampling of one-shot retrieval queries  .
     normalized_embeddings: Search corpus of normalized embeddings.
-    labels: Multi-hot labels.
+    labels: Multi-hot labels. Only classes with 2 or more samples will be used,
+      all others will be ignored. Note that the classes should probably not
+      include an unknown class, because it makes little sense to try and do
+      one-shot retrieval on those samples.
 
   Returns:
     The ROC-AUC, aggregated across species using the geometric average.
@@ -100,6 +114,9 @@ def one_shot_metric(
           labels=labels,
           label_mask=label_mask,
           sort_descending=True,
+          # We need at least 2 samples for one-shot retrieval: One exemplar and
+          # one to retrieve.
+          sample_threshold=2,
       )["geometric"]
   )
 
