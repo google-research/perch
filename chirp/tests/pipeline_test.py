@@ -564,6 +564,98 @@ class PipelineTest(parameterized.TestCase):
         tf.shape(zero_pad_example['audio'])[-1],
     )
 
+  def test_AddTensorOp(self):
+    """Test for combined datasets."""
+    # Define some sample datasets
+    ds1 = tf.data.Dataset.from_tensor_slices({
+        'tensor_A': tf.constant([1, 2, 3], dtype=tf.int32),
+        'tensor_B': tf.constant([1.0, 2.0, 3.0], dtype=tf.float32),
+    })
+    ds2 = tf.data.Dataset.from_tensor_slices({
+        'tensor_A': tf.constant([1, 2, 3], dtype=tf.int32),
+        # add new tensor_C
+        'tensor_C': tf.constant([1, 2, 3], dtype=tf.int32),
+    })
+    ds3 = tf.data.Dataset.from_tensor_slices({
+        'tensor_A': tf.constant([1, 2, 3], dtype=tf.int32),
+        # tensor_B is different shape
+        'tensor_B': tf.constant(
+            [[1.0, 1.0], [2.0, 2.0], [3.0, 3.0]], dtype=tf.float32
+        ),
+    })
+    ds4 = tf.data.Dataset.from_tensor_slices({
+        'tensor_A': tf.constant([1, 2, 3], dtype=tf.int32),
+        # tensor_B is different dtype
+        'tensor_B': tf.constant([1, 2, 3], dtype=tf.int64),
+    })
+
+    # Ensure the unified tensor dict info contains details about all tensors
+    unified_ds_dict = pipeline.AddTensorOp.make_merged_op([ds1, ds2])
+    assert 'tensor_A' in unified_ds_dict
+    assert 'tensor_B' in unified_ds_dict
+    assert 'tensor_C' in unified_ds_dict
+
+    # Unify datasets
+    unified_ds1 = pipeline.AddTensorOp.add_missing_tensors_to_dataset(
+        ds1, unified_ds_dict
+    )
+    unified_ds2 = pipeline.AddTensorOp.add_missing_tensors_to_dataset(
+        ds2, unified_ds_dict
+    )
+
+    # Extract one item from unified datasets to check tensors
+    example_ds1 = next(iter(unified_ds1))
+    example_ds2 = next(iter(unified_ds2))
+
+    # Check tensors in unified_ds1
+    assert 'tensor_A' in example_ds1
+    assert 'tensor_B' in example_ds1
+    assert 'tensor_C' in example_ds1
+    assert example_ds1['tensor_A'].dtype == tf.int32
+    assert example_ds1['tensor_B'].dtype == tf.float32
+    assert example_ds1['tensor_C'].dtype == tf.int32
+
+    # Check tensors in unified_ds2
+    assert 'tensor_A' in example_ds2
+    assert 'tensor_B' in example_ds2
+    assert 'tensor_C' in example_ds2
+    assert example_ds2['tensor_A'].dtype == tf.int32
+    assert example_ds2['tensor_B'].dtype == tf.float32
+    assert example_ds2['tensor_C'].dtype == tf.int32
+
+    # Test error is raised with the faulty ds3 and ds4 datasets
+    with self.assertRaises(ValueError):
+      pipeline.AddTensorOp.make_merged_op([ds1, ds3])
+    with self.assertRaises(ValueError):
+      pipeline.AddTensorOp.make_merged_op([ds1, ds4])
+
+  def test_RemoveUnwantedKeys(self):
+    """Test for removing unwanted keys from the dataset features."""
+    # Define a mock dataset and unwanted keys
+    features = {
+        'tensor_A': tf.constant([1, 2, 3], dtype=tf.int32),
+        'tensor_B': tf.constant([1.0, 2.0, 3.0, 4.0], dtype=tf.float32),
+        'tensor_C': tf.constant(['a', 'b', 'c', 'd'], dtype=tf.string),
+    }
+    unwanted_keys = ['tensor_A', 'tensor_C']
+
+    # Mock dataset_info. dataset_info is not currently used anywhere.
+    mock_dataset_info = mock.Mock()
+
+    # Apply the op
+    op = pipeline.RemoveUnwantedKeys(unwanted_keys=unwanted_keys)
+    modified_features = op(features, mock_dataset_info)
+
+    # Check keys removed
+    assert 'tensor_A' not in modified_features
+    assert 'tensor_C' not in modified_features
+
+    # Check unchanged key remains
+    assert 'tensor_B' in modified_features
+    np.testing.assert_array_equal(
+        modified_features['tensor_B'].numpy(), features['tensor_B'].numpy()
+    )
+
 
 if __name__ == '__main__':
   absltest.main()

@@ -30,6 +30,7 @@ from chirp.models import quantizers
 from chirp.models import soundstream_unet
 from chirp.models import taxonomy_model
 from chirp.preprocessing import pipeline
+from chirp.train import utils
 from flax import linen as nn
 import optax
 
@@ -52,4 +53,5 @@ def get_globals() -> dict[str, Any]:
       "handcrafted_features": handcrafted_features,
       "soundstream_unet": soundstream_unet,
       "taxonomy_model": taxonomy_model,
+      "train_utils": utils,
   }

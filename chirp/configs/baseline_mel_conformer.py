@@ -41,7 +41,7 @@ def get_config() -> config_dict.ConfigDict:
   input_shape = (
       config.get_ref('train_window_size_s') * config.get_ref('sample_rate_hz'),
   )
-  config.init_config = presets.get_base_init_config(
+  config.init_config = presets.get_classifier_init_config(
       config, input_shape=input_shape
   )
   config.init_config.optimizer = _c(

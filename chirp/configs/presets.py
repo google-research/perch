@@ -57,7 +57,6 @@ def get_base_config(**kwargs):
   config.update(kwargs)
   return config
 
-
 def get_base_init_config(
     config: config_dict.ConfigDict, **kwargs
 ) -> config_dict.ConfigDict:
@@ -69,6 +68,51 @@ def get_base_init_config(
   init_config.learning_rate = 0.001
   init_config.rng_seed = 0
   init_config.target_class_list = config.get_ref('target_class_list')
+  init_config.update(**kwargs)
+  return init_config
+
+
+def get_classifier_init_config(
+    # TODO: Merge this and get_base_init_config so all baselines use the same one
+    config: config_dict.ConfigDict,
+    **kwargs,
+) -> config_dict.ConfigDict:
+  """Init config for classifier training, compatible with multi datasets."""
+  init_config = config_dict.ConfigDict()
+  init_config.input_shape = (
+      config.get_ref('train_window_size_s') * config.get_ref('sample_rate_hz'),
+  )
+  init_config.learning_rate = 0.001
+  init_config.rng_seed = 0
+  init_config.output_head_metadatas = (
+      _c(
+          'train_utils.OutputHeadMetadata.from_db',
+          key='label',
+          class_list_name=config.get_ref('target_class_list'),
+          weight=1.0,
+      ),
+      _c(
+          'train_utils.OutputHeadMetadata.from_mapping',
+          key='genus',
+          source_class_list_name=config.get_ref('target_class_list'),
+          weight=0.1,
+          mapping_name='ebird2021_to_genus',
+      ),
+      _c(
+          'train_utils.OutputHeadMetadata.from_mapping',
+          key='family',
+          source_class_list_name=config.get_ref('target_class_list'),
+          weight=0.1,
+          mapping_name='ebird2021_to_family',
+      ),
+      _c(
+          'train_utils.OutputHeadMetadata.from_mapping',
+          key='order',
+          source_class_list_name=config.get_ref('target_class_list'),
+          weight=0.1,
+          mapping_name='ebird2021_to_order',
+      ),
+  )
   init_config.update(**kwargs)
   return init_config
 
@@ -202,6 +246,11 @@ def get_supervised_train_pipeline(
               target_class_list=config.get_ref('target_class_list'),
               add_taxonomic_labels=config.get_ref('add_taxonomic_labels'),
           ),
+          _c('pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25),
+          _c(
+              'pipeline.RandomSlice',
+              window_size=config.get_ref('train_window_size_s'),
+          ),
           _c('pipeline.MixAudio', mixin_prob=mixin_prob),
           _c(
               'pipeline.Pad',
@@ -209,15 +258,10 @@ def get_supervised_train_pipeline(
               add_mask=config.get_ref('pad_mask'),
           ),
           _c(
-              'pipeline.RandomSlice',
-              window_size=config.get_ref('train_window_size_s'),
-          ),
-          _c(
               'pipeline.Batch',
               batch_size=config.get_ref('batch_size'),
               split_across_devices=True,
           ),
-          _c('pipeline.RandomNormalizeAudio', min_gain=0.15, max_gain=0.25),
           _c('pipeline.Repeat'),
       ],
   )

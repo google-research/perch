@@ -35,7 +35,7 @@ class TaxonomyModel(nn.Module):
     num_classes: Number of classes for each output head.
     encoder: A network (e.g., a 2D convolutional network) that takes
       spectrograms and returns feature vectors.
-    taxonomy_loss_weight: Weight for taxonomic label losses.
+    taxonomy_loss_weight: Weight for taxonomic label losses. DEPRACATED!
     frontend: The frontend to use to generate features.
     hubert_feature_extractor: Optionally, a pre-trained frozen feature extractor
       trained in a self-supervised way. This option is mutually exclusive with
@@ -55,7 +55,7 @@ class TaxonomyModel(nn.Module):
       train: bool,
       use_running_average: bool | None = None,
       mask: jnp.ndarray | None = None,
-  ) -> output.ClassifierOutput | output.TaxonomyOutput:
+  ) -> dict[str, jnp.ndarray]:
     """Apply the taxonomy model.
 
     Args:
@@ -110,13 +110,9 @@ class TaxonomyModel(nn.Module):
     # Classify the encoder outputs and assemble outputs.
     model_outputs = {}
     model_outputs["embedding"] = x
-    model_outputs["label"] = nn.Dense(self.num_classes["label"])(x)
-    if not self.taxonomy_loss_weight or set(self.num_classes) == set(["label"]):
-      return output.ClassifierOutput(**model_outputs)
     for k, n in self.num_classes.items():
-      if k != "label":
-        model_outputs[k] = nn.Dense(n)(x)
-    return output.TaxonomyOutput(**model_outputs)
+      model_outputs[k] = nn.Dense(n)(x)
+    return model_outputs
 
 
 class ConformerModel(nn.Module):

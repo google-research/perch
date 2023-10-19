@@ -135,10 +135,10 @@ class TaxonomyModelCallback:
     self.model_callback = pmap_with_remainder(fprop)
 
     if self.use_learned_representations:
-      class_list = (
-          namespace_db.load_db()
-          .class_lists[self.init_config.target_class_list]
-          .classes
+      class_list = next(
+          md.class_list.classes
+          for md in self.init_config.output_head_metadatas
+          if md.key == 'label'
       )
       head_index = list(model_bundle.model.num_classes.keys()).index('label')
       output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
