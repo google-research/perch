@@ -428,8 +428,18 @@ def run(
     config.eval_dataset_config = getattr(config.eval_dataset_config, name)
   else:
     name = "valid"
-
-  if mode == "train":
+  if (
+      hasattr(config, "is_multi_dataset")
+      and config.is_multi_dataset
+      and mode == "train"
+  ):
+    train_dataset, dataset_info = data_utils.get_multi_dataset(
+        is_train=True,
+        tf_data_service_address=tf_data_service_address,
+        **config.train_dataset_config,
+    )
+    valid_dataset = None
+  elif mode == "train":
     train_dataset, dataset_info = data_utils.get_dataset(
         is_train=True,
         tf_data_service_address=tf_data_service_address,
