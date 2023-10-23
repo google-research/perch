@@ -64,7 +64,7 @@ def load_audio_file(
     target_sample_rate: int,
     resampling_type: str = 'polyphase',
 ) -> jnp.ndarray:
-  """Read an audio file and resample it using librosa."""
+  """Read an audio file, and resample it using librosa."""
   filepath = epath.Path(filepath)
   if target_sample_rate <= 0:
     # Use the native sample rate.
