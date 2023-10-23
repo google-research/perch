@@ -135,7 +135,7 @@ def load_audio_window(
   except soundfile.LibsndfileError:
     logging.info('Failed to load audio with libsndfile: %s', filepath)
   # This fail-over is much slower but more reliable; the entire audio file
-  # is loaded (and possible resampled) and then we extract the target audio.
+  # is loaded (and possibly resampled) and then we extract the target audio.
   audio = load_audio(filepath, sample_rate)
   offset = int(offset_s * sample_rate)
   window_size = int(window_size_s * sample_rate)
