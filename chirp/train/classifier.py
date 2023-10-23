@@ -25,7 +25,7 @@ from chirp.models import metrics
 from chirp.models import output
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
-from chirp.train import utils
+from chirp.train import train_utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -61,7 +61,7 @@ def get_train_metrics(
 
   metrics_ = {"loss": clu_metrics.Average.from_output("loss")}
   for key in keys:
-    metrics_[f"{key}_loss"] = utils.MultiAverage.create(
+    metrics_[f"{key}_loss"] = train_utils.MultiAverage.create(
         num_labels[key]
     ).from_output(f"{key}_loss")
     metrics_[f"{key}_map"] = clu_metrics.Average.from_fun(get_keyed_map_fn(key))
@@ -79,7 +79,7 @@ def initialize_model(
     optimizer: optax.GradientTransformation | None = None,
     for_inference: bool = False,
     add_taxonomic_labels: bool = True,
-) -> tuple[utils.ModelBundle, utils.TrainState]:
+) -> tuple[train_utils.ModelBundle, train_utils.TrainState]:
   """Creates model for training, eval, or inference.
 
   Args:
@@ -135,11 +135,11 @@ def initialize_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = utils.TrainState(
+  train_state = train_utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state
   )
   return (
-      utils.ModelBundle(
+      train_utils.ModelBundle(
           model=model,
           key=key,
           ckpt=ckpt,
@@ -166,7 +166,7 @@ def train(
 
   Args:
     model_bundle: Static objects for conducting the experiment.
-    train_state: Initial utils.TrainState.
+    train_state: Initial train_utils.TrainState.
     train_dataset: Training dataset.
     num_train_steps: The number of training steps.
     logdir: Directory to use for logging.
@@ -178,8 +178,8 @@ def train(
   taxonomy_keys = ["label"]
   taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
   if taxonomy_loss_weight != 0.0:
-    taxonomy_keys += utils.TAXONOMY_KEYS
-  train_metrics_collection = utils.NestedCollection.create(
+    taxonomy_keys += train_utils.TAXONOMY_KEYS
+  train_metrics_collection = train_utils.NestedCollection.create(
       **get_train_metrics(taxonomy_keys, model_bundle.model.num_classes)
   )
 
@@ -198,7 +198,7 @@ def train(
             "patch_mask": patch_mask_key,
         },
     )
-    losses = utils.taxonomy_loss(
+    losses = train_utils.taxonomy_loss(
         outputs=model_outputs,
         taxonomy_loss_weight=taxonomy_loss_weight,
         loss_fn=loss_fn,
@@ -222,7 +222,7 @@ def train(
         grads, train_state.opt_state, train_state.params
     )
     params = optax.apply_updates(train_state.params, updates)
-    train_state = utils.TrainState(
+    train_state = train_utils.TrainState(
         step=train_state.step + 1,
         params=params,
         opt_state=opt_state,
@@ -253,7 +253,7 @@ def train(
         train_metrics = flax_utils.unreplicate(train_metrics).compute(
             prefix="train"
         )
-        utils.write_metrics(writer, step, train_metrics)
+        train_utils.write_metrics(writer, step, train_metrics)
       reporter(step)
 
     if (step + 1) % checkpoint_every_steps == 0 or step == num_train_steps:
@@ -263,8 +263,8 @@ def train(
 
 
 def evaluate(
-    model_bundle: utils.ModelBundle,
-    train_state: utils.TrainState,
+    model_bundle: train_utils.ModelBundle,
+    train_state: train_utils.TrainState,
     valid_dataset: tf.data.Dataset,
     workdir: str,
     num_train_steps: int,
@@ -279,7 +279,7 @@ def evaluate(
   taxonomy_keys = ["label"]
   taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
   if taxonomy_loss_weight != 0.0:
-    taxonomy_keys += utils.TAXONOMY_KEYS
+    taxonomy_keys += train_utils.TAXONOMY_KEYS
 
   # The metrics are the same as for training, but with rank-based metrics added.
   metrics_ = get_train_metrics(taxonomy_keys, model_bundle.model.num_classes)
@@ -287,8 +287,10 @@ def evaluate(
   for key in taxonomy_keys:
     valid_metrics[f"{key}_cmap"] = ((f"{key}_logits", key), metrics.cmap)
     valid_metrics[f"{key}_roc_auc"] = ((f"{key}_logits", key), metrics.roc_auc)
-  metrics_["rank_metrics"] = utils.CollectingMetrics.from_funs(**valid_metrics)
-  valid_metrics_collection = utils.NestedCollection.create(**metrics_)
+  metrics_["rank_metrics"] = train_utils.CollectingMetrics.from_funs(
+      **valid_metrics
+  )
+  valid_metrics_collection = train_utils.NestedCollection.create(**metrics_)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def get_metrics(batch, train_state):
@@ -297,7 +299,7 @@ def evaluate(
     model_outputs = model_bundle.model.apply(
         variables, batch["audio"], train=False, **kwargs
     )
-    losses = utils.taxonomy_loss(
+    losses = train_utils.taxonomy_loss(
         outputs=model_outputs,
         taxonomy_loss_weight=taxonomy_loss_weight,
         loss_fn=loss_fn,
@@ -333,7 +335,7 @@ def evaluate(
   reporter = periodic_actions.ReportProgress(
       num_train_steps=num_train_steps, writer=writer
   )
-  for train_state in utils.checkpoint_iterator(
+  for train_state in train_utils.checkpoint_iterator(
       train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
   ):
     step = int(train_state.step)
@@ -379,13 +381,15 @@ def evaluate(
           break
 
       # Log validation loss
-      utils.write_metrics(writer, step, valid_metrics.compute(prefix=name))
+      train_utils.write_metrics(
+          writer, step, valid_metrics.compute(prefix=name)
+      )
     writer.flush()
 
 
 def export_tf_model(
-    model_bundle: utils.ModelBundle,
-    train_state: utils.TrainState,
+    model_bundle: train_utils.ModelBundle,
+    train_state: train_utils.TrainState,
     workdir: str,
     input_shape: tuple[int, ...],
     num_train_steps: int,
@@ -393,7 +397,7 @@ def export_tf_model(
     polymorphic_batch: bool = True,
 ):
   """Export SavedModel and TFLite."""
-  for train_state in utils.checkpoint_iterator(
+  for train_state in train_utils.checkpoint_iterator(
       train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
   ):
     variables = {"params": train_state.params, **train_state.model_state}

@@ -20,7 +20,7 @@ from chirp.models import mae
 from chirp.models import taxonomy_model
 from chirp.taxonomy import class_utils
 from chirp.train import classifier
-from chirp.train import utils
+from chirp.train import train_utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import periodic_actions
@@ -38,7 +38,7 @@ def initialize_model(
     input_shape: tuple[int, ...],
     learning_rate: float,
     workdir: str,
-) -> tuple[utils.ModelBundle, utils.TrainState]:
+) -> tuple[train_utils.ModelBundle, train_utils.TrainState]:
   """Creates model for training, eval, or inference."""
   del model_config
   # Initialize random number generator
@@ -73,11 +73,13 @@ def initialize_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = utils.TrainState(
+  train_state = train_utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state
   )
   return (
-      utils.ModelBundle(model=model, key=key, ckpt=ckpt, optimizer=optimizer),
+      train_utils.ModelBundle(
+          model=model, key=key, ckpt=ckpt, optimizer=optimizer
+      ),
       train_state,
   )
 
@@ -89,7 +91,9 @@ def initialize_finetune_model(
     learning_rate: float,
     workdir: str,
     target_class_list: str,
-) -> tuple[classifier.utils.ModelBundle, classifier.utils.TrainState]:
+) -> tuple[
+    classifier.train_utils.ModelBundle, classifier.train_utils.TrainState
+]:
   """Creates model for training, eval, or inference."""
   # Initialize random number generator
   key = random.PRNGKey(rng_seed)
@@ -130,11 +134,11 @@ def initialize_finetune_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = classifier.utils.TrainState(
+  train_state = classifier.train_utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state
   )
   return (
-      classifier.utils.ModelBundle(
+      classifier.train_utils.ModelBundle(
           model=model,
           key=key,
           ckpt=ckpt,
@@ -158,7 +162,7 @@ def train(
 
   Args:
     model_bundle: Static objects for conducting the experiment.
-    train_state: Initial utils.TrainState.
+    train_state: Initial train_utils.TrainState.
     train_dataset: Training dataset.
     num_train_steps: The number of training steps.
     logdir: Directory to use for logging.
@@ -223,7 +227,7 @@ def train(
         grads, train_state.opt_state, train_state.params
     )
     params = optax.apply_updates(train_state.params, updates)
-    train_state = utils.TrainState(
+    train_state = train_utils.TrainState(
         step=train_state.step + 1,
         params=params,
         opt_state=opt_state,
@@ -270,6 +274,7 @@ def run(
     tf_data_service_address: str,
 ) -> None:
   """Run the experiment."""
+  train_dataset, valid_dataset, dataset_info = None, None, None
   if mode in ("train", "finetune"):
     train_dataset, dataset_info = data_utils.get_dataset(
         is_train=True,

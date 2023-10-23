@@ -18,7 +18,7 @@
 import itertools
 import os
 import time
-from typing import Callable
+from typing import Any, Callable
 
 from absl import logging
 from chirp import path_utils
@@ -37,16 +37,17 @@ import tensorflow as tf
 TAXONOMY_KEYS = ['genus', 'family', 'order']
 
 
-@flax.struct.dataclass
-class TrainState:
+# Note: Inherit from PyTreeNode instead of using the flax.struct.dataclass
+# to avoid PyType issues.
+# See: https://flax.readthedocs.io/en/latest/api_reference/flax.struct.html
+class TrainState(flax.struct.PyTreeNode):
   step: int
   params: flax.core.scope.VariableDict
   opt_state: optax.OptState
   model_state: flax.core.scope.FrozenVariableDict
 
 
-@flax.struct.dataclass
-class ModelBundle:
+class ModelBundle(flax.struct.PyTreeNode):
   model: nn.Module
   key: jnp.ndarray
   ckpt: checkpoint.Checkpoint

@@ -30,7 +30,7 @@ from chirp.models import metrics
 from chirp.models import output
 from chirp.models import quantizers
 from chirp.taxonomy import class_utils
-from chirp.train import utils
+from chirp.train import train_utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -327,7 +327,7 @@ def get_train_metrics(
   for i, block_ind in enumerate(readout_points):
     for key in keys:
       metrics_.update({
-          f"{key}_{block_ind}_xentropy": utils.MultiAverage.create(
+          f"{key}_{block_ind}_xentropy": train_utils.MultiAverage.create(
               num_labels[key]
           ).from_fun(
               functools.partial(keyed_cross_entropy, key=key, readout_index=i)
@@ -413,6 +413,7 @@ def initialize_model(
     quantizer_class = quantizers.VectorQuantizer
   quantizer_list = []
   for _ in range(len(model_config.quantizer_points)):
+    quantizer = None
     if (
         quantizer_config.strategy
         == quantizers.QuantizationStrategy.PRODUCT_QUANTIZATION.value
@@ -486,7 +487,7 @@ def initialize_model(
         raise ValueError(
             "Expected early_fs_config.num_frames to be 125, 63, 32 or 16."
         )
-
+      conv_layer_tuples = None
       if frontend is None:
         # Their original architecture led to 500 frames which caused OOM.
         # Added 2 additional conv layers with stride 2 which makes it 125.
@@ -602,7 +603,7 @@ def initialize_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = utils.TrainState(
+  train_state = train_utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state
   )
 
@@ -633,6 +634,7 @@ def initialize_model(
     ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_quantizer_from)
     did_reload = False
     num_attempts = 0
+    reloaded_quantizer = None
     while not did_reload and num_attempts < 5:
       try:
         reloaded_quantizer = ckpt_to_reload.restore(None)
@@ -645,6 +647,10 @@ def initialize_model(
         )
         time.sleep(5)
       num_attempts += 1
+    if reloaded_quantizer is None:
+      raise RuntimeError(
+          "Unable to reload quantizer from %s." % reload_quantizer_from
+      )
     if "quantizer" in reloaded_quantizer["params"].keys():
       quantizer_key = "quantizer"
     elif "quantizer_0" in reloaded_quantizer["params"].keys():
@@ -663,6 +669,7 @@ def initialize_model(
     ckpt_to_reload = checkpoint.MultihostCheckpoint(reload_hubert_from)
     did_reload = False
     num_attempts = 0
+    reloaded_hubert = None
     while not did_reload and num_attempts < 5:
       try:
         reloaded_hubert = ckpt_to_reload.restore(None)
@@ -675,6 +682,10 @@ def initialize_model(
         )
         time.sleep(5)
       num_attempts += 1
+    if reloaded_hubert is None:
+      raise RuntimeError(
+          "Unable to reload HuBERT from %s." % reload_hubert_from
+      )
     logging.info(
         "Reloaded HuBERT params with keys %s", reloaded_hubert["params"].keys()
     )
@@ -695,7 +706,9 @@ def initialize_model(
       logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
 
   return (
-      utils.ModelBundle(model=model, key=key, ckpt=ckpt, optimizer=optimizer),
+      train_utils.ModelBundle(
+          model=model, key=key, ckpt=ckpt, optimizer=optimizer
+      ),
       train_state,
       learning_rate,
   )
@@ -720,7 +733,7 @@ def train(
 
   Args:
     model_bundle: Static objects for conducting the experiment.
-    train_state: Initial utils.TrainState.
+    train_state: Initial train_utils.TrainState.
     learning_rate_schedule: The schedule for the learning rate.
     train_dataset: Training dataset.
     num_train_steps: The number of training steps.
@@ -748,8 +761,8 @@ def train(
   taxonomy_keys = ["label"]
   taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
   if taxonomy_loss_weight != 0.0:
-    taxonomy_keys += utils.TAXONOMY_KEYS
-  train_metrics_collection = utils.NestedCollection.create(
+    taxonomy_keys += train_utils.TAXONOMY_KEYS
+  train_metrics_collection = train_utils.NestedCollection.create(
       **get_train_metrics(
           taxonomy_keys,
           model_bundle.model.num_classes,
@@ -817,7 +830,7 @@ def train(
 
     params = optax.apply_updates(train_state.params, updates)
 
-    train_state = utils.TrainState(
+    train_state = train_utils.TrainState(
         step=train_state.step + 1,
         params=params,
         opt_state=opt_state,
@@ -851,7 +864,7 @@ def train(
       )
 
       if step % log_every_steps == 0:
-        utils.write_metrics(
+        train_utils.write_metrics(
             writer,
             step,
             flax_utils.unreplicate(train_metrics).compute(prefix="train"),
@@ -865,8 +878,8 @@ def train(
 
 
 def evaluate(
-    model_bundle: utils.ModelBundle,
-    train_state: utils.TrainState,
+    model_bundle: train_utils.ModelBundle,
+    train_state: train_utils.TrainState,
     learning_rate_schedule: optax.Schedule,
     valid_dataset: tf.data.Dataset,
     workdir: str,
@@ -882,7 +895,7 @@ def evaluate(
   taxonomy_keys = ["label"]
   taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
   if taxonomy_loss_weight != 0.0:
-    taxonomy_keys += utils.TAXONOMY_KEYS
+    taxonomy_keys += train_utils.TAXONOMY_KEYS
   metrics_ = get_train_metrics(
       taxonomy_keys,
       model_bundle.model.num_classes,
@@ -902,8 +915,10 @@ def evaluate(
         (f"{key}_logits", key),
         metrics.roc_auc,
     )
-  metrics_["rank_metrics"] = utils.CollectingMetrics.from_funs(**rank_metrics)
-  valid_metrics_collection = utils.NestedCollection.create(**metrics_)
+  metrics_["rank_metrics"] = train_utils.CollectingMetrics.from_funs(
+      **rank_metrics
+  )
+  valid_metrics_collection = train_utils.NestedCollection.create(**metrics_)
 
   @functools.partial(jax.pmap, axis_name="batch")
   def get_metrics(batch, train_state, mask_key):
@@ -946,7 +961,7 @@ def evaluate(
   reporter = periodic_actions.ReportProgress(
       num_train_steps=num_train_steps, writer=writer
   )
-  for train_state in utils.checkpoint_iterator(
+  for train_state in train_utils.checkpoint_iterator(
       train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
   ):
     step = int(train_state.step)
@@ -972,54 +987,10 @@ def evaluate(
           break
 
       # Log validation loss
-      utils.write_metrics(writer, step, valid_metrics.compute(prefix=name))
-    writer.flush()
-
-
-def export_tf_model(
-    model_bundle: utils.ModelBundle,
-    train_state: utils.TrainState,
-    workdir: str,
-    input_shape: tuple[int, ...],
-    num_train_steps,
-    eval_sleep_s=EVAL_LOOP_SLEEP_S,
-):
-  """Write a TF SavedModel."""
-  for train_state in utils.checkpoint_iterator(
-      train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
-  ):
-    variables = {"params": train_state.params, **train_state.model_state}
-
-    def infer_fn(audio_batch):
-      model_outputs = model_bundle.model.apply(
-          variables, audio_batch, train=False  # pylint: disable=cell-var-from-loop
+      train_utils.write_metrics(
+          writer, step, valid_metrics.compute(prefix=name)
       )
-      return model_outputs.label
-
-    tf_predict = tf.function(
-        jax2tf.convert(infer_fn, enable_xla=False),
-        input_signature=[
-            tf.TensorSpec(
-                shape=(1,) + input_shape, dtype=tf.float32, name="input"
-            )
-        ],
-        autograph=False,
-    )
-
-    converter = tf.lite.TFLiteConverter.from_concrete_functions(
-        [tf_predict.get_concrete_function()], tf_predict
-    )
-
-  converter.target_spec.supported_ops = [
-      tf.lite.OpsSet.TFLITE_BUILTINS,  # enable TensorFlow Lite ops.
-      tf.lite.OpsSet.SELECT_TF_OPS,  # enable TensorFlow ops.
-  ]
-  tflite_float_model = converter.convert()
-
-  if not tf.io.gfile.exists(workdir):
-    tf.io.gfile.makedirs(workdir)
-  with tf.io.gfile.GFile(os.path.join(workdir, "model.tflite"), "wb") as f:
-    f.write(tflite_float_model)
+    writer.flush()
 
 
 def run(
@@ -1035,6 +1006,7 @@ def run(
   else:
     name = "valid"
 
+  train_dataset, valid_dataset, dataset_info = None, None, None
   if mode == "train":
     train_dataset, dataset_info = data_utils.get_dataset(
         is_train=True,
@@ -1131,9 +1103,4 @@ def run(
     )
 
   elif mode == "export":
-    export_tf_model(
-        model_bundle,
-        train_state,
-        workdir=workdir,
-        **config.export_config,
-    )
+    raise NotImplementedError("Export mode is not implemented for Hubert.")

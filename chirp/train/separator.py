@@ -26,7 +26,7 @@ from chirp.models import metrics
 from chirp.models import output
 from chirp.models import separation_model
 from chirp.taxonomy import class_utils
-from chirp.train import utils
+from chirp.train import train_utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import metrics as clu_metrics
@@ -65,7 +65,7 @@ TRAIN_METRICS = {
 }
 
 EVAL_METRICS = {
-    'rank_metrics': utils.CollectingMetrics.from_funs(
+    'rank_metrics': train_utils.CollectingMetrics.from_funs(
         **{
             'label_cmap': (('label_logits', 'label'), metrics.cmap),
             'genus_cmap': (('genus_logits', 'genus'), metrics.cmap),
@@ -110,12 +110,12 @@ def initialize_model(
 
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
-  train_state = utils.TrainState(
+  train_state = train_utils.TrainState(
       step=0, params=params, opt_state=opt_state, model_state=model_state
   )
   train_state = ckpt.restore_or_initialize(train_state)
   return (
-      utils.ModelBundle(
+      train_utils.ModelBundle(
           model=model,
           key=key,
           ckpt=ckpt,
@@ -264,7 +264,9 @@ def train(
 ) -> None:
   """Train a model."""
   train_iterator = train_dataset.as_numpy_iterator()
-  train_metrics_collection = utils.NestedCollection.create(**TRAIN_METRICS)
+  train_metrics_collection = train_utils.NestedCollection.create(
+      **TRAIN_METRICS
+  )
   initial_step = int(train_state.step)
   train_state = flax.jax_utils.replicate(train_state)
   # Logging
@@ -290,7 +292,7 @@ def train(
           estimate=model_outputs.separated_audio,
       )
       model_outputs = model_outputs.time_reduce_logits('MIDPOINT')
-      taxo_loss = utils.taxonomy_loss(
+      taxo_loss = train_utils.taxonomy_loss(
           outputs=model_outputs,
           taxonomy_loss_weight=taxonomy_labels_weight,
           loss_fn=loss_fn,
@@ -320,7 +322,7 @@ def train(
         grads, train_state.opt_state
     )
     params = optax.apply_updates(train_state.params, updates)
-    train_state = utils.TrainState(
+    train_state = train_utils.TrainState(
         step=train_state.step + 1,
         params=params,
         opt_state=opt_state,
@@ -337,7 +339,7 @@ def train(
         train_metrics = flax_utils.unreplicate(train_metrics).compute(
             prefix='train'
         )
-        utils.write_metrics(writer, step, train_metrics)
+        train_utils.write_metrics(writer, step, train_metrics)
       reporter(step)
     if step % checkpoint_every_steps == 0:
       with reporter.timed('checkpoint'):
@@ -346,8 +348,8 @@ def train(
 
 
 def evaluate(
-    model_bundle: utils.ModelBundle,
-    train_state: utils.TrainState,
+    model_bundle: train_utils.ModelBundle,
+    train_state: train_utils.TrainState,
     valid_dataset: tf.data.Dataset,
     workdir: str,
     num_train_steps: int,
@@ -363,7 +365,7 @@ def evaluate(
   """Run evaluation."""
   train_metrics = TRAIN_METRICS.copy()
   del train_metrics['loss']
-  valid_metrics_collection = utils.NestedCollection.create(
+  valid_metrics_collection = train_utils.NestedCollection.create(
       **(train_metrics | EVAL_METRICS)
   )
 
@@ -378,7 +380,7 @@ def evaluate(
     estimate, _ = metrics.least_squares_mixit(
         reference=batch['source_audio'], estimate=model_outputs.separated_audio
     )
-    taxo_loss = utils.taxonomy_loss(
+    taxo_loss = train_utils.taxonomy_loss(
         outputs=model_outputs,
         taxonomy_loss_weight=taxonomy_labels_weight,
         loss_fn=loss_fn,
@@ -398,7 +400,7 @@ def evaluate(
   reporter = periodic_actions.ReportProgress(
       num_train_steps=num_train_steps, writer=writer
   )
-  for train_state in utils.checkpoint_iterator(
+  for train_state in train_utils.checkpoint_iterator(
       train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
   ):
     cur_train_step = int(train_state.step)
@@ -429,15 +431,15 @@ def evaluate(
           break
 
       # Log validation loss
-      utils.write_metrics(
+      train_utils.write_metrics(
           writer, cur_train_step, valid_metrics.compute(prefix='valid')
       )
     writer.flush()
 
 
 def export_tf_model(
-    model_bundle: utils.ModelBundle,
-    train_state: utils.TrainState,
+    model_bundle: train_utils.ModelBundle,
+    train_state: train_utils.TrainState,
     workdir: str,
     num_train_steps: int,
     frame_size: int,
@@ -457,7 +459,7 @@ def export_tf_model(
       divisible by the product of all strides in the model.
     eval_sleep_s: Number of seconds to sleep when waiting for next checkpoint.
   """
-  for train_state in utils.checkpoint_iterator(
+  for train_state in train_utils.checkpoint_iterator(
       train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
   ):
     variables = {'params': train_state.params, **train_state.model_state}
