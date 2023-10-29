@@ -14,15 +14,17 @@
 # limitations under the License.
 
 """Scrape iNaturalist for audio recordings."""
+
 from collections.abc import Sequence
-import concurrent.futures
 import csv
 import math
 import os.path
+import time
 import urllib.parse
 
 from absl import app
 from absl import flags
+from absl import logging
 import ratelimiter
 import requests
 import tensorflow as tf
@@ -85,22 +87,32 @@ def download_audio(input_file, output_dir):
     audio_target = os.path.join(output_dir, filename)
     if not tf.io.gfile.exists(audio_target):
       with tf.io.gfile.GFile(audio_target, "wb") as f:
-        content = session.get(url=row["identifier"]).content
-        f.write(content)
+        r = session.get(url=row["identifier"])
+        if not r.ok:
+          return False
+        f.write(r.content)
         # Increment the rate limiter once for each kilobyte downloaded
-        for _ in range(math.ceil(len(content) / 1024)):
+        for _ in range(math.ceil(len(r.content) / 1024)):
           with day_limit, hour_limit:
             pass
+    return True
 
-  with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-    list(
-        tqdm.tqdm(
-            executor.map(
-                download_file, csv.DictReader(tf.io.gfile.GFile(input_file))
-            ),
-            total=sum(1 for _ in tf.io.gfile.GFile(input_file)),
+  for row in tqdm.tqdm(
+      csv.DictReader(tf.io.gfile.GFile(input_file)),
+      total=sum(1 for _ in tf.io.gfile.GFile(input_file)),
+  ):
+    for num_try in range(math.ceil(math.log2(60 * 60 * 24))):
+      if download_file(row):
+        break
+      else:
+        logging.warning(
+            "Failed to download %s, sleeping %s seconds...",
+            row["id"],
+            2**num_try,
         )
-    )
+        time.sleep(2**num_try)
+    else:
+      logging.error("Failed to download %s, moving on", row["id"])
 
 
 def main(argv: Sequence[str]) -> None:
