@@ -19,7 +19,8 @@ sudo apt-get install libsndfile1 ffmpeg
 poetry install
 ```
 
-Running `poetry install` creates a virtual environment and installs all dependencies, in which you can run the Perch codebase. To run the tests, try:
+Running `poetry install` creates a virtual environment and installs all
+dependencies, in which you can run the Perch codebase. To run the tests, try
 
 ```bash
 poetry run python -m unittest discover -s chirp/tests -p "*test.py"
