@@ -43,6 +43,13 @@ class Namespace:
     if UNKNOWN_LABEL in self.classes:
       raise ValueError("unknown class")
 
+  def __str__(self):
+    example_class = sorted(list(self.classes))[0]
+    return (
+        f"Namespace with {len(self.classes)} classes, "
+        f"including '{example_class}'"
+    )
+
 
 @dataclasses.dataclass
 class Mapping:
@@ -76,6 +83,9 @@ class Mapping:
     if UNKNOWN_LABEL in self.mapped_pairs.values():
       raise ValueError("unknown target class")
 
+  def __str__(self):
+    return f"Mapping from {self.source_namespace} to {self.target_namespace}."
+
 
 @dataclasses.dataclass
 class ClassList:
@@ -100,6 +110,13 @@ class ClassList:
   def __post_init__(self):
     if len(set(self.classes)) != len(self.classes):
       raise ValueError("duplicate entries in class list")
+
+  def __str__(self):
+    example_class = sorted(list(self.classes))[0]
+    return (
+        f"ClassList in namespace {self.namespace} with {len(self.classes)}"
+        f" classes, including '{example_class}'."
+    )
 
   @classmethod
   def from_csv(cls, csv_data: Iterable[str]) -> "ClassList":
