@@ -119,25 +119,6 @@ class EmbeddingModel:
     """
     raise NotImplementedError
 
-  def convert_logits(
-      self,
-      logits: np.ndarray,
-      source_class_list: namespace.ClassList,
-      target_class_list: namespace.ClassList | None,
-  ) -> np.ndarray:
-    """Convert model logits to logits for a different class list."""
-    if target_class_list is None:
-      return logits
-    sp_matrix, sp_mask = source_class_list.get_class_map_matrix(
-        target_class_list
-    )
-    # When we convert from ClassList A (used for training) to ClassList B
-    # (for inference output) there may be labels in B which don't appear in A.
-    # The `sp_mask` tells us which labels appear in both A and B. We set the
-    # logit for the new labels to NULL_LOGIT, which corresponds to a probability
-    # very close to zero.
-    return logits @ sp_matrix + NULL_LOGIT * (1 - sp_mask)
-
   def frame_audio(
       self,
       audio_array: np.ndarray,

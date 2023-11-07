@@ -407,15 +407,12 @@ class InferenceTest(parameterized.TestCase):
         make_logits=False,
         make_separated_audio=True,
     )
-    db = namespace_db.load_db()
-    target_class_list = db.class_lists['high_sierras']
 
     embeddor = models.PlaceholderModel(
         sample_rate=22050,
         make_embeddings=True,
         make_logits=True,
         make_separated_audio=False,
-        target_class_list=target_class_list,
     )
     fake_config = config_dict.ConfigDict()
     sep_embed = models.SeparateEmbedModel(
@@ -438,7 +435,7 @@ class InferenceTest(parameterized.TestCase):
     )
     # The Sep+Embed model takes the max logits over the channel dimension.
     self.assertSequenceEqual(
-        outputs.logits['label'].shape, [5, len(target_class_list.classes)]
+        outputs.logits['label'].shape, [5, len(embeddor.class_list.classes)]
     )
 
   def test_pooled_embeddings(self):
