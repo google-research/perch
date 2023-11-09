@@ -248,7 +248,7 @@ def least_squares_solve_mix(matrix, rhs, diag_loading=1e-3):
       cov_matrix.shape[-1], dtype=cov_matrix.dtype
   )
   return scipy.linalg.solve(
-      cov_matrix, jnp.matmul(adj_matrix, rhs), sym_pos=True
+      cov_matrix, jnp.matmul(adj_matrix, rhs), assume_a='pos'
   )
 
 
