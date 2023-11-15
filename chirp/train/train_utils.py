@@ -155,7 +155,7 @@ class CollectingMetrics(clu_metrics.Metric):
           A dictionary mapping metric names to compute values, which can either
           be scalars/arrays or another dictionary of computed metrics.
         """
-        with jax.default_device(jax.devices('cpu')[0]):
+        with jax.default_device(jax.local_devices(backend='cpu')[0]):
           values = super().compute()
           return {
               metric_name: metric[1](*(values[name] for name in metric[0]))
