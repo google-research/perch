@@ -18,12 +18,13 @@
 import itertools
 import os
 import time
-from typing import Any, Callable
+from typing import Callable, Sequence
 
 from absl import logging
 from chirp import path_utils
 from chirp.models import output
 from chirp.taxonomy import namespace
+from chirp.taxonomy import namespace_db
 from clu import checkpoint
 from clu import metrics as clu_metrics
 import flax
@@ -36,7 +37,6 @@ import tensorflow as tf
 
 TAXONOMY_KEYS = ['genus', 'family', 'order']
 
-
 # Note: Inherit from PyTreeNode instead of using the flax.struct.dataclass
 # to avoid PyType issues.
 # See: https://flax.readthedocs.io/en/latest/api_reference/flax.struct.html
@@ -47,13 +47,45 @@ class TrainState(flax.struct.PyTreeNode):
   model_state: flax.core.scope.FrozenVariableDict
 
 
+class OutputHeadMetadata(flax.struct.PyTreeNode):
+  """Data describing a classifer output head."""
+
+  key: str
+  class_list: namespace.ClassList
+  weight: float
+
+  @classmethod
+  def from_db(cls, key: str, class_list_name: str, weight: float):
+    db = namespace_db.load_db()
+    return cls(
+        key=key, class_list=db.class_lists[class_list_name], weight=weight
+    )
+
+  @classmethod
+  def from_mapping(
+      cls,
+      key: str,
+      source_class_list_name: str,
+      weight: float,
+      mapping_name: str,
+      keep_unknown: bool | None = None,
+  ):
+    db = namespace_db.load_db()
+    source_classlist = db.class_lists[source_class_list_name]
+    mapping = db.mappings[mapping_name]
+    class_list = source_classlist.apply_namespace_mapping(
+        mapping, keep_unknown=keep_unknown
+    )
+    return cls(key=key, class_list=class_list, weight=weight)
+
+
 class ModelBundle(flax.struct.PyTreeNode):
   model: nn.Module
   key: jnp.ndarray
   ckpt: checkpoint.Checkpoint
   optimizer: optax.GradientTransformation | None = None
   class_lists: dict[str, namespace.ClassList] | None = None
-
+  output_head_metadatas: Sequence[OutputHeadMetadata] | None = None
 
 @flax.struct.dataclass
 class MultiAverage(clu_metrics.Average):
@@ -296,6 +328,23 @@ def checkpoint_iterator(
     st = time.time()
     logging.info('Loaded checkpoint at step %d', int(train_state.step))
     yield train_state
+
+
+def output_head_loss(
+    outputs: dict[str, jnp.ndarray],
+    output_head_metadatas: Sequence[OutputHeadMetadata],
+    loss_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    **kwargs,
+) -> dict[str, jnp.ndarray]:
+  """Compute losses from model outputs and output head specifications."""
+  total_loss = jnp.array(0.0)
+  losses = {}
+  for md in output_head_metadatas:
+    md_loss = loss_fn(outputs[md.key], kwargs[md.key])
+    losses[f'{md.key}_loss'] = md_loss
+    total_loss += md.weight * jnp.mean(md_loss, axis=-1)
+  losses['loss'] = total_loss
+  return losses
 
 
 def taxonomy_loss(

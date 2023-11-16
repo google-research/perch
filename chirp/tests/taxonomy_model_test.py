@@ -73,7 +73,8 @@ class TaxonomyModelTest(absltest.TestCase):
         rngs={"dropout": rng},
     )
     self.assertNotEqual(
-        jnp.squeeze(output1.label).tolist(), jnp.squeeze(output2.label).tolist()
+        jnp.squeeze(output1["label"]).tolist(),
+        jnp.squeeze(output2["label"]).tolist(),
     )
 
   def test_batch_norm(self):

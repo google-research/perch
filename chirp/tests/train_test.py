@@ -186,8 +186,11 @@ class TrainTest(parameterized.TestCase):
     )
     with open(os.path.join(self.train_dir, "label.csv")) as f:
       got_class_list = namespace.ClassList.from_csv(f.readlines())
-    # Check equality of the ClassList with the Model Bundle.
-    self.assertEqual(model_bundle.class_lists["label"], got_class_list)
+    class_lists = {
+        md.key: md.class_list for md in config.init_config.output_head_metadatas
+    }
+    class_list = class_lists["label"]
+    self.assertEqual(class_list.classes, got_class_list.classes)
 
     self.assertTrue(
         tf.io.gfile.exists(

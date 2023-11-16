@@ -135,17 +135,17 @@ class TaxonomyModelCallback:
     self.model_callback = pmap_with_remainder(fprop)
 
     if self.use_learned_representations:
-      class_list = (
-          namespace_db.load_db()
-          .class_lists[self.init_config.target_class_list]
-          .classes
-      )
+      class_lists = {
+          md.key: md.class_list for md in self.init_config.output_head_metadatas
+      }
+      class_list = class_lists['label']
+
       head_index = list(model_bundle.model.num_classes.keys()).index('label')
       output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
       self.learned_representations.update(
           {
               n: w
-              for n, w in zip(class_list, output_weights)
+              for n, w in zip(class_list.classes, output_weights)
               if n not in self.learned_representation_blocklist
           }
       )

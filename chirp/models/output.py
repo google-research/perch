@@ -54,6 +54,14 @@ class TaxonomicOutput(Protocol):
   order: jnp.ndarray
 
 
+def output_head_logits(output, output_head_metadatas) -> dict[str, jnp.ndarray]:
+  return {
+      f'{md.key}_logits': output[md.key]
+      for md in output_head_metadatas
+      if md.key in output
+  }
+
+
 def logits(output) -> dict[str, jnp.ndarray]:
   return {
       f'{key}_logits': getattr(output, key)

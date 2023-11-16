@@ -16,7 +16,7 @@
 """Data pipeline functions."""
 
 import dataclasses
-from typing import Iterable, Sequence, Tuple
+from typing import Any, Iterable, Sequence, Tuple
 
 from absl import logging
 from chirp import audio_utils
@@ -783,6 +783,9 @@ class ConvertReefLabels(FeaturesPreprocessOp):
     """Loads the taxonomy database used for mapping and class lists."""
     self.db = namespace_db.load_db()
 
+  def __str__(self):
+    return 'ConvertReefLabels'
+
   def load_tables(
       self, source_classes: namespace.ClassList
   ) -> Tuple[tf.lookup.StaticHashTable, tf.Tensor]:
@@ -818,7 +821,11 @@ class ConvertReefLabels(FeaturesPreprocessOp):
         0,
         1,
     )
-    output_features.update({'label': output_labels, 'label_mask': mask})
+    output_features.update(
+        {'reef_label': output_labels, 'reef_label_mask': mask}
+    )
+    # del label so it doesnt conflict if working with another ds (e.g birds)
+    del output_features['label']
     return output_features
 
   def __call__(
@@ -857,6 +864,9 @@ class ConvertBirdTaxonomyLabels(FeaturesPreprocessOp):
     # pipeline applications TF will attempt to re-use previous constants
     # belonging to a different tf.function.
     self.db = namespace_db.load_db()
+
+  def __str__(self):
+    return 'ConvertBirdTaxonomyLabels'
 
   def load_tables(
       self, source_class_list: namespace.ClassList
@@ -1412,3 +1422,124 @@ class FilterDropLabel(DatasetPreprocessOp):
       return tf.math.logical_not(tf.reduce_any(filter_idx == features['label']))
 
     return dataset.filter(_pred)
+
+
+@dataclasses.dataclass
+class RemoveUnwantedFeatures(FeaturesPreprocessOp):
+  """Remove unwanted keys from the features.
+
+  Useful for combining datasets with different feature dicts. This operation
+  helps in cleaning up redundant features. In cases where certain features
+  are missing in one dataset but present in another, `AddTensorOp` can be
+  utilized to introduce those features with zero tensors.
+
+  Attributes:
+    unwanted_keys: List of keys to be removed from the features.
+  """
+
+  unwanted_keys: list[str]
+
+  def __call__(
+      self, features: Features, dataset_info: tfds.core.DatasetInfo
+  ) -> Features:
+    # Making a copy of the features to avoid modifying in-place
+    features_copy = features.copy()
+
+    # Removing the unwanted keys
+    for key in self.unwanted_keys:
+      features_copy.pop(key, None)  # Use pop with default to avoid KeyError
+
+    return features_copy
+
+
+@dataclasses.dataclass
+class AddTensorOp(DatasetPreprocessOp):
+  """Add missing tensors to a dataset.
+
+  The class identifies the shape and datatype of tensors in provided datasets
+  and creates a unified structure. If certain tensors are missing in the
+  dataset, they are added and filled with zeros.
+
+  Attributes:
+    ds_list: List of datasets to evaluate and harmonize.
+    unified_shape_info: Dict of the features keys to shape and dtype values
+  """
+
+  unified_shape_info: dict[str, Tuple[tf.Tensor, str]]
+
+  @staticmethod
+  def extract_shapes_and_dtypes(dataset):
+    """Get one item from the dataset.
+
+    Assumes examples from each dataset have matching shapes.
+    """
+    example_item = None
+    for item in dataset.take(1):
+      example_item = item
+    if example_item is None:
+      raise ValueError('Dataset should have at least one item.')
+    if not isinstance(example_item, dict):
+      raise ValueError('Dataset items should be dictionaries.')
+
+    # Extract and store shapes and dtypes
+    shapes_and_dtypes_dict = {}
+    for key, tensor in example_item.items():
+      shapes_and_dtypes_dict[key] = (tf.shape(tensor), tensor.dtype)
+    return shapes_and_dtypes_dict
+
+  @classmethod
+  def from_datasets(cls, ds_list):
+    if not all(isinstance(ds, tf.data.Dataset) for ds in ds_list):
+      raise ValueError('Items in ds_list must be of type tf.data.Dataset')
+    # Get each individual datasets shapes and dtypes
+    unified_shape_info = {}
+    for ds in ds_list:
+      shape_and_dtype = cls.extract_shapes_and_dtypes(ds)
+      for key, (shape, dtype) in shape_and_dtype.items():
+        if key not in unified_shape_info:
+          unified_shape_info[key] = (shape, dtype)
+          continue
+        if unified_shape_info[key][0] != shape:
+          reference_shape = unified_shape_info[key][0]
+          raise ValueError(f'Mismatch in shapes {reference_shape} vs {shape}')
+        if unified_shape_info[key][1] != dtype:
+          reference_dtype = unified_shape_info[key][1]
+          raise ValueError(f'Mismatch in dtypes {reference_dtype} vs {dtype}')
+
+    return cls(unified_shape_info)
+
+  def __call__(
+      self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
+  ) -> tf.data.Dataset:
+    """Adds missing tensors to the dataset based on the unified_info."""
+
+    def add_tensors(features):
+      for key, (shape, dtype) in self.unified_shape_info.items():
+        if key not in features:
+          # fill the tensor with zeros:
+          tensor = tf.zeros(shape, dtype=dtype)
+          features[key] = tensor
+      return features
+
+    # Apply the transformation to each item in the dataset
+    augmented_dataset = dataset.map(add_tensors)
+
+    return augmented_dataset
+
+  def __call__(
+      self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
+  ) -> tf.data.Dataset:
+    """Adds missing tensors to the dataset based on the unified_info."""
+
+    def add_tensors(features):
+      for key, (shape, dtype) in self.unified_shape_info.items():
+        if key not in features:
+          # fill the tensor with zeros:
+          tensor = tf.zeros(shape, dtype=dtype)
+          features[key] = tensor
+      return features
+
+    # Apply the transformation to each item in the dataset
+    augmented_dataset = dataset.map(add_tensors)
+
+    return augmented_dataset

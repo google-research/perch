@@ -41,7 +41,7 @@ def get_config() -> config_dict.ConfigDict:
   )
 
   # Configure the experiment setup
-  config.init_config = presets.get_base_init_config(config)
+  config.init_config = presets.get_classifier_init_config(config)
   config.init_config.optimizer = _c(
       'optax.adam', learning_rate=config.init_config.get_ref('learning_rate')
   )

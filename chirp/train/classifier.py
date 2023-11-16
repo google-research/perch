@@ -24,7 +24,6 @@ from chirp.data import utils as data_utils
 from chirp.models import metrics
 from chirp.models import output
 from chirp.models import taxonomy_model
-from chirp.taxonomy import class_utils
 from chirp.train import train_utils
 from clu import checkpoint
 from clu import metric_writers
@@ -55,16 +54,18 @@ def get_keyed_map_fn(key):
 
 
 def get_train_metrics(
-    keys: list[str], num_labels: dict[str, int]
+    output_head_metadatas: Sequence[train_utils.OutputHeadMetadata],
 ) -> dict[str, type[clu_metrics.Metric]]:
   """Create a collection of metrics with cross-entropy and average precision."""
 
   metrics_ = {"loss": clu_metrics.Average.from_output("loss")}
-  for key in keys:
-    metrics_[f"{key}_loss"] = train_utils.MultiAverage.create(
-        num_labels[key]
-    ).from_output(f"{key}_loss")
-    metrics_[f"{key}_map"] = clu_metrics.Average.from_fun(get_keyed_map_fn(key))
+  for md in output_head_metadatas:
+    metrics_[f"{md.key}_loss"] = train_utils.MultiAverage.create(
+        len(md.class_list.classes)
+    ).from_output(f"{md.key}_loss")
+    metrics_[f"{md.key}_map"] = clu_metrics.Average.from_fun(
+        get_keyed_map_fn(md.key)
+    )
 
   return metrics_
 
@@ -75,10 +76,9 @@ def initialize_model(
     input_shape: Sequence[int],
     learning_rate: float,
     workdir: str,
-    target_class_list: str,
+    output_head_metadatas: Sequence[train_utils.OutputHeadMetadata],
     optimizer: optax.GradientTransformation | None = None,
     for_inference: bool = False,
-    add_taxonomic_labels: bool = True,
 ) -> tuple[train_utils.ModelBundle, train_utils.TrainState]:
   """Creates model for training, eval, or inference.
 
@@ -88,12 +88,11 @@ def initialize_model(
     input_shape: Shape of the model inputs.
     learning_rate: The learning rate to use for training.
     workdir: The directory the checkpoint is stored in.
-    target_class_list: A list of target classes for the classifier output.
+    output_head_metadatas: Info for connecting datasets to output heads
     optimizer: The optimizer to use during training. Optional for when loading
       pre-trained models for inference.
     for_inference: Indicates whether the model is being initialized for
       inference (if false, initialzed for training).
-    add_taxonomic_labels: Whether "genus", "family", "order" mapping to be used
 
   Note: learning_rate is unused (it's expected to be used in constructing the
     `optimizer` argument), but it's left part of the function signature for
@@ -109,11 +108,11 @@ def initialize_model(
 
   # Load model
   model_init_key, key = random.split(key)
-  class_lists = class_utils.get_class_lists(
-      target_class_list, add_taxonomic_labels
-  )
+  num_classes = {
+      md.key: len(md.class_list.classes) for md in output_head_metadatas
+  }
   model = taxonomy_model.TaxonomyModel(
-      num_classes={k: len(v.classes) for (k, v) in class_lists.items()},
+      num_classes=num_classes,
       **model_config,
   )
   # Ensure input_shape is a tuple for concatenation.
@@ -144,7 +143,7 @@ def initialize_model(
           key=key,
           ckpt=ckpt,
           optimizer=optimizer,
-          class_lists=class_lists,
+          output_head_metadatas=output_head_metadatas,
       ),
       train_state,
   )
@@ -175,12 +174,8 @@ def train(
     loss_fn: Loss function used for training.
   """
   train_iterator = train_dataset.as_numpy_iterator()
-  taxonomy_keys = ["label"]
-  taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
-  if taxonomy_loss_weight != 0.0:
-    taxonomy_keys += train_utils.TAXONOMY_KEYS
   train_metrics_collection = train_utils.NestedCollection.create(
-      **get_train_metrics(taxonomy_keys, model_bundle.model.num_classes)
+      **get_train_metrics(model_bundle.output_head_metadatas)
   )
 
   # Forward pass and metrics
@@ -198,14 +193,17 @@ def train(
             "patch_mask": patch_mask_key,
         },
     )
-    losses = train_utils.taxonomy_loss(
+    losses = train_utils.output_head_loss(
         outputs=model_outputs,
-        taxonomy_loss_weight=taxonomy_loss_weight,
+        output_head_metadatas=model_bundle.output_head_metadatas,
         loss_fn=loss_fn,
         **batch,
     )
+    logits = output.output_head_logits(
+        model_outputs, model_bundle.output_head_metadatas
+    )
     train_metrics = train_metrics_collection.gather_from_model_output(
-        **output.logits(model_outputs),
+        **logits,
         **losses,
         **batch,
     )
@@ -276,17 +274,18 @@ def evaluate(
     name: str = "valid",
 ):
   """Run evaluation."""
-  taxonomy_keys = ["label"]
-  taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight
-  if taxonomy_loss_weight != 0.0:
-    taxonomy_keys += train_utils.TAXONOMY_KEYS
-
   # The metrics are the same as for training, but with rank-based metrics added.
-  metrics_ = get_train_metrics(taxonomy_keys, model_bundle.model.num_classes)
+  metrics_ = get_train_metrics(model_bundle.output_head_metadatas)
   valid_metrics = {}
-  for key in taxonomy_keys:
-    valid_metrics[f"{key}_cmap"] = ((f"{key}_logits", key), metrics.cmap)
-    valid_metrics[f"{key}_roc_auc"] = ((f"{key}_logits", key), metrics.roc_auc)
+  for md in model_bundle.output_head_metadatas:
+    valid_metrics[f"{md.key}_cmap"] = (
+        (f"{md.key}_logits", md.key),
+        metrics.cmap,
+    )
+    valid_metrics[f"{md.key}_roc_auc"] = (
+        (f"{md.key}_logits", md.key),
+        metrics.roc_auc,
+    )
   metrics_["rank_metrics"] = train_utils.CollectingMetrics.from_funs(
       **valid_metrics
   )
@@ -299,14 +298,17 @@ def evaluate(
     model_outputs = model_bundle.model.apply(
         variables, batch["audio"], train=False, **kwargs
     )
-    losses = train_utils.taxonomy_loss(
+    losses = train_utils.output_head_loss(
         outputs=model_outputs,
-        taxonomy_loss_weight=taxonomy_loss_weight,
+        output_head_metadatas=model_bundle.output_head_metadatas,
         loss_fn=loss_fn,
         **batch,
     )
+    logits = output.output_head_logits(
+        model_outputs, model_bundle.output_head_metadatas
+    )
     return valid_metrics_collection.gather_from_model_output(
-        **output.logits(model_outputs),
+        **logits,
         **batch,
         **losses,
     )
@@ -386,7 +388,6 @@ def evaluate(
       )
     writer.flush()
 
-
 def export_tf_model(
     model_bundle: train_utils.ModelBundle,
     train_state: train_utils.TrainState,
@@ -397,6 +398,10 @@ def export_tf_model(
     polymorphic_batch: bool = True,
 ):
   """Export SavedModel and TFLite."""
+  # Get model_ouput keys from output_head_metadatas and add the 'embedding' key
+  output_keys = set(md.key for md in model_bundle.output_head_metadatas)
+  output_keys.add("embedding")  # Add 'embedding' if not already present
+
   for train_state in train_utils.checkpoint_iterator(
       train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
   ):
@@ -406,7 +411,10 @@ def export_tf_model(
       model_outputs = model_bundle.model.apply(
           variables, audio_batch, train=False
       )
-      return model_outputs.label, model_outputs.embedding
+      # Will use all keys in configs.init_config.output_head_metadatas
+      return tuple(
+          model_outputs[key] for key in output_keys if key in model_outputs
+      )
 
     if polymorphic_batch:
       shape = (None,) + input_shape
@@ -415,8 +423,11 @@ def export_tf_model(
     converted_model = export_utils.Jax2TfModelWrapper(
         infer_fn, variables, shape, False
     )
+    class_lists = {
+        md.key: md.class_list for md in model_bundle.output_head_metadatas
+    }
     converted_model.export_converted_model(
-        workdir, train_state.step, model_bundle.class_lists
+        workdir, train_state.step, class_lists
     )
 
 
@@ -432,8 +443,18 @@ def run(
     config.eval_dataset_config = getattr(config.eval_dataset_config, name)
   else:
     name = "valid"
-
-  if mode == "train":
+  if (
+      hasattr(config, "is_multi_dataset")
+      and config.is_multi_dataset
+      and mode == "train"
+  ):
+    train_dataset, dataset_info = data_utils.get_multi_dataset(
+        is_train=True,
+        tf_data_service_address=tf_data_service_address,
+        **config.train_dataset_config,
+    )
+    valid_dataset = None
+  elif mode == "train":
     train_dataset, dataset_info = data_utils.get_dataset(
         is_train=True,
         tf_data_service_address=tf_data_service_address,
@@ -462,9 +483,7 @@ def run(
     )
 
   model_bundle, train_state = initialize_model(
-      workdir=workdir,
-      **config.init_config,
-      add_taxonomic_labels=config.add_taxonomic_labels,
+      workdir=workdir, **config.init_config
   )
   if mode == "train":
     train_state = model_bundle.ckpt.restore_or_initialize(train_state)
