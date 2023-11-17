@@ -753,6 +753,59 @@ class LabelConversionConstants:
 
 
 @dataclasses.dataclass
+class ConvertFSD50KLabels(FeaturesPreprocessOp):
+  """Convert FSD50K dataset labels to multihot encoded labels.
+
+  Attributes:
+    source_namespace (str): The namespace of the source classes.
+    target_class_list (str): The target set of classes.
+
+  Usage:
+  After creating an instance of ConvertFSD50KLabels, it can be used as a
+    callable to preprocess samples from the FSD50k dataset. The output will
+    have labels encoded in multi-hot format and a corresponding mask (mask will
+    default to all 1's but this can be adapted).
+  """
+
+  source_namespace: str = 'audioset'
+  target_class_list: str = 'fsd50k'
+
+  def __str__(self):
+    return 'ConvertFSD50KLabels'
+
+  def encode_labels(self, features: Features) -> Features:
+    """Multi-hot encode the input feature labels."""
+    output_features = features.copy()
+    int_labels_batch = output_features['label']
+
+    # Multi-hot encoding
+    db = namespace_db.load_db()
+    target_classes = db.class_lists[self.target_class_list]
+    class_list_size = len(target_classes.classes)
+    encoded_labels = tf.reduce_sum(
+        tf.one_hot(int_labels_batch, class_list_size, dtype=tf.int64), axis=0
+    )
+    encoded_labels = tf.clip_by_value(encoded_labels, 0, 1)
+
+    # Mask is all 1's
+    mask = tf.ones([len(target_classes.classes)])
+
+    output_features.update(
+        {'fsd50k_label': encoded_labels, 'fsd50k_label_mask': mask}
+    )
+    # Remove the original label to prevent conflicts
+    del output_features['label']
+    return output_features
+
+  def __call__(
+      self, features: Features, dataset_info: tfds.core.DatasetInfo
+  ) -> Features:
+    """Trigger operations in this preprocessing."""
+    output_features = self.encode_labels(features)
+    return output_features
+
+
+@dataclasses.dataclass
 class ConvertReefLabels(FeaturesPreprocessOp):
   """Convert reef labels to multihot encoded labels that include soundtype.
 
@@ -1543,3 +1596,21 @@ class AddTensorOp(DatasetPreprocessOp):
     augmented_dataset = dataset.map(add_tensors)
 
     return augmented_dataset
+
+
+@dataclasses.dataclass
+class PrintShape(FeaturesPreprocessOp):
+  """Useful for debugging conflicting tensors for multidataset batching."""
+
+  names: tuple[str, ...] = ('audio',)
+
+  def __call__(
+      self, features: Features, dataset_info: tfds.core.DatasetInfo
+  ) -> Features:
+    for name in self.names:
+      if name in features:
+        # Print the shape of the feature
+        tf.print(
+            f'Shape of {name} before operation: ', tf.shape(features[name])
+        )
+    return features
