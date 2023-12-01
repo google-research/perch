@@ -25,6 +25,22 @@ Running `poetry install` installs all Perch dependencies into a new virtual envi
 poetry run python -m unittest discover -s chirp/tests -p "*test.py"
 ```
 
+## Using a container
+
+Alternatively, you can install and run this project using a container via
+Docker. To build a container using the tag `perch`, run:
+```bash
+git clone https://github.com/google-research/perch
+cd perch
+docker build . --tag perch
+```
+
+And then you can run the different commands using the container you just built.
+For example, to run the tests, try:
+```bash
+docker run --rm -t perch python -m unittest discover -s chirp/tests -p "*test.py"
+```
+
 ## BIRB data preparation
 
 ### Evaluation data
