@@ -15,7 +15,7 @@ curl -sSL https://install.python-poetry.org | python3 -
 # Install dependencies for librosa
 sudo apt-get install libsndfile1 ffmpeg
 
-# Install all dependencies specified in the poetry configs.
+# Install all dependencies specified in the poetry configs
 poetry install
 ```
 
@@ -27,25 +27,23 @@ poetry run python -m unittest discover -s chirp/tests -p "*test.py"
 
 ## Using a container
 
-Alternatively, you can install and run this project using a container via
-Docker. To build a container using the tag `perch`, run:
+Alternatively, you can install and run this project using a container via Docker. To build a container using the tag `perch`, run:
+
 ```bash
 git clone https://github.com/google-research/perch
 cd perch
 docker build . --tag perch
 ```
 
-And then you can run the different commands using the container you just built.
-For example, to run the tests, try:
+After building the container, to run the unit tests, use:
+
 ```bash
 docker run --rm -t perch python -m unittest discover -s chirp/tests -p "*test.py"
 ```
 
 ## BIRB data preparation
 
-### Evaluation data
-
-After [installing](#installation) the `chirp` package, run the following command from the repository's root directory:
+To build the BIRB evaluation data, after [installing](#installation) the `chirp` package, run the following command from the repository's root directory:
 
 ```bash
 poetry run tfds build -i chirp.data.bird_taxonomy,chirp.data.soundscapes \
