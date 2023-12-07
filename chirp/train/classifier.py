@@ -388,6 +388,7 @@ def evaluate(
       )
     writer.flush()
 
+
 def export_tf_model(
     model_bundle: train_utils.ModelBundle,
     train_state: train_utils.TrainState,
@@ -396,11 +397,13 @@ def export_tf_model(
     num_train_steps: int,
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     polymorphic_batch: bool = True,
+    output_keys: Sequence[str] | None = None,
 ):
   """Export SavedModel and TFLite."""
   # Get model_ouput keys from output_head_metadatas and add the 'embedding' key
-  output_keys = set(md.key for md in model_bundle.output_head_metadatas)
-  output_keys.add("embedding")  # Add 'embedding' if not already present
+  if output_keys is None:
+    output_keys = set(md.key for md in model_bundle.output_head_metadatas)
+    output_keys.add("embedding")  # Add 'embedding' if not already present
 
   for train_state in train_utils.checkpoint_iterator(
       train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
