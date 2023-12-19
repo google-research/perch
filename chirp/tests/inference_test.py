@@ -526,6 +526,59 @@ class InferenceTest(parameterized.TestCase):
 
     print(metrics)
 
+  @parameterized.product(
+      batchable=(True, False),
+  )
+  def test_taxonomy_model_tf(self, batchable):
+    class FakeModelFn:
+      output_depths = (3, 256)
+
+      def infer_tf(self, audio_array):
+        outputs = [
+            np.zeros([audio_array.shape[0], depth], dtype=np.float32)
+            for depth in self.output_depths
+        ]
+        return outputs
+
+    class_list = namespace.ClassList('fake', ['alpha', 'beta', 'delta'])
+    wrapped_model = models.TaxonomyModelTF(
+        sample_rate=32000,
+        model_path='/dev/null',
+        window_size_s=5.0,
+        hop_size_s=5.0,
+        model=FakeModelFn(),
+        class_list=class_list,
+        batchable=batchable,
+    )
+
+    # Check that a single frame of audio is handled properly.
+    outputs = wrapped_model.embed(np.zeros([5 * 32000], dtype=np.float32))
+    self.assertFalse(outputs.batched)
+    self.assertSequenceEqual(outputs.embeddings.shape, [1, 1, 256])
+    self.assertSequenceEqual(outputs.logits['label'].shape, [1, 3])
+
+    # Check that multi-frame audio is handled properly.
+    outputs = wrapped_model.embed(np.zeros([20 * 32000], dtype=np.float32))
+    self.assertFalse(outputs.batched)
+    self.assertSequenceEqual(outputs.embeddings.shape, [4, 1, 256])
+    self.assertSequenceEqual(outputs.logits['label'].shape, [4, 3])
+
+    # Check that a batch of single frame of audio is handled properly.
+    outputs = wrapped_model.batch_embed(
+        np.zeros([10, 5 * 32000], dtype=np.float32)
+    )
+    self.assertTrue(outputs.batched)
+    self.assertSequenceEqual(outputs.embeddings.shape, [10, 1, 1, 256])
+    self.assertSequenceEqual(outputs.logits['label'].shape, [10, 1, 3])
+
+    # Check that a batch of multi-frame audio is handled properly.
+    outputs = wrapped_model.batch_embed(
+        np.zeros([2, 20 * 32000], dtype=np.float32)
+    )
+    self.assertTrue(outputs.batched)
+    self.assertSequenceEqual(outputs.embeddings.shape, [2, 4, 1, 256])
+    self.assertSequenceEqual(outputs.logits['label'].shape, [2, 4, 3])
+
 
 if __name__ == '__main__':
   absltest.main()

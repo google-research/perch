@@ -329,13 +329,15 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     framed_audio = self.frame_audio(
         audio_array, self.window_size_s, self.hop_size_s
     )
-    if self.target_peak is not None:
-      framed_audio = self.normalize_audio(framed_audio, self.target_peak)
+    framed_audio = self.normalize_audio(framed_audio, self.target_peak)
+
     all_logits, all_embeddings = self.model.infer_tf(framed_audio[:1])
     for window in framed_audio[1:]:
       logits, embeddings = self.model.infer_tf(window[np.newaxis, :])
       all_logits = np.concatenate([all_logits, logits], axis=0)
       all_embeddings = np.concatenate([all_embeddings, embeddings], axis=0)
+
+    # Add channel dimension.
     all_embeddings = all_embeddings[:, np.newaxis, :]
 
     return interface.InferenceOutputs(
@@ -351,17 +353,24 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     framed_audio = self.frame_audio(
         audio_batch, self.window_size_s, self.hop_size_s
     )
-    if self.target_peak is not None:
-      framed_audio = self.normalize_audio(framed_audio, self.target_peak)
+    framed_audio = self.normalize_audio(framed_audio, self.target_peak)
 
     rebatched_audio = framed_audio.reshape([-1, framed_audio.shape[-1]])
     logits, embeddings = self.model.infer_tf(rebatched_audio)
     logits = np.reshape(logits, framed_audio.shape[:2] + (logits.shape[-1],))
+    # Unbatch and add channel dimension.
     embeddings = np.reshape(
-        embeddings, framed_audio.shape[:2] + (embeddings.shape[-1],)
+        embeddings,
+        framed_audio.shape[:2]
+        + (
+            1,
+            embeddings.shape[-1],
+        ),
     )
 
-    return interface.InferenceOutputs(embeddings, {'label': logits}, None)
+    return interface.InferenceOutputs(
+        embeddings, {'label': logits}, None, batched=True
+    )
 
 
 @dataclasses.dataclass

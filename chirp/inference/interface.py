@@ -146,9 +146,11 @@ class EmbeddingModel:
   def normalize_audio(
       self,
       framed_audio: np.ndarray,
-      target_peak: float,
+      target_peak: float | None,
   ) -> np.ndarray:
     """Normalizes audio with shape [..., T] to match the target_peak value."""
+    if target_peak is None:
+      return framed_audio
     framed_audio = framed_audio.copy()
     framed_audio -= np.mean(framed_audio, axis=-1, keepdims=True)
     peak_norm = np.max(np.abs(framed_audio), axis=-1, keepdims=True)
