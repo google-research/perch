@@ -33,8 +33,9 @@ def get_config() -> config_dict.ConfigDict:
   emb_model_checkpoint_path = ''
 
   # Raw audio files are several hours long each
-  config.num_shards_per_file = 720
-  config.shard_len_s = 60
+  config.shard_len_s = -1
+  config.num_shards_per_file = -1
+
   # Number of workers when using the Beam DirectRunner on a single machine.
   config.num_direct_workers = 8
   config.embed_fn_config = {

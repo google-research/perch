@@ -67,9 +67,10 @@ def main(unused_argv: Sequence[str]) -> None:
   logging.info('Locating source files...')
   # Create and run the beam pipeline.
   source_infos = embed_lib.create_source_infos(
-      config.source_file_patterns,
-      config.num_shards_per_file,
-      config.shard_len_s,
+      source_file_patterns=config.source_file_patterns,
+      shard_len_s=config.get('shard_len_s', -1.0),
+      num_shards_per_file=config.get('num_shards_per_file', -1),
+      start_shard_idx=config.get('start_shard_idx', 0),
   )
   logging.info('Found %d source infos.', len(source_infos))
   if not source_infos:

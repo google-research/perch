@@ -26,7 +26,6 @@ from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
 from chirp.taxonomy import namespace
-from chirp.taxonomy import namespace_db
 from etils import epath
 from ml_collections import config_dict
 import numpy as np
@@ -137,6 +136,68 @@ class InferenceTest(parameterized.TestCase):
       )
     else:
       self.assertEqual(got_example[tf_examples.RAW_AUDIO].shape, (0,))
+
+  def test_embed_fn_source_variations(self):
+    """Test processing with variations of SourceInfo."""
+    model_kwargs = {
+        'sample_rate': 16000,
+        'embedding_size': 128,
+        'make_embeddings': True,
+        'make_logits': False,
+        'make_separated_audio': False,
+    }
+    embed_fn = embed_lib.EmbedFn(
+        write_embeddings=True,
+        write_logits=False,
+        write_separated_audio=False,
+        write_raw_audio=False,
+        model_key='placeholder_model',
+        model_config=model_kwargs,
+        min_audio_s=2.0,
+        file_id_depth=0,
+    )
+    embed_fn.setup()
+    self.assertIsNotNone(embed_fn.embedding_model)
+    parser = tf_examples.get_example_parser()
+
+    test_wav_path = os.fspath(
+        path_utils.get_absolute_path(
+            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+        )
+    )
+
+    # Check that a SourceInfo with window_size_s <= 0 embeds the entire file.
+    source_info = embed_lib.SourceInfo(test_wav_path, 0, -1)
+    example = embed_fn.process(source_info)[0]
+    example = parser(example.SerializeToString())
+    self.assertEqual(example['embedding'].shape[0], 21)
+
+    # Check that a SourceInfo with window_size_s > 0 embeds part of the file.
+    source_info = embed_lib.SourceInfo(test_wav_path, 0, 5.0)
+    example = embed_fn.process(source_info)[0]
+    example = parser(example.SerializeToString())
+    self.assertEqual(example['embedding'].shape[0], 5)
+
+    # Check that the second part of the file has the correct length.
+    source_info = embed_lib.SourceInfo(test_wav_path, 1, 5.0)
+    example = embed_fn.process(source_info)[0]
+    example = parser(example.SerializeToString())
+    self.assertEqual(example['embedding'].shape[0], 5)
+
+    # Check that the end of a file is properly handled.
+    # In this case, the window_size_s is 6.0, and we have a 21 audio file.
+    # So shard number 3 should be the 3s remainder.
+    source_info = embed_lib.SourceInfo(test_wav_path, 3, 6.0)
+    example = embed_fn.process(source_info)[0]
+    example = parser(example.SerializeToString())
+    self.assertEqual(example['embedding'].shape[0], 3)
+
+    # Check that a too-short remainder returns None.
+    # In this case, the window_size_s is 5.0, and we have a 21s audio file.
+    # So shard number 4 should be the 1s remainder, but the min_audio_s is set
+    # to 2s, so we should drop the example.
+    source_info = embed_lib.SourceInfo(test_wav_path, 4, 5.0)
+    self.assertIsNone(embed_fn.process(source_info))
 
   def test_keyed_write_logits(self):
     """Test that EmbedFn writes only the desired logits if specified."""
@@ -286,6 +347,32 @@ class InferenceTest(parameterized.TestCase):
 
     framed = embed_fn.embedding_model.frame_audio(np.ones(100), 1.0, 5.0)
     self.assertEqual(framed.shape, (1, 200))
+
+  def test_create_source_infos(self):
+    # Just one file, but it's all good.
+    globs = [
+        path_utils.get_absolute_path(
+            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+        )
+    ]
+    # Disable sharding by setting shard_len_s <= 0.
+    got_infos = embed_lib.create_source_infos(
+        globs, shard_len_s=-1, num_shards_per_file=100
+    )
+    self.assertLen(got_infos, 1)
+
+    # Try automatic sharding by setting num_shards_per_file < 0.
+    got_infos = embed_lib.create_source_infos(
+        globs, shard_len_s=10, num_shards_per_file=-1
+    )
+    # The test file is ~21s long, so we should get three shards.
+    self.assertLen(got_infos, 3)
+
+    # Use a fixed number of shards per file.
+    got_infos = embed_lib.create_source_infos(
+        globs, shard_len_s=10, num_shards_per_file=10
+    )
+    self.assertLen(got_infos, 10)
 
   def test_tfrecord_multiwriter(self):
     output_dir = epath.Path(tempfile.TemporaryDirectory().name)

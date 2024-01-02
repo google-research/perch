@@ -66,19 +66,47 @@ class SourceId:
 
 def create_source_infos(
     source_file_patterns: Sequence[str],
-    num_shards_per_file: int,
     shard_len_s: float,
+    num_shards_per_file: int = -1,
+    start_shard_idx: int = 0,
 ) -> Sequence[SourceInfo]:
-  """Expand source file patterns into a list of SourceInfos."""
-  # TODO(tomdenton): probe each file and create work units in a new Beam stage.
+  """Expand source file patterns into a list of SourceInfos.
+
+  Args:
+    source_file_patterns: Sequence of file patterns to glob.
+    shard_len_s: Length in seconds of each TFExample. If <=0, use the full file.
+    num_shards_per_file: Limits number of shards per file. Set to -1 to
+      automatically find the number of shards per file.
+    start_shard_idx: Skip all shards prior to the chosen shard.
+
+  Returns:
+    Sequence of SourceInfo objects.
+  """
   source_files = []
   for pattern in source_file_patterns:
     for source_file in epath.Path('').glob(pattern):
       source_files.append(source_file)
 
   source_file_splits = []
+  if shard_len_s <= 0:
+    # Generate a single source info for each file.
+    for source in source_files:
+      source_file_splits.append(SourceInfo(source.as_posix(), 0, -1.0))
+    return source_file_splits
+
   for source in source_files:
-    for i in range(num_shards_per_file):
+    if num_shards_per_file > 0:
+      num_shards = num_shards_per_file
+    else:
+      try:
+        sf = soundfile.SoundFile(source)
+        file_length_s = sf.frames / sf.samplerate
+        num_shards = int(file_length_s // shard_len_s + 1)
+      except Exception as exc:  # pylint: disable=broad-exception-caught
+        logging.error('Failed to parse audio file (%s) : %s.', source, exc)
+        continue
+
+    for i in range(start_shard_idx, num_shards):
       source_file_splits.append(SourceInfo(source.as_posix(), i, shard_len_s))
   return source_file_splits
 
@@ -135,7 +163,7 @@ class EmbedFn(beam.DoFn):
       model_config: config_dict.ConfigDict,
       file_id_depth: int,
       crop_s: float = -1.0,
-      min_audio_s: float = 5.0,
+      min_audio_s: float = 1.0,
       embedding_model: interface.EmbeddingModel | None = None,
       target_sample_rate: int = -2,
       logits_head_config: config_dict.ConfigDict | None = None,
@@ -263,7 +291,10 @@ class EmbedFn(beam.DoFn):
     file_id = source_info.file_id(self.file_id_depth)
 
     logging.info('...loading audio (%s)', source_info.filepath)
-    timestamp_offset_s = source_info.shard_num * source_info.shard_len_s
+    if source_info.shard_len_s <= 0:
+      timestamp_offset_s = 0
+    else:
+      timestamp_offset_s = source_info.shard_num * source_info.shard_len_s
 
     if crop_s > 0:
       window_size_s = crop_s

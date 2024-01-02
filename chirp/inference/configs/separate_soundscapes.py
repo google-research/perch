@@ -32,8 +32,9 @@ def get_config() -> config_dict.ConfigDict:
   sep_model_checkpoint_path = ''
   emb_model_checkpoint_path = ''
 
-  config.num_shards_per_file = 120
-  config.shard_len_s = 60
+  config.shard_len_s = -1
+  config.num_shards_per_file = -1
+
   # Number of workers when using the Beam DirectRunner on a single machine.
   config.num_direct_workers = 8
   config.embed_fn_config = {
@@ -41,6 +42,7 @@ def get_config() -> config_dict.ConfigDict:
       'write_logits': False,
       'write_separated_audio': False,
       'write_raw_audio': False,
+      'file_id_depth': 1,
       'model_key': 'separate_embed_model',
       'file_id_depth': 1,
       'model_config': {
