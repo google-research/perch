@@ -78,7 +78,9 @@ def get_feature_description(logit_names: Sequence[str] | None = None):
   return feature_description
 
 
-def get_example_parser(logit_names: Sequence[str] | None = None):
+def get_example_parser(
+    logit_names: Sequence[str] | None = None, tensor_dtype: str = 'float32'
+):
   """Create a parser for decoding inference library TFExamples."""
   features = get_feature_description(logit_names=logit_names)
 
@@ -93,9 +95,9 @@ def get_example_parser(logit_names: Sequence[str] | None = None):
       # both conditional branches. So we use an empty tensor when no
       # data is present to parse.
       if ex[key] != tf.constant(b'', dtype=tf.string):
-        ex[key] = tf.io.parse_tensor(ex[key], tf.float32)
+        ex[key] = tf.io.parse_tensor(ex[key], out_type=tensor_dtype)
       else:
-        ex[key] = tf.zeros_like([], dtype=tf.float32)
+        ex[key] = tf.zeros_like([], dtype=tensor_dtype)
     return ex
 
   return _parser
@@ -106,6 +108,7 @@ def create_embeddings_dataset(
     file_glob: str = '*',
     prefetch: int = 128,
     logit_names: Sequence[str] | None = None,
+    tensor_dtype: str = 'float32',
 ):
   """Create a TF Dataset of the embeddings."""
   embeddings_dir = epath.Path(embeddings_dir)
@@ -114,13 +117,16 @@ def create_embeddings_dataset(
       embeddings_files, num_parallel_reads=tf.data.AUTOTUNE
   )
 
-  parser = get_example_parser(logit_names=logit_names)
+  parser = get_example_parser(
+      logit_names=logit_names, tensor_dtype=tensor_dtype
+  )
   ds = ds.map(parser, num_parallel_calls=tf.data.AUTOTUNE)
   ds = ds.prefetch(prefetch)
   return ds
 
 
-def serialize_tensor(tensor: np.ndarray) -> np.ndarray:
+def serialize_tensor(tensor: np.ndarray, tensor_dtype: str) -> np.ndarray:
+  tensor = tf.cast(tensor, tensor_dtype)
   serialized = tf.io.serialize_tensor(tensor)
   return serialized.numpy()
 
@@ -134,6 +140,7 @@ def model_outputs_to_tf_example(
     write_logits: bool | Sequence[str],
     write_separated_audio: bool,
     write_raw_audio: bool,
+    tensor_dtype: str = 'float32',
 ) -> tf.train.Example:
   """Create a TFExample from InferenceOutputs."""
   feature = {
@@ -142,7 +149,7 @@ def model_outputs_to_tf_example(
   }
   if write_embeddings and model_outputs.embeddings is not None:
     feature[EMBEDDING] = bytes_feature(
-        serialize_tensor(model_outputs.embeddings)
+        serialize_tensor(model_outputs.embeddings, tensor_dtype)
     )
     feature[EMBEDDING_SHAPE] = (int_feature(model_outputs.embeddings.shape),)
 
@@ -154,19 +161,21 @@ def model_outputs_to_tf_example(
       logit_keys = tuple(k for k in logit_keys if k in write_logits)
     for logits_key in logit_keys:
       logits = model_outputs.logits[logits_key]
-      feature[logits_key] = bytes_feature(serialize_tensor(logits))
+      feature[logits_key] = bytes_feature(
+          serialize_tensor(logits, tensor_dtype)
+      )
       feature[logits_key + '_shape'] = int_feature(logits.shape)
 
   if write_separated_audio and model_outputs.separated_audio is not None:
     feature[SEPARATED_AUDIO] = bytes_feature(
-        serialize_tensor(model_outputs.separated_audio)
+        serialize_tensor(model_outputs.separated_audio, tensor_dtype)
     )
     feature[SEPARATED_AUDIO_SHAPE] = int_feature(
         model_outputs.separated_audio.shape
     )
   if write_raw_audio:
     feature[RAW_AUDIO] = bytes_feature(
-        serialize_tensor(tf.constant(audio, dtype=tf.float32))
+        serialize_tensor(tf.constant(audio, dtype=tf.float32), tensor_dtype)
     )
     feature[RAW_AUDIO_SHAPE] = int_feature(audio.shape)
   ex = tf.train.Example(features=tf.train.Features(feature=feature))

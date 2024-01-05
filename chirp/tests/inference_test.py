@@ -57,6 +57,7 @@ class InferenceTest(parameterized.TestCase):
       write_logits=(True, False),
       write_separated_audio=(True, False),
       write_raw_audio=(True, False),
+      tensor_dtype=('float32', 'float16'),
   )
   def test_embed_fn(
       self,
@@ -67,6 +68,7 @@ class InferenceTest(parameterized.TestCase):
       write_logits,
       write_raw_audio,
       write_separated_audio,
+      tensor_dtype,
   ):
     model_kwargs = {
         'sample_rate': 16000,
@@ -83,6 +85,7 @@ class InferenceTest(parameterized.TestCase):
         model_key='placeholder_model',
         model_config=model_kwargs,
         file_id_depth=0,
+        tensor_dtype=tensor_dtype,
     )
     embed_fn.setup()
     self.assertIsNotNone(embed_fn.embedding_model)
@@ -98,7 +101,8 @@ class InferenceTest(parameterized.TestCase):
     serialized = example.SerializeToString()
 
     parser = tf_examples.get_example_parser(
-        logit_names=['label', 'other_label']
+        logit_names=['label', 'other_label'],
+        tensor_dtype=tensor_dtype,
     )
     got_example = parser(serialized)
     self.assertIsNotNone(got_example)

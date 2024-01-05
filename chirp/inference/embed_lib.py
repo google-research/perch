@@ -112,7 +112,7 @@ def create_source_infos(
 
 
 def get_existing_source_ids(
-    output_dir: epath.Path, file_pattern: str
+    output_dir: epath.Path, file_pattern: str, tensor_dtype: str = 'float32'
 ) -> Set[SourceId]:
   """Return existing SourceInfos from the matching output dir and pattern."""
   existing_source_ids = set([])
@@ -120,7 +120,7 @@ def get_existing_source_ids(
     return existing_source_ids
   filenames = [fn for fn in output_dir.glob(file_pattern)]
   dataset = tf.data.TFRecordDataset(filenames)
-  parser = tf_examples.get_example_parser()
+  parser = tf_examples.get_example_parser(tensor_dtype=tensor_dtype)
   dataset = dataset.map(parser)
   for e in dataset.as_numpy_iterator():
     existing_source_ids.add(
@@ -167,6 +167,7 @@ class EmbedFn(beam.DoFn):
       embedding_model: interface.EmbeddingModel | None = None,
       target_sample_rate: int = -2,
       logits_head_config: config_dict.ConfigDict | None = None,
+      tensor_dtype: str = 'float32',
   ):
     """Initialize the embedding DoFn.
 
@@ -191,6 +192,8 @@ class EmbedFn(beam.DoFn):
         resample to a fixed rate.
       logits_head_config: Optional configuration for a secondary
         interface.LogitsOutputHead classifying the model embeddings.
+      tensor_dtype: Dtype to use for storing tensors (embeddings, logits, or
+        audio). Default to float32, but float16 approximately halves file size.
     """
     self.model_key = model_key
     self.model_config = model_config
@@ -205,6 +208,7 @@ class EmbedFn(beam.DoFn):
     self.target_sample_rate = target_sample_rate
     self.logits_head_config = logits_head_config
     self.logits_head = None
+    self.tensor_dtype = tensor_dtype
 
   def setup(self):
     if self.embedding_model is None:
@@ -273,6 +277,7 @@ class EmbedFn(beam.DoFn):
         write_separated_audio=self.write_separated_audio,
         write_embeddings=self.write_embeddings,
         write_logits=write_logits,
+        tensor_dtype=self.tensor_dtype,
     )
     return example
 
@@ -343,12 +348,17 @@ class EmbedFn(beam.DoFn):
     return [example]
 
 
-def get_config(config_key: str):
+def get_config(config_key: str, shard_idx: str = '') -> config_dict.ConfigDict:
   """Get a config given its keyed name."""
   module_key = '..{}'.format(config_key)
-  config = importlib.import_module(
-      module_key, INFERENCE_CONFIGS_PKG
-  ).get_config()
+  if shard_idx:
+    config = importlib.import_module(
+        module_key, INFERENCE_CONFIGS_PKG
+    ).get_config(shard_idx)
+  else:
+    config = importlib.import_module(
+        module_key, INFERENCE_CONFIGS_PKG
+    ).get_config()
 
   logging.info('Loaded config %s', config_key)
   logging.info('Config output location : %s', config.output_dir)

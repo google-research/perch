@@ -402,6 +402,7 @@ def read_embedded_dataset(
     embeddings_path: str,
     time_pooling: str,
     exclude_classes: Sequence[str] = (),
+    tensor_dtype: str = 'float32',
 ):
   """Read pre-saved embeddings to memory from storage.
 
@@ -420,6 +421,7 @@ def read_embedded_dataset(
     embeddings_path: Location of the existing embeddings as TFRecordDataset.
     time_pooling: Method of time pooling.
     exclude_classes: List of classes to exclude.
+    tensor_dtype: Tensor dtype used in the embeddings tfrecords.
 
   Returns:
     Ordered labels and a Dict contianing the entire embedded dataset.
@@ -428,7 +430,7 @@ def read_embedded_dataset(
   output_dir = epath.Path(embeddings_path)
   fns = [fn for fn in output_dir.glob('embeddings-*')]
   ds = tf.data.TFRecordDataset(fns)
-  parser = tf_examples.get_example_parser()
+  parser = tf_examples.get_example_parser(tensor_dtype=tensor_dtype)
   ds = ds.map(parser)
 
   # Loading the lables assuming a folder-of-folder structure

@@ -49,7 +49,9 @@ class BootstrapState:
     if self.embeddings_dataset:
       return self.embeddings_dataset
     ds = tf_examples.create_embeddings_dataset(
-        self.config.embeddings_path, 'embeddings-*'
+        self.config.embeddings_path,
+        'embeddings-*',
+        tensor_dtype=self.config.tensor_dtype,
     )
     self.embeddings_dataset = ds
     return ds
@@ -84,6 +86,9 @@ class BootstrapConfig:
   # Annotations info.
   annotated_path: str
 
+  # Tensor dtype in embeddings.
+  tensor_dtype: str
+
   # The following are populated automatically from the embedding config.
   embedding_hop_size_s: float | None = None
   file_id_depth: int | None = None
@@ -98,6 +103,7 @@ class BootstrapConfig:
     """Instantiate from a configuration written alongside embeddings."""
     embedding_config = embed_lib.load_embedding_config(embeddings_path)
     embed_fn_config = embedding_config.embed_fn_config
+    tensor_dtype = embed_fn_config.get('tensor_dtype', 'float32')
 
     # Extract the embedding model config from the embedding_config.
     if embed_fn_config.model_key == 'separate_embed_model':
@@ -115,4 +121,5 @@ class BootstrapConfig:
         embedding_hop_size_s=model_config.hop_size_s,
         file_id_depth=embed_fn_config.file_id_depth,
         audio_globs=embedding_config.source_file_patterns,
+        tensor_dtype=tensor_dtype,
     )
