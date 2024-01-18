@@ -33,7 +33,6 @@ from absl import flags
 from absl import logging
 from chirp import config_utils
 from chirp.configs import config_globals
-from chirp.projects.weakly_supervised import train as weakly_supervised
 from chirp.train import classifier
 from chirp.train import hubert
 from chirp.train import mae
@@ -67,7 +66,6 @@ TARGETS: dict[str, Run] = {
     "mae": mae.run,
     "hubert": hubert.run,
     "separator": separator.run,
-    "weakly_supervised": weakly_supervised.run,
 }
 
 _CONFIG = config_flags.DEFINE_config_file("config")
