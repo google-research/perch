@@ -27,7 +27,7 @@ scenic = {git = "https://github.com/google-research/scenic.git"}
 tensorflow-hub = "^0.14.0"
 imageio = "^2.5.0"
 matplotlib = "^3.6.1"
-notebook = "^7.0.4"
+notebook = "^7.0.7"
 chex = "^0.1.7"
 numba = "^0.57"
 
