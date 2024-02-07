@@ -310,14 +310,17 @@ class TaxonomyModelTF(interface.EmbeddingModel):
       label_csv_path = base_path / 'label.csv'
 
     model = tf.saved_model.load(model_path)
-    with label_csv_path.open('r') as f:
-      class_list = namespace.ClassList.from_csv(f)
+
+    if hasattr(config, 'class_list') and config.class_list is not None:
+      # Config brings its own class list
+      pass
+    else:
+      with label_csv_path.open('r') as f:
+        config.class_list = namespace.ClassList.from_csv(f)
 
     # Check whether the model support polymorphic batch shape.
     batchable = cls.is_batchable(model)
-    return cls(
-        model=model, class_list=class_list, batchable=batchable, **config
-    )
+    return cls(model=model, batchable=batchable, **config)
 
   def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
     if self.batchable:
