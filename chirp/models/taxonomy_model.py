@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Perch Authors.
+# Copyright 2024 The Perch Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -97,6 +97,7 @@ class TaxonomyModel(nn.Module):
       x = self.hubert_feature_extractor(inputs)  # pylint: disable=not-callable
     else:
       x = inputs
+    frontend_outputs = x
 
     # Apply the encoder.
     while len(x.shape) < 4:
@@ -110,6 +111,7 @@ class TaxonomyModel(nn.Module):
     # Classify the encoder outputs and assemble outputs.
     model_outputs = {}
     model_outputs["embedding"] = x
+    model_outputs["frontend"] = frontend_outputs
     for k, n in self.num_classes.items():
       model_outputs[k] = nn.Dense(n)(x)
     return model_outputs

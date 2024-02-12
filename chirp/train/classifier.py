@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Perch Authors.
+# Copyright 2024 The Perch Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 """Training loop."""
 
 import functools
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 from absl import logging
 from chirp import export_utils
@@ -42,14 +42,13 @@ import tensorflow as tf
 EVAL_LOOP_SLEEP_S = 30
 
 
-def get_keyed_map_fn(key):
+def get_keyed_av_prec_fn(key):
   def _map(**kwargs):
     return metrics.average_precision(
         scores=kwargs[f"{key}_logits"],
         labels=kwargs[key],
         label_mask=kwargs.get(f"{key}_mask", None),
     )
-
   return _map
 
 
@@ -64,7 +63,7 @@ def get_train_metrics(
         len(md.class_list.classes)
     ).from_output(f"{md.key}_loss")
     metrics_[f"{md.key}_map"] = clu_metrics.Average.from_fun(
-        get_keyed_map_fn(md.key)
+        get_keyed_av_prec_fn(md.key)
     )
 
   return metrics_
@@ -150,9 +149,9 @@ def initialize_model(
 
 
 def train(
-    model_bundle,
-    train_state,
-    train_dataset,
+    model_bundle: Any,
+    train_state: Any,
+    train_dataset: Any,
     num_train_steps: int,
     logdir: str,
     log_every_steps: int,
@@ -398,12 +397,18 @@ def export_tf_model(
     eval_sleep_s: int = EVAL_LOOP_SLEEP_S,
     polymorphic_batch: bool = True,
     output_keys: Sequence[str] | None = None,
+    tf_lite_dtype: str = "float16",
+    tf_lite_select_ops: bool = True,
+    export_dir: str | None = None,
 ):
   """Export SavedModel and TFLite."""
   # Get model_ouput keys from output_head_metadatas and add the 'embedding' key
   if output_keys is None:
     output_keys = set(md.key for md in model_bundle.output_head_metadatas)
     output_keys.add("embedding")  # Add 'embedding' if not already present
+    output_keys.add("frontend")  # Add 'frontend' if not already present
+  if export_dir is None:
+    export_dir = workdir
 
   for train_state in train_utils.checkpoint_iterator(
       train_state, model_bundle.ckpt, workdir, num_train_steps, eval_sleep_s
@@ -415,9 +420,7 @@ def export_tf_model(
           variables, audio_batch, train=False
       )
       # Will use all keys in configs.init_config.output_head_metadatas
-      return tuple(
-          model_outputs[key] for key in output_keys if key in model_outputs
-      )
+      return {k: v for k, v in model_outputs.items() if k in output_keys}
 
     if polymorphic_batch:
       shape = (None,) + input_shape
@@ -430,7 +433,11 @@ def export_tf_model(
         md.key: md.class_list for md in model_bundle.output_head_metadatas
     }
     converted_model.export_converted_model(
-        workdir, train_state.step, class_lists
+        export_dir,
+        train_state.step,
+        class_lists,
+        tf_lite_dtype=tf_lite_dtype,
+        tf_lite_select_ops=tf_lite_select_ops,
     )
 
 

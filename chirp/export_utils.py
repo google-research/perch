@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Perch Authors.
+# Copyright 2024 The Perch Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ class Jax2TfModelWrapper(tf.Module):
 
   def export_converted_model(
       self,
-      workdir: str,
+      export_dir: str,
       train_step: int,
       class_lists: dict[str, namespace.ClassList] | None = None,
       export_tf_lite: bool = True,
@@ -111,17 +111,19 @@ class Jax2TfModelWrapper(tf.Module):
 
     logging.info('Saving TF SavedModel...')
     tf.saved_model.save(
-        self, os.path.join(workdir, 'savedmodel'), signatures=concrete_fn
+        self, os.path.join(export_dir, 'savedmodel'), signatures=concrete_fn
     )
     with tf.io.gfile.GFile(
-        os.path.join(workdir, 'savedmodel', 'ckpt.txt'), 'w'
+        os.path.join(export_dir, 'savedmodel', 'ckpt.txt'), 'w'
     ) as f:
       f.write(f'train_state.step: {train_step}\n')
 
     logging.info('Writing class lists...')
     if class_lists is not None:
       for key, class_list in class_lists.items():
-        with tf.io.gfile.GFile(os.path.join(workdir, f'{key}.csv'), 'w') as f:
+        with tf.io.gfile.GFile(
+            os.path.join(export_dir, f'{key}.csv'), 'w'
+        ) as f:
           # NOTE: Although the namespace is written to the file, there is no
           # guarantee that the class list will still be compatible with the
           # namespace if the latter gets updated.
@@ -155,11 +157,13 @@ class Jax2TfModelWrapper(tf.Module):
       converter.target_spec.supported_ops += [tf.lite.OpsSet.SELECT_TF_OPS]
     tflite_float_model = converter.convert()
 
-    if not tf.io.gfile.exists(workdir):
-      tf.io.gfile.makedirs(workdir)
-    with tf.io.gfile.GFile(os.path.join(workdir, 'model.tflite'), 'wb') as f:
+    if not tf.io.gfile.exists(export_dir):
+      tf.io.gfile.makedirs(export_dir)
+    with tf.io.gfile.GFile(os.path.join(export_dir, 'model.tflite'), 'wb') as f:
       f.write(tflite_float_model)
-    with tf.io.gfile.GFile(os.path.join(workdir, 'tflite_ckpt.txt'), 'w') as f:
+    with tf.io.gfile.GFile(
+        os.path.join(export_dir, 'tflite_ckpt.txt'), 'w'
+    ) as f:
       f.write(f'train_state.step: {train_step}\n')
 
     logging.info('Export complete.')

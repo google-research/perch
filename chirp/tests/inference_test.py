@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Perch Authors.
+# Copyright 2024 The Perch Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -618,20 +618,26 @@ class InferenceTest(parameterized.TestCase):
     print(metrics)
 
   @parameterized.product(
+      model_return_type=('tuple', 'dict'),
       batchable=(True, False),
   )
-  def test_taxonomy_model_tf(self, batchable):
+  def test_taxonomy_model_tf(self, model_return_type, batchable):
     class FakeModelFn:
-      output_depths = (3, 256)
+      output_depths = {'label': 3, 'embedding': 256}
 
       def infer_tf(self, audio_array):
-        outputs = [
-            np.zeros([audio_array.shape[0], depth], dtype=np.float32)
-            for depth in self.output_depths
-        ]
+        outputs = {
+            k: np.zeros([audio_array.shape[0], d], dtype=np.float32)
+            for k, d in self.output_depths.items()
+        }
+        if model_return_type == 'tuple':
+          # Published Perch models v1 through v4 returned a tuple, not a dict.
+          return outputs['label'], outputs['embedding']
         return outputs
 
-    class_list = namespace.ClassList('fake', ['alpha', 'beta', 'delta'])
+    class_list = {
+        'label': namespace.ClassList('fake', ['alpha', 'beta', 'delta'])
+    }
     wrapped_model = models.TaxonomyModelTF(
         sample_rate=32000,
         model_path='/dev/null',

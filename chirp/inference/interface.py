@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Perch Authors.
+# Copyright 2024 The Perch Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,12 +42,14 @@ class InferenceOutputs:
       logits array has shape [Frames, L.size] or [Frames, Channels, L.size].
     separated_audio: Separated audio channels with shape [Channels, Samples].
     batched: If True, each output has an additonal batch dimension.
+    frontend: Model frontend output, such as melspectrogram.
   """
 
   embeddings: np.ndarray | None = None
   logits: LogitType | None = None
   separated_audio: np.ndarray | None = None
   batched: bool = False
+  frontend: np.ndarray | None = None
 
   def __post_init__(self):
     # In some scenarios, we may be passed TF EagerTensors. We dereference these

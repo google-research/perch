@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2023 The Perch Authors.
+# Copyright 2024 The Perch Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -255,7 +255,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   window_size_s: float
   hop_size_s: float
   model: Any  # TF SavedModel
-  class_list: namespace.ClassList
+  class_list: dict[str, namespace.ClassList]
   batchable: bool
   target_peak: float | None = 0.25
   tfhub_version: int | None = None
@@ -263,7 +263,21 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   @classmethod
   def is_batchable(cls, model: Any) -> bool:
     sig = model.signatures['serving_default']
-    return sig.inputs[0].shape[0] is None
+    if sig.inputs[0].shape[0] is not None:
+      raise NotImplementedError(
+          'The non-batchable model is no longer supported. '
+          'Please update to a more recent model!'
+      )
+    return True
+
+  @classmethod
+  def load_class_lists(cls, csv_glob):
+    class_lists = {}
+    for csv_path in csv_glob:
+      with csv_path.open('r') as f:
+        key = csv_path.name.replace('.csv', '')
+        class_lists[key] = namespace.ClassList.from_csv(f)
+    return class_lists
 
   @classmethod
   def from_tfhub(cls, config: config_dict.ConfigDict) -> 'TaxonomyModelTF':
@@ -283,11 +297,10 @@ class TaxonomyModelTF(interface.EmbeddingModel):
 
     # Get the labels CSV from TFHub.
     model_path = hub.resolve(model_url)
-    labels_path = epath.Path(model_path) / 'assets/label.csv'
-    with labels_path.open('r') as f:
-      class_list = namespace.ClassList.from_csv(f)
+    class_lists_glob = (epath.Path(model_path) / 'assets').glob('*.csv')
+    class_lists = cls.load_class_lists(class_lists_glob)
     return cls(
-        model=model, class_list=class_list, batchable=batchable, **config
+        model=model, class_list=class_lists, batchable=batchable, **config
     )
 
   @classmethod
@@ -303,61 +316,51 @@ class TaxonomyModelTF(interface.EmbeddingModel):
     ).exists():
       # This looks like a downloaded TFHub model.
       model_path = base_path
-      label_csv_path = epath.Path(config.model_path) / 'assets' / 'label.csv'
+      class_lists_glob = (epath.Path(model_path) / 'assets').glob('*.csv')
     else:
       # Probably a savedmodel distributed directly.
       model_path = base_path / 'savedmodel'
-      label_csv_path = base_path / 'label.csv'
+      class_lists_glob = epath.Path(base_path).glob('*.csv')
 
     model = tf.saved_model.load(model_path)
-    with label_csv_path.open('r') as f:
-      class_list = namespace.ClassList.from_csv(f)
+    class_lists = cls.load_class_lists(class_lists_glob)
 
     # Check whether the model support polymorphic batch shape.
     batchable = cls.is_batchable(model)
     return cls(
-        model=model, class_list=class_list, batchable=batchable, **config
+        model=model, class_list=class_lists, batchable=batchable, **config
     )
 
   def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
-    if self.batchable:
-      return interface.embed_from_batch_embed_fn(self.batch_embed, audio_array)
-
-    # Process one example at a time.
-    # This should be fine on CPU, but may be somewhat inefficient for large
-    # arrays on GPU or TPU.
-    framed_audio = self.frame_audio(
-        audio_array, self.window_size_s, self.hop_size_s
-    )
-    framed_audio = self.normalize_audio(framed_audio, self.target_peak)
-
-    all_logits, all_embeddings = self.model.infer_tf(framed_audio[:1])
-    for window in framed_audio[1:]:
-      logits, embeddings = self.model.infer_tf(window[np.newaxis, :])
-      all_logits = np.concatenate([all_logits, logits], axis=0)
-      all_embeddings = np.concatenate([all_embeddings, embeddings], axis=0)
-
-    # Add channel dimension.
-    all_embeddings = all_embeddings[:, np.newaxis, :]
-
-    return interface.InferenceOutputs(
-        all_embeddings, {'label': all_logits}, None
-    )
+    return interface.embed_from_batch_embed_fn(self.batch_embed, audio_array)
 
   def batch_embed(
       self, audio_batch: np.ndarray[Any, Any]
   ) -> interface.InferenceOutputs:
-    if not self.batchable:
-      return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
-
     framed_audio = self.frame_audio(
         audio_batch, self.window_size_s, self.hop_size_s
     )
     framed_audio = self.normalize_audio(framed_audio, self.target_peak)
 
     rebatched_audio = framed_audio.reshape([-1, framed_audio.shape[-1]])
-    logits, embeddings = self.model.infer_tf(rebatched_audio)
-    logits = np.reshape(logits, framed_audio.shape[:2] + (logits.shape[-1],))
+    outputs = self.model.infer_tf(rebatched_audio)
+    frontend_output = None
+    if hasattr(outputs, 'keys'):
+      # Dictionary-type outputs. Arrange appropriately.
+      embeddings = outputs.pop('embedding')
+      if 'frontend' in outputs:
+        frontend_output = outputs.pop('frontend')
+      # Assume remaining outputs are all logits.
+      logits = outputs
+    elif len(outputs) == 2:
+      # Assume logits, embeddings outputs.
+      label_logits, embeddings = outputs
+      logits = {'label': label_logits}
+    else:
+      raise ValueError('Unexpected outputs type.')
+
+    for k, v in logits.items():
+      logits[k] = np.reshape(v, framed_audio.shape[:2] + (v.shape[-1],))
     # Unbatch and add channel dimension.
     embeddings = np.reshape(
         embeddings,
@@ -367,9 +370,12 @@ class TaxonomyModelTF(interface.EmbeddingModel):
             embeddings.shape[-1],
         ),
     )
-
     return interface.InferenceOutputs(
-        embeddings, {'label': logits}, None, batched=True
+        embeddings=embeddings,
+        logits=logits,
+        separated_audio=None,
+        batched=True,
+        frontend=frontend_output,
     )
 
 
