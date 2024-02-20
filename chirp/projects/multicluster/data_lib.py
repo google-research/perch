@@ -67,9 +67,17 @@ class MergedDataset:
       load_audio: bool = True,
       target_sample_rate: int = -2,
       audio_file_pattern: str = '*',
+      embedding_config_hash: str = '',
+      embedding_file_prefix: str = 'embeddings-',
       pad_type: str = 'zeros',
+      cache_embeddings: bool = True,
+      tf_record_shards: int = 1,
   ) -> 'MergedDataset':
     """Generating MergedDataset via folder-of-folders method.
+
+    This method will scan for existing embeddings cached within the folder of
+    folders and re-use those with a matching prefix. The prefix is expected to
+    have a hash signature for matching configs.
 
     Args:
       base_dir: Base directory where either folder-of-folders of audio or
@@ -83,7 +91,17 @@ class MergedDataset:
         sample rate.
       audio_file_pattern: The glob pattern to use for finding audio files within
         the sub-folders.
+      embedding_config_hash: String hash of the embedding config to identify an
+        existing embeddings folder. This will be appended to the
+        embedding_file_prefix, e.g. 'embeddings-1234'.
+      embedding_file_prefix: Prefix for existing materialized embedding files.
+        Embeddings with a matching hash will be re-used to avoid reprocessing,
+        and embeddings with a non-matching hash will be ignored.
       pad_type: Padding strategy for short audio.
+      cache_embeddings: Materialize new embeddings as TF records within the
+        folder-of-folders.
+      tf_record_shards: Number of files to materialize if writing embeddings to
+        TF records.
 
     Returns:
       MergedDataset
@@ -91,6 +109,27 @@ class MergedDataset:
     print('Embedding from Folder of Folders...')
 
     st = time.time()
+
+    existing_merged = None
+    existing_embedded_srcs = []
+    if embedding_config_hash:
+      print('Checking for existing embeddings from Folder of Folders...')
+
+      base_path = epath.Path(base_dir)
+      embedding_folder = (
+          base_path / f'{embedding_file_prefix}{embedding_config_hash}'
+      )
+
+      if embedding_folder.exists() and any(embedding_folder.iterdir()):
+        existing_merged = cls.from_tfrecords(
+            base_dir, embedding_folder.as_posix(), time_pooling, exclude_classes
+        )
+        existing_embedded_srcs = existing_merged.data['filename']
+
+      print(f'Found {len(existing_embedded_srcs)} existing embeddings.')
+
+    print('Checking for new sources to embed from Folder of Folders...')
+
     labels, merged = embed_dataset(
         base_dir=base_dir,
         embedding_model=embedding_model,
@@ -99,8 +138,18 @@ class MergedDataset:
         load_audio=load_audio,
         target_sample_rate=target_sample_rate,
         audio_file_pattern=audio_file_pattern,
+        excluded_files=existing_embedded_srcs,
+        embedding_file_prefix=embedding_file_prefix,
         pad_type=pad_type,
     )
+
+    if not merged and existing_merged is None:
+      raise ValueError('No embeddings or raw audio files found.')
+
+    if not merged and existing_merged is not None:
+      print('\nUsing existing embeddings for all audio source files.')
+      return existing_merged
+
     elapsed = time.time() - st
     print(f'\n...embedded dataset in {elapsed:5.2f}s...')
     data = merged
@@ -114,12 +163,30 @@ class MergedDataset:
       class_counts[(cl, cl_str)] += 1
     for (cl, cl_str), count in sorted(class_counts.items()):
       print(f'    class {cl_str} / {cl} : {count}')
-    return cls(
+    new_merged = cls(
         data=data,
         embedding_dim=embedding_dim,
         num_classes=num_classes,
         labels=labels,
     )
+
+    if cache_embeddings:
+      if not embedding_config_hash:
+        raise ValueError(
+            'Embedding config hash must be specified when caching embeddings.'
+        )
+
+      new_merged.write_embeddings_to_tf_records(
+          base_dir,
+          embedding_config_hash,
+          embedding_file_prefix,
+          tf_record_shards,
+      )
+
+    if existing_merged:
+      return cls.from_merged_datasets([new_merged, existing_merged])
+
+    return new_merged
 
   @classmethod
   def from_tfrecords(
@@ -167,6 +234,103 @@ class MergedDataset:
         num_classes=num_classes,
         labels=labels,
     )
+
+  @classmethod
+  def from_merged_datasets(
+      cls, merged_datasets: Sequence['MergedDataset']
+  ) -> 'MergedDataset':
+    """Generating MergedDataset from a sequence of MergedDatasets.
+
+    This assumes that the given merged datasets are compatible, i.e. they were
+    generated with the same options and embedding configurations.
+
+    Args:
+      merged_datasets: Sequence of compatible MergedDatasets.
+
+    Returns:
+      MergedDataset
+    """
+
+    embedding_dim = merged_datasets[0].embedding_dim
+    num_classes = merged_datasets[0].num_classes
+    labels = merged_datasets[0].labels
+    data = {}
+
+    for merged_dataset in merged_datasets[1:]:
+      # TODO: Improve compatibility checking to use config hashes.
+      if (
+          embedding_dim != merged_dataset.embedding_dim
+          or num_classes != merged_dataset.num_classes
+          or labels != merged_dataset.labels
+      ):
+        raise ValueError('Given merged datasets are not compatible.')
+
+    for key in merged_datasets[0].data.keys():
+      data_arrays = [merged_data.data[key] for merged_data in merged_datasets]
+      data[key] = np.concatenate(data_arrays)
+
+    return cls(
+        data=data,
+        embedding_dim=embedding_dim,
+        num_classes=num_classes,
+        labels=labels,
+    )
+
+  def embeddings_to_tf_examples(self) -> Sequence[tf.train.Example]:
+    """Return a dictionary of embedding tf.Examples keyed by label_str."""
+    examples = []
+    embeddings = self.data['embeddings']
+    filename = self.data['filename']
+
+    for embedding, filename in zip(embeddings, filename):
+      examples.append(
+          tf_examples.model_outputs_to_tf_example(
+              model_outputs=interface.InferenceOutputs(embedding),
+              file_id=filename,
+              audio=np.empty(1),
+              timestamp_offset_s=0,
+              write_embeddings=True,
+              write_logits=False,
+              write_separated_audio=False,
+              write_raw_audio=False,
+          )
+      )
+
+    return examples
+
+  def write_embeddings_to_tf_records(
+      self,
+      base_dir: str,
+      embedding_config_hash: str,
+      embedding_file_prefix: str = 'embeddings-',
+      tf_record_shards: int = 1,
+  ) -> None:
+    """Materialize MergedDataset embeddings as TF records to folder-of-folders.
+
+    Args:
+      base_dir: Base directory where either folder-of-folders of audio or
+        tfrecord embeddings are stored.
+      embedding_config_hash: String hash of the embedding config to identify an
+        existing embeddings folder. This will be appended to the
+        embedding_file_prefix, e.g. 'embeddings-1234'.
+      embedding_file_prefix: Prefix for existing materialized embedding files.
+        Embeddings with a matching hash will be re-used to avoid reprocessing,
+        and embeddings with a non-matching hash will be ignored.
+      tf_record_shards: Number of files to materialize if writing embeddings to
+        TF records.
+    """
+    embedding_examples = self.embeddings_to_tf_examples()
+    output_dir = (
+        epath.Path(base_dir) / f'{embedding_file_prefix}{embedding_config_hash}'
+    )
+    output_dir.mkdir(exist_ok=True, parents=True)
+
+    with tf_examples.EmbeddingsTFRecordMultiWriter(
+        output_dir=output_dir.as_posix(), num_files=tf_record_shards
+    ) as file_writer:
+      for example in embedding_examples:
+        file_writer.write(example.SerializeToString())
+      file_writer.flush()
 
   def create_random_train_test_split(
       self,
@@ -283,6 +447,40 @@ def _pad_audio(
   raise ValueError('Unrecognized padding method.')
 
 
+# TODO: add alternative labeling strategies as options
+def labels_from_folder_of_folders(
+    base_dir: str,
+    exclude_classes: Sequence[str] = (),
+    embedding_file_prefix: str = 'embeddings-',
+) -> Sequence[str]:
+  """Returns the labels from the given folder of folders.
+
+  Args:
+    base_dir: Folder of folders directory containing audio or embedded data.
+    exclude_classes: Classes to skip.
+    embedding_file_prefix: Folders containing existing embeddings that will be
+      ignored when determining labels.
+  """
+  base_dir = epath.Path(base_dir)
+  sub_dirs = sorted([p.name for p in base_dir.glob('*') if p.is_dir()])
+  if not sub_dirs:
+    raise ValueError(
+        'No subfolders found in base directory. Audio will be '
+        'matched as "base_dir/*/*.wav", with the subfolders '
+        'indicating class names.'
+    )
+
+  labels = []
+  for d in sub_dirs:
+    if d in exclude_classes:
+      continue
+    if d.startswith(embedding_file_prefix):
+      continue
+    labels.append(d)
+
+  return labels
+
+
 def embed_dataset(
     base_dir: str,
     embedding_model: interface.EmbeddingModel,
@@ -291,6 +489,8 @@ def embed_dataset(
     load_audio: bool = True,
     target_sample_rate: int = -1,
     audio_file_pattern: str = '*',
+    excluded_files: Sequence[str] = (),
+    embedding_file_prefix: str = 'embeddings-',
     pad_type: str = 'zeros',
 ) -> Tuple[Sequence[str], Dict[str, np.ndarray]]:
   """Add embeddings to an eval dataset.
@@ -311,20 +511,17 @@ def embed_dataset(
       raw audio with no resampling. If -2, uses the embedding_model sample rate.
     audio_file_pattern: The glob pattern to use for finding audio files within
       the sub-folders.
+    excluded_files: These files will be ignored, the paths are assumed to be
+      relative to the base_dir.
+    embedding_file_prefix: Prefix for existing embedding files, matching files
+      will be ignored.
     pad_type: Padding style for short audio.
 
   Returns:
     Ordered labels and a Dict contianing the entire embedded dataset.
   """
+  labels = labels_from_folder_of_folders(base_dir, exclude_classes)
   base_dir = epath.Path(base_dir)
-  labels = sorted([p.name for p in base_dir.glob('*') if p.is_dir()])
-  if not labels:
-    raise ValueError(
-        'No subfolders found in base directory. Audio will be '
-        'matched as "base_dir/*/*.wav", with the subfolders '
-        'indicating class names.'
-    )
-  labels = [label for label in labels if label not in exclude_classes]
 
   if hasattr(embedding_model, 'window_size_s'):
     window_size = int(
@@ -341,8 +538,11 @@ def embed_dataset(
     label_hot = np.zeros([len(labels)], np.int32)
     label_hot[label_idx] = 1
 
+    # Get filepaths excluding embedding files
     filepaths = [
-        fp.as_posix() for fp in (base_dir / label).glob(audio_file_pattern)
+        fp
+        for fp in (base_dir / label).glob(audio_file_pattern)
+        if not fp.name.startswith(embedding_file_prefix)
     ]
 
     if not filepaths:
@@ -351,6 +551,12 @@ def embed_dataset(
               audio_file_pattern, base_dir / label
           )
       )
+
+    filepaths = [
+        fp.as_posix()
+        for fp in filepaths
+        if fp.relative_to(base_dir).as_posix() not in excluded_files
+    ]
 
     audio_iterator = audio_utils.multi_load_audio_window(
         filepaths, None, target_sample_rate, -1
@@ -433,17 +639,7 @@ def read_embedded_dataset(
   parser = tf_examples.get_example_parser(tensor_dtype=tensor_dtype)
   ds = ds.map(parser)
 
-  # Loading the lables assuming a folder-of-folder structure
-  # TODO: add alternative labeling strategies as options
-  base_dir = epath.Path(base_dir)
-  labels = sorted([p.name for p in base_dir.glob('*') if p.is_dir()])
-  if not labels:
-    raise ValueError(
-        'No subfolders found in base directory. Audio will be '
-        'matched as "base_dir/*/*.wav", with the subfolders '
-        'indicating class names.'
-    )
-  labels = [label for label in labels if label not in exclude_classes]
+  labels = labels_from_folder_of_folders(base_dir, exclude_classes)
 
   merged = collections.defaultdict(list)
   label_dict = collections.defaultdict(dict)
@@ -457,12 +653,16 @@ def read_embedded_dataset(
     label_dict[label]['label_str'] = label
 
   for ex in ds.as_numpy_iterator():
-    outputs = interface.pool_axis(ex['embedding'], -3, time_pooling)
-    if ex['embedding'].shape[-2] == 1:
-      channel_pooling = 'squeeze'
+    # Embedding has already been pooled into single dim.
+    if len(ex['embedding'].shape) == 1:
+      outputs = ex['embedding']
     else:
-      channel_pooling = 'first'
-    outputs = interface.pool_axis(outputs, -2, channel_pooling)
+      outputs = interface.pool_axis(ex['embedding'], -3, time_pooling)
+      if ex['embedding'].shape[-2] == 1:
+        channel_pooling = 'squeeze'
+      else:
+        channel_pooling = 'first'
+      outputs = interface.pool_axis(outputs, -2, channel_pooling)
 
     merged['embeddings'].append(outputs)
     merged['filename'].append(ex['filename'].decode())

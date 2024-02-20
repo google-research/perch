@@ -16,6 +16,7 @@
 """Configuration and init library for Search Bootstrap projects."""
 
 import dataclasses
+import hashlib
 from typing import Sequence
 
 from chirp.inference import embed_lib
@@ -95,15 +96,19 @@ class BootstrapConfig:
   audio_globs: Sequence[str] | None = None
   model_key: str | None = None
   model_config: config_dict.ConfigDict | None = None
+  tf_record_shards: int | None = None
 
   @classmethod
   def load_from_embedding_config(
-      cls, embeddings_path: str, annotated_path: str
+      cls, embeddings_path: str, annotated_path: str, tf_record_shards: int = 1
   ):
     """Instantiate from a configuration written alongside embeddings."""
     embedding_config = embed_lib.load_embedding_config(embeddings_path)
     embed_fn_config = embedding_config.embed_fn_config
     tensor_dtype = embed_fn_config.get('tensor_dtype', 'float32')
+    tf_record_shards = embedding_config.get(
+        'tf_record_shards', tf_record_shards
+    )
 
     # Extract the embedding model config from the embedding_config.
     if embed_fn_config.model_key == 'separate_embed_model':
@@ -122,4 +127,14 @@ class BootstrapConfig:
         file_id_depth=embed_fn_config.file_id_depth,
         audio_globs=embedding_config.source_file_patterns,
         tensor_dtype=tensor_dtype,
+        tf_record_shards=tf_record_shards,
     )
+
+  def embedding_config_hash(self, digest_size: int = 10) -> str:
+    """Returns a stable hash of the model key and config."""
+    config_str = self.model_config.to_json(sort_keys=True)
+    encoded_str = f'{self.model_key};{config_str}'.encode('utf-8')
+
+    hash_obj = hashlib.blake2b(digest_size=digest_size)
+    hash_obj.update(encoded_str)
+    return hash_obj.hexdigest()
