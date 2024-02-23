@@ -16,8 +16,8 @@ ml-collections = "^0.1.1"
 optax = ">=0.1.7"
 # Note that tensorflow and tensorflow-io versions must be synchronized.
 # See: https://github.com/tensorflow/io#tensorflow-version-compatibility
-tensorflow = "=2.13.0"
-tensorflow-io = "=0.33"
+tensorflow = "=2.15.0"
+tensorflow-io = "=0.36"
 tensorflow-datasets = {version = "^4.9.3", extras = ["dev"]}
 pandas = {version = "^2.1.1", extras=["gcp"]}
 etils = {version = "^1.5.0", extras = ["epath"]}
