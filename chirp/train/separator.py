@@ -263,6 +263,8 @@ def train(
     ] = optax.sigmoid_binary_cross_entropy,
 ) -> None:
   """Train a model."""
+  if train_dataset is None:
+    raise ValueError('train_dataset is None')
   train_iterator = train_dataset.as_numpy_iterator()
   train_metrics_collection = train_utils.NestedCollection.create(
       **TRAIN_METRICS
@@ -318,6 +320,8 @@ def train(
         train_state.params, train_state.model_state
     )
     grads = jax.lax.pmean(grads, axis_name='batch')
+    if model_bundle.optimizer is None:
+      raise ValueError('model_bundle.optimizer is None')
     updates, opt_state = model_bundle.optimizer.update(
         grads, train_state.opt_state
     )

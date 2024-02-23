@@ -757,6 +757,8 @@ def train(
         "reload_quantizer being True."
     )
 
+  if train_dataset is None:
+    raise ValueError("train_dataset is None.")
   train_iterator = train_dataset.as_numpy_iterator()
   taxonomy_keys = ["label"]
   taxonomy_loss_weight = model_bundle.model.taxonomy_loss_weight

@@ -50,6 +50,8 @@ class SeparatorOutput:
     elif reduction == 'MAX':
       reduce_fn = lambda x: jnp.max(x, axis=1)
     elif reduction == 'MIDPOINT':
+      if self.label is None:
+        raise ValueError('SeperatorOutput.label is None')
       midpt = self.label.shape[1] // 2
       reduce_fn = lambda x: x[:, midpt, :]
     else:
@@ -169,6 +171,8 @@ class SeparationModel(nn.Module):
     )(classify_hiddens)
     classify_hiddens = nn.swish(classify_hiddens)
     classify_outputs = {}
+    if self.num_classes is None:
+      raise ValueError('SeparatorModel.num_classes is None')
     for k, n in self.num_classes.items():
       classify_outputs[k] = nn.Conv(n, (1,), (1,), 'SAME')(classify_hiddens)
     classify_outputs['embedding'] = classify_hiddens
