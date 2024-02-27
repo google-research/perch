@@ -49,26 +49,49 @@ def _make_output_head_model(model_path: str, embedding_dim: int = 1280):
 
 class InferenceTest(parameterized.TestCase):
 
-  @parameterized.product(
-      make_embeddings=(True, False),
-      make_logits=(True, False),
-      make_separated_audio=(True, False),
-      write_embeddings=(True, False),
-      write_logits=(True, False),
-      write_separated_audio=(True, False),
-      write_raw_audio=(True, False),
-      tensor_dtype=('float32', 'float16'),
+  @parameterized.parameters(
+      # Test each output type individually.
+      {'make_embeddings': True},
+      {'make_embeddings': True, 'write_embeddings': True},
+      {'make_logits': True},
+      {'make_logits': True, 'write_logits': True},
+      {'make_separated_audio': True},
+      {'make_separated_audio': True, 'write_separated_audio': True},
+      {'make_frontend': True},
+      {'make_frontend': True, 'write_frontend': True},
+      {'write_raw_audio': True},
+      # Check float16 handling.
+      {'make_embeddings': True, 'tensor_dtype': 'float16'},
+      {
+          'make_embeddings': True,
+          'write_embeddings': True,
+          'tensor_dtype': 'float16',
+      },
+      # Check with all active.
+      {
+          'make_embeddings': True,
+          'make_logits': True,
+          'make_separated_audio': True,
+          'make_frontend': True,
+          'write_embeddings': True,
+          'write_logits': True,
+          'write_separated_audio': True,
+          'write_frontend': True,
+          'write_raw_audio': True,
+      },
   )
   def test_embed_fn(
       self,
-      make_embeddings,
-      make_logits,
-      make_separated_audio,
-      write_embeddings,
-      write_logits,
-      write_raw_audio,
-      write_separated_audio,
-      tensor_dtype,
+      make_embeddings=False,
+      make_logits=False,
+      make_separated_audio=False,
+      make_frontend=False,
+      write_embeddings=False,
+      write_logits=False,
+      write_raw_audio=False,
+      write_separated_audio=False,
+      write_frontend=False,
+      tensor_dtype='float32',
   ):
     model_kwargs = {
         'sample_rate': 16000,
@@ -76,12 +99,14 @@ class InferenceTest(parameterized.TestCase):
         'make_embeddings': make_embeddings,
         'make_logits': make_logits,
         'make_separated_audio': make_separated_audio,
+        'make_frontend': make_frontend,
     }
     embed_fn = embed_lib.EmbedFn(
         write_embeddings=write_embeddings,
         write_logits=write_logits,
         write_separated_audio=write_separated_audio,
         write_raw_audio=write_raw_audio,
+        write_frontend=write_frontend,
         model_key='placeholder_model',
         model_config=model_kwargs,
         file_id_depth=0,
@@ -133,6 +158,14 @@ class InferenceTest(parameterized.TestCase):
     else:
       self.assertEqual(got_example[tf_examples.SEPARATED_AUDIO].shape, (0,))
 
+    if make_frontend and write_frontend:
+      frontend = got_example[tf_examples.FRONTEND]
+      self.assertSequenceEqual(
+          frontend.shape, got_example[tf_examples.FRONTEND_SHAPE]
+      )
+    else:
+      self.assertEqual(got_example[tf_examples.FRONTEND].shape, (0,))
+
     if write_raw_audio:
       raw_audio = got_example[tf_examples.RAW_AUDIO]
       self.assertSequenceEqual(
@@ -155,6 +188,7 @@ class InferenceTest(parameterized.TestCase):
         write_logits=False,
         write_separated_audio=False,
         write_raw_audio=False,
+        write_frontend=False,
         model_key='placeholder_model',
         model_config=model_kwargs,
         min_audio_s=2.0,
@@ -218,6 +252,7 @@ class InferenceTest(parameterized.TestCase):
         write_logits=write_logits,
         write_separated_audio=False,
         write_raw_audio=False,
+        write_frontend=False,
         model_key='placeholder_model',
         model_config=model_kwargs,
         file_id_depth=0,
@@ -299,6 +334,7 @@ class InferenceTest(parameterized.TestCase):
         write_logits=False,
         write_separated_audio=False,
         write_raw_audio=False,
+        write_frontend=False,
         model_key='placeholder_model',
         model_config=model_kwargs,
         min_audio_s=1.0,
@@ -341,6 +377,7 @@ class InferenceTest(parameterized.TestCase):
         write_logits=False,
         write_separated_audio=False,
         write_raw_audio=False,
+        write_frontend=False,
         model_key='placeholder_model',
         model_config=model_kwargs,
         min_audio_s=1.0,
@@ -396,6 +433,7 @@ class InferenceTest(parameterized.TestCase):
               write_logits=False,
               write_separated_audio=False,
               write_raw_audio=False,
+              write_frontend=False,
           )
       )
     with tf_examples.EmbeddingsTFRecordMultiWriter(
@@ -434,6 +472,7 @@ class InferenceTest(parameterized.TestCase):
               write_logits=False,
               write_separated_audio=False,
               write_raw_audio=False,
+              write_frontend=False,
           )
       )
     with tf_examples.EmbeddingsTFRecordMultiWriter(
@@ -602,6 +641,7 @@ class InferenceTest(parameterized.TestCase):
         write_logits=False,
         write_separated_audio=False,
         write_raw_audio=False,
+        write_frontend=False,
         model_key='placeholder_model',
         model_config=model_kwargs,
         file_id_depth=0,

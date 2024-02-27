@@ -678,9 +678,11 @@ class PlaceholderModel(interface.EmbeddingModel):
   make_embeddings: bool = True
   make_logits: bool = True
   make_separated_audio: bool = True
+  make_frontend: bool = True
   do_frame_audio: bool = False
   window_size_s: float = 1.0
   hop_size_s: float = 1.0
+  frontend_size: tuple[int, int] = (32, 32)
 
   @classmethod
   def from_config(cls, config: config_dict.ConfigDict) -> 'PlaceholderModel':
@@ -702,6 +704,10 @@ class PlaceholderModel(interface.EmbeddingModel):
     if self.make_embeddings:
       outputs['embeddings'] = np.zeros(
           [time_size, 1, self.embedding_size], np.float32
+      )
+    if self.make_frontend:
+      outputs['frontend'] = np.zeros(
+          [time_size, self.frontend_size[0], self.frontend_size[1]], np.float32
       )
     if self.make_logits:
       outputs['logits'] = {

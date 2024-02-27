@@ -36,6 +36,8 @@ SEPARATED_AUDIO = 'separated_audio'
 SEPARATED_AUDIO_SHAPE = 'separated_audio_shape'
 RAW_AUDIO = 'raw_audio'
 RAW_AUDIO_SHAPE = 'raw_audio_shape'
+FRONTEND = 'frontend'
+FRONTEND_SHAPE = 'frontend_shape'
 
 
 def get_feature_description(logit_names: Sequence[str] | None = None):
@@ -62,6 +64,10 @@ def get_feature_description(logit_names: Sequence[str] | None = None):
       SEPARATED_AUDIO_SHAPE: tf.io.FixedLenSequenceFeature(
           [], tf.int64, allow_missing=True
       ),
+      FRONTEND: tf.io.FixedLenFeature([], tf.string, default_value=''),
+      FRONTEND_SHAPE: tf.io.FixedLenSequenceFeature(
+          [], tf.int64, allow_missing=True
+      ),
       RAW_AUDIO: tf.io.FixedLenFeature([], tf.string, default_value=''),
       RAW_AUDIO_SHAPE: tf.io.FixedLenSequenceFeature(
           [], tf.int64, allow_missing=True
@@ -86,7 +92,7 @@ def get_example_parser(
 
   def _parser(ex):
     ex = tf.io.parse_single_example(ex, features)
-    tensor_keys = [EMBEDDING, SEPARATED_AUDIO, RAW_AUDIO]
+    tensor_keys = [EMBEDDING, SEPARATED_AUDIO, RAW_AUDIO, FRONTEND]
     if logit_names is not None:
       tensor_keys.extend(logit_names)
     for key in tensor_keys:
@@ -140,6 +146,7 @@ def model_outputs_to_tf_example(
     write_logits: bool | Sequence[str],
     write_separated_audio: bool,
     write_raw_audio: bool,
+    write_frontend: bool,
     tensor_dtype: str = 'float32',
 ) -> tf.train.Example:
   """Create a TFExample from InferenceOutputs."""
@@ -152,6 +159,26 @@ def model_outputs_to_tf_example(
         serialize_tensor(model_outputs.embeddings, tensor_dtype)
     )
     feature[EMBEDDING_SHAPE] = (int_feature(model_outputs.embeddings.shape),)
+
+  if write_separated_audio and model_outputs.separated_audio is not None:
+    feature[SEPARATED_AUDIO] = bytes_feature(
+        serialize_tensor(model_outputs.separated_audio, tensor_dtype)
+    )
+    feature[SEPARATED_AUDIO_SHAPE] = int_feature(
+        model_outputs.separated_audio.shape
+    )
+
+  if write_frontend and model_outputs.frontend is not None:
+    feature[FRONTEND] = bytes_feature(
+        serialize_tensor(model_outputs.frontend, tensor_dtype)
+    )
+    feature[FRONTEND_SHAPE] = int_feature(model_outputs.frontend.shape)
+
+  if write_raw_audio:
+    feature[RAW_AUDIO] = bytes_feature(
+        serialize_tensor(tf.constant(audio, dtype=tf.float32), tensor_dtype)
+    )
+    feature[RAW_AUDIO_SHAPE] = int_feature(audio.shape)
 
   # Handle writing logits.
   if model_outputs.logits is not None and write_logits:
@@ -166,18 +193,6 @@ def model_outputs_to_tf_example(
       )
       feature[logits_key + '_shape'] = int_feature(logits.shape)
 
-  if write_separated_audio and model_outputs.separated_audio is not None:
-    feature[SEPARATED_AUDIO] = bytes_feature(
-        serialize_tensor(model_outputs.separated_audio, tensor_dtype)
-    )
-    feature[SEPARATED_AUDIO_SHAPE] = int_feature(
-        model_outputs.separated_audio.shape
-    )
-  if write_raw_audio:
-    feature[RAW_AUDIO] = bytes_feature(
-        serialize_tensor(tf.constant(audio, dtype=tf.float32), tensor_dtype)
-    )
-    feature[RAW_AUDIO_SHAPE] = int_feature(audio.shape)
   ex = tf.train.Example(features=tf.train.Features(feature=feature))
   return ex
 

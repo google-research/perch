@@ -37,6 +37,7 @@ import tensorflow as tf
 
 TAXONOMY_KEYS = ['genus', 'family', 'order']
 
+
 # Note: Inherit from PyTreeNode instead of using the flax.struct.dataclass
 # to avoid PyType issues.
 # See: https://flax.readthedocs.io/en/latest/api_reference/flax.struct.html
@@ -86,6 +87,7 @@ class ModelBundle(flax.struct.PyTreeNode):
   optimizer: optax.GradientTransformation | None = None
   class_lists: dict[str, namespace.ClassList] | None = None
   output_head_metadatas: Sequence[OutputHeadMetadata] | None = None
+
 
 @flax.struct.dataclass
 class MultiAverage(clu_metrics.Average):

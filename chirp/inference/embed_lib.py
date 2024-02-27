@@ -159,6 +159,7 @@ class EmbedFn(beam.DoFn):
       write_logits: bool | Sequence[str],
       write_separated_audio: bool,
       write_raw_audio: bool,
+      write_frontend: bool,
       model_key: str,
       model_config: config_dict.ConfigDict,
       file_id_depth: int,
@@ -177,6 +178,8 @@ class EmbedFn(beam.DoFn):
         logit keys to write.
       write_separated_audio: Whether to write out separated audio tracks.
       write_raw_audio: If true, will add the original audio to the output.
+      write_frontend: If true, will add the model's frontend (spectrogram) to
+        the output.
       model_key: String indicating which model wrapper to use. See MODEL_KEYS.
         Only used for setting up the embedding model.
       model_config: Keyword arg dictionary for the model wrapper class. Only
@@ -201,6 +204,7 @@ class EmbedFn(beam.DoFn):
     self.write_logits = write_logits
     self.write_separated_audio = write_separated_audio
     self.write_raw_audio = write_raw_audio
+    self.write_frontend = write_frontend
     self.crop_s = crop_s
     self.embedding_model = embedding_model
     self.file_id_depth = file_id_depth
@@ -277,6 +281,7 @@ class EmbedFn(beam.DoFn):
         write_separated_audio=self.write_separated_audio,
         write_embeddings=self.write_embeddings,
         write_logits=write_logits,
+        write_frontend=self.write_frontend,
         tensor_dtype=self.tensor_dtype,
     )
     return example

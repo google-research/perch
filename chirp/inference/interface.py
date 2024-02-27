@@ -245,26 +245,24 @@ def embed_from_batch_embed_fn(
   audio_batch = audio_array[np.newaxis, :]
   outputs = embed_fn(audio_batch)
 
-  if outputs.embeddings is not None:
-    embeddings = outputs.embeddings[0]
-  else:
-    embeddings = None
+  unbatched_outputs = {}
+  for k in ['embeddings', 'separated_audio', 'frontend']:
+    if getattr(outputs, k) is not None:
+      unbatched_outputs[k] = getattr(outputs, k)[0]
+    else:
+      unbatched_outputs[k] = None
+
   if outputs.logits is not None:
     logits = {}
     for k, v in outputs.logits.items():
       logits[k] = v[0]
   else:
     logits = None
-  if outputs.separated_audio is not None:
-    separated_audio = outputs.separated_audio[0]
-  else:
-    separated_audio = None
 
   return InferenceOutputs(
-      embeddings=embeddings,
       logits=logits,
-      separated_audio=separated_audio,
       batched=False,
+      **unbatched_outputs,
   )
 
 
@@ -275,10 +273,13 @@ def batch_embed_from_embed_fn(
   outputs = []
   for audio in audio_batch:
     outputs.append(embed_fn(audio))
-  if outputs[0].embeddings is not None:
-    embeddings = np.stack([x.embeddings for x in outputs], axis=0)
-  else:
-    embeddings = None
+
+  batched_outputs = {}
+  for k in ['embeddings', 'separated_audio', 'frontend']:
+    if getattr(outputs[0], k) is not None:
+      batched_outputs[k] = np.stack([getattr(x, k) for x in outputs], axis=0)
+    else:
+      batched_outputs[k] = None
 
   if outputs[0].logits is not None:
     batched_logits = {}
@@ -289,16 +290,10 @@ def batch_embed_from_embed_fn(
   else:
     batched_logits = None
 
-  if outputs[0].separated_audio is not None:
-    separated_audio = np.stack([x.separated_audio for x in outputs], axis=0)
-  else:
-    separated_audio = None
-
   return InferenceOutputs(
-      embeddings=embeddings,
       logits=batched_logits,
-      separated_audio=separated_audio,
       batched=True,
+      **batched_outputs,
   )
 
 
