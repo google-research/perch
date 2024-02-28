@@ -17,12 +17,17 @@
 
 Implementation of the EfficientNet model in Flax.
 """
+import dataclasses
 import enum
 import math
-from typing import NamedTuple
+from typing import Callable, NamedTuple
 
+from aqt.jax.v2 import aqt_conv_general
+from aqt.jax.v2 import aqt_dot_general
+from aqt.jax.v2 import config as aqt_cfg
 from chirp.models import layers
 from flax import linen as nn
+import flax.typing as flax_typing
 from jax import numpy as jnp
 
 
@@ -109,6 +114,31 @@ def round_num_blocks(num_blocks: int, depth_coefficient: float) -> int:
   return int(math.ceil(depth_coefficient * num_blocks))
 
 
+@dataclasses.dataclass
+class OpSet:
+  activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
+  sigmoid: Callable[[jnp.ndarray], jnp.ndarray] = nn.sigmoid
+  stem_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.swish
+  head_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.swish
+  dot_general: flax_typing.DotGeneralT | None = None
+  conv_general_dilated: flax_typing.ConvGeneralDilatedT | None = None
+
+
+op_sets = {
+    "default": OpSet(),
+    "qat": OpSet(
+        activation=nn.relu,
+        sigmoid=nn.hard_sigmoid,
+        stem_activation=nn.hard_swish,
+        head_activation=nn.hard_swish,
+        dot_general=aqt_dot_general.make_dot_general(None),
+        conv_general_dilated=aqt_conv_general.make_conv_general_dilated(
+            aqt_cfg.DotGeneralRaw.make_conv_general_dilated()
+        ),
+    ),
+}
+
+
 class Stem(nn.Module):
   """The stem of an EfficientNet model.
 
@@ -120,6 +150,8 @@ class Stem(nn.Module):
   """
 
   features: int
+  conv_general_dilated: flax_typing.ConvGeneralDilatedT | None = None
+  activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.swish
 
   @nn.compact
   def __call__(
@@ -140,10 +172,11 @@ class Stem(nn.Module):
         kernel_size=(3, 3),
         strides=2,
         use_bias=False,
+        conv_general_dilated=self.conv_general_dilated,
         padding="VALID",
     )(inputs)
     x = nn.BatchNorm(use_running_average=use_running_average)(x)
-    x = nn.swish(x)
+    x = self.activation(x)
     return x
 
 
@@ -155,9 +188,12 @@ class Head(nn.Module):
 
   Attributes:
     features: The number of filters.
+    conv_general_dilated: Convolution op.
   """
 
   features: int
+  activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.swish
+  conv_general_dilated: flax_typing.ConvGeneralDilatedT | None = None
 
   @nn.compact
   def __call__(
@@ -174,10 +210,14 @@ class Head(nn.Module):
       A JAX array of `(batch size, height, width, features)`.
     """
     x = nn.Conv(
-        features=self.features, kernel_size=(1, 1), strides=1, use_bias=False
+        features=self.features,
+        kernel_size=(1, 1),
+        strides=1,
+        use_bias=False,
+        conv_general_dilated=self.conv_general_dilated,
     )(inputs)
     x = nn.BatchNorm(use_running_average=use_running_average)(x)
-    x = nn.swish(x)
+    x = self.activation(x)
     return x
 
 
@@ -192,6 +232,7 @@ class EfficientNet(nn.Module):
     survival_probability: The survival probability to use for stochastic depth.
     head: Optional Flax module to use as custom head.
     stem: Optional Flax module to use as custom stem.
+    op_set: Named set of ops to use.
   """
 
   model: EfficientNetModel
@@ -199,6 +240,7 @@ class EfficientNet(nn.Module):
   survival_probability: float = 0.8
   head: nn.Module | None = None
   stem: nn.Module | None = None
+  op_set: str = "default"
 
   @nn.compact
   def __call__(
@@ -225,13 +267,19 @@ class EfficientNet(nn.Module):
       A JAX array of `(batch size, height, width, features)` if `include_top` is
       false. If `include_top` is true the output is `(batch_size, features)`.
     """
+    ops = op_sets[self.op_set]
+
     if use_running_average is None:
       use_running_average = not train
     scaling = SCALINGS[self.model]
 
     if self.stem is None:
       features = round_features(STEM_FEATURES, scaling.width_coefficient)
-      stem = Stem(features)
+      stem = Stem(
+          features,
+          activation=ops.stem_activation,
+          conv_general_dilated=ops.conv_general_dilated,
+      )
     else:
       stem = self.stem
 
@@ -248,11 +296,14 @@ class EfficientNet(nn.Module):
             strides=strides,
             expand_ratio=stage.expand_ratio,
             kernel_size=stage.kernel_size,
-            activation=nn.swish,
             batch_norm=True,
             reduction_ratio=REDUCTION_RATIO,
+            activation=ops.activation,
+            sigmoid_activation=ops.sigmoid,
+            dot_general=ops.dot_general,
+            conv_general_dilated=ops.conv_general_dilated,
         )
-        y = mbconv(x, use_running_average=use_running_average)
+        y = mbconv(x, train=train, use_running_average=use_running_average)
 
         # Stochastic depth
         if block > 0 and self.survival_probability:
@@ -267,7 +318,11 @@ class EfficientNet(nn.Module):
 
     if self.head is None:
       features = round_features(HEAD_FEATURES, scaling.width_coefficient)
-      head = Head(features)
+      head = Head(
+          features,
+          activation=ops.head_activation,
+          conv_general_dilated=ops.conv_general_dilated,
+      )
     else:
       head = self.head
 

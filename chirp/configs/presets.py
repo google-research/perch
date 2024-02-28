@@ -49,6 +49,7 @@ def get_base_config(**kwargs):
   config.num_channels = 128
   config.batch_size = 256
   config.add_taxonomic_labels = True
+  config.taxonomy_loss_weight = 0.001
   config.target_class_list = 'xenocanto'
   config.num_train_steps = 1_000_000
   config.loss_fn = _o('optax.sigmoid_binary_cross_entropy')
@@ -56,6 +57,7 @@ def get_base_config(**kwargs):
   config.tfds_data_dir = ''
   config.update(kwargs)
   return config
+
 
 def get_base_init_config(
     config: config_dict.ConfigDict, **kwargs
@@ -96,21 +98,21 @@ def get_classifier_init_config(
           'train_utils.OutputHeadMetadata.from_mapping',
           key='genus',
           source_class_list_name=config.get_ref('target_class_list'),
-          weight=0.1,
+          weight=config.get_ref('taxonomy_loss_weight'),
           mapping_name='ebird2021_to_genus',
       ),
       _c(
           'train_utils.OutputHeadMetadata.from_mapping',
           key='family',
           source_class_list_name=config.get_ref('target_class_list'),
-          weight=0.1,
+          weight=config.get_ref('taxonomy_loss_weight'),
           mapping_name='ebird2021_to_family',
       ),
       _c(
           'train_utils.OutputHeadMetadata.from_mapping',
           key='order',
           source_class_list_name=config.get_ref('target_class_list'),
-          weight=0.1,
+          weight=config.get_ref('taxonomy_loss_weight'),
           mapping_name='ebird2021_to_order',
       ),
   )

@@ -15,25 +15,30 @@
 
 """Tests for layers."""
 import operator
+
 from chirp.models import layers
 from jax import numpy as jnp
 from jax import random
 from jax import tree_util
 
 from absl.testing import absltest
+from absl.testing import parameterized
 
 
-class LayersTest(absltest.TestCase):
+class LayersTest(parameterized.TestCase):
 
   def test_mbconv(self):
     # See table 2 in the MobileNetV2 paper
     mbconv = layers.MBConv(
-        features=24, kernel_size=(3, 3), strides=2, expand_ratio=6
+        features=24,
+        kernel_size=(3, 3),
+        strides=2,
+        expand_ratio=6,
     )
     key = random.PRNGKey(0)
     inputs = jnp.ones((1, 112, 112, 16))
     outputs, variables = mbconv.init_with_output(
-        key, inputs, use_running_average=False
+        key, inputs, train=True, use_running_average=False
     )
     self.assertEqual(outputs.shape, (1, 56, 56, 24))
 
@@ -44,6 +49,29 @@ class LayersTest(absltest.TestCase):
         16 * 6 * 16
         + 3 * 3 * 6 * 16  # Expansion
         + 16 * 6 * 24  # Depthwise separable convolution  # Reduction
+    )
+    self.assertEqual(num_parameters, expected_num_parameters)
+
+  def test_fused_mbconv(self):
+    # See table 2 in the MobileNetV2 paper
+    fused_mbconv = layers.FusedMBConv(
+        features=24,
+        kernel_size=(3, 3),
+        strides=(2, 2),
+        expand_ratio=6,
+    )
+    key = random.PRNGKey(0)
+    inputs = jnp.ones((1, 112, 112, 16))
+    outputs, variables = fused_mbconv.init_with_output(
+        key, inputs, train=True, use_running_average=False
+    )
+    self.assertEqual(outputs.shape, (1, 56, 56, 24))
+
+    num_parameters = tree_util.tree_reduce(
+        operator.add, tree_util.tree_map(jnp.size, variables["params"])
+    )
+    expected_num_parameters = (
+        3 * 3 * 16 * 16 * 6 + 6 * 16 * 24  # Expansion  # Projection
     )
     self.assertEqual(num_parameters, expected_num_parameters)
 

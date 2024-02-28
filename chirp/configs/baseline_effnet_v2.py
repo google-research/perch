@@ -40,12 +40,9 @@ def get_config() -> config_dict.ConfigDict:
   )
   model_config = config_dict.ConfigDict()
   model_config.encoder = _c(
-      'efficientnet.EfficientNet',
-      model=_c(
-          'efficientnet.EfficientNetModel',
-          value='b1',
-      ),
-      op_set='default',
+      'efficientnet_v2.EfficientNetV2',
+      model_name='efficientnetv2-s',
+      op_set='qat',
   )
   model_config.taxonomy_loss_weight = 0.001
   model_config.frontend = presets.get_new_pcen_melspec_config(config)
@@ -65,6 +62,6 @@ def get_config() -> config_dict.ConfigDict:
 
 def get_hyper(hyper):
   return hyper.sweep(
-      'config.init_config.model_config.encoder.__config.op_set',
-      hyper.discrete(['default', 'qat']),
+      'config.init_config.rng_seed',
+      hyper.discrete([17, 42, 666]),
   )

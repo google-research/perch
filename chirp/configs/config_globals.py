@@ -22,6 +22,7 @@ from chirp.eval import callbacks
 from chirp.eval import eval_lib
 from chirp.models import conformer
 from chirp.models import efficientnet
+from chirp.models import efficientnet_v2
 from chirp.models import frontend
 from chirp.models import handcrafted_features
 from chirp.models import hubert
@@ -42,6 +43,7 @@ def get_globals() -> dict[str, Any]:
       "config_utils": config_utils,
       "conformer": conformer,
       "efficientnet": efficientnet,
+      "efficientnet_v2": efficientnet_v2,
       "eval_lib": eval_lib,
       "hubert": hubert,
       "quantizers": quantizers,

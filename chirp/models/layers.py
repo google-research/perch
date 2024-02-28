@@ -21,6 +21,7 @@ Building blocks and layers to construct networks, implemented as Flax modules.
 from typing import Callable
 
 from flax import linen as nn
+import flax.typing as flax_typing
 import jax
 from jax import nn as jnn
 from jax import numpy as jnp
@@ -39,10 +40,13 @@ class SqueezeAndExcitation(nn.Module):
     reduction_ratio: The reduction factor in the squeeze operation. Referred to
       as `r` in the paper.
     activation: The activation to apply after squeezing.
+    use_qat: Whether to use quantization-friendly ops.
   """
 
   reduction_ratio: int = 4
   activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
+  sigmoid_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.sigmoid
+  dot_general: flax_typing.DotGeneralT | None = None
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -61,12 +65,20 @@ class SqueezeAndExcitation(nn.Module):
 
     # Squeeze
     x = jnp.mean(inputs, axis=(1, 2))
-    x = nn.Dense(features=x.shape[-1] // self.reduction_ratio, name="Reduce")(x)
+    x = nn.Dense(
+        features=int(x.shape[-1] // self.reduction_ratio),
+        name="Reduce",
+        dot_general=self.dot_general,
+    )(x)
     x = self.activation(x)
 
     # Excite
-    x = nn.Dense(features=inputs.shape[-1], name="Expand")(x)
-    x = nn.sigmoid(x)
+    x = nn.Dense(
+        features=inputs.shape[-1],
+        name="Expand",
+        dot_general=self.dot_general,
+    )(x)
+    x = self.sigmoid_activation(x)
     return inputs * x[:, None, None, :]
 
 
@@ -88,38 +100,51 @@ class MBConv(nn.Module):
     expand_ratio: The expansion factor to use. A block with expansion factor `N`
       is commonly referred to as MBConvN.
     kernel_size: The kernel size used by the depthwise separable convolution.
-    activation: The activation function to use after the expanding 1x1
-      convolution. Also used by the optional squeeze-and-excitation block.
     batch_norm: Whether to use batch normalization after the expanding and
       reducing convolutions.
     reduction_ratio: If given, a squeeze-and-excitation block is inserted after
       the depthwise separable convolution with the given reduction factor. Note
       that this reduction ratio is relative to the number of input channels,
       i.e., it scales with `expand_ratio`.
+    activation: The activation function to use after the expanding 1x1
+      convolution. Also used by the optional squeeze-and-excitation block.
+    sigmoid_activation: Sigmoid-like activation.
+    dot_general: Dot general to use for matmuls.
+    conv_general_dilated: Conv general dilated to use for convolutions.
   """
 
   features: int
   strides: int
   expand_ratio: int
   kernel_size: tuple[int, int] = (3, 3)
-  activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu6
+  conv_dropout: float = 0.0
   batch_norm: bool = False
   reduction_ratio: int | None = None
+  activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu6
+  sigmoid_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.sigmoid
+  dot_general: flax_typing.DotGeneralT | None = None
+  conv_general_dilated: flax_typing.ConvGeneralDilatedT | None = None
 
   @nn.compact
   def __call__(
-      self, inputs: jnp.ndarray, use_running_average: bool = None
+      self,
+      inputs: jnp.ndarray,
+      train: bool,
+      use_running_average: bool | None = None,
   ) -> jnp.ndarray:
     """Applies an inverted bottleneck block to the inputs.
 
     Args:
       inputs: Inputs should be of shape `(batch size, height, width, channels)`.
+      train: Whether to execute in training mode.
       use_running_average: Used to decide whether to use running statistics in
         BatchNorm (test mode), or the current batch's statistics (train mode).
 
     Returns:
       A JAX array of `(batch size, height, width, features)`.
     """
+    if use_running_average is None:
+      use_running_average = not train
     features = self.expand_ratio * inputs.shape[-1]
 
     x = inputs
@@ -129,6 +154,7 @@ class MBConv(nn.Module):
           kernel_size=(1, 1),
           strides=(1, 1),
           use_bias=False,
+          conv_general_dilated=self.conv_general_dilated,
           name="ExpandConv",
       )(x)
       if self.batch_norm:
@@ -138,7 +164,6 @@ class MBConv(nn.Module):
       x = self.activation(x)
 
     if self.strides == 2:
-
       def _pad_width(input_size: int, kernel_size: int) -> tuple[int, int]:
         """Calculate padding required to halve input with stride 2."""
         return (kernel_size // 2) - (1 - input_size % 2), kernel_size // 2
@@ -157,6 +182,7 @@ class MBConv(nn.Module):
         padding=padding,
         feature_group_count=features,
         use_bias=False,
+        conv_general_dilated=self.conv_general_dilated,
         name="DepthwiseConv",
     )(x)
     if self.batch_norm:
@@ -165,16 +191,22 @@ class MBConv(nn.Module):
       )(x)
     x = self.activation(x)
 
+    if self.conv_dropout and self.expand_ratio > 1:
+      x = nn.Dropout(self.conv_dropout, deterministic=not train)(x)
+
     if self.reduction_ratio is not None:
       x = SqueezeAndExcitation(
           reduction_ratio=self.reduction_ratio * self.expand_ratio,
           activation=self.activation,
+          dot_general=self.dot_general,
+          sigmoid_activation=self.sigmoid_activation,
       )(x)
     x = nn.Conv(
         features=self.features,
         kernel_size=(1, 1),
         strides=1,
         use_bias=False,
+        conv_general_dilated=self.conv_general_dilated,
         name="ProjectConv",
     )(x)
     if self.batch_norm:
@@ -182,6 +214,81 @@ class MBConv(nn.Module):
           use_running_average=use_running_average, name="ProjectBatchNorm"
       )(x)
 
+    return x
+
+
+class FusedMBConv(nn.Module):
+  """Fusing the proj conv1x1 and depthwise_conv into a conv2d.
+
+  Note: fields match MBConv exactly to allow interchangeability.
+  """
+
+  features: int
+  strides: int
+  expand_ratio: int
+  kernel_size: tuple[int, int] = (3, 3)
+  conv_dropout: float = 0.0
+  batch_norm: bool = False
+  reduction_ratio: int | None = None
+  activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu6
+  sigmoid_activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.sigmoid
+  dot_general: flax_typing.DotGeneralT | None = None
+  conv_general_dilated: flax_typing.ConvGeneralDilatedT | None = None
+
+  @nn.compact
+  def __call__(
+      self,
+      inputs: jnp.ndarray,
+      train: bool,
+      use_running_average: bool | None = None,
+  ) -> jnp.ndarray:
+    if use_running_average is None:
+      use_running_average = not train
+    features = self.expand_ratio * inputs.shape[-1]
+
+    x = inputs
+    if self.expand_ratio != 1:
+      x = nn.Conv(
+          features=features,
+          kernel_size=self.kernel_size,
+          strides=self.strides,
+          use_bias=False,
+          conv_general_dilated=self.conv_general_dilated,
+          name="ExpandConv",
+      )(x)
+      if self.batch_norm:
+        x = nn.BatchNorm(
+            use_running_average=use_running_average, name="ExpandBatchNorm"
+        )(x)
+      x = self.activation(x)
+
+    if self.conv_dropout and self.expand_ratio > 1:
+      x = nn.Dropout(self.conv_dropout, deterministic=not train)(x)
+
+    if self.reduction_ratio is not None:
+      x = SqueezeAndExcitation(
+          reduction_ratio=self.reduction_ratio * self.expand_ratio,
+          activation=self.activation,
+          dot_general=self.dot_general,
+          sigmoid_activation=self.sigmoid_activation,
+      )(x)
+
+    x = nn.Conv(
+        features=self.features,
+        kernel_size=(1, 1) if self.expand_ratio != 1 else self.kernel_size,
+        strides=(1, 1) if self.expand_ratio != 1 else self.strides,
+        use_bias=False,
+        conv_general_dilated=self.conv_general_dilated,
+        name="ProjectConv",
+    )(x)
+    if self.batch_norm:
+      x = nn.BatchNorm(
+          use_running_average=use_running_average, name="ProjectBatchNorm"
+      )(x)
+    if self.expand_ratio == 1:
+      x = self.activation(x)
+    # In this implementation, residual connections are handled by the model, not
+    # the layer.
     return x
 
 
@@ -213,6 +320,8 @@ class FeedForward(nn.Module):
 
   output_dims: int = 0
   activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
+  dot_general: flax_typing.DotGeneralT | None = None
+  use_qat: bool = False
 
   @nn.compact
   def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -224,7 +333,11 @@ class FeedForward(nn.Module):
     Returns:
       Outputs. Shaped [..., output_dims].
     """
-    x = nn.Dense(features=self.output_dims, name="FeedForward")(inputs)
+    x = nn.Dense(
+        features=self.output_dims,
+        dot_general=self.dot_general,
+        name="FeedForward",
+    )(inputs)
     x = self.activation(x)
     return x
 
@@ -559,6 +672,8 @@ class Conformer(nn.Module):
           atten_dropout_prob=self.atten_dropout,
           num_heads=self.atten_num_heads,
       )
+    else:
+      trans_atten = None
 
     # Setup convolution layer.
     lconv = LightConv1D(
@@ -570,6 +685,8 @@ class Conformer(nn.Module):
 
     if not self.skip_layer_norm:
       final_ln = nn.LayerNorm(name="final_ln")
+    else:
+      final_ln = None
 
     if atten_mask is not None and "mhsa" not in self.layer_order:
       raise RuntimeError("Attention mask is provided but no attention layer.")

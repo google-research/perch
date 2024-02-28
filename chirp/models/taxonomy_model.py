@@ -19,7 +19,6 @@ import dataclasses
 from chirp.models import conformer
 from chirp.models import frontend
 from chirp.models import layers
-from chirp.models import output
 from flax import linen as nn
 from jax import numpy as jnp
 
@@ -44,7 +43,7 @@ class TaxonomyModel(nn.Module):
 
   num_classes: dict[str, int]
   encoder: nn.Module
-  taxonomy_loss_weight: float
+  taxonomy_loss_weight: float | None = None
   frontend: nn.Module | None = None
   hubert_feature_extractor: nn.Module | None = None
 
