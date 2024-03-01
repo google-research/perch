@@ -10,7 +10,7 @@ python = ">=3.10,<3.12"
 absl-py = "^1.4.0"
 apache-beam = {version = "^2.50.0", extras = ["gcp"]}
 clu = "^0.0.9"
-flax = "^0.7.4"
+flax = "^0.8.1"
 jax = "^0.4.16"
 ml-collections = "^0.1.1"
 optax = ">=0.1.7"
@@ -23,6 +23,7 @@ pandas = {version = "^2.1.1", extras=["gcp"]}
 etils = {version = "^1.5.0", extras = ["epath"]}
 ratelimiter = "^1.2.0.post0"
 SPARQLWrapper = "^2.0.0"
+aqtp = "^0.5.0"
 scenic = {git = "https://github.com/google-research/scenic.git"}
 tensorflow-hub = "^0.14.0"
 imageio = "^2.5.0"
