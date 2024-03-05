@@ -174,6 +174,37 @@ class InferenceTest(parameterized.TestCase):
     else:
       self.assertEqual(got_example[tf_examples.RAW_AUDIO].shape, (0,))
 
+  @parameterized.parameters(
+      {'config_filename': 'embedding_config_v0'},
+      # Includes frontend handling options.
+      {'config_filename': 'embedding_config_v1'},
+  )
+  def test_embed_fn_from_config(self, config_filename):
+    # Test that we can load a model from a golden config and compute embeddings.
+    test_config_path = os.fspath(
+        path_utils.get_absolute_path(f'tests/testdata/{config_filename}.json')
+    )
+    embed_config = embed_lib.load_embedding_config(test_config_path, '')
+    embed_fn = embed_lib.EmbedFn(**embed_config)
+    embed_fn.setup()
+    self.assertIsNotNone(embed_fn.embedding_model)
+
+    test_wav_path = os.fspath(
+        path_utils.get_absolute_path(
+            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
+        )
+    )
+    source_info = embed_lib.SourceInfo(test_wav_path, 0, 10)
+    example = embed_fn.process(source_info, crop_s=10.0)[0]
+    serialized = example.SerializeToString()
+
+    parser = tf_examples.get_example_parser(
+        logit_names=['label', 'other_label'],
+        tensor_dtype=embed_config.tensor_dtype,
+    )
+    got_example = parser(serialized)
+    self.assertIsNotNone(got_example)
+
   def test_embed_fn_source_variations(self):
     """Test processing with variations of SourceInfo."""
     model_kwargs = {
@@ -303,11 +334,9 @@ class InferenceTest(parameterized.TestCase):
     # Save and restore the model.
     with tempfile.TemporaryDirectory() as logits_model_dir:
       logits_model.save_model(logits_model_dir, '')
-      restore_config = config_dict.ConfigDict({
-          'model_path': logits_model_dir,
-          'logits_key': 'other_label',
-      })
-      restored_model = interface.LogitsOutputHead.from_config(restore_config)
+      restored_model = interface.LogitsOutputHead.from_config_file(
+          logits_model_dir
+      )
     reupdated_outputs = restored_model.add_logits(
         base_outputs, keep_original=True
     )

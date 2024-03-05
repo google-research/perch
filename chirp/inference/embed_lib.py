@@ -159,7 +159,6 @@ class EmbedFn(beam.DoFn):
       write_logits: bool | Sequence[str],
       write_separated_audio: bool,
       write_raw_audio: bool,
-      write_frontend: bool,
       model_key: str,
       model_config: config_dict.ConfigDict,
       file_id_depth: int,
@@ -169,6 +168,7 @@ class EmbedFn(beam.DoFn):
       target_sample_rate: int = -2,
       logits_head_config: config_dict.ConfigDict | None = None,
       tensor_dtype: str = 'float32',
+      write_frontend: bool = False,
   ):
     """Initialize the embedding DoFn.
 
@@ -178,8 +178,6 @@ class EmbedFn(beam.DoFn):
         logit keys to write.
       write_separated_audio: Whether to write out separated audio tracks.
       write_raw_audio: If true, will add the original audio to the output.
-      write_frontend: If true, will add the model's frontend (spectrogram) to
-        the output.
       model_key: String indicating which model wrapper to use. See MODEL_KEYS.
         Only used for setting up the embedding model.
       model_config: Keyword arg dictionary for the model wrapper class. Only
@@ -197,6 +195,8 @@ class EmbedFn(beam.DoFn):
         interface.LogitsOutputHead classifying the model embeddings.
       tensor_dtype: Dtype to use for storing tensors (embeddings, logits, or
         audio). Default to float32, but float16 approximately halves file size.
+      write_frontend: If true, will add the model's frontend (spectrogram) to
+        the output. (Defaults False for backwards compatibility.)
     """
     self.model_key = model_key
     self.model_config = model_config
@@ -381,10 +381,10 @@ def maybe_write_config(parsed_config, output_dir):
     f.write(config_json)
 
 
-def load_embedding_config(embeddings_path):
+def load_embedding_config(embeddings_path, filename: str = 'config.json'):
   """Loads the configuration to generate unlabeled embeddings."""
   embeddings_path = epath.Path(embeddings_path)
-  with (embeddings_path / 'config.json').open() as f:
+  with (embeddings_path / filename).open() as f:
     embedding_config = config_dict.ConfigDict(json.loads(f.read()))
   return embedding_config
 

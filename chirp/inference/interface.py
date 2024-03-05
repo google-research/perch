@@ -16,6 +16,7 @@
 """Interface for models producing embeddings."""
 
 import dataclasses
+import json
 from typing import Any, Callable, Dict
 
 from absl import logging
@@ -182,6 +183,14 @@ class LogitsOutputHead:
   channel_pooling: str = 'max'
 
   @classmethod
+  def from_config_file(cls, model_path: str, filename='logits_config.json'):
+    config_filepath = epath.Path(model_path) / filename
+    with (config_filepath).open() as f:
+      logits_config = config_dict.ConfigDict(json.loads(f.read()))
+    logits_config.model_path = model_path
+    return cls.from_config(logits_config)
+
+  @classmethod
   def from_config(cls, config: config_dict.ConfigDict):
     logits_model = tf.saved_model.load(config.model_path)
     model_path = epath.Path(config.model_path)
@@ -198,6 +207,13 @@ class LogitsOutputHead:
     # Write the model.
     tf.saved_model.save(self.logits_model, output_path)
     output_path = epath.Path(output_path)
+    # Write a config file.
+    config_data = dataclasses.asdict(self)
+    for k in ['logits_model', 'class_list']:
+      # These are loaded automatically.
+      config_data.pop(k)
+    with (output_path / 'logits_config.json').open('w') as f:
+      json.dump(config_data, f)
     # Copy the embeddings_config if provided
     if embeddings_path:
       (epath.Path(embeddings_path) / 'config.json').copy(

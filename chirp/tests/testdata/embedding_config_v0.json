@@ -1,0 +1,16 @@
+{
+  "write_embeddings": true,
+  "write_logits": false,
+  "write_separated_audio": false,
+  "write_raw_audio": false,
+  "file_id_depth": 0,
+  "model_key": "placeholder_model",
+  "tensor_dtype": "float32",
+  "model_config": {
+    "sample_rate": 16000,
+    "embedding_size": 128,
+    "make_embeddings": true,
+    "make_logits": false,
+    "make_separated_audio": false
+  }
+}

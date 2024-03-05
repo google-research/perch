@@ -146,7 +146,7 @@ def model_outputs_to_tf_example(
     write_logits: bool | Sequence[str],
     write_separated_audio: bool,
     write_raw_audio: bool,
-    write_frontend: bool,
+    write_frontend: bool = False,
     tensor_dtype: str = 'float32',
 ) -> tf.train.Example:
   """Create a TFExample from InferenceOutputs."""
