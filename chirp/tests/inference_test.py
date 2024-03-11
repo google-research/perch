@@ -20,11 +20,20 @@ import tempfile
 
 import apache_beam as beam
 from apache_beam.testing import test_pipeline
+from chirp import audio_utils
+from chirp import config_utils
 from chirp import path_utils
+from chirp.inference import colab_utils
 from chirp.inference import embed_lib
 from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
+from chirp.models import metrics
+from chirp.projects.bootstrap import bootstrap
+from chirp.projects.bootstrap import display
+from chirp.projects.bootstrap import search
+from chirp.projects.multicluster import classify
+from chirp.projects.multicluster import data_lib
 from chirp.taxonomy import namespace
 from etils import epath
 from ml_collections import config_dict
@@ -48,6 +57,20 @@ def _make_output_head_model(model_path: str, embedding_dim: int = 1280):
 
 
 class InferenceTest(parameterized.TestCase):
+
+  def test_imports(self):
+    # Test that imports work in external github environment.
+    # This explicitly tests that libraries commonly used in Colab workflows
+    # can be imported when Perch is installed without Jax training dependencies.
+    self.assertIsNotNone(audio_utils)
+    self.assertIsNotNone(bootstrap)
+    self.assertIsNotNone(classify)
+    self.assertIsNotNone(colab_utils)
+    self.assertIsNotNone(config_utils)
+    self.assertIsNotNone(data_lib)
+    self.assertIsNotNone(display)
+    self.assertIsNotNone(metrics)
+    self.assertIsNotNone(search)
 
   @parameterized.parameters(
       # Test each output type individually.
