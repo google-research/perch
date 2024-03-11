@@ -1,4 +1,4 @@
-name: CI
+name: CI_no_jaxtrain
 
 on:
   push:
@@ -25,10 +25,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'poetry'
-      - name: Install Chirp and its dependencies
+      - name: Install Chirp and its dependencies, except jaxtrain dependencies.
         run: |
           sudo apt-get update
           sudo apt-get install libsndfile1 ffmpeg
-          poetry install --with jaxtrain
+          poetry install --without jaxtrain
       - name: Test with unittest
-        run: poetry run python -m unittest discover -s chirp/tests -p "*test.py"
+        # TODO: Group together jaxtrain tests so they can be easily excluded.
+        run: poetry run python -m unittest discover -s chirp/tests -p "*inference_test.py"

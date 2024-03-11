@@ -19,7 +19,6 @@ import warnings
 
 from absl import logging
 from chirp import config_utils
-from chirp.configs import config_globals
 from chirp.inference import embed_lib
 import numpy as np
 import tensorflow as tf
