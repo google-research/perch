@@ -31,6 +31,7 @@ numba = "^0.57"
 librosa = "^0.10.1"
 numpy = "^1.24.0"
 tqdm = "^4.6"
+ipywidgets = "^8.1"
 
 [tool.poetry.group.jaxtrain]
 optional = true
