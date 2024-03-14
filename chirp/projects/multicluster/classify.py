@@ -127,10 +127,14 @@ def train_embedding_model(
     random_seed: int,
     batch_size: int,
     learning_rate: float | None = None,
+    exclude_eval_classes: Sequence[int] = (),
 ) -> ClassifierMetrics:
   """Trains a classification model over embeddings and labels."""
   train_locs, test_locs, _ = merged.create_random_train_test_split(
-      train_ratio, train_examples_per_class, random_seed
+      train_ratio,
+      train_examples_per_class,
+      random_seed,
+      exclude_eval_classes=exclude_eval_classes,
   )
   test_metrics = train_from_locs(
       model=model,
