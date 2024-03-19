@@ -91,12 +91,12 @@ class BootstrapConfig:
   tensor_dtype: str
 
   # The following are populated automatically from the embedding config.
-  embedding_hop_size_s: float | None = None
-  file_id_depth: int | None = None
-  audio_globs: Sequence[str] | None = None
-  model_key: str | None = None
-  model_config: config_dict.ConfigDict | None = None
-  tf_record_shards: int | None = None
+  embedding_hop_size_s: float
+  file_id_depth: int
+  audio_globs: Sequence[str]
+  model_key: str
+  model_config: config_dict.ConfigDict
+  tf_record_shards: int
 
   @classmethod
   def load_from_embedding_config(

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for inference library."""
+"""Tests for mass-embedding functionality."""
 
 import os
 import tempfile
@@ -28,12 +28,12 @@ from chirp.inference import embed_lib
 from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
+from chirp.inference.classify import classify
+from chirp.inference.classify import data_lib
+from chirp.inference.search import bootstrap
+from chirp.inference.search import display
+from chirp.inference.search import search
 from chirp.models import metrics
-from chirp.projects.bootstrap import bootstrap
-from chirp.projects.bootstrap import display
-from chirp.projects.bootstrap import search
-from chirp.projects.multicluster import classify
-from chirp.projects.multicluster import data_lib
 from chirp.taxonomy import namespace
 from etils import epath
 from ml_collections import config_dict
@@ -56,7 +56,7 @@ def _make_output_head_model(model_path: str, embedding_dim: int = 1280):
   )
 
 
-class InferenceTest(parameterized.TestCase):
+class EmbedTest(parameterized.TestCase):
 
   def test_imports(self):
     # Test that imports work in external github environment.
@@ -139,9 +139,7 @@ class InferenceTest(parameterized.TestCase):
     self.assertIsNotNone(embed_fn.embedding_model)
 
     test_wav_path = os.fspath(
-        path_utils.get_absolute_path(
-            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
-        )
+        path_utils.get_absolute_path('inference/tests/testdata/clap.wav')
     )
 
     source_info = embed_lib.SourceInfo(test_wav_path, 0, 10)
@@ -205,7 +203,9 @@ class InferenceTest(parameterized.TestCase):
   def test_embed_fn_from_config(self, config_filename):
     # Test that we can load a model from a golden config and compute embeddings.
     test_config_path = os.fspath(
-        path_utils.get_absolute_path(f'tests/testdata/{config_filename}.json')
+        path_utils.get_absolute_path(
+            f'inference/tests/testdata/{config_filename}.json'
+        )
     )
     embed_config = embed_lib.load_embedding_config(test_config_path, '')
     embed_fn = embed_lib.EmbedFn(**embed_config)
@@ -213,9 +213,7 @@ class InferenceTest(parameterized.TestCase):
     self.assertIsNotNone(embed_fn.embedding_model)
 
     test_wav_path = os.fspath(
-        path_utils.get_absolute_path(
-            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
-        )
+        path_utils.get_absolute_path('inference/tests/testdata/clap.wav')
     )
     source_info = embed_lib.SourceInfo(test_wav_path, 0, 10)
     example = embed_fn.process(source_info, crop_s=10.0)[0]
@@ -253,9 +251,7 @@ class InferenceTest(parameterized.TestCase):
     parser = tf_examples.get_example_parser()
 
     test_wav_path = os.fspath(
-        path_utils.get_absolute_path(
-            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
-        )
+        path_utils.get_absolute_path('inference/tests/testdata/clap.wav')
     )
 
     # Check that a SourceInfo with window_size_s <= 0 embeds the entire file.
@@ -315,9 +311,7 @@ class InferenceTest(parameterized.TestCase):
     self.assertIsNotNone(embed_fn.embedding_model)
 
     test_wav_path = os.fspath(
-        path_utils.get_absolute_path(
-            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
-        )
+        path_utils.get_absolute_path('inference/tests/testdata/clap.wav')
     )
 
     source_info = embed_lib.SourceInfo(test_wav_path, 0, 10)
@@ -396,9 +390,7 @@ class InferenceTest(parameterized.TestCase):
     self.assertIsNotNone(embed_fn.embedding_model)
 
     test_wav_path = os.fspath(
-        path_utils.get_absolute_path(
-            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
-        )
+        path_utils.get_absolute_path('inference/tests/testdata/clap.wav')
     )
     source_info = embed_lib.SourceInfo(test_wav_path, 0, 10)
     # Crop to 3.0s to ensure we can handle short audio examples.
@@ -443,11 +435,7 @@ class InferenceTest(parameterized.TestCase):
 
   def test_create_source_infos(self):
     # Just one file, but it's all good.
-    globs = [
-        path_utils.get_absolute_path(
-            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
-        )
-    ]
+    globs = [path_utils.get_absolute_path('inference/tests/testdata/clap.wav')]
     # Disable sharding by setting shard_len_s <= 0.
     got_infos = embed_lib.create_source_infos(
         globs, shard_len_s=-1, num_shards_per_file=100
@@ -672,9 +660,7 @@ class InferenceTest(parameterized.TestCase):
   def test_beam_pipeline(self):
     """Check that we can write embeddings to TFRecord file."""
     test_wav_path = os.fspath(
-        path_utils.get_absolute_path(
-            'tests/testdata/tfds_builder_wav_directory_test/clap.wav'
-        )
+        path_utils.get_absolute_path('inference/tests/testdata/clap.wav')
     )
     source_infos = [embed_lib.SourceInfo(test_wav_path, 0, 10)]
     base_pipeline = test_pipeline.TestPipeline()

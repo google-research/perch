@@ -32,4 +32,4 @@ jobs:
           poetry install --without jaxtrain
       - name: Test with unittest
         # TODO: Group together jaxtrain tests so they can be easily excluded.
-        run: poetry run python -m unittest discover -s chirp/tests -p "*inference_test.py"
+        run: poetry run python -m unittest discover -s chirp/inference/tests -p "*test.py"

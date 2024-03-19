@@ -19,8 +19,8 @@ import functools
 from typing import Sequence
 
 from chirp import audio_utils
+from chirp.inference.search import search
 from chirp.models import frontend
-from chirp.projects.bootstrap import search
 import IPython
 from IPython.display import display as ipy_display
 import ipywidgets

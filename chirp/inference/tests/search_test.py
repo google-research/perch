@@ -15,7 +15,7 @@
 
 """Tests for the bootstrap search component."""
 
-from chirp.projects.bootstrap import search
+from chirp.inference.search import search
 import numpy as np
 
 from absl.testing import absltest

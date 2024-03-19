@@ -18,8 +18,8 @@
 import dataclasses
 from typing import Sequence
 
+from chirp.inference.classify import data_lib
 from chirp.models import metrics
-from chirp.projects.multicluster import data_lib
 import numpy as np
 import tensorflow as tf
 
@@ -131,9 +131,7 @@ def train_embedding_model(
 ) -> ClassifierMetrics:
   """Trains a classification model over embeddings and labels."""
   train_locs, test_locs, _ = merged.create_random_train_test_split(
-      train_ratio,
-      train_examples_per_class,
-      random_seed,
+      train_ratio, train_examples_per_class, random_seed,
       exclude_eval_classes=exclude_eval_classes,
   )
   test_metrics = train_from_locs(
