@@ -18,10 +18,12 @@
 import dataclasses
 from typing import Sequence
 
+from chirp.inference import tf_examples
 from chirp.inference.classify import data_lib
 from chirp.models import metrics
 import numpy as np
 import tensorflow as tf
+import tqdm
 
 
 @dataclasses.dataclass
@@ -144,3 +146,72 @@ def train_embedding_model(
       learning_rate=learning_rate,
   )
   return test_metrics
+
+
+def get_inference_dataset(
+    embeddings_ds: tf.data.Dataset,
+    model: tf.keras.Model,
+):
+  """Create a dataset which includes the model's predictions."""
+
+  def classify_batch(batch):
+    """Classify a batch of embeddings."""
+    emb = batch[tf_examples.EMBEDDING]
+    emb_shape = tf.shape(emb)
+    flat_emb = tf.reshape(emb, [-1, emb_shape[-1]])
+    logits = model(flat_emb)
+    logits = tf.reshape(
+        logits, [emb_shape[0], emb_shape[1], tf.shape(logits)[-1]]
+    )
+    # Take the maximum logit over channels.
+    logits = tf.reduce_max(logits, axis=-2)
+    batch['logits'] = logits
+    return batch
+
+  inference_ds = embeddings_ds.map(
+      classify_batch, num_parallel_calls=tf.data.AUTOTUNE
+  )
+  return inference_ds
+
+
+def write_inference_csv(
+    embeddings_ds: tf.data.Dataset,
+    model: tf.keras.Model,
+    labels: Sequence[str],
+    output_filepath: str,
+    embedding_hop_size_s: float,
+    threshold: dict[str, float] | None = None,
+    exclude_classes: Sequence[str] = ('unknown',),
+    include_classes: Sequence[str] = (),
+):
+  """Write a CSV file of inference results."""
+  inference_ds = get_inference_dataset(embeddings_ds, model)
+
+  detection_count = 0
+  nondetection_count = 0
+  with open(output_filepath, 'w') as f:
+    # Write column headers.
+    headers = ['filename', 'timestamp_s', 'label', 'logit']
+    f.write(', '.join(headers) + '\n')
+    for ex in tqdm.tqdm(inference_ds.as_numpy_iterator()):
+      for t in range(ex['logits'].shape[0]):
+        for i, label in enumerate(labels):
+          if label in exclude_classes:
+            continue
+          if include_classes and label not in include_classes:
+            continue
+          if threshold is None or ex['logits'][t, i] > threshold[label]:
+            offset = ex['timestamp_s'] + t * embedding_hop_size_s
+            logit = '{:.2f}'.format(ex['logits'][t, i])
+            row = [
+                ex['filename'].decode('utf-8'),
+                '{:.2f}'.format(offset),
+                label,
+                logit,
+            ]
+            f.write(', '.join(row) + '\n')
+            detection_count += 1
+          else:
+            nondetection_count += 1
+  print('\n\n\n   Detection count: ', detection_count)
+  print('NonDetection count: ', nondetection_count)

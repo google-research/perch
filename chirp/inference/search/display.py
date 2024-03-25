@@ -15,6 +15,7 @@
 
 """Utility functions for displaying audio and results in Colab/Jupyter."""
 
+import dataclasses
 import functools
 from typing import Sequence
 
@@ -22,6 +23,7 @@ from chirp import audio_utils
 from chirp.inference.search import search
 from chirp.models import frontend
 import IPython
+from IPython.display import clear_output
 from IPython.display import display as ipy_display
 import ipywidgets
 from librosa import display as librosa_display
@@ -81,6 +83,38 @@ def plot_audio_melspec(
     ipy_display(IPython.display.Audio(audio, rate=sample_rate))
 
 
+def _make_result_buttons(button_labels: Sequence[str]):
+  """Creates buttons for selected labels."""
+
+  def button_callback(x):
+    x.value = not x.value
+    if x.value:
+      x.button_style = 'success'
+    else:
+      x.button_style = ''
+
+  buttons = []
+  for lbl in button_labels:
+    check = ipywidgets.Button(
+        description=lbl,
+        disabled=False,
+        button_style='',
+    )
+    check.value = False
+    check.on_click(button_callback)
+
+    buttons.append(check)
+  return buttons
+
+
+def _make_result_radio_buttons(button_labels: Sequence[str]):
+  """Make radio buttons with the indicated labels."""
+  b = ipywidgets.RadioButtons(options=button_labels)
+  # Explicitly set value to None to avoid pre-selecting the first option.
+  b.value = None
+  return [b]
+
+
 def display_search_results(
     results: search.TopKSearchResults,
     embedding_sample_rate: int,
@@ -88,6 +122,8 @@ def display_search_results(
     window_s: float = 5.0,
     checkbox_labels: Sequence[str] = (),
     max_workers=5,
+    exclusive_labels=False,
+    rank_offset: int = 0,
 ):
   """Display search results, and add audio and annotation info to results."""
 
@@ -104,33 +140,71 @@ def display_search_results(
   ):
     plot_audio_melspec(result_audio_window, embedding_sample_rate)
     plt.show()
-    print(f'rank        : {rank}')
+    print(f'rank        : {rank + rank_offset}')
     print(f'source file : {r.filename}')
     offset_s = r.timestamp_offset
     print(f'offset_s    : {offset_s:.2f}')
     print(f'score       : {(r.score):.2f}')
-    label_widgets = []
 
-    def button_callback(x):
-      x.value = not x.value
-      if x.value:
-        x.button_style = 'success'
+    if not r.label_widgets:
+      if exclusive_labels:
+        r.label_widgets = _make_result_radio_buttons(checkbox_labels)
       else:
-        x.button_style = ''
+        r.label_widgets = _make_result_buttons(checkbox_labels)
 
-    for lbl in checkbox_labels:
-      check = ipywidgets.Button(
-          description=lbl,
-          disabled=False,
-          button_style='',
-      )
-      check.value = False
-      check.on_click(button_callback)
+    for b in r.label_widgets:
+      ipy_display(b)
 
-      label_widgets.append(check)
-      ipy_display(check)
     # Attach audio and widgets to the SearchResult.
     r.audio = result_audio_window
-    r.label_widgets = label_widgets
-
     print('-' * 80)
+
+
+@dataclasses.dataclass
+class PageState:
+  max_page: int
+  curr_page: int = 0
+
+  def increment(self, inc):
+    self.curr_page += inc
+    self.curr_page = min(self.max_page, self.curr_page)
+    self.curr_page = max(0, self.curr_page)
+
+
+def display_paged_results(
+    all_results: search.TopKSearchResults,
+    page_state: PageState,
+    samples_per_page: int = 10,
+    **kwargs,
+):
+  """Display search results in pages."""
+
+  def increment_page_callback(x, inc, page_state):
+    page_state.increment(inc)
+    display_page(page_state)
+
+  next_page_button = ipywidgets.Button(description='Next Page', disabled=False)
+  next_page_button.on_click(lambda x: increment_page_callback(x, 1, page_state))
+  prev_page_button = ipywidgets.Button(description='Prev Page', disabled=False)
+  prev_page_button.on_click(
+      lambda x: increment_page_callback(x, -1, page_state)
+  )
+
+  def display_page(page_state):
+    clear_output()
+    num_pages = len(all_results.search_results) // samples_per_page
+    page = page_state.curr_page
+    print(f'Results Page: {page} / {num_pages}')
+    st, end = page * samples_per_page, (page + 1) * samples_per_page
+    results_page = search.TopKSearchResults(
+        all_results.search_results[st:end], top_k=samples_per_page
+    )
+    display_search_results(
+        results_page, rank_offset=page * samples_per_page, **kwargs
+    )
+    print(f'Results Page: {page} / {num_pages}')
+    ipy_display(prev_page_button)
+    ipy_display(next_page_button)
+
+  # Display the first page.
+  display_page(page_state)

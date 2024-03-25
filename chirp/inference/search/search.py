@@ -60,6 +60,9 @@ class TopKSearchResults:
   min_score: float = -1.0
   _min_score_idx: int = -1
 
+  def __post_init__(self):
+    self._update_deseridata()
+
   def __iter__(self):
     for r in self.search_results:
       yield r
@@ -85,6 +88,8 @@ class TopKSearchResults:
     return score < self.min_score
 
   def _update_deseridata(self):
+    if not self.search_results:
+      return
     self._min_score_idx = np.argmin([r.sort_score for r in self.search_results])
     self.min_score = self.search_results[self._min_score_idx].sort_score
 
