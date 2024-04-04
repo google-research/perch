@@ -18,11 +18,14 @@
 General utilities for processing audio and spectrograms.
 """
 import concurrent
+import dataclasses
 import functools
+import itertools
 import logging
 import os
+import queue
 import tempfile
-from typing import Generator, Sequence
+from typing import Any, Callable, Generator, Iterator, Sequence
 import warnings
 
 from chirp import path_utils
@@ -148,11 +151,31 @@ def multi_load_audio_window(
     sample_rate: int,
     window_size_s: float,
     max_workers: int = 5,
+    buffer_size: int = -1,
 ) -> Generator[np.ndarray, None, None]:
   """Generator for loading audio windows in parallel.
 
   Note that audio is returned in the same order as the filepaths.
   Also, this ultimately relies on soundfile, which can be buggy in some cases.
+
+  Caution: Because this generator uses an Executor, it can continue holding
+  resources while not being used. If you are using this in a notebook, you
+  should use this in a 'nameless' context, like:
+  ```
+  for audio in multi_load_audio_window(...):
+    ...
+  ```
+  or in a try/finally block:
+  ```
+  audio_iterator = multi_load_audio_window(...)
+  try:
+    for audio in audio_iterator:
+      ...
+  finally:
+    del(audio_iterator)
+  ```
+  Otherwise, the generator will continue to hold resources until the notebook
+  is closed.
 
   Args:
     filepaths: Paths to audio to load.
@@ -161,25 +184,37 @@ def multi_load_audio_window(
     sample_rate: Sample rate for returned audio.
     window_size_s: Window length to read from each file. Set <0 to read all.
     max_workers: Number of threads to allocate.
+    buffer_size: Max number of audio windows to queue up. Defaults to 10x the
+      number of workers.
 
   Yields:
     Loaded audio windows.
   """
+  if buffer_size == -1:
+    buffer_size = 10 * max_workers
+  if offsets is None:
+    offsets = [0.0 for _ in filepaths]
   loader = functools.partial(
       load_audio_window, sample_rate=sample_rate, window_size_s=window_size_s
   )
-  if offsets is None:
-    offsets = [0.0 for _ in filepaths]
-  # ThreadPoolExecutor works well despite the
-  with concurrent.futures.ThreadPoolExecutor(
-      max_workers=max_workers
-  ) as executor:
-    futures = []
-    for fp, offset in zip(filepaths, offsets):
-      future = executor.submit(loader, offset_s=offset, filepath=fp)
-      futures.append(future)
-    while futures:
-      yield futures.pop(0).result()
+
+  # TODO(tomdenton): Use itertools.batched in Python 3.12+
+  def batched(iterable, n):
+    it = iter(iterable)
+    while batch := tuple(itertools.islice(it, n)):
+      yield batch
+
+  task_iterator = zip(filepaths, offsets)
+  batched_iterator = batched(task_iterator, buffer_size)
+  mapping = lambda x: loader(x[0], x[1])
+
+  executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+  try:
+    yield from itertools.chain.from_iterable(
+        executor.map(mapping, batch) for batch in batched_iterator
+    )
+  finally:
+    executor.shutdown(wait=False, cancel_futures=True)
 
 
 def load_xc_audio(xc_id: str, sample_rate: int) -> jnp.ndarray:
