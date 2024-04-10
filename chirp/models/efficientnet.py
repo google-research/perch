@@ -23,11 +23,11 @@ import math
 from typing import Callable, NamedTuple
 
 from aqt.jax.v2 import aqt_conv_general
-from aqt.jax.v2 import aqt_dot_general
 from aqt.jax.v2 import config as aqt_cfg
 from chirp.models import layers
 from flax import linen as nn
 import flax.typing as flax_typing
+import jax
 from jax import numpy as jnp
 
 
@@ -131,7 +131,7 @@ op_sets = {
         sigmoid=nn.hard_sigmoid,
         stem_activation=nn.hard_swish,
         head_activation=nn.hard_swish,
-        dot_general=aqt_dot_general.make_dot_general(None),
+        dot_general=jax.lax.dot_general,
         conv_general_dilated=aqt_conv_general.make_conv_general_dilated(
             aqt_cfg.DotGeneralRaw.make_conv_general_dilated()
         ),
