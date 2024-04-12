@@ -6,6 +6,14 @@ A bioacoustics research project.
 
 ## Installation
 
+We support installation on a generic Linux workstation.
+A GPU is recommended, especially when working with large datasets.
+The recipe below is the same used by our continuous integration testing.
+
+Some users have successfully used our repository with the Windows Linux
+Subsystem, or with Docker in a cloud-based virtual machine. Anecdotally,
+installation on OS X is difficult.
+
 You might need the following dependencies.
 
 ```bash

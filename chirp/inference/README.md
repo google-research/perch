@@ -7,19 +7,26 @@ This library is for applying trained models to data.
 We provide a few Python notebooks for efficient transfer learning, as suggested
 in [Feature Embeddings from Large-Scale Acoustic Bird Classifiers Enable Few-Shot Transfer Learning](https://arxiv.org/abs/2307.06292).
 
+The full workflow is illustrated in a
+[Colab tutorial](https://colab.research.google.com/drive/1gPBu2fyw6aoT-zxXFk15I2GObfMRNHUq).
+This tutorial can be used with Google Colab's free-tier, requiring no software
+installation, though a (free) Google account is required. This notebook can
+be copied and adapted to work with your own data, stored in Drive.
+
+For local installation and use of the base Python notebooks, we recommend using
+a Linux machine (eg, Ubuntu) with a moderate GPU. Our continuous integration
+tests install and run on Linux, so that is your best bet for compatibility.
+Some users have had success using the Windows Linux Subsystem (WSL), or with
+using Docker and virtual machines hosted in the cloud.
+Anecdotally, installation on OS X is difficult.
+
 ### Workflow Overview
 
 The classifier workflow has two-or-three steps. We work with an
 /embedding model/, a large quantity of /unlabeled data/ and a usually-smaller
 set of /labeled data/.
 
-Before attempting to run code from this workflow, first download an embedding model. You can use the [Google Bird
-Vocalization Classifier](https://tfhub.dev/google/bird-vocalization-classifier/)
-(aka, Perch). Download the model and unzip it, keeping track of where you've
-placed it. (It is also possible to use [BirdNET](https://github.com/kahst/BirdNET-Analyzer) or, with a bit more effort, any
-model which turns audio into embeddings, such as [YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet).)
-
-Then we need to compute /embeddings/ of the target unlabeled audio. The
+We first need to compute /embeddings/ of the target unlabeled audio. The
 unlabeled audio is specified by one or more 'globs' of files like:
 `/my_home/audio/*/*.flac`. Any audio formats readable by Librosa should be fine.
 We provide `embed_audio.ipynb` to do so. This creates a dataset of embeddings
@@ -30,9 +37,10 @@ or more), we provide a Beam pipeline via `embed.py` which can run on a cluster.
 Setting this up may be challenging, however; feel free to get in touch if you
 have questions.
 
-Once we have embedded the unlabeled audio, you can use `search_embeddings.ipynb`
-to search for interesting audio. Starting from a clip (or Xeno-Canto id, or
-URL for an audio file), you can search for similar audio in the unlabeled data.
+Once we have embedded the unlabeled audio, you can use `agile_modeling.ipynb`
+to search for interesting audio and create a classifier. Starting from a clip
+(or Xeno-Canto id, or URL for an audio file), you can search for similar audio
+in the unlabeled data.
 By providing a label and clicking on relevant results, you will start amassing
 a set of `labeled data`.
 
@@ -43,10 +51,15 @@ easy to add additional examples. It is recommended to add examples with length
 matching the /window size/ of the embedding model (5 seconds for Perch, or
 3 seconds for BirdNET).
 
-From there, `active_learning.ipynb` will help build a small classifier using
+From there, the notebook will build a small classifier using
 the embeddings of the labeled audio. The classifier can then be run on the
 unlabeled data. Hand-labeling results will allow you to feed new data into the
 labeled dataset, and iterate quickly.
+
+The `analysis.ipynb` notebook provides additional tools for analyzing data with
+a pre-trained classifier, as developed in `agile_modeling.ipynb`. It can be
+used to run detections over new data, estimate total call density, and
+evaluate the real-world model quality.
 
 ### Installation (Linux)
 
