@@ -24,13 +24,29 @@ curl -sSL https://install.python-poetry.org | python3 -
 sudo apt-get install libsndfile1 ffmpeg
 
 # Install all dependencies specified in the poetry configs
-poetry install
+poetry install  --with jaxtrain
 ```
 
 Running `poetry install` installs all Perch dependencies into a new virtual environment, in which you can run the Perch code base. To run the tests, use:
 
 ```bash
 poetry run python -m unittest discover -s chirp/tests -p "*test.py"
+poetry run python -m unittest discover -s chirp/inference/tests -p "*test.py"
+```
+
+### Lightweight Inference
+
+Note that if you only need the python notebooks for use with pre-trained models,
+you can install with lighter dependencies:
+
+```
+# Install inference-only dependencies specified in the poetry configs
+poetry install
+```
+
+And check that the inference tests succeed:
+```bash
+poetry run python -m unittest discover -s chirp/inference/tests -p "*test.py"
 ```
 
 ## Using a container
