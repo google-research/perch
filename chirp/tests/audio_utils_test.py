@@ -64,8 +64,13 @@ class AudioUtilsTest(parameterized.TestCase):
         'clap.wav',
     )
     offsets = [0.0, 0.1, 0.2]
+    audio_loader = lambda fp, offset: audio_utils.load_audio_window(
+        fp, offset, 32000, -1
+    )
     audios = list(
-        audio_utils.multi_load_audio_window([wav_path] * 3, offsets, 32000, -1)
+        audio_utils.multi_load_audio_window(
+            [wav_path] * 3, offsets, audio_loader
+        )
     )
     # The first result should be the full wav file.
     self.assertLen(audios, 3)

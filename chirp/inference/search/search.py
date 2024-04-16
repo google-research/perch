@@ -328,7 +328,7 @@ def classifer_search_embeddings_parallel(
     del query_embedding_batch
     emb = batch[tf_examples.EMBEDDING]
     emb_shape = tf.shape(emb)
-    flat_emb = tf.reshape(emb, [-1, emb_shape[-1]])
+    flat_emb = tf.cast(tf.reshape(emb, [-1, emb_shape[-1]]), tf.float32)
     logits = embeddings_classifier(flat_emb)
     logits = tf.reshape(
         logits, [emb_shape[0], emb_shape[1], tf.shape(logits)[-1]]

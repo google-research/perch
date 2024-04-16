@@ -18,14 +18,11 @@
 General utilities for processing audio and spectrograms.
 """
 import concurrent
-import dataclasses
-import functools
 import itertools
 import logging
 import os
-import queue
 import tempfile
-from typing import Any, Callable, Generator, Iterator, Sequence
+from typing import Callable, Generator, Sequence
 import warnings
 
 from chirp import path_utils
@@ -147,9 +144,8 @@ def load_audio_window(
 
 def multi_load_audio_window(
     filepaths: Sequence[str],
-    offsets: Sequence[int] | None,
-    sample_rate: int,
-    window_size_s: float,
+    offsets: Sequence[float] | None,
+    audio_loader: Callable[[str, float], np.ndarray],
     max_workers: int = 5,
     buffer_size: int = -1,
 ) -> Generator[np.ndarray, None, None]:
@@ -181,8 +177,7 @@ def multi_load_audio_window(
     filepaths: Paths to audio to load.
     offsets: Read offset in seconds for each file, or None if no offsets are
       needed.
-    sample_rate: Sample rate for returned audio.
-    window_size_s: Window length to read from each file. Set <0 to read all.
+    audio_loader: Function to load audio given a filepath and offset.
     max_workers: Number of threads to allocate.
     buffer_size: Max number of audio windows to queue up. Defaults to 10x the
       number of workers.
@@ -194,9 +189,6 @@ def multi_load_audio_window(
     buffer_size = 10 * max_workers
   if offsets is None:
     offsets = [0.0 for _ in filepaths]
-  loader = functools.partial(
-      load_audio_window, sample_rate=sample_rate, window_size_s=window_size_s
-  )
 
   # TODO(tomdenton): Use itertools.batched in Python 3.12+
   def batched(iterable, n):
@@ -206,7 +198,7 @@ def multi_load_audio_window(
 
   task_iterator = zip(filepaths, offsets)
   batched_iterator = batched(task_iterator, buffer_size)
-  mapping = lambda x: loader(x[0], x[1])
+  mapping = lambda x: audio_loader(x[0], x[1])
 
   executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
   try:

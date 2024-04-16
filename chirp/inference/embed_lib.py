@@ -96,17 +96,17 @@ def create_source_infos(
 
   for source in source_files:
     if num_shards_per_file > 0:
-      num_shards = num_shards_per_file
+      end_shard_idx = start_shard_idx + num_shards_per_file
     else:
       try:
         sf = soundfile.SoundFile(source)
         file_length_s = sf.frames / sf.samplerate
-        num_shards = int(file_length_s // shard_len_s + 1)
+        end_shard_idx = int(file_length_s // shard_len_s + 1)
       except Exception as exc:  # pylint: disable=broad-exception-caught
         logging.error('Failed to parse audio file (%s) : %s.', source, exc)
         continue
 
-    for i in range(start_shard_idx, num_shards):
+    for i in range(start_shard_idx, end_shard_idx):
       source_file_splits.append(SourceInfo(source.as_posix(), i, shard_len_s))
   return source_file_splits
 

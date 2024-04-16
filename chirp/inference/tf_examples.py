@@ -115,10 +115,13 @@ def create_embeddings_dataset(
     prefetch: int = 128,
     logit_names: Sequence[str] | None = None,
     tensor_dtype: str = 'float32',
+    shuffle_files: bool = False,
 ):
   """Create a TF Dataset of the embeddings."""
   embeddings_dir = epath.Path(embeddings_dir)
   embeddings_files = [fn.as_posix() for fn in embeddings_dir.glob(file_glob)]
+  if shuffle_files:
+    np.random.shuffle(embeddings_files)
   ds = tf.data.TFRecordDataset(
       embeddings_files, num_parallel_reads=tf.data.AUTOTUNE
   )

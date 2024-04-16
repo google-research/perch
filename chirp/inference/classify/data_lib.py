@@ -558,8 +558,11 @@ def embed_dataset(
         if fp.relative_to(base_dir).as_posix() not in excluded_files
     ]
 
+    audio_loader = lambda fp, offset: audio_utils.load_audio(
+        fp, target_sample_rate
+    )
     audio_iterator = audio_utils.multi_load_audio_window(
-        filepaths, None, target_sample_rate, -1
+        audio_loader=audio_loader, filepaths=filepaths, offsets=None
     )
 
     for fp, audio in tqdm.tqdm(

@@ -154,3 +154,56 @@ Step-by-step:
 * From the terminal, change directory to the main chirp repository, and use
   poetry to run the embed.py script:
   ```poetry run python chirp/inference/embed.py --```
+
+# Agile Modeling Code Structure
+
+The agile modeling python notebooks heavily rely on the code in this directory.
+The three parts of the workflow are embedding, search, and classification. The
+latter two parts generally require knowing where the embeddings are, how
+to join embeddings with their source audio, and how to display examples
+to users in Colab.
+
+Embedding is handled by utilities in `embed_lib.py`. When embeddings are
+computed, a configuration file is written beside the embeddings which indicates
+the embedding model used and the audio file globs which were embedded.
+
+## Boostrap Config and Project State
+
+For subsequent steps, we coordinate activity with `search/bootstrap.py`. First,
+we create a `bootstrap.BootstrapConfig`, which collects info on the embedding
+model, location of embeddings files, and audio glob (for connecting embeddings
+with their source audio). The `bootstrap.BootstrapConfig` is then used to create
+a `bootstrap.BootstrapState`, which includes an instantiated copy of the
+embedding model, and is also used to create certain objects which depend heavily
+on the configuration - such as the Tensorflow Dataset of embeddings, or an
+iterator over audio files corresponding to embeddings.
+
+## Search
+
+Brute-force search is handled by `bootstrap/search.py`. This is optimized for
+fast execution, and is fairly adaptable to new situations, such as searching
+with a classifier, finding examples at a specific distance from the query,
+or selecting random examples.
+
+The `search.TopKSearchResults` object maintains a list of `search.SearchResult`,
+both of which are also important for display.
+
+## Classification
+
+Users may provide data in a 'folder-of-folders' format. The
+`classify.data_lib.py` file contains utilities for loading embeddings of
+labeled data into memory in a `MergedDataset` object. This object contains
+everything needed for training small classifiers on top of embeddings.
+Actual small-model training code is contained in `classify/classify.py`.
+
+## Display
+
+Displaying examples to the user generally requires connecting embeddings with
+source audio. The `bootstrap.BootstrapState` is responsible for providing an
+iterator (via `search_results_audio_iterator`) which iterates over and
+`search.TopKSearchResults` object, attaching audio to each result. The iterator
+provides results in the same order as they appear in the
+`search.TopKSearchResults` object.
+
+Each `search.SearchResult` object may have iPython widgets attached to it, such
+as label buttons. These are used for obtaining user-provided labels, etc.

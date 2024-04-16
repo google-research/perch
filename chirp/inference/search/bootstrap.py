@@ -16,13 +16,17 @@
 """Configuration and init library for Search Bootstrap projects."""
 
 import dataclasses
+import functools
 import hashlib
-from typing import Sequence
+from typing import Callable, Iterator, Sequence
 
+from chirp import audio_utils
+from chirp.inference import a2o_utils
 from chirp.inference import embed_lib
 from chirp.inference import interface
 from chirp.inference import models
 from chirp.inference import tf_examples
+from chirp.inference.search import search
 from etils import epath
 from ml_collections import config_dict
 import tensorflow as tf
@@ -30,12 +34,21 @@ import tensorflow as tf
 
 @dataclasses.dataclass
 class BootstrapState:
-  """Union of data and models useful to go from a few examples to a detector."""
+  """Union of data and models useful to go from a few examples to a detector.
+
+  Attributes:
+    config: The configuration of the bootstrap project.
+    embedding_model: The model used to compute embeddings, loaded on init.
+    embeddings_dataset: A TF Dataset of the embeddings, loaded on init.
+    source_map: A Callable mapping file_id to full filepath.
+    a2o_auth_token: Auth token for fetching A2O data.
+  """
 
   config: 'BootstrapConfig'
   embedding_model: interface.EmbeddingModel | None = None
   embeddings_dataset: tf.data.Dataset | None = None
-  source_map: dict[str, embed_lib.SourceInfo] | None = None
+  source_map: Callable[[str], str] | None = None
+  a2o_auth_token: str = ''
 
   def __post_init__(self):
     if self.embedding_model is None:
@@ -43,38 +56,78 @@ class BootstrapState:
           self.config.model_key
       ].from_config(self.config.model_config)
     self.create_embeddings_dataset()
-    self.create_source_map()
+    if self.source_map is None:
+      if self.a2o_auth_token:
+        window_size_s = self.config.model_config.window_size_s
+        self.source_map = functools.partial(
+            a2o_utils.make_a2o_audio_url_from_file_id,
+            window_size_s=window_size_s,
+        )
+      else:
+        self.source_map = self.default_source_map
 
-  def create_embeddings_dataset(self):
+  def create_embeddings_dataset(self, shuffle_files: bool = False):
     """Create a TF Dataset of the embeddings."""
-    if self.embeddings_dataset:
+    if self.embeddings_dataset and not shuffle_files:
       return self.embeddings_dataset
     ds = tf_examples.create_embeddings_dataset(
         self.config.embeddings_path,
-        'embeddings-*',
+        self.config.embeddings_glob,
         tensor_dtype=self.config.tensor_dtype,
+        shuffle_files=shuffle_files,
     )
     self.embeddings_dataset = ds
     return ds
 
-  def create_source_map(self):
+  def search_results_audio_iterator(
+      self, search_results: search.TopKSearchResults, **kwargs
+  ) -> Iterator[search.SearchResult]:
+    """Create an iterator over TopKSearchResults which loads audio."""
+    filepaths = [
+        self.source_map(r.filename, r.timestamp_offset)
+        for r in search_results.search_results
+    ]
+    offsets = [r.timestamp_offset for r in search_results.search_results]
+    sample_rate = self.config.model_config.sample_rate
+    window_size_s = self.config.model_config.window_size_s
+    if self.a2o_auth_token:
+      iterator = a2o_utils.multi_load_a2o_audio(
+          filepaths=filepaths,
+          offsets=offsets,
+          auth_token=self.a2o_auth_token,
+          sample_rate=sample_rate,
+          **kwargs,
+      )
+    else:
+      audio_loader = functools.partial(
+          audio_utils.load_audio,
+          window_size_s=window_size_s,
+          sample_rate=sample_rate,
+      )
+      iterator = audio_utils.multi_load_audio_window(
+          filepaths=filepaths,
+          offsets=offsets,
+          audio_loader=audio_loader,
+          **kwargs,
+      )
+    for result, audio in zip(search_results.search_results, iterator):
+      result.audio = audio
+      yield result
+
+  def default_source_map(self, file_id: str) -> str:
     """Map filenames to full filepaths."""
     if self.config.audio_globs is None:
-      raise ValueError('Cannot create source map with no audio globs.')
-    source_infos = embed_lib.create_source_infos(self.config.audio_globs, -1)
+      raise ValueError('No audio globs found in the embedding config.')
 
-    self.source_map = {}
-    for s in source_infos:
-      file_id = epath.Path(
-          *epath.Path(s.filepath).parts[-(self.config.file_id_depth + 1) :]
-      ).as_posix()
-      dupe = self.source_map.get(file_id)
-      if dupe:
-        raise ValueError(
-            'All base filenames must be unique. '
-            f'Filename {file_id} appears in both {s.filepath} and {dupe}.'
-        )
-      self.source_map[file_id] = s.filepath
+    for path_glob in self.config.audio_globs:
+      # Remove any wildcards from the path, and append the file_id.
+      # This assumes that wildcards are only used at the end of the path,
+      # but this asusmption is not enforced.
+      base_path = '/'.join([p for p in path_glob.split('/') if '*' not in p])
+      candidate_path = epath.Path(base_path) / file_id
+      if candidate_path.exists():
+        return candidate_path.as_posix()
+    raise ValueError(f'No file found for file_id {file_id}.')
 
 
 @dataclasses.dataclass
@@ -90,6 +143,9 @@ class BootstrapConfig:
   # Tensor dtype in embeddings.
   tensor_dtype: str
 
+  # Glob for embeddings.
+  embeddings_glob: str
+
   # The following are populated automatically from the embedding config.
   embedding_hop_size_s: float
   file_id_depth: int
@@ -99,11 +155,21 @@ class BootstrapConfig:
   tf_record_shards: int
 
   @classmethod
-  def load_from_embedding_config(
-      cls, embeddings_path: str, annotated_path: str, tf_record_shards: int = 1
-  ):
+  def load_from_embedding_path(cls, embeddings_path: str, **kwargs):
     """Instantiate from a configuration written alongside embeddings."""
     embedding_config = embed_lib.load_embedding_config(embeddings_path)
+    return cls.load_from_embedding_config(embedding_config, **kwargs)
+
+  @classmethod
+  def load_from_embedding_config(
+      cls,
+      embedding_config: config_dict.ConfigDict,
+      annotated_path: str,
+      tf_record_shards: int = 1,
+      embeddings_path: str | None = None,
+      embeddings_glob: str = 'embeddings-*',
+  ):
+    """Instantiate from an embedding config."""
     embed_fn_config = embedding_config.embed_fn_config
     tensor_dtype = embed_fn_config.get('tensor_dtype', 'float32')
     tf_record_shards = embedding_config.get(
@@ -118,6 +184,8 @@ class BootstrapConfig:
     else:
       model_key = embed_fn_config.model_key
       model_config = embed_fn_config.model_config
+    if embeddings_path is None:
+      embeddings_path = embedding_config.output_dir
     return BootstrapConfig(
         embeddings_path=embeddings_path,
         annotated_path=annotated_path,
@@ -128,6 +196,7 @@ class BootstrapConfig:
         audio_globs=embedding_config.source_file_patterns,
         tensor_dtype=tensor_dtype,
         tf_record_shards=tf_record_shards,
+        embeddings_glob=embeddings_glob,
     )
 
   def embedding_config_hash(self, digest_size: int = 10) -> str:

@@ -19,7 +19,7 @@ import dataclasses
 import functools
 from typing import Sequence
 
-from chirp import audio_utils
+from chirp.inference.search import bootstrap
 from chirp.inference.search import search
 from chirp.models import frontend
 import IPython
@@ -116,47 +116,41 @@ def _make_result_radio_buttons(button_labels: Sequence[str]):
 
 
 def display_search_results(
+    project_state: bootstrap.BootstrapState,
     results: search.TopKSearchResults,
     embedding_sample_rate: int,
-    source_map: dict[str, str],
-    window_s: float = 5.0,
     checkbox_labels: Sequence[str] = (),
-    max_workers=5,
     exclusive_labels=False,
     rank_offset: int = 0,
+    **kwargs,
 ):
   """Display search results, and add audio and annotation info to results."""
+  results_iterator = project_state.search_results_audio_iterator(
+      results, **kwargs
+  )
 
   # Parallel load the audio windows.
-  filepaths = [source_map[r.filename] for r in results]
-  offsets = [r.timestamp_offset for r in results]
-  for rank, (r, result_audio_window) in enumerate(
-      zip(
-          results,
-          audio_utils.multi_load_audio_window(
-              filepaths, offsets, embedding_sample_rate, window_s, max_workers
-          ),
-      )
-  ):
-    plot_audio_melspec(result_audio_window, embedding_sample_rate)
-    plt.show()
+  for rank, result in enumerate(results_iterator):
+    if result.audio is not None:
+      plot_audio_melspec(result.audio, embedding_sample_rate)
+      plt.show()
+    else:
+      print('Failed to load audio for result.')
     print(f'rank        : {rank + rank_offset}')
-    print(f'source file : {r.filename}')
-    offset_s = r.timestamp_offset
+    print(f'source file : {result.filename}')
+    offset_s = result.timestamp_offset
     print(f'offset_s    : {offset_s:.2f}')
-    print(f'score       : {(r.score):.2f}')
+    print(f'score       : {(result.score):.2f}')
 
-    if not r.label_widgets:
+    if not result.label_widgets:
       if exclusive_labels:
-        r.label_widgets = _make_result_radio_buttons(checkbox_labels)
+        result.label_widgets = _make_result_radio_buttons(checkbox_labels)
       else:
-        r.label_widgets = _make_result_buttons(checkbox_labels)
+        result.label_widgets = _make_result_buttons(checkbox_labels)
 
-    for b in r.label_widgets:
+    for b in result.label_widgets:
       ipy_display(b)
 
-    # Attach audio and widgets to the SearchResult.
-    r.audio = result_audio_window
     print('-' * 80)
 
 
@@ -179,7 +173,7 @@ def display_paged_results(
 ):
   """Display search results in pages."""
 
-  def increment_page_callback(x, inc, page_state):
+  def increment_page_callback(unused_x, inc, page_state):
     page_state.increment(inc)
     display_page(page_state)
 
@@ -200,7 +194,7 @@ def display_paged_results(
         all_results.search_results[st:end], top_k=samples_per_page
     )
     display_search_results(
-        results_page, rank_offset=page * samples_per_page, **kwargs
+        results=results_page, rank_offset=page * samples_per_page, **kwargs
     )
     print(f'Results Page: {page} / {num_pages}')
     ipy_display(prev_page_button)
