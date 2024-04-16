@@ -15,6 +15,7 @@
 
 """Tests for audio utilities."""
 
+import functools
 import os
 
 from chirp import audio_utils
@@ -118,6 +119,22 @@ class AudioUtilsTest(parameterized.TestCase):
     )
 
     np.testing.assert_allclose(out, librosa_out, rtol=5e-2)
+
+  def test_ema(self):
+    rng = np.random.default_rng(seed=0)
+    inputs = rng.normal(size=(128, 3))
+    gamma = 0.9
+    outputs, _ = audio_utils.ema(inputs, gamma)
+    ref = functools.reduce(lambda x, y: (1 - gamma) * x + gamma * y, inputs)
+    np.testing.assert_allclose(outputs[-1], ref, rtol=1e-6)
+
+  def test_ema_conv1d(self):
+    rng = np.random.default_rng(seed=0)
+    inputs = rng.normal(size=(128, 3))
+    gamma = 0.9
+    outputs = audio_utils.ema_conv1d(inputs[None], gamma, conv_width=-1)[0]
+    ref = functools.reduce(lambda x, y: (1 - gamma) * x + gamma * y, inputs)
+    np.testing.assert_allclose(outputs[-1], ref, rtol=1e-6)
 
   @parameterized.product(
       # NOTE: TF and JAX have different outputs when nperseg is odd.

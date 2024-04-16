@@ -366,7 +366,8 @@ def ema_conv1d(
   padded_inp = jnp.concatenate([left_pad, xs], axis=1)
 
   kernel = jnp.array(
-      [(1.0 - gamma) ** k for k in range(conv_width - 1)] + [gamma]
+      [(1.0 - gamma) ** (conv_width - 1)]
+      + [gamma * (1.0 - gamma) ** k for k in range(conv_width - 2, -1, -1)]
   ).astype(xs.dtype)
   if isinstance(gamma, float) or gamma.ndim == 0:
     kernel = kernel[jnp.newaxis, jnp.newaxis, :]
