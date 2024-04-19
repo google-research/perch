@@ -19,6 +19,7 @@ import functools
 import os
 
 from chirp import audio_utils
+from chirp import path_utils
 from jax import numpy as jnp
 from jax import random
 from jax import scipy as jsp
@@ -48,21 +49,15 @@ class AudioUtilsTest(parameterized.TestCase):
     _, _, cls.spectrogram = jsp.signal.stft(cls.audio)
 
   def test_load_audio(self):
-    wav_path = os.path.join(
-        os.path.normpath(os.path.dirname(__file__)),
-        'testdata',
-        'tfds_builder_wav_directory_test',
-        'clap.wav',
+    test_wav_path = os.fspath(
+        path_utils.get_absolute_path('tests/testdata/clap.wav')
     )
-    audio = audio_utils.load_audio(wav_path, 32000)
+    audio = audio_utils.load_audio(test_wav_path, 32000)
     self.assertLen(audio, 678240)
 
   def test_multi_load_audio(self):
-    wav_path = os.path.join(
-        os.path.normpath(os.path.dirname(__file__)),
-        'testdata',
-        'tfds_builder_wav_directory_test',
-        'clap.wav',
+    test_wav_path = os.fspath(
+        path_utils.get_absolute_path('tests/testdata/clap.wav')
     )
     offsets = [0.0, 0.1, 0.2]
     audio_loader = lambda fp, offset: audio_utils.load_audio_window(
@@ -70,7 +65,7 @@ class AudioUtilsTest(parameterized.TestCase):
     )
     audios = list(
         audio_utils.multi_load_audio_window(
-            [wav_path] * 3, offsets, audio_loader
+            [test_wav_path] * 3, offsets, audio_loader
         )
     )
     # The first result should be the full wav file.
@@ -88,6 +83,22 @@ class AudioUtilsTest(parameterized.TestCase):
     np.testing.assert_array_almost_equal(
         audios[0][int(0.2 * 32000) :], audios[2], 4
     )
+
+  @parameterized.product(
+      filename=(
+          '21100_36_48.wav',
+          '21100_36_48.mp3',
+          '21100_36_48.flac',
+          '21100_36_48.ogg',
+          '21100_36_48.opus',
+      ),
+  )
+  def test_load_audio_file(self, filename):
+    test_wav_path = os.fspath(
+        path_utils.get_absolute_path(os.path.join('tests/testdata', filename))
+    )
+    got_audio = audio_utils.load_audio_file(test_wav_path, 32000)
+    self.assertEqual(got_audio.shape[0], 320000)
 
   def test_pcen(self):
     gain = 0.5
