@@ -267,12 +267,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   @classmethod
   def is_batchable(cls, model: Any) -> bool:
     sig = model.signatures['serving_default']
-    if sig.inputs[0].shape[0] is not None:
-      raise NotImplementedError(
-          'The non-batchable model is no longer supported. '
-          'Please update to a more recent model!'
-      )
-    return True
+    return sig.inputs[0].shape[0] is None
 
   @classmethod
   def load_class_lists(cls, csv_glob):
@@ -356,6 +351,27 @@ class TaxonomyModelTF(interface.EmbeddingModel):
   def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
     return interface.embed_from_batch_embed_fn(self.batch_embed, audio_array)
 
+  def _nonbatchable_batch_embed(self, audio_batch: np.ndarray):
+    """Embed a batch of audio with an old non-batchable model."""
+    all_logits = []
+    all_embeddings = []
+    for audio in audio_batch:
+      outputs = self.model.infer_tf(audio[np.newaxis, :])
+      if hasattr(outputs, 'keys'):
+        embedding = outputs.pop('embedding')
+        logits = outputs.pop('label')
+      else:
+        # Assume the model output is always a (logits, embedding) twople.
+        logits, embedding = outputs
+      all_logits.append(logits)
+      all_embeddings.append(embedding)
+    all_logits = np.stack(all_logits, axis=0)
+    all_embeddings = np.stack(all_embeddings, axis=0)
+    return {
+        'embedding': all_embeddings,
+        'label': all_logits,
+    }
+
   def batch_embed(
       self, audio_batch: np.ndarray[Any, Any]
   ) -> interface.InferenceOutputs:
@@ -363,9 +379,13 @@ class TaxonomyModelTF(interface.EmbeddingModel):
         audio_batch, self.window_size_s, self.hop_size_s
     )
     framed_audio = self.normalize_audio(framed_audio, self.target_peak)
-
     rebatched_audio = framed_audio.reshape([-1, framed_audio.shape[-1]])
-    outputs = self.model.infer_tf(rebatched_audio)
+
+    if not self.batchable:
+      outputs = self._nonbatchable_batch_embed(rebatched_audio)
+    else:
+      outputs = self.model.infer_tf(rebatched_audio)
+
     frontend_output = None
     if hasattr(outputs, 'keys'):
       # Dictionary-type outputs. Arrange appropriately.
