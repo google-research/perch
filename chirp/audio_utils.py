@@ -69,9 +69,24 @@ def load_audio_file(
   if target_sample_rate <= 0:
     # Use the native sample rate.
     target_sample_rate = None
-  with tempfile.NamedTemporaryFile(
-      mode='w+b', suffix=os.path.splitext(filepath)[-1]
-  ) as f:
+  extension = os.path.splitext(filepath)[-1].lower()
+  if extension in ('wav', 'flac', 'ogg', 'opus'):
+    with filepath.open('rb') as f:
+      sf = soundfile.SoundFile(file=f)
+      audio = sf.read()
+      if target_sample_rate is not None:
+        audio = librosa.resample(
+            y=audio,
+            orig_sr=sf.samplerate,
+            target_sr=target_sample_rate,
+            res_type=resampling_type,
+        )
+      return audio
+
+  # Handle other audio formats.
+  # Because librosa passes file handles to soundfile, we need to copy the file
+  # to a temporary file before passing it to librosa.
+  with tempfile.NamedTemporaryFile(mode='w+b', suffix=extension) as f:
     with filepath.open('rb') as sf:
       f.write(sf.read())
     # librosa outputs lots of warnings which we can safely ignore when
@@ -83,7 +98,7 @@ def load_audio_file(
           sr=target_sample_rate,
           res_type=resampling_type,
       )
-      return audio
+  return audio
 
 
 def load_audio_window_soundfile(

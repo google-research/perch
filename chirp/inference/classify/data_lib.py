@@ -28,6 +28,7 @@ training small classifiers or evaluating clustering methods.
 
 import collections
 import dataclasses
+import itertools
 import time
 from typing import Dict, Sequence, Tuple
 
@@ -64,7 +65,7 @@ class MergedDataset:
       embedding_model: interface.EmbeddingModel,
       time_pooling: str = 'mean',
       exclude_classes: Sequence[str] = (),
-      load_audio: bool = True,
+      load_audio: bool = False,
       target_sample_rate: int = -2,
       audio_file_pattern: str = '*',
       embedding_config_hash: str = '',
@@ -72,6 +73,7 @@ class MergedDataset:
       pad_type: str = 'zeros',
       cache_embeddings: bool = True,
       tf_record_shards: int = 1,
+      max_workers: int = 5,
   ) -> 'MergedDataset':
     """Generating MergedDataset via folder-of-folders method.
 
@@ -85,7 +87,8 @@ class MergedDataset:
       embedding_model: EmbeddingModel used to produce embeddings.
       time_pooling: Key for time pooling strategy.
       exclude_classes: Classes to skip.
-      load_audio: Whether to load audio into memory.
+      load_audio: Whether to load audio into memory. beware that this can cause
+        problems with large datasets.
       target_sample_rate: Resample loaded audio to this sample rate. If -1,
         loads raw audio with no resampling. If -2, uses the embedding_model
         sample rate.
@@ -102,6 +105,7 @@ class MergedDataset:
         folder-of-folders.
       tf_record_shards: Number of files to materialize if writing embeddings to
         TF records.
+      max_workers: Number of threads to use for loading audio.
 
     Returns:
       MergedDataset
@@ -141,6 +145,7 @@ class MergedDataset:
         excluded_files=existing_embedded_srcs,
         embedding_file_prefix=embedding_file_prefix,
         pad_type=pad_type,
+        max_workers=max_workers,
     )
 
     if not merged and existing_merged is None:
@@ -430,7 +435,7 @@ def _pad_audio(
   """Pad audio to target_length."""
   if len(audio.shape) > 1:
     raise ValueError('audio should be a flat array.')
-  if audio.shape[0] > target_length:
+  if audio.shape[0] >= target_length:
     return audio
   if pad_type == 'zeros':
     pad_amount = target_length - audio.shape[0]
@@ -486,12 +491,13 @@ def embed_dataset(
     embedding_model: interface.EmbeddingModel,
     time_pooling: str,
     exclude_classes: Sequence[str] = (),
-    load_audio: bool = True,
+    load_audio: bool = False,
     target_sample_rate: int = -1,
     audio_file_pattern: str = '*',
     excluded_files: Sequence[str] = (),
     embedding_file_prefix: str = 'embeddings-',
     pad_type: str = 'zeros',
+    max_workers: int = 5,
 ) -> Tuple[Sequence[str], Dict[str, np.ndarray]]:
   """Add embeddings to an eval dataset.
 
@@ -516,6 +522,7 @@ def embed_dataset(
     embedding_file_prefix: Prefix for existing embedding files, matching files
       will be ignored.
     pad_type: Padding style for short audio.
+    max_workers: Number of threads to use for loading audio.
 
   Returns:
     Ordered labels and a Dict contianing the entire embedded dataset.
@@ -558,47 +565,40 @@ def embed_dataset(
         if fp.relative_to(base_dir).as_posix() not in excluded_files
     ]
 
-    audio_loader = lambda fp, offset: audio_utils.load_audio(
-        fp, target_sample_rate
+    audio_loader = lambda fp, offset: _pad_audio(
+        np.asarray(audio_utils.load_audio(fp, target_sample_rate)),
+        window_size,
+        pad_type,
     )
     audio_iterator = audio_utils.multi_load_audio_window(
-        audio_loader=audio_loader, filepaths=filepaths, offsets=None
+        audio_loader=audio_loader,
+        filepaths=filepaths,
+        offsets=None,
+        max_workers=max_workers,
+        buffer_size=64,
     )
 
-    for fp, audio in tqdm.tqdm(
-        zip(filepaths, audio_iterator), total=len(filepaths)
-    ):
-      audio_size = audio.shape[0]
-      if window_size > audio_size:
-        audio = _pad_audio(audio, window_size, pad_type)
-      audio = audio.astype(np.float32)
+    for audio in tqdm.tqdm(audio_iterator):
       outputs = embedding_model.embed(audio)
-
       if outputs.embeddings is None:
         raise ValueError('Embedding model did not produce any embeddings!')
-
       # If the audio was separated then the raw audio is in the first channel.
       # Embedding shape is either [B, F, C, D] or [F, C, D] so channel is
       # always -2.
       channel_pooling = (
           'squeeze' if outputs.embeddings.shape[-2] == 1 else 'first'
       )
-
       embeds = outputs.pooled_embeddings(time_pooling, channel_pooling)
       merged['embeddings'].append(embeds)
-
-      filename = epath.Path(fp).name
-      merged['filename'].append(f'{label}/{filename}')
       if load_audio:
         merged['audio'].append(audio)
+
+    for fp in filepaths:
+      filename = epath.Path(fp).name
+      merged['filename'].append(f'{label}/{filename}')
       merged['label'].append(label_idx)
       merged['label_str'].append(label)
       merged['label_hot'].append(label_hot)
-
-  if load_audio:
-    # pad audio to ensure all the same length.
-    target_audio_len = np.max([a.shape[0] for a in merged['audio']])
-    merged['audio'] = [_pad_audio(a, target_audio_len) for a in merged['audio']]
 
   outputs = {}
   for k in merged.keys():
