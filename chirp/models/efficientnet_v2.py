@@ -179,8 +179,11 @@ class EfficientNetV2(nn.Module):
   def __post_init__(self):
     super().__post_init__()
     if self.block_configs is None:
-      block_strs, self.dropout_rate = efficientnetv2_params[self.model_name]
-      self.block_configs = [decode_block_string(s) for s in block_strs]
+      block_strs, dropout_rate = efficientnetv2_params[self.model_name]
+      object.__setattr__(self, 'dropout_rate', dropout_rate)
+      object.__setattr__(
+          self, 'block_configs', [decode_block_string(s) for s in block_strs]
+      )
 
   def residual(
       self,
