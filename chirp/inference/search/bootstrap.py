@@ -100,7 +100,7 @@ class BootstrapState:
       )
     else:
       audio_loader = functools.partial(
-          audio_utils.load_audio,
+          audio_utils.load_audio_window,
           window_size_s=window_size_s,
           sample_rate=sample_rate,
       )
@@ -114,12 +114,21 @@ class BootstrapState:
       result.audio = audio
       yield result
 
-  def default_source_map(self, file_id: str) -> str:
+  def default_source_map(
+      self, file_id: str, unused_offset_s: float = 0.0
+  ) -> str:
     """Map filenames to full filepaths."""
     if self.config.audio_globs is None:
       raise ValueError('No audio globs found in the embedding config.')
+    fid_depth = self.config.file_id_depth
 
     for path_glob in self.config.audio_globs:
+      # First check for the file using the (known) file_id_depth.
+      base_path = epath.Path(path_glob).parts[: -fid_depth - 1]
+      candidate_path = epath.Path('').joinpath(*base_path) / file_id
+      if candidate_path.exists():
+        return candidate_path.as_posix()
+
       # Remove any wildcards from the path, and append the file_id.
       # This assumes that wildcards are only used at the end of the path,
       # but this asusmption is not enforced.

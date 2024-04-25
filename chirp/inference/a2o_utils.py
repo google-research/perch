@@ -86,7 +86,9 @@ def load_a2o_audio(
     with io.BytesIO(audio_response.content) as f:
       sf = soundfile.SoundFile(f)
       audio = sf.read()
-      audio = librosa.resample(audio, sf.samplerate, sample_rate)
+      audio = librosa.resample(
+          audio, orig_sr=sf.samplerate, target_sr=sample_rate
+      )
   except soundfile.LibsndfileError:
     return None
   return audio
