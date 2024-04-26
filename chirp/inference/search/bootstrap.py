@@ -47,7 +47,7 @@ class BootstrapState:
   config: 'BootstrapConfig'
   embedding_model: interface.EmbeddingModel | None = None
   embeddings_dataset: tf.data.Dataset | None = None
-  source_map: Callable[[str], str] | None = None
+  source_map: Callable[[str, float], str] | None = None
   a2o_auth_token: str = ''
 
   def __post_init__(self):
@@ -64,7 +64,9 @@ class BootstrapState:
             window_size_s=window_size_s,
         )
       else:
-        self.source_map = self.default_source_map
+        self.source_map = lambda file_id, offset: filesystem_source_map(
+            self.config.audio_globs, self.config.file_id_depth, file_id
+        )
 
   def create_embeddings_dataset(self, shuffle_files: bool = False):
     """Create a TF Dataset of the embeddings."""
@@ -114,30 +116,6 @@ class BootstrapState:
       result.audio = audio
       yield result
 
-  def default_source_map(
-      self, file_id: str, unused_offset_s: float = 0.0
-  ) -> str:
-    """Map filenames to full filepaths."""
-    if self.config.audio_globs is None:
-      raise ValueError('No audio globs found in the embedding config.')
-    fid_depth = self.config.file_id_depth
-
-    for path_glob in self.config.audio_globs:
-      # First check for the file using the (known) file_id_depth.
-      base_path = epath.Path(path_glob).parts[: -fid_depth - 1]
-      candidate_path = epath.Path('').joinpath(*base_path) / file_id
-      if candidate_path.exists():
-        return candidate_path.as_posix()
-
-      # Remove any wildcards from the path, and append the file_id.
-      # This assumes that wildcards are only used at the end of the path,
-      # but this asusmption is not enforced.
-      base_path = '/'.join([p for p in path_glob.split('/') if '*' not in p])
-      candidate_path = epath.Path(base_path) / file_id
-      if candidate_path.exists():
-        return candidate_path.as_posix()
-    raise ValueError(f'No file found for file_id {file_id}.')
-
 
 @dataclasses.dataclass
 class BootstrapConfig:
@@ -167,7 +145,9 @@ class BootstrapConfig:
   def load_from_embedding_path(cls, embeddings_path: str, **kwargs):
     """Instantiate from a configuration written alongside embeddings."""
     embedding_config = embed_lib.load_embedding_config(embeddings_path)
-    return cls.load_from_embedding_config(embedding_config, **kwargs)
+    return cls.load_from_embedding_config(
+        embedding_config, embeddings_path=embeddings_path, **kwargs
+    )
 
   @classmethod
   def load_from_embedding_config(
@@ -216,3 +196,29 @@ class BootstrapConfig:
     hash_obj = hashlib.blake2b(digest_size=digest_size)
     hash_obj.update(encoded_str)
     return hash_obj.hexdigest()
+
+
+def filesystem_source_map(
+    audio_globs: Sequence[str],
+    file_id_depth: int,
+    file_id: str,
+) -> str:
+  """Map filenames to full filepaths."""
+  if audio_globs is None:
+    raise ValueError('No audio globs found in the embedding config.')
+
+  for path_glob in audio_globs:
+    # First check for the file using the (known) file_id_depth.
+    base_path = epath.Path(path_glob).parts[: -file_id_depth - 1]
+    candidate_path = epath.Path('').joinpath(*base_path) / file_id
+    if candidate_path.exists():
+      return candidate_path.as_posix()
+
+    # Remove any wildcards from the path, and append the file_id.
+    # This assumes that wildcards are only used at the end of the path,
+    # but this asusmption is not enforced.
+    base_path = '/'.join([p for p in path_glob.split('/') if '*' not in p])
+    candidate_path = epath.Path(base_path) / file_id
+    if candidate_path.exists():
+      return candidate_path.as_posix()
+  raise ValueError(f'No file found for file_id {file_id}.')
