@@ -28,7 +28,6 @@ from chirp import signal
 from chirp.models import cwt
 from flax import linen as nn
 import jax
-from jax import lax
 from jax import numpy as jnp
 from jax import scipy as jsp
 
