@@ -32,6 +32,7 @@ librosa = "^0.10.1"
 numpy = "^1.24.0"
 tqdm = "^4.6"
 ipywidgets = "^8.1"
+scann = "^1.3.2"
 
 [tool.poetry.group.jaxtrain]
 optional = true
@@ -40,8 +41,8 @@ optional = true
 # TF-io is used for sample rate conversion only in data ingestion pipelines.
 # Note that tensorflow and tensorflow-io versions must be synchronized.
 # See: https://github.com/tensorflow/io#tensorflow-version-compatibility
-tensorflow = "^2.15"
-tensorflow-io = "^0.36"
+tensorflow = "^2.16"
+tensorflow-io = "^0.37"
 tensorflow-datasets = {version = "^4.9.3", extras = ["dev"]}
 # AudioMAE / ViT.
 scenic = {git = "https://github.com/google-research/scenic.git"}
