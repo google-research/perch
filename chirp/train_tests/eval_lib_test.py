@@ -28,7 +28,7 @@ from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.eval import callbacks
 from chirp.eval import eval_lib
 from chirp.taxonomy import namespace_db
-from chirp.tests import fake_dataset
+from chirp.train_tests import fake_dataset
 from chirp.train import classifier
 import ml_collections
 import numpy as np

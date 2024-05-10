@@ -28,7 +28,7 @@ from chirp.models import efficientnet
 from chirp.models import frontend
 from chirp.preprocessing import pipeline
 from chirp.taxonomy import namespace
-from chirp.tests import fake_dataset
+from chirp.train_tests import fake_dataset
 from chirp.train import classifier
 from clu import checkpoint
 from flax import linen as nn

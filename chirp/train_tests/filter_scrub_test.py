@@ -20,7 +20,7 @@ import shutil
 import tempfile
 
 from chirp.data import filter_scrub_utils as fsu
-from chirp.tests import fake_dataset
+from chirp.train_tests import fake_dataset
 import pandas as pd
 import tensorflow_datasets as tfds
 

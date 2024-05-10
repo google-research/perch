@@ -23,7 +23,8 @@ from absl.testing import absltest
 
 def _manual_data_dir() -> str:
   return os.path.join(
-      os.path.normpath(os.path.dirname(__file__)),
+      os.path.normpath(os.path.dirname(os.path.dirname(__file__))),
+      'tests',
       'testdata',
       'tfds_builder_wav_directory_test',
   )

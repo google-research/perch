@@ -21,8 +21,8 @@ from chirp.configs import config_globals
 from chirp.configs import hubert_base_pq
 from chirp.data import utils as data_utils
 from chirp.preprocessing import pipeline
-from chirp.tests import fake_dataset
 from chirp.train import hubert as hubert_train
+from chirp.train_tests import fake_dataset
 from clu import checkpoint
 from flax import linen as nn
 import jax

@@ -24,7 +24,7 @@ from chirp.configs import config_globals
 from chirp.configs import separator as separator_config
 from chirp.data import utils as data_utils
 from chirp.data.bird_taxonomy import bird_taxonomy
-from chirp.tests import fake_dataset
+from chirp.train_tests import fake_dataset
 from chirp.train import separator
 from clu import checkpoint
 import jax

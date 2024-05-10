@@ -23,7 +23,7 @@ from chirp.models import frontend
 from chirp.preprocessing import pipeline
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
-from chirp.tests import fake_dataset
+from chirp.train_tests import fake_dataset
 from jax import numpy as jnp
 import numpy as np
 import tensorflow as tf
