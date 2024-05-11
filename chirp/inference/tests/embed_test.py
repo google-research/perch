@@ -18,6 +18,7 @@
 import os
 import tempfile
 
+from absl import logging
 import apache_beam as beam
 from apache_beam.testing import test_pipeline
 from chirp import audio_utils
@@ -339,7 +340,12 @@ class EmbedTest(parameterized.TestCase):
     logits_model = _make_output_head_model(
         '/tmp/logits_model', embedding_dim=128
     )
-    base_outputs = base_model.embed(np.zeros(5 * 22050))
+    base_outputs = base_model.embed(np.zeros(5 * 22050, dtype=np.float32))
+    logging.warning('Keras model: ', logits_model.logits_model)
+    logging.warning(
+        'logits model output: ',
+        logits_model.logits_model(np.zeros([1, 128], dtype=np.float32)),
+    )
     updated_outputs = logits_model.add_logits(base_outputs, keep_original=True)
     self.assertSequenceEqual(
         updated_outputs.logits['other_label'].shape,
@@ -350,10 +356,13 @@ class EmbedTest(parameterized.TestCase):
 
     # Save and restore the model.
     with tempfile.TemporaryDirectory() as logits_model_dir:
+      # Explicitly call 'predict' so that Keras records the model graph.
+      logits_model.logits_model.predict(np.zeros([1, 128], dtype=np.float32))
       logits_model.save_model(logits_model_dir, '')
       restored_model = interface.LogitsOutputHead.from_config_file(
           logits_model_dir
       )
+    logging.warning('Restored Keras model: ', restored_model.logits_model)
     reupdated_outputs = restored_model.add_logits(
         base_outputs, keep_original=True
     )

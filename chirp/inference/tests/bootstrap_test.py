@@ -16,6 +16,7 @@
 """Tests for project state handling."""
 
 import os
+import shutil
 import tempfile
 
 from chirp import audio_utils
@@ -33,12 +34,21 @@ from absl.testing import absltest
 
 class BootstrapTest(absltest.TestCase):
 
+  def setUp(self):
+    super().setUp()
+    # `self.create_tempdir()` raises an UnparsedFlagAccessError, which is why
+    # we use `tempdir` directly.
+    self.tempdir = tempfile.mkdtemp()
+
+  def tearDown(self):
+    super().tearDown()
+    shutil.rmtree(self.tempdir)
+
   def make_wav_files(self, classes, filenames):
     # Create a pile of files.
     rng = np.random.default_rng(seed=42)
-    tmpdir = self.create_tempdir()
     for subdir in classes:
-      subdir_path = os.path.join(tmpdir.full_path, subdir)
+      subdir_path = os.path.join(self.tempdir, subdir)
       os.mkdir(subdir_path)
       for filename in filenames:
         with open(
@@ -46,7 +56,7 @@ class BootstrapTest(absltest.TestCase):
         ) as f:
           noise = rng.normal(scale=0.2, size=16000)
           wavfile.write(f, 16000, noise)
-    audio_glob = os.path.join(tmpdir.full_path, '*/*.wav')
+    audio_glob = os.path.join(self.tempdir, '*/*.wav')
     return audio_glob
 
   def write_placeholder_embeddings(self, audio_glob, source_infos, embed_dir):
@@ -129,15 +139,16 @@ class BootstrapTest(absltest.TestCase):
     source_infos = embed_lib.create_source_infos([audio_glob], shard_len_s=5.0)
     self.assertLen(source_infos, len(classes) * len(filenames))
 
-    embed_dir = self.create_tempdir()
-    labeled_dir = self.create_tempdir()
-    self.write_placeholder_embeddings(
-        audio_glob, source_infos, embed_dir.full_path
-    )
+    embed_dir = os.path.join(self.tempdir, 'embeddings')
+    labeled_dir = os.path.join(self.tempdir, 'labeled')
+    epath.Path(embed_dir).mkdir(parents=True, exist_ok=True)
+    epath.Path(labeled_dir).mkdir(parents=True, exist_ok=True)
+
+    self.write_placeholder_embeddings(audio_glob, source_infos, embed_dir)
 
     bootstrap_config = bootstrap.BootstrapConfig.load_from_embedding_path(
-        embeddings_path=embed_dir.full_path,
-        annotated_path=labeled_dir.full_path,
+        embeddings_path=embed_dir,
+        annotated_path=labeled_dir,
     )
     print('config hash : ', bootstrap_config.embedding_config_hash())
 
