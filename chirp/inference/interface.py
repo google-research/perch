@@ -230,7 +230,16 @@ class LogitsOutputHead:
       logging.warning('No embeddings found in model outputs.')
       return model_outputs
     flat_embeddings = np.reshape(embeddings, [-1, embeddings.shape[-1]])
-    flat_logits = self.logits_model(flat_embeddings)
+    # TODO(tomdenton): Figure out why the keras saved model isn't callable.
+    if callable(self.logits_model):
+      flat_logits = self.logits_model(flat_embeddings)
+    elif hasattr(self.logits_model, 'signatures'):
+      flat_logits = self.logits_model.signatures['serving_default'](
+          inputs=flat_embeddings
+      )
+      flat_logits = flat_logits['output_0'].numpy()
+    else:
+      raise ValueError('could not figure out how to call wrapped model.')
     logits_shape = np.concatenate(
         [np.shape(embeddings)[:-1], np.shape(flat_logits)[-1:]], axis=0
     )

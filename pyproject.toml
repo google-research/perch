@@ -22,7 +22,7 @@ tensorflow = "^2.15"
 pandas = {version = "^2.1.1", extras=["gcp"]}
 etils = {version = "^1.5.0", extras = ["epath"]}
 SPARQLWrapper = "^2.0.0"
-tensorflow-hub = "^0.14.0"
+tensorflow-hub = "^0.16.0"
 imageio = "^2.5.0"
 matplotlib = "^3.6.1"
 notebook = "^7.0.4"
