@@ -411,7 +411,7 @@ def evaluate(
     with reporter.timed('eval'):
       valid_metrics = valid_metrics_collection.empty()
       for valid_step, batch in enumerate(valid_dataset.as_numpy_iterator()):
-        batch = jax.tree_map(np.asarray, batch)
+        batch = jax.tree.map(np.asarray, batch)
         model_outputs, new_valid_metrics = get_metrics(
             batch, flax_utils.replicate(train_state)
         )

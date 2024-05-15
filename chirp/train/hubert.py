@@ -971,7 +971,7 @@ def evaluate(
     with reporter.timed("eval"):
       valid_metrics = valid_metrics_collection.empty()
       for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
-        batch = jax.tree_map(np.asarray, batch)
+        batch = jax.tree.map(np.asarray, batch)
         mask_key = None
         if mask_at_eval:
           mask_key, key = random.split(key)

@@ -328,8 +328,8 @@ def evaluate(
       return x[device_batch_size * num_devices :][None]
 
     return (
-        jax.tree_map(device_batch_fn, batch),
-        jax.tree_map(remainder_batch_fn, batch),
+        jax.tree.map(device_batch_fn, batch),
+        jax.tree.map(remainder_batch_fn, batch),
     )
 
   writer = metric_writers.create_default_writer(workdir)
@@ -344,7 +344,7 @@ def evaluate(
     with reporter.timed("eval"):
       valid_metrics = valid_metrics_collection.empty()
       for s, batch in enumerate(valid_dataset.as_numpy_iterator()):
-        batch = jax.tree_map(np.asarray, batch)
+        batch = jax.tree.map(np.asarray, batch)
         # Handle device batching if it's not been handled by the data pipeliine
         # already.
         if batch["label"].ndim == 2:
@@ -365,7 +365,7 @@ def evaluate(
                 remainder_batch,
                 # The remainder batch has shape [1, ...] rather than
                 # [jax.local_device_count(), ...].
-                jax.tree_map(lambda x: x[:1], replicated_train_state),
+                jax.tree.map(lambda x: x[:1], replicated_train_state),
             )
             valid_metrics = valid_metrics.merge(
                 flax_utils.unreplicate(new_valid_metrics)
