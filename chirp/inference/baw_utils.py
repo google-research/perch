@@ -17,6 +17,7 @@
 
 import io
 import os
+import re
 from typing import Generator, Sequence
 import urllib
 
@@ -31,11 +32,15 @@ import soundfile
 def make_baw_audio_url_from_file_id(
     file_id: str, offset_s: float, window_size_s: float, baw_domain: str = "data.acousticsobervatory.org"
 ) -> str:
-  """Construct an A2O audio URL."""
+  """Construct an baw audio URL."""
   # Extract the recording UID. Example:
   # 'site_0277/20210428T100000+1000_Five-Rivers-Dry-A_909057.flac' -> 909057
-  file_id = file_id.split("_")[-1]
-  file_id = file_id.replace(".flac", "")
+  # 'site_0277/20210428T100000+1000_Five-Rivers-Dry-A_909057.wav' -> 909057
+  pattern = re.compile(r'.*_(\d+)\.[^\.]+$')
+  match = pattern.search(file_id)
+  if not match:
+      raise ValueError("Invalid file_id format")
+  file_id = match.group(1)
   offset_s = int(offset_s)
   # See: https://api.staging.ecosounds.org/api-docs/index.html
   audio_path = (
@@ -70,6 +75,7 @@ def load_baw_audio(
   Returns:
     The audio as a numpy array, or None if the audio could not be loaded.
   """
+
   if session is None:
     # Use requests.get instead of session.get if no session is provided.
     session = requests
@@ -109,13 +115,13 @@ def multi_load_baw_audio(
           max_retries=requests.adapters.Retry(total=5, backoff_factor=0.5)
       ),
   )
-  a2o_audio_loader = lambda fp, offset: load_baw_audio(
+  baw_audio_loader = lambda fp, offset: load_baw_audio(
       fp, sample_rate=sample_rate, auth_token=auth_token, session=session
   )
   iterator = audio_utils.multi_load_audio_window(
       filepaths=filepaths,
       offsets=offsets,
-      audio_loader=a2o_audio_loader,
+      audio_loader=baw_audio_loader,
       **kwargs,
   )
   try:
