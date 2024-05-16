@@ -37,10 +37,10 @@ class ClassifierMetrics:
 
 
 def get_two_layer_model(
-    num_hiddens: int, embedding_dim: int, num_classes: int, batch_norm: bool
+    num_hiddens: int, embedding_dim: int, num_classes: int, batch_norm: bool, dtype: str='float32'
 ) -> tf.keras.Model:
   """Create a simple two-layer Keras model."""
-  layers = [tf.keras.Input(shape=[embedding_dim])]
+  layers = [tf.keras.Input(shape=[embedding_dim], dtype=tf.dtypes.as_dtype(dtype))]
   if batch_norm:
     layers.append(tf.keras.layers.BatchNormalization())
   layers += [
@@ -51,12 +51,20 @@ def get_two_layer_model(
   return model
 
 
-def get_linear_model(embedding_dim: int, num_classes: int) -> tf.keras.Model:
+# def get_linear_model_old(embedding_dim: int, num_classes: int) -> tf.keras.Model:
+#   """Create a simple linear Keras model."""
+#   model = tf.keras.Sequential([
+#       tf.keras.Input(shape=[embedding_dim], dtype=tf.float16),
+#       tf.keras.layers.Dense(num_classes),
+#   ])
+#   return model
+
+
+def get_linear_model(embedding_dim: int, num_classes: int, dtype: str="float32") -> tf.keras.Model:
   """Create a simple linear Keras model."""
-  model = tf.keras.Sequential([
-      tf.keras.Input(shape=[embedding_dim]),
-      tf.keras.layers.Dense(num_classes),
-  ])
+  input_layer = tf.keras.layers.Input(shape=[embedding_dim], dtype=tf.dtypes.as_dtype(dtype))
+  dense_layer = tf.keras.layers.Dense(num_classes)
+  model = tf.keras.Model(inputs=input_layer, outputs=dense_layer(input_layer))
   return model
 
 

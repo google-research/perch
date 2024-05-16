@@ -219,6 +219,7 @@ def search_embeddings_parallel(
     random_sample: bool = False,
     invert_sort_score: bool = False,
     filter_fn: Callable[[Any], bool] | None = None,
+    quit_after: int | None = None
 ):
   """Run a brute-force search.
 
@@ -287,7 +288,10 @@ def search_embeddings_parallel(
   results = TopKSearchResults([], top_k=top_k)
   all_distances = []
   try:
-    for ex in tqdm.tqdm(embeddings_dataset.as_numpy_iterator()):
+    for i, ex in enumerate(tqdm.tqdm(embeddings_dataset.as_numpy_iterator())):
+      if quit_after is not None and i >= quit_after:
+        print("quitting early because quit_after is set")
+        break
       all_distances.append(ex['scores'].reshape([-1]))
       if results.will_filter(ex['max_sort_score']):
         continue
@@ -323,12 +327,15 @@ def classifer_search_embeddings_parallel(
   Returns:
     TopKSearchResults and all logits.
   """
+  signature = embeddings_classifier.signatures["serving_default"]
+  input_specs = signature.structured_input_signature[1]
+  model_input_dtype = list(input_specs.values())[0].dtype
 
   def classify_batch(batch, query_embedding_batch):
     del query_embedding_batch
     emb = batch[tf_examples.EMBEDDING]
     emb_shape = tf.shape(emb)
-    flat_emb = tf.cast(tf.reshape(emb, [-1, emb_shape[-1]]), tf.float32)
+    flat_emb = tf.cast(tf.reshape(emb, [-1, emb_shape[-1]]), model_input_dtype)
     logits = embeddings_classifier(flat_emb)
     logits = tf.reshape(
         logits, [emb_shape[0], emb_shape[1], tf.shape(logits)[-1]]
