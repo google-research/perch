@@ -18,6 +18,7 @@
 import collections
 import dataclasses
 import functools
+import heapq
 from typing import Any, Callable, List, Sequence
 
 from chirp.inference import tf_examples
@@ -50,55 +51,62 @@ class SearchResult:
     """Return an identifier for this result."""
     return hash((self.filename, self.timestamp_offset))
 
+  def __lt__(self, other):
+    return self.sort_score < other.sort_score
+
+  def __gt__(self, other):
+    return self.sort_score > other.sort_score
+
+  def __le__(self, other):
+    return self.sort_score <= other.sort_score
+
+  def __ge__(self, other):
+    return self.sort_score >= other.sort_score
+
 
 @dataclasses.dataclass
 class TopKSearchResults:
-  """Top-K search results."""
+  """Wrapper for sorting and handling TopK search results.
 
-  search_results: List[SearchResult]
+  This class maintains a queue of SearchResult objects, sorted by their
+  sort_score. When updated with a new SearchResult, the result is either added
+  or ignored appropriately. For speed, the `will_filter` method allows checking
+  immediately whether a result with a given score will be discarded. The results
+  are kept in heap-order for efficeint updating.
+
+  Iterating over the search results will produce a copy of the results, with
+  in-order iteration over results from largest to smallest sort_score.
+  """
+
   top_k: int
-  min_score: float = -1.0
-  _min_score_idx: int = -1
+  search_results: List[SearchResult] = dataclasses.field(default_factory=list)
 
   def __post_init__(self):
-    self._update_deseridata()
+    heapq.heapify(self.search_results)
 
   def __iter__(self):
-    for r in self.search_results:
-      yield r
+    iter_queue = sorted(self.search_results, reverse=True)
+    for result in iter_queue:
+      yield result
+
+  @property
+  def min_score(self):
+    return self.search_results[0].sort_score
 
   def update(self, search_result: SearchResult) -> None:
     """Update Results with the new result."""
-    if len(self.search_results) < self.top_k:
-      # Add the result, regardless of score, until we have k results.
-      pass
-    elif search_result.sort_score < self.min_score:
-      # Early return to save compute.
+    if self.will_filter(search_result.sort_score):
       return
-    elif len(self.search_results) >= self.top_k:
-      self.search_results.pop(self._min_score_idx)
-    self.search_results.append(search_result)
-    self._update_deseridata()
+    if len(self.search_results) >= self.top_k:
+      heapq.heappop(self.search_results)
+    heapq.heappush(self.search_results, search_result)
 
   def will_filter(self, score: float) -> bool:
     """Check whether a score is relevant."""
     if len(self.search_results) < self.top_k:
       # Add the result, regardless of score, until we have k results.
       return False
-    return score < self.min_score
-
-  def _update_deseridata(self):
-    if not self.search_results:
-      return
-    self._min_score_idx = np.argmin([r.sort_score for r in self.search_results])
-    self.min_score = self.search_results[self._min_score_idx].sort_score
-
-  def sort(self):
-    """Sort the results."""
-    scores = np.array([r.sort_score for r in self.search_results])
-    idxs = np.argsort(-scores)
-    self.search_results = [self.search_results[idx] for idx in idxs]
-    self._update_deseridata()
+    return score < self.search_results[0].sort_score
 
   def write_labeled_data(self, labeled_data_path: str, sample_rate: int):
     """Write labeled results to the labeled data collection."""
@@ -284,7 +292,7 @@ def search_embeddings_parallel(
     embeddings_dataset = embeddings_dataset.filter(filter_fn)
   embeddings_dataset = embeddings_dataset.prefetch(1024)
 
-  results = TopKSearchResults([], top_k=top_k)
+  results = TopKSearchResults(top_k=top_k)
   all_distances = []
   try:
     for ex in tqdm.tqdm(embeddings_dataset.as_numpy_iterator()):
@@ -304,7 +312,6 @@ def search_embeddings_parallel(
   except KeyboardInterrupt:
     pass
   all_distances = np.concatenate(all_distances)
-  results.sort()
   return results, all_distances
 
 

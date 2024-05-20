@@ -42,25 +42,27 @@ class SearchTest(parameterized.TestCase):
       )
       fake_results.append(r)
 
-    results = search.TopKSearchResults([], top_k=10)
+    results = search.TopKSearchResults(top_k=10)
     for i, r in enumerate(fake_results):
       results.update(r)
       self.assertLen(results.search_results, min([i + 1, 10]))
       # Get the 10th largest value amongst the dists seen so far.
       true_min_neg_dist = -np.max(sorted(dists[: i + 1])[:10])
-      arg_min_dist = np.argmin([r.sort_score for r in results])
+      arg_min_dist = np.argmin([r.sort_score for r in results.search_results])
       self.assertEqual(results.min_score, true_min_neg_dist)
       self.assertEqual(
           results.search_results[arg_min_dist].sort_score, results.min_score
       )
 
     self.assertLen(results.search_results, results.top_k)
-    results.sort()
-    for i in range(1, 10):
-      self.assertGreater(
-          results.search_results[i - 1].sort_score,
-          results.search_results[i].sort_score,
-      )
+    last_score = None
+    for i, result in enumerate(results):
+      if i > 0:
+        self.assertGreater(
+            last_score,
+            result.sort_score,
+        )
+      last_score = result.sort_score
 
   @parameterized.product(
       metric_name=('euclidean', 'cosine', 'mip'),

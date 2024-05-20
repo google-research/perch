@@ -163,7 +163,7 @@ class BootstrapTest(absltest.TestCase):
 
     # Check that we can iterate over TopKSearchResults,
     # and successfully attach audio.
-    search_results = search.TopKSearchResults([], top_k=3)
+    search_results = search.TopKSearchResults(top_k=3)
     for i, ex in enumerate(ds.as_numpy_iterator()):
       result = search.SearchResult(
           embedding=ex['embedding'],
