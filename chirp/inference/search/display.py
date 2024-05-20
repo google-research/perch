@@ -76,10 +76,10 @@ def plot_audio_melspec(
 ):
   """Plot a melspectrogram from audio."""
   melspec_layer = get_melspec_layer(sample_rate)
-  if audio.shape[0] < sample_rate / 100:
-    audio = np.concatenate(
-        audio, np.zeros([sample_rate // 100 + 1], dtype=audio.dtype), axis=0
-    )
+  if audio.shape[0] < sample_rate / 100 + 1:
+    # Center pad if audio is too short.
+    zs = np.zeros([sample_rate // 10], dtype=audio.dtype)
+    audio = np.concatenate([zs, audio, zs], axis=0)
   melspec = melspec_layer.apply({}, audio[np.newaxis, :])[0]
   plot_melspec(melspec, newfig=newfig, sample_rate=sample_rate, frame_rate=100)
   plt.show()
