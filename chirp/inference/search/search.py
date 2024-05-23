@@ -21,6 +21,7 @@ import functools
 import heapq
 from typing import Any, Callable, List, Sequence
 
+from chirp.inference import interface
 from chirp.inference import tf_examples
 from etils import epath
 import numpy as np
@@ -316,7 +317,7 @@ def search_embeddings_parallel(
 
 
 def classifer_search_embeddings_parallel(
-    embeddings_classifier: tf.keras.Model,
+    embeddings_classifier: interface.LogitsOutputHead,
     target_index: int,
     **kwargs,
 ):

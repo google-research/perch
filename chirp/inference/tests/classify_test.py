@@ -15,11 +15,12 @@
 
 """Test small-model classification."""
 
-from collections.abc import Sequence
+import tempfile
 
-from absl import app
+from chirp.inference import interface
 from chirp.inference.classify import classify
 from chirp.inference.classify import data_lib
+from chirp.taxonomy import namespace
 import numpy as np
 
 from absl.testing import absltest
@@ -60,9 +61,10 @@ class ClassifyTest(parameterized.TestCase):
     num_classes = 4
     num_points = 100
     model = classify.get_linear_model(embedding_dim, num_classes)
+    rng = np.random.default_rng(42)
     merged = self.make_merged_dataset(
         num_points=num_points,
-        rng=np.random.default_rng(42),
+        rng=rng,
         num_classes=num_classes,
         embedding_dim=embedding_dim,
     )
@@ -76,6 +78,26 @@ class ClassifyTest(parameterized.TestCase):
         batch_size=16,
         learning_rate=0.01,
     )
+    query = rng.normal(size=(num_points, embedding_dim)).astype(np.float32)
+
+    logits = model(query)
+
+    # Save and restore the model.
+    class_names = ['a', 'b', 'c', 'd']
+    with tempfile.TemporaryDirectory() as logits_model_dir:
+      logits_model = interface.LogitsOutputHead(
+          model_path=logits_model_dir,
+          logits_key='some_model',
+          logits_model=model,
+          class_list=namespace.ClassList('classes', class_names),
+      )
+      logits_model.save_model(logits_model_dir, '')
+      restored_model = interface.LogitsOutputHead.from_config_file(
+          logits_model_dir
+      )
+      restored_logits = restored_model(query)
+    error = np.abs(restored_logits - logits).sum()
+    self.assertEqual(error, 0)
 
 
 if __name__ == '__main__':
