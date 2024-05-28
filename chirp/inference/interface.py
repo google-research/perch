@@ -211,7 +211,9 @@ class LogitsOutputHead:
       flat_logits = self.logits_model.signatures['serving_default'](
           inputs=embeddings
       )
-      logits = flat_logits['output_0'].numpy()
+      logits = flat_logits['output_0']
+      if hasattr(logits, 'numpy'):
+        logits = logits.numpy()
     else:
       raise ValueError('could not figure out how to call wrapped model.')
     return logits
