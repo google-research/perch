@@ -18,6 +18,7 @@
 import dataclasses
 from typing import Sequence
 
+from chirp.inference import interface
 from chirp.inference import tf_examples
 from chirp.inference.classify import data_lib
 from chirp.models import metrics
@@ -91,17 +92,23 @@ def train_from_locs(
           tf.keras.metrics.AUC(
               curve='ROC', name='auc', from_logits=True, multi_label=True
           ),
-          tf.keras.metrics.RecallAtPrecision(0.9, name='recall0.9'),
       ],
   )
 
-  train_ds = merged.create_keras_dataset(train_locs, True, batch_size)
-  test_ds = merged.create_keras_dataset(test_locs, False, batch_size)
+  train_features = merged.data['embeddings'][train_locs]
+  train_labels = merged.data['label_hot'][train_locs]
 
-  model.fit(train_ds, epochs=num_epochs, verbose=0)
+  model.fit(
+      train_features,
+      train_labels,
+      epochs=num_epochs,
+      verbose=0,
+      batch_size=batch_size,
+  )
 
   # Compute overall metrics to avoid online approximation error in Keras.
-  test_logits = model.predict(test_ds, verbose=0, batch_size=8)
+  test_features = merged.data['embeddings'][test_locs]
+  test_logits = model.predict(test_features, verbose=0, batch_size=8)
   test_labels_hot = merged.data['label_hot'][test_locs]
   test_labels = merged.data['label'][test_locs]
 
@@ -158,7 +165,7 @@ def train_embedding_model(
 
 def get_inference_dataset(
     embeddings_ds: tf.data.Dataset,
-    model: tf.keras.Model,
+    model: interface.LogitsOutputHead,
 ):
   """Create a dataset which includes the model's predictions."""
 
@@ -184,7 +191,7 @@ def get_inference_dataset(
 
 def write_inference_csv(
     embeddings_ds: tf.data.Dataset,
-    model: tf.keras.Model,
+    model: interface.LogitsOutputHead,
     labels: Sequence[str],
     output_filepath: str,
     embedding_hop_size_s: float,

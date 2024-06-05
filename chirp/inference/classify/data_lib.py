@@ -384,28 +384,6 @@ class MergedDataset:
     test_locs = np.array(test_locs)
     return train_locs, test_locs, class_locs
 
-  def create_keras_dataset(
-      self, locs: Sequence[int], is_train: bool, batch_size: int
-  ) -> tf.data.Dataset:
-    """Create a keras-friendly tf.data.Dataset from the in-memory dataset."""
-
-    def _data_gen():
-      for loc in locs:
-        yield (
-            self.data['embeddings'][loc],
-            tf.one_hot(self.data['label'][loc], self.num_classes),
-        )
-
-    ds = tf.data.Dataset.from_generator(
-        _data_gen,
-        output_types=(tf.float32, tf.int64),
-        output_shapes=(self.embedding_dim, self.num_classes),
-    )
-    if is_train:
-      ds = ds.shuffle(1024)
-    ds = ds.batch(batch_size)
-    return ds
-
 
 def pool_time_axis(embeddings, pool_method, axis=1):
   """Apply pooling over the specified axis."""

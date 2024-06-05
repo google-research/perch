@@ -202,6 +202,22 @@ class LogitsOutputHead:
         **config,
     )
 
+  def __call__(self, embeddings: np.ndarray) -> InferenceOutputs:
+    """Apply the wrapped logits_model to embeddings with shape [B, D]."""
+    if callable(self.logits_model):
+      logits = self.logits_model(embeddings)
+    elif hasattr(self.logits_model, 'signatures'):
+      # TODO(tomdenton): Figure out why the Keras saved model isn't callable.
+      flat_logits = self.logits_model.signatures['serving_default'](
+          inputs=embeddings
+      )
+      logits = flat_logits['output_0']
+      if hasattr(logits, 'numpy'):
+        logits = logits.numpy()
+    else:
+      raise ValueError('could not figure out how to call wrapped model.')
+    return logits
+
   def save_model(self, output_path: str, embeddings_path: str):
     """Write a SavedModel and metadata to disk."""
     # Write the model.
@@ -230,16 +246,7 @@ class LogitsOutputHead:
       logging.warning('No embeddings found in model outputs.')
       return model_outputs
     flat_embeddings = np.reshape(embeddings, [-1, embeddings.shape[-1]])
-    # TODO(tomdenton): Figure out why the keras saved model isn't callable.
-    if callable(self.logits_model):
-      flat_logits = self.logits_model(flat_embeddings)
-    elif hasattr(self.logits_model, 'signatures'):
-      flat_logits = self.logits_model.signatures['serving_default'](
-          inputs=flat_embeddings
-      )
-      flat_logits = flat_logits['output_0'].numpy()
-    else:
-      raise ValueError('could not figure out how to call wrapped model.')
+    flat_logits = self(flat_embeddings)
     logits_shape = np.concatenate(
         [np.shape(embeddings)[:-1], np.shape(flat_logits)[-1:]], axis=0
     )

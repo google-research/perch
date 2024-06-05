@@ -76,6 +76,10 @@ def plot_audio_melspec(
 ):
   """Plot a melspectrogram from audio."""
   melspec_layer = get_melspec_layer(sample_rate)
+  if audio.shape[0] < sample_rate / 100 + 1:
+    # Center pad if audio is too short.
+    zs = np.zeros([sample_rate // 10], dtype=audio.dtype)
+    audio = np.concatenate([zs, audio, zs], axis=0)
   melspec = melspec_layer.apply({}, audio[np.newaxis, :])[0]
   plot_melspec(melspec, newfig=newfig, sample_rate=sample_rate, frame_rate=100)
   plt.show()
@@ -191,7 +195,8 @@ def display_paged_results(
     print(f'Results Page: {page} / {num_pages}')
     st, end = page * samples_per_page, (page + 1) * samples_per_page
     results_page = search.TopKSearchResults(
-        all_results.search_results[st:end], top_k=samples_per_page
+        top_k=samples_per_page,
+        search_results=all_results.search_results[st:end],
     )
     display_search_results(
         results=results_page, rank_offset=page * samples_per_page, **kwargs
