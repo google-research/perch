@@ -331,6 +331,8 @@ def classifer_search_embeddings_parallel(
   input_specs = signature.structured_input_signature[1]
   model_input_dtype = list(input_specs.values())[0].dtype
 
+  # model_input_dtype = embeddings_classifier.input.dtype
+
   def classify_batch(batch, query_embedding_batch):
     del query_embedding_batch
     emb = batch[tf_examples.EMBEDDING]
