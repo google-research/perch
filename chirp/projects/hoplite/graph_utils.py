@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Utility functions for testing and benchmarking."""
+"""Utility functions for graph operations."""
 
 from collections.abc import Callable
 
@@ -31,21 +31,25 @@ def insert_random_embeddings(
 ):
   """Insert randomly generated embedding vectors into the DB."""
   rng = np.random.default_rng(seed=seed)
-  for i in tqdm.tqdm(range(num_embeddings)):
+  np_alpha = np.array(list('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), dtype='|S1')
+  for _ in tqdm.tqdm(range(num_embeddings)):
     embedding = np.float32(rng.normal(size=emb_dim, loc=0, scale=1.0))
-    metadata = {'file_id': 'random_file', 'offset_s': 1.0 * i}
-    db.insert_embedding(embedding, **metadata)
+    source = rng.choice(np_alpha, size=8, replace=False)
+    db.insert_embedding(embedding, source)
   db.commit()
 
 
-def connected_components(graph_db: interface.GraphSearchDBInterface):
+def connected_components(
+    graph_db: interface.GraphSearchDBInterface,
+) -> list[set[int]]:
   """Compute the connected components of the graph."""
-  components = []
-  component = set()
   visited = set()
-  pool = set([1])
-  idxes = set(range(1, graph_db.count_embeddings() + 1))
-  for _ in tqdm.tqdm(range(graph_db.count_embeddings() + 1)):
+  pool = set([graph_db.get_one_embedding_id()])
+
+  component = pool.copy()
+  components = [component]
+  idxes = set(graph_db.get_embedding_ids())
+  for _ in tqdm.tqdm(range(1, graph_db.count_embeddings())):
     idx = pool.pop()
     visited.add(idx)
     for e in graph_db.get_edges(idx):
@@ -57,16 +61,16 @@ def connected_components(graph_db: interface.GraphSearchDBInterface):
       if not unvisited:
         break
       else:
+        pool = set([next(iter(unvisited))])
+        component = pool.copy()
         components.append(component)
-        component = set()
-        pool = set([tuple(unvisited)[0]])
   return components
 
 
 def add_random_edges(
     graph_db: interface.GraphSearchDBInterface, out_degree: int, seed: int = 42
 ):
-  """Add a random connected subgraph to the DB.
+  """Add edges to form a random connected graph to the DB.
 
   Creates a single cycle, ensuring connectedness, and adds random edges to meet
   target out_degree.
@@ -78,36 +82,34 @@ def add_random_edges(
   """
   num_embeddings = graph_db.count_embeddings()
   np.random.seed(seed)
-  embedding_ids = list(range(1, num_embeddings + 1))
-  q = 0
+  embedding_ids = graph_db.get_embedding_ids()
+
   # Random choice is a bottleneck...
   # Instead, shuffle and use permuted indices, then re-shuffle when we get
   # near the end of the list.
   # This gets throughput of ~18k edges/sec, compared to ~300 edges/sec when
   # using np.random.choice(embedding_ids, 10)... 60x speedup.
   np.random.shuffle(embedding_ids)
-  cyclic_order = embedding_ids[:]
+  cyclic_order = embedding_ids.copy()
   # We get a 'free' edge by creating an initial cycle (ensuring graph
   # connectivity). Reduce out_degree by one to reflect this.
   out_degree -= 1
-  for i in tqdm.tqdm(range(1, num_embeddings + 1)):
-    cyclic_edge = cyclic_order[(i + 1) % num_embeddings]
+  # q is an index into the shuffled id's for fast selection of a random subset.
+  q = 0
+  for idx in tqdm.tqdm(embedding_ids):
+    cyclic_edge = cyclic_order[idx % num_embeddings]
     outs = embedding_ids[q : q + out_degree]
     if cyclic_edge in outs:
       outs = embedding_ids[q : q + out_degree + 1]
       q += out_degree + 1
     else:
-      outs.append(cyclic_edge)
+      outs = np.concatenate([outs, [cyclic_edge]])
       q += out_degree
+    graph_db.insert_edges(idx, outs)
 
-    if q + out_degree >= num_embeddings:
+    if q + out_degree + 1 >= num_embeddings:
       q = 0
       np.random.shuffle(embedding_ids)
-    for j in outs:
-      if j == i:
-        graph_db.insert_edge(i, num_embeddings)
-      else:
-        graph_db.insert_edge(i, j)
   graph_db.commit()
 
 
@@ -145,6 +147,9 @@ def brute_search(
   for idx in db.get_embedding_ids():
     target_embedding = db.get_embedding(idx)
     score = score_fn(query_embedding, target_embedding)
+    # Check filtering and then force insert to avoid creating a SearchResult
+    # object for discarded objects. This saves a small amount of time in the
+    # inner loop.
     if not results.will_filter(idx, score):
-      results.update(search_results.SearchResult(idx, score))
+      results.update(search_results.SearchResult(idx, score), force_insert=True)
   return results

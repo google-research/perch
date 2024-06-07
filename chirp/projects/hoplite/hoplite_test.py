@@ -22,11 +22,14 @@ import tempfile
 from chirp.projects.hoplite import graph_utils
 from chirp.projects.hoplite import in_mem_impl
 from chirp.projects.hoplite import index
+from chirp.projects.hoplite import interface
 from chirp.projects.hoplite import sqlite_impl
 import numpy as np
 
 from absl.testing import absltest
 from absl.testing import parameterized
+
+EMBEDDING_SIZE = 128
 
 
 class HopliteTest(parameterized.TestCase):
@@ -39,25 +42,55 @@ class HopliteTest(parameterized.TestCase):
     super().tearDown()
     shutil.rmtree(self.tempdir)
 
-  def _make_db(self, db_type, num_embeddings: int, rng: np.random.Generator):
+  def _make_db(
+      self, db_type: str, num_embeddings: int, rng: np.random.Generator
+  ) -> interface.GraphSearchDBInterface:
     if db_type == 'in_mem':
-      db = in_mem_impl.InMemoryGraphSearchDB.create()
-
+      db = in_mem_impl.InMemoryGraphSearchDB.create(
+          embedding_dim=EMBEDDING_SIZE,
+          max_size=2000,
+          degree_bound=1000,
+      )
     elif db_type == 'sqlite':
       # TODO(tomdenton): use tempfile.
       db = sqlite_impl.SQLiteGraphSearchDB.create(
-          db_path=os.path.join(self.tempdir, 'db.sqlite')
+          db_path=os.path.join(self.tempdir, 'db.sqlite'),
+          embedding_dim=EMBEDDING_SIZE,
       )
     else:
       raise ValueError(f'Unknown db type: {db_type}')
     db.setup()
     # Insert a few embeddings...
-    random_embeddings = np.float16(
-        rng.normal(size=[num_embeddings, 128], loc=0, scale=1.0)
+    graph_utils.insert_random_embeddings(
+        db, EMBEDDING_SIZE, num_embeddings, rng
     )
-    for emb in random_embeddings:
-      db.insert_embedding(emb)
     return db
+
+  def _clone_embeddings(
+      self,
+      source_db: interface.GraphSearchDBInterface,
+      target_db: interface.GraphSearchDBInterface,
+  ):
+    """Copy all embeddings to target_db and provide an id mapping."""
+    id_mapping = {}
+
+    for idx in source_db.get_embedding_ids():
+      emb = source_db.get_embedding(idx)
+      source = source_db.get_embedding_source(idx)
+      target_id = target_db.insert_embedding(emb, source)
+      id_mapping[idx] = target_id
+    return id_mapping
+
+  def _add_random_edges(
+      self,
+      rng: np.random.Generator,
+      db: interface.GraphSearchDBInterface,
+      degree: int,
+  ):
+    ids = db.get_embedding_ids()
+    for idx in ids:
+      ys = rng.choice(np.setdiff1d(ids, [idx]), degree, replace=False)
+      db.insert_edges(idx, ys)
 
   @parameterized.product(
       db_type=(
@@ -65,7 +98,7 @@ class HopliteTest(parameterized.TestCase):
           'sqlite',
       ),
   )
-  def test_db_interface(self, db_type):
+  def test_graph_db_interface(self, db_type):
     rng = np.random.default_rng(42)
     db = self._make_db(db_type, 1000, rng)
 
@@ -74,9 +107,8 @@ class HopliteTest(parameterized.TestCase):
     self.assertEqual(db.count_edges(), 0)
 
     # Insert a few random edges...
-    idxes = list(range(1, db.count_embeddings() + 1))
-    got_idxes = db.get_embedding_ids()
-    self.assertSameElements(sorted(got_idxes), idxes)
+    idxes = db.get_embedding_ids()
+    self.assertLen(idxes, 1000)
 
     rng.shuffle(idxes)
     for i in range(db.count_embeddings() - 1):
@@ -89,17 +121,13 @@ class HopliteTest(parameterized.TestCase):
       db.delete_edge(idxes[i], idxes[i + 1])
     self.assertEqual(db.count_edges(), 500)
 
-    print(idxes[1], '->', [idxes[3], idxes[5], idxes[7]])
-    db.insert_edge(idxes[1], idxes[3])
-    db.insert_edge(idxes[1], idxes[5])
-    db.insert_edge(idxes[1], idxes[7])
+    db.insert_edges(idxes[1], np.array([idxes[3], idxes[5], idxes[7]]))
     edges = db.get_edges(idxes[1])
-    print(edges)
     self.assertSameElements(edges, [idxes[2], idxes[3], idxes[5], idxes[7]])
     self.assertEqual(db.count_edges(), 503)
     db.delete_edges(idxes[1])
     edges = db.get_edges(idxes[1])
-    print(edges)
+    self.assertEmpty(edges)
     self.assertEqual(db.count_edges(), 499)
 
     db.drop_all_edges()
@@ -107,31 +135,76 @@ class HopliteTest(parameterized.TestCase):
 
     db.commit()
 
-  def test_impl_agreement(self):
-    """Check that in-memory and sqlite operations give the same results."""
+  @parameterized.product(
+      db_type=(
+          'in_mem',
+          'sqlite',
+      ),
+  )
+  def test_labels_db_interface(self, db_type):
     rng = np.random.default_rng(42)
-    in_mem_db = self._make_db('in_mem', 1000, rng)
-    rng = np.random.default_rng(42)
-    sqlite_db = self._make_db('sqlite', 1000, rng)
+    db = self._make_db(db_type, 1000, rng)
+    ids = db.get_embedding_ids()
+    db.insert_label(
+        interface.Label(ids[0], 'hawgoo', interface.LabelType.POSITIVE, 'human')
+    )
+    db.insert_label(
+        interface.Label(
+            ids[0], 'hawgoo', interface.LabelType.POSITIVE, 'machine'
+        )
+    )
+    db.insert_label(
+        interface.Label(
+            ids[1], 'hawgoo', interface.LabelType.POSITIVE, 'machine'
+        )
+    )
+    db.insert_label(
+        interface.Label(
+            ids[0], 'rewbla', interface.LabelType.NEGATIVE, 'machine'
+        )
+    )
 
-    in_mem_ids = in_mem_db.get_embedding_ids()
-    sqlite_ids = sqlite_db.get_embedding_ids()
-    self.assertSameElements(in_mem_ids, sqlite_ids)
+    with self.subTest('get_embeddings_by_label'):
+      # When both label_type and source are unspecified, we should get all
+      # unique IDs with the target label. Id's 0 and 1 both have some kind of
+      # 'hawgoo' label.
+      got = db.get_embeddings_by_label('hawgoo', None, None)
+      self.assertSequenceEqual(sorted(got), sorted([ids[0], ids[1]]))
 
-    for id_ in in_mem_ids:
-      self.assertSameElements(
-          in_mem_db.get_embedding(id_), sqlite_db.get_embedding(id_)
+    with self.subTest('get_embeddings_by_label_type'):
+      # Now we should get the ID's for all POSITIVE 'hawgoo' labels, regardless
+      # of source.
+      got = db.get_embeddings_by_label(
+          'hawgoo', interface.LabelType.POSITIVE, None
       )
+      self.assertSequenceEqual(sorted(got), sorted([ids[0], ids[1]]))
 
-    got_m = in_mem_db.get_embeddings((2, 4, 8, 16))
-    got_s = sqlite_db.get_embeddings((2, 4, 8, 16))
-    self.assertEqual(np.sum(np.square(got_m - got_s)), 0.0)
+      # There are no negative 'hawgoo' labels.
+      got = db.get_embeddings_by_label(
+          'hawgoo', interface.LabelType.NEGATIVE, None
+      )
+      self.assertEqual(got.shape[0], 0)
+
+    with self.subTest('get_embeddings_by_label_source'):
+      # There is only one hawgoo labeled by a human.
+      got = db.get_embeddings_by_label('hawgoo', None, 'human')
+      self.assertSequenceEqual(got, [ids[0]])
+
+      # And only one example with a 'rewbla' labeled by a machine.
+      got = db.get_embeddings_by_label('rewbla', None, 'machine')
+      self.assertSequenceEqual(got, [ids[0]])
+
+    with self.subTest('count_all_labels'):
+      # Finally, there are a total of three labels on ID 0.
+      got = db.get_labels(ids[0])
+      self.assertLen(got, 3)
 
   def test_brute_search_impl_agreement(self):
     rng = np.random.default_rng(42)
     in_mem_db = self._make_db('in_mem', 1000, rng)
-    rng = np.random.default_rng(42)
-    sqlite_db = self._make_db('sqlite', 1000, rng)
+
+    sqlite_db = self._make_db('sqlite', 0, rng)
+    id_mapping = self._clone_embeddings(in_mem_db, sqlite_db)
 
     # Check brute-force search agreement.
     query = rng.normal(size=(128,), loc=0, scale=1.0)
@@ -141,27 +214,47 @@ class HopliteTest(parameterized.TestCase):
     results_s = graph_utils.brute_search(
         sqlite_db, query, search_list_size=10, score_fn=np.dot
     )
-    self.assertSequenceEqual(
-        tuple(r.embedding_id for r in results_m),
-        tuple(r.embedding_id for r in results_s),
-    )
+    self.assertLen(results_m.search_results, 10)
+    self.assertLen(results_s.search_results, 10)
+    # Search results are iterated over in sorted order.
+    for r_m, r_s in zip(results_m, results_s):
+      emb_m = in_mem_db.get_embedding(r_m.embedding_id)
+      emb_s = sqlite_db.get_embedding(r_s.embedding_id)
+      self.assertEqual(id_mapping[r_m.embedding_id], r_s.embedding_id)
+      np.testing.assert_equal(emb_m, emb_s)
 
   def test_greedy_search_impl_agreement(self):
     rng = np.random.default_rng(42)
     in_mem_db = self._make_db('in_mem', 1000, rng)
+    self._add_random_edges(rng, in_mem_db, degree=10)
+
+    sqlite_db = self._make_db('sqlite', 0, rng)
+    id_mapping = self._clone_embeddings(in_mem_db, sqlite_db)
+
+    for x in in_mem_db.get_embedding_ids():
+      nbrs = in_mem_db.get_edges(x)
+      for y in nbrs:
+        sqlite_db.insert_edge(id_mapping[x], id_mapping[y])
+
     rng = np.random.default_rng(42)
-    sqlite_db = self._make_db('sqlite', 1000, rng)
-    query = rng.normal(size=(128,), loc=0, scale=1.0)
-    v_s = index.HopliteSearchIndex.from_db(sqlite_db)
+    query = rng.normal(size=(EMBEDDING_SIZE,), loc=0, scale=1.0)
+
     v_m = index.HopliteSearchIndex.from_db(in_mem_db)
-    results_s, path_s = v_s.greedy_search(
-        query, search_list_size=32, start_node=1
-    )
+    v_s = index.HopliteSearchIndex.from_db(sqlite_db)
+
     results_m, path_m = v_m.greedy_search(
-        query, search_list_size=32, start_node=1
+        query, search_list_size=32, start_node=0, deterministic=True
     )
-    self.assertSequenceEqual(path_s, path_m)
-    self.assertSequenceEqual(results_s._ids, results_m._ids)
+    results_s, path_s = v_s.greedy_search(
+        query, search_list_size=32, start_node=1, deterministic=True
+    )
+    self.assertSameElements((id_mapping[x] for x in path_m), path_s)
+
+    # Iterating over the search results proceeds in sorted order.
+    np.testing.assert_equal(
+        [id_mapping[r.embedding_id] for r in results_m.search_results],
+        [r.embedding_id for r in results_s.search_results],
+    )
 
 
 if __name__ == '__main__':
