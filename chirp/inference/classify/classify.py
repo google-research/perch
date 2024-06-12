@@ -64,7 +64,7 @@ def get_two_layer_model(
 def get_linear_model(embedding_dim: int, num_classes: int, dtype: str="float32") -> tf.keras.Model:
   """Create a simple linear Keras model."""
   input_layer = tf.keras.layers.Input(shape=[embedding_dim], dtype=tf.dtypes.as_dtype(dtype))
-  dense_layer = tf.keras.layers.Dense(num_classes)
+  dense_layer = tf.keras.layers.Dense(num_classes, dtype=dtype)
   model = tf.keras.Model(inputs=input_layer, outputs=dense_layer(input_layer))
   return model
 
@@ -174,7 +174,7 @@ def get_inference_dataset(
     emb = batch[tf_examples.EMBEDDING]
     emb_shape = tf.shape(emb)
     flat_emb = tf.reshape(emb, [-1, emb_shape[-1]])
-    logits = model(flat_emb)
+    logits = model.logits_model(flat_emb)
     logits = tf.reshape(
         logits, [emb_shape[0], emb_shape[1], tf.shape(logits)[-1]]
     )
@@ -182,7 +182,7 @@ def get_inference_dataset(
     logits = tf.reduce_max(logits, axis=-2)
     batch['logits'] = logits
     return batch
-
+  
   inference_ds = embeddings_ds.map(
       classify_batch, num_parallel_calls=tf.data.AUTOTUNE
   )

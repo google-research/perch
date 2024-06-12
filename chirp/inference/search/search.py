@@ -315,9 +315,10 @@ def search_embeddings_parallel(
         )
         results.update(result)
   except KeyboardInterrupt:
-    pass
-  all_distances = np.concatenate(all_distances)
-  return results, all_distances
+    print("quitting search early because of keyboard interrupt")
+  finally: 
+    all_distances = np.concatenate(all_distances)
+    return results, all_distances
 
 
 def classifer_search_embeddings_parallel(
@@ -335,11 +336,15 @@ def classifer_search_embeddings_parallel(
   Returns:
     TopKSearchResults and all logits.
   """
-  signature = embeddings_classifier.signatures["serving_default"]
-  input_specs = signature.structured_input_signature[1]
-  model_input_dtype = list(input_specs.values())[0].dtype
-
-  # model_input_dtype = embeddings_classifier.input.dtype
+  
+  # logits model behaves differently depending on whether it's been 
+  # saved and loaded or not
+  if hasattr(embeddings_classifier.logits_model, 'signatures'):
+    signature = embeddings_classifier.logits_model.signatures["serving_default"]
+    input_specs = signature.structured_input_signature[1]
+    model_input_dtype = list(input_specs.values())[0].dtype
+  else:
+    model_input_dtype = embeddings_classifier.logits_model.input.dtype
 
   def classify_batch(batch, query_embedding_batch):
     del query_embedding_batch
