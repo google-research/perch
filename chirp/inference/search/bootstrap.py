@@ -21,7 +21,7 @@ import hashlib
 from typing import Callable, Iterator, Sequence
 
 from chirp import audio_utils
-from chirp.inference import a2o_utils
+from chirp.inference import baw_utils
 from chirp.inference import embed_lib
 from chirp.inference import interface
 from chirp.inference import models
@@ -41,14 +41,14 @@ class BootstrapState:
     embedding_model: The model used to compute embeddings, loaded on init.
     embeddings_dataset: A TF Dataset of the embeddings, loaded on init.
     source_map: A Callable mapping file_id to full filepath.
-    a2o_auth_token: Auth token for fetching A2O data.
+    baw_auth_token: Auth token for fetching BAW/A2O data.
   """
 
   config: 'BootstrapConfig'
   embedding_model: interface.EmbeddingModel | None = None
   embeddings_dataset: tf.data.Dataset | None = None
   source_map: Callable[[str, float], str] | None = None
-  a2o_auth_token: str = ''
+  baw_auth_token: str = ''
 
   def __post_init__(self):
     if self.embedding_model is None:
@@ -57,10 +57,10 @@ class BootstrapState:
       ].from_config(self.config.model_config)
     self.create_embeddings_dataset()
     if self.source_map is None:
-      if self.a2o_auth_token:
+      if self.baw_auth_token:
         window_size_s = self.config.model_config.window_size_s
         self.source_map = functools.partial(
-            a2o_utils.make_a2o_audio_url_from_file_id,
+            baw_utils.make_baw_audio_url_from_file_id,
             window_size_s=window_size_s,
         )
       else:
@@ -92,11 +92,11 @@ class BootstrapState:
     offsets = [r.timestamp_offset for r in search_results.search_results]
     sample_rate = self.config.model_config.sample_rate
     window_size_s = self.config.model_config.window_size_s
-    if self.a2o_auth_token:
-      iterator = a2o_utils.multi_load_a2o_audio(
+    if self.baw_auth_token:
+      iterator = baw_utils.multi_load_baw_audio(
           filepaths=filepaths,
           offsets=offsets,
-          auth_token=self.a2o_auth_token,
+          auth_token=self.baw_auth_token,
           sample_rate=sample_rate,
           **kwargs,
       )

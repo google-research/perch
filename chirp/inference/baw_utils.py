@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Utility functions for working with the A2O API."""
+"""Handlers for the Bio-Acoustics Workbench (BAW/A2O) API."""
 
 import io
 import os
+import re
 from typing import Generator, Sequence
 import urllib
 
@@ -28,20 +29,27 @@ import requests
 import soundfile
 
 
-def make_a2o_audio_url_from_file_id(
-    file_id: str, offset_s: float, window_size_s: float
+FILE_ID_TO_UID_PATTERN = re.compile(r".*_(\d+).[^\.]+$")
+
+
+def make_baw_audio_url_from_file_id(
+    file_id: str,
+    offset_s: float,
+    window_size_s: float,
+    baw_domain: str = "api.acousticobservatory.org",
 ) -> str:
-  """Construct an A2O audio URL."""
+  """Construct an baw audio URL."""
   # Extract the recording UID. Example:
   # 'site_0277/20210428T100000+1000_Five-Rivers-Dry-A_909057.flac' -> 909057
-  file_id = file_id.split("_")[-1]
-  file_id = file_id.replace(".flac", "")
+  # 'site_0277/20210428T100000+1000_Five-Rivers-Dry-A_909057.wav' -> 909057
+  pattern = re.compile(r".*_(\d+)\.[^\.]+$")
+  match = pattern.search(file_id)
+  if not match:
+    raise ValueError("Invalid file_id format")
+  file_id = match.group(1)
   offset_s = int(offset_s)
   # See: https://api.staging.ecosounds.org/api-docs/index.html
-  audio_path = (
-      "https://api.acousticobservatory.org/audio_recordings/"
-      f"{file_id}/media.flac"
-  )
+  audio_path = f"https://{baw_domain}/audio_recordings/{file_id}/media.flac"
   if offset_s <= 0 and window_size_s <= 0:
     return audio_path
   params = {}
@@ -53,23 +61,24 @@ def make_a2o_audio_url_from_file_id(
   return audio_path
 
 
-def load_a2o_audio(
+def load_baw_audio(
     audio_url: str,
     auth_token: str,
     sample_rate: int,
     session: requests.Session,
 ) -> np.ndarray | None:
-  """Load audio from the A2O API.
+  """Load audio from the Bioacoustics Workbench API.
 
   Args:
     audio_url: URL to load the audio from.
-    auth_token: The A2O API auth token.
+    auth_token: The BAW API auth token.
     sample_rate: The sample rate to resample the audio to.
     session: The requests session to use.
 
   Returns:
     The audio as a numpy array, or None if the audio could not be loaded.
   """
+
   if session is None:
     # Use requests.get instead of session.get if no session is provided.
     session = requests
@@ -94,14 +103,14 @@ def load_a2o_audio(
   return audio
 
 
-def multi_load_a2o_audio(
+def multi_load_baw_audio(
     filepaths: Sequence[str],
     offsets: Sequence[int],
     auth_token: str,
     sample_rate: int = 32000,
     **kwargs,
 ) -> Generator[np.ndarray, None, None]:
-  """Creates a generator that loads audio from the A2O API."""
+  """Creates a generator that loads audio from the BAW API."""
   session = requests.Session()
   session.mount(
       "https://",
@@ -109,13 +118,13 @@ def multi_load_a2o_audio(
           max_retries=requests.adapters.Retry(total=5, backoff_factor=0.5)
       ),
   )
-  a2o_audio_loader = lambda fp, offset: load_a2o_audio(
+  baw_audio_loader = lambda fp, offset: load_baw_audio(
       fp, sample_rate=sample_rate, auth_token=auth_token, session=session
   )
   iterator = audio_utils.multi_load_audio_window(
       filepaths=filepaths,
       offsets=offsets,
-      audio_loader=a2o_audio_loader,
+      audio_loader=baw_audio_loader,
       **kwargs,
   )
   try:
