@@ -84,7 +84,13 @@ def create_source_infos(
   """
   source_files = []
   for pattern in source_file_patterns:
-    for source_file in epath.Path('').glob(pattern):
+    if '://' in pattern:
+      root, pattern = pattern.split('://')
+      root = root + '://'
+    else:
+      root = ''
+
+    for source_file in epath.Path(root).glob(pattern):
       source_files.append(source_file)
 
   source_file_splits = []

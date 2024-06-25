@@ -435,7 +435,11 @@ class EmbedTest(parameterized.TestCase):
 
   def test_create_source_infos(self):
     # Just one file, but it's all good.
-    globs = [path_utils.get_absolute_path('inference/tests/testdata/clap.wav')]
+    globs = [
+        path_utils.get_absolute_path(
+            'inference/tests/testdata/clap.wav'
+        ).as_posix()
+    ]
     # Disable sharding by setting shard_len_s <= 0.
     got_infos = embed_lib.create_source_infos(
         globs, shard_len_s=-1, num_shards_per_file=100
