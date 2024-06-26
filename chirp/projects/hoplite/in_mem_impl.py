@@ -17,9 +17,10 @@
 
 import collections
 import dataclasses
-from typing import Sequence
+from typing import Any, Sequence
 
 from chirp.projects.hoplite import interface
+from ml_collections import config_dict
 import numpy as np
 
 
@@ -38,14 +39,19 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
   max_size: int
   degree_bound: int
   embeddings: np.ndarray
-  embedding_sources: dict[int, str] = dataclasses.field(default_factory=dict)
+  embedding_sources: dict[int, interface.EmbeddingSource] = dataclasses.field(
+      default_factory=dict
+  )
   embedding_ids: set[int] = dataclasses.field(default_factory=set)
   edges: np.ndarray = dataclasses.field(
       default_factory=lambda: np.array((0, 2), np.int64)
   )
-  embedding_dtype: type = np.float16
+  embedding_dtype: type[Any] = np.float16
   labels: dict[int, list[interface.Label]] = dataclasses.field(
       default_factory=lambda: collections.defaultdict(list)
+  )
+  kv_store: dict[str, config_dict.ConfigDict] = dataclasses.field(
+      default_factory=dict
   )
 
   @classmethod
@@ -80,6 +86,12 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
     """Return a count of all edges in the database."""
     return np.sum(self.edges >= 0)
 
+  def insert_metadata(self, key: str, value: config_dict.ConfigDict) -> None:
+    self.kv_store[key] = value
+
+  def get_metadata(self, key: str) -> config_dict.ConfigDict:
+    return self.kv_store[key]
+
   def embedding_dimension(self) -> int:
     return self.embedding_dim
 
@@ -109,7 +121,9 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
         (self.max_size, self.degree_bound), dtype=np.int64
     )
 
-  def insert_embedding(self, embedding: np.ndarray, source: str) -> int:
+  def insert_embedding(
+      self, embedding: np.ndarray, source: interface.EmbeddingSource
+  ) -> int:
     """Add an embedding to the database."""
     if len(self.embedding_ids) >= self.max_size:
       # TODO(tomdenton): Automatically resize instead of throwing an error.
@@ -135,7 +149,9 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
     """Retrieve an embedding from the database."""
     return self.embeddings[embedding_id]
 
-  def get_embedding_source(self, embedding_id: int) -> str:
+  def get_embedding_source(
+      self, embedding_id: int
+  ) -> interface.EmbeddingSource:
     return self.embedding_sources[embedding_id]
 
   def get_embeddings(
@@ -150,10 +166,21 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
   def get_one_embedding_id(self) -> int:
     return next(iter(self.embedding_ids))
 
-  def get_embeddings_by_source(self, source: str) -> np.ndarray:
+  def get_embeddings_by_source(
+      self,
+      dataset_name: str,
+      source_id: str,
+      offsets: np.ndarray | None = None,
+  ) -> np.ndarray:
     found_idxes = set()
     for idx, embedding_source in self.embedding_sources.items():
-      if source != embedding_source:
+      if dataset_name and dataset_name != embedding_source.dataset_name:
+        continue
+      if source_id and source_id != embedding_source.source_id:
+        continue
+      if offsets is not None and not np.array_equal(
+          offsets, embedding_source.offsets
+      ):
         continue
       found_idxes.add(idx)
     return np.array(tuple(found_idxes))
@@ -169,7 +196,7 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
   def insert_label(self, label: interface.Label) -> None:
     if label.type is None:
       raise ValueError('label type must be set')
-    if label.label_source is None:
+    if label.provenance is None:
       raise ValueError('label source must be set')
     self.labels[label.embedding_id].append(label)
 
@@ -177,7 +204,7 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
       self,
       label: str,
       label_type: interface.LabelType | None = interface.LabelType.POSITIVE,
-      label_source: str | None = None,
+      provenance: str | None = None,
   ) -> np.ndarray:
     found_idxes = set()
     for idx, emb_labels in self.labels.items():
@@ -186,7 +213,7 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
           continue
         if label_type is not None and emb_label.type != label_type:
           continue
-        if label_source is not None and emb_label.label_source != label_source:
+        if provenance is not None and emb_label.provenance != provenance:
           continue
         found_idxes.add(idx)
     return np.array(tuple(found_idxes))

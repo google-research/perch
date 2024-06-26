@@ -16,10 +16,12 @@
 """SQLite Implementation of a searchable embeddings database."""
 
 import dataclasses
+import json
 import sqlite3
 from typing import Any
 
 from chirp.projects.hoplite import interface
+from ml_collections import config_dict
 import numpy as np
 
 EMBEDDINGS_TABLE = 'hoplite_embeddings'
@@ -32,11 +34,16 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
 
   db: sqlite3.Connection
   embedding_dim: int
-  embedding_dtype: type = np.float16
+  embedding_dtype: type[Any] = np.float16
   _cursor: sqlite3.Cursor | None = None
 
   @classmethod
-  def create(cls, db_path: str, embedding_dim: int):
+  def create(
+      cls,
+      db_path: str,
+      embedding_dim: int,
+      embedding_dtype: type[Any] = np.float16,
+  ):
     db = sqlite3.connect(db_path)
     cursor = db.cursor()
     cursor.execute('PRAGMA journal_mode=WAL;')  # Enable WAL mode
@@ -61,12 +68,30 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
 
   def setup(self, index=True):
     cursor = self._get_cursor()
+    # Create embedding sources table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS hoplite_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dataset STRING NOT NULL,
+            source STRING NOT NULL
+        );
+    """)
+
     # Create embeddings table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS hoplite_embeddings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             embedding BLOB NOT NULL,
-            source STRING NOT NULL
+            source_idx INTEGER NOT NULL,
+            offsets BLOB NOT NULL,
+            FOREIGN KEY (source_idx) REFERENCES hoplite_sources(id)
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS hoplite_metadata (
+            key STRING PRIMARY KEY,
+            data STRING NOT NULL
         );
     """)
 
@@ -87,7 +112,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         embedding_id INTEGER NOT NULL,
         label STRING NOT NULL,
         type INT NOT NULL,
-        source STRING NOT NULL,
+        provenance STRING NOT NULL,
         FOREIGN KEY (embedding_id) REFERENCES embeddings(id)
     )""")
 
@@ -98,7 +123,11 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
           idx_embedding ON hoplite_embeddings (id);
       """)
       cursor.execute("""
-      CREATE INDEX IF NOT EXISTS embedding_source ON hoplite_embeddings (source);
+      CREATE UNIQUE INDEX IF NOT EXISTS
+          source_pairs ON hoplite_sources (dataset, source);
+      """)
+      cursor.execute("""
+      CREATE INDEX IF NOT EXISTS embedding_source ON hoplite_embeddings (source_idx);
       """)
       cursor.execute("""
       CREATE INDEX IF NOT EXISTS idx_source_embedding ON hoplite_edges (source_embedding_id);
@@ -127,6 +156,32 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     cursor = self._get_cursor()
     cursor.execute("""SELECT id FROM hoplite_embeddings;""")
     return int(cursor.fetchone())
+
+  def insert_metadata(self, key: str, value: config_dict.ConfigDict) -> None:
+    """Insert a key-value pair into the metadata table."""
+    json_coded = value.to_json()
+    cursor = self._get_cursor()
+    cursor.execute(
+        """
+      INSERT INTO hoplite_metadata (key, data) VALUES (?, ?)
+      ON CONFLICT (key) DO UPDATE SET data = excluded.data;
+    """,
+        (key, json_coded),
+    )
+
+  def get_metadata(self, key: str) -> config_dict.ConfigDict:
+    """Get a key-value pair from the metadata table."""
+    cursor = self._get_cursor()
+    cursor.execute(
+        """
+      SELECT data FROM hoplite_metadata WHERE key = ?;
+    """,
+        (key,),
+    )
+    result = cursor.fetchone()
+    if result is None:
+      raise ValueError(f'Metadata key not found: {key}')
+    return config_dict.ConfigDict(json.loads(result[0]))
 
   def insert_edge(self, x_id: int, y_id: int):
     cursor = self._get_cursor()
@@ -162,16 +217,45 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     """)
     self.db.commit()
 
-  def insert_embedding(self, embedding: np.ndarray, source: str) -> int:
+  def _get_source_id(
+      self, dataset_name: str, source_id: str, insert: bool = False
+  ) -> int:
+    cursor = self._get_cursor()
+    cursor.execute(
+        """
+      SELECT id FROM hoplite_sources WHERE dataset = ? AND source = ?;
+    """,
+        (dataset_name, source_id),
+    )
+    result = cursor.fetchone()
+    if result is None and insert:
+      cursor.execute(
+          """
+        INSERT INTO hoplite_sources (dataset, source) VALUES (?, ?);
+      """,
+          (dataset_name, source_id),
+      )
+      return int(cursor.lastrowid)
+    elif result is None:
+      raise ValueError(f'Source not found: {dataset_name} / {source_id}')
+    return int(result[0])
+
+  def insert_embedding(
+      self, embedding: np.ndarray, source: interface.EmbeddingSource
+  ) -> int:
     if embedding.shape[-1] != self.embedding_dim:
       raise ValueError('Incorrect embedding dimension.')
     cursor = self._get_cursor()
     embedding_bytes = self.serialize_embedding(embedding)
+    source_id = self._get_source_id(
+        source.dataset_name, source.source_id, insert=True
+    )
+    offset_bytes = self.serialize_embedding(source.offsets)
     cursor.execute(
         """
-      INSERT INTO hoplite_embeddings (embedding, source) VALUES (?, ?);
+      INSERT INTO hoplite_embeddings (embedding, source_idx, offsets) VALUES (?, ?, ?);
     """,
-        (embedding_bytes, source),
+        (embedding_bytes, source_id, offset_bytes),
     )
     embedding_id = cursor.lastrowid
     return int(embedding_id)
@@ -204,15 +288,22 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     embedding = cursor.fetchall()[0][0]
     return self.deserialize_embedding(embedding)
 
-  def get_embedding_source(self, embedding_id: int) -> str:
+  def get_embedding_source(
+      self, embedding_id: int
+  ) -> interface.EmbeddingSource:
     cursor = self._get_cursor()
     cursor.execute(
         """
-      SELECT source FROM hoplite_embeddings WHERE id = ?;
-    """,
+        SELECT hs.dataset, hs.source, he.offsets
+        FROM hoplite_sources hs
+        JOIN hoplite_embeddings he ON hs.id = he.source
+        WHERE he.id = ?;
+        """,
         (int(embedding_id),),
     )
-    return cursor.fetchall()[0][0]
+    dataset, source, offsets = cursor.fetchall()[0]
+    offsets = self.deserialize_embedding(offsets)
+    return interface.EmbeddingSource(dataset, source, offsets)
 
   def get_embeddings(
       self, embedding_ids: np.ndarray
@@ -232,15 +323,28 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     )
     return result_ids, embeddings
 
-  def get_embeddings_by_source(self, source: str) -> np.ndarray:
+  def get_embeddings_by_source(
+      self,
+      dataset_name: str,
+      source_id: str,
+      offsets: np.ndarray | None = None,
+  ) -> np.ndarray:
     """Get the embedding IDs for all embeddings matching the source."""
+    source_id = self._get_source_id(dataset_name, source_id, insert=False)
     query = (
-        'SELECT id FROM hoplite_embeddings WHERE hoplite_embeddings.source = ?;'
+        'SELECT id, offsets FROM hoplite_embeddings '
+        'WHERE hoplite_embeddings.source = ?;'
     )
     cursor = self._get_cursor()
-    cursor.execute(query, (source,))
-    idxes = cursor.fetchall()
-    return np.array(tuple(e[0] for e in idxes))
+    cursor.execute(query, (source_id,))
+    idxes, got_offsets_bytes = cursor.fetchall()
+    outputs = np.array(tuple(e[0] for e in idxes))
+    if offsets is not None:
+      got_offsets = self.deserialize_embedding(got_offsets_bytes)
+      outputs = np.array(
+          tuple(e[0] for e, off in zip(idxes, got_offsets) if off == offsets)
+      )
+    return outputs
 
   def get_edges(self, embedding_id: int) -> np.ndarray:
     query = (
@@ -258,18 +362,18 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
   def insert_label(self, label: interface.Label):
     if label.type is None:
       raise ValueError('label type must be set')
-    if label.label_source is None:
+    if label.provenance is None:
       raise ValueError('label source must be set')
     cursor = self._get_cursor()
     cursor.execute(
         """
-      INSERT INTO hoplite_labels (embedding_id, label, type, source) VALUES (?, ?, ?, ?);
+      INSERT INTO hoplite_labels (embedding_id, label, type, provenance) VALUES (?, ?, ?, ?);
     """,
         (
             int(label.embedding_id),
             label.label,
             label.type.value,
-            label.label_source,
+            label.provenance,
         ),
     )
 
@@ -277,16 +381,16 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
       self,
       label: str,
       label_type: interface.LabelType | None = interface.LabelType.POSITIVE,
-      label_source: str | None = None,
+      provenance: str | None = None,
   ) -> np.ndarray:
     query = 'SELECT embedding_id FROM hoplite_labels WHERE label = ?'
     pred = (label,)
     if label_type is not None:
       query += ' AND type = ?'
       pred = pred + (label_type.value,)
-    if label_source is not None:
-      query += ' AND source = ?'
-      pred = pred + (label_source,)
+    if provenance is not None:
+      query += ' AND provenance = ?'
+      pred = pred + (provenance,)
     cursor = self._get_cursor()
     results = cursor.execute(query, pred).fetchall()
     ids = np.array(tuple(int(c[0]) for c in results), np.int64)
@@ -296,7 +400,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     cursor = self._get_cursor()
     cursor.execute(
         """
-      SELECT embedding_id, label, type, source FROM hoplite_labels WHERE embedding_id = ?;
+      SELECT embedding_id, label, type, provenance FROM hoplite_labels WHERE embedding_id = ?;
     """,
         (int(embedding_id),),
     )

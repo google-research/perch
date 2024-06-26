@@ -20,6 +20,7 @@ import dataclasses
 import enum
 from typing import Sequence
 
+from ml_collections import config_dict
 import numpy as np
 
 
@@ -36,23 +37,51 @@ class Label:
     embedding_id: Unique integer ID for the embedding this label applies to.
     label: Label string.
     type: Type of label (positive, negative, etc).
-    label_source: Freeform field describing where the label came from (eg,
-      labeler name, model identifier for pseudolabels, etc).
+    provenance: Freeform field describing the annotation (eg, labeler name,
+      model identifier for pseudolabels, etc).
   """
 
   embedding_id: int
   label: str
   type: LabelType
-  label_source: str
+  provenance: str
+
+
+@dataclasses.dataclass
+class EmbeddingSource:
+  """Source information for an embedding."""
+
+  dataset_name: str
+  source_id: str
+  offsets: np.ndarray
+
+
+@dataclasses.dataclass
+class EmbeddingMetadata:
+  """Convenience class for converting dataclasses to/from ConfigDict."""
+
+  def to_config_dict(self) -> config_dict.ConfigDict:
+    """Convert to a config dict."""
+    return config_dict.ConfigDict(dataclasses.asdict(self))
+
+  @classmethod
+  def from_config_dict(
+      cls, config: config_dict.ConfigDict
+  ) -> 'EmbeddingMetadata':
+    """Convert from a config dict."""
+    return cls(**config)
 
 
 class GraphSearchDBInterface(abc.ABC):
   """Interface for graph-searchable embeddings database.
 
-  The database consists of a table of embeddings with a metadata string and
-  a unique id for each embedding. The IDs are chosen by the database when the
-  embedding is inserted. The database also contains a tabel of `Label`s,
+  The database consists of a table of embeddings with a unique id for each
+  embedding, and some metadata for linking the embedding to its source.
+  The IDs are chosen by the database when the embedding is inserted. The
+  database also contains a table of `Label`s,
   and (as needed) a table of graph edges facilitating faster search.
+  Finally, a Key-Value table of ConfigDict objects is used to store arbitrary
+  metadata associated with the database.
 
   Methods are split into 'Base' methods and 'Composite' methods. Base methods
   must be implemented for any implementation. Composite methods have a default
@@ -76,12 +105,22 @@ class GraphSearchDBInterface(abc.ABC):
     """Commit any pending transactions to the database."""
 
   @abc.abstractmethod
+  def insert_metadata(self, key: str, value: config_dict.ConfigDict) -> None:
+    """Insert a key-value pair into the metadata table."""
+
+  @abc.abstractmethod
+  def get_metadata(self, key: str) -> config_dict.ConfigDict:
+    """Get a key-value pair from the metadata table."""
+
+  @abc.abstractmethod
   def get_embedding_ids(self) -> np.ndarray:
     # TODO(tomdenton): Make this return an iterator, with optional shuffling.
     """Get all embedding IDs in the database."""
 
   @abc.abstractmethod
-  def insert_embedding(self, embedding: np.ndarray, source: str) -> int:
+  def insert_embedding(
+      self, embedding: np.ndarray, source: EmbeddingSource
+  ) -> int:
     """Add an embedding to the database."""
 
   @abc.abstractmethod
@@ -89,11 +128,16 @@ class GraphSearchDBInterface(abc.ABC):
     """Retrieve an embedding from the database."""
 
   @abc.abstractmethod
-  def get_embedding_source(self, embedding_id: int) -> str:
+  def get_embedding_source(self, embedding_id: int) -> EmbeddingSource:
     """Get the source corresponding to the given embedding_id."""
 
   @abc.abstractmethod
-  def get_embeddings_by_source(self, source: str) -> np.ndarray:
+  def get_embeddings_by_source(
+      self,
+      dataset_name: str,
+      source_id: str,
+      offsets: np.ndarray | None = None,
+  ) -> np.ndarray:
     """Get the embedding IDs for all embeddings matching the source."""
 
   @abc.abstractmethod
@@ -121,7 +165,7 @@ class GraphSearchDBInterface(abc.ABC):
       self,
       label: str,
       label_type: LabelType | None = LabelType.POSITIVE,
-      label_source: str | None = None,
+      provenance: str | None = None,
   ) -> np.ndarray:
     """Find embeddings by label.
 
@@ -129,7 +173,7 @@ class GraphSearchDBInterface(abc.ABC):
       label: Label string to search for.
       label_type: Type of label to return. If None, returns all labels
         regardless of Type.
-      label_source: If provided, filters to the target label_source value.
+      provenance: If provided, filters to the target provenance value.
 
     Returns:
       An array of unique embedding id's matching the label.

@@ -32,9 +32,13 @@ def insert_random_embeddings(
   """Insert randomly generated embedding vectors into the DB."""
   rng = np.random.default_rng(seed=seed)
   np_alpha = np.array(list('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), dtype='|S1')
+  dataset_names = ('a', 'b', 'c')
   for _ in tqdm.tqdm(range(num_embeddings)):
     embedding = np.float32(rng.normal(size=emb_dim, loc=0, scale=1.0))
-    source = rng.choice(np_alpha, size=8, replace=False)
+    dataset_name = rng.choice(dataset_names)
+    source_name = rng.choice(np_alpha, size=8, replace=False)
+    offsets = rng.integers(0, 100, size=[1])
+    source = interface.EmbeddingSource(dataset_name, source_name, offsets)
     db.insert_embedding(embedding, source)
   db.commit()
 

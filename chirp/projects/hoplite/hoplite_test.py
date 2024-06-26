@@ -24,6 +24,7 @@ from chirp.projects.hoplite import in_mem_impl
 from chirp.projects.hoplite import index
 from chirp.projects.hoplite import interface
 from chirp.projects.hoplite import sqlite_impl
+from ml_collections import config_dict
 import numpy as np
 
 from absl.testing import absltest
@@ -64,6 +65,10 @@ class HopliteTest(parameterized.TestCase):
     graph_utils.insert_random_embeddings(
         db, EMBEDDING_SIZE, num_embeddings, rng
     )
+
+    config = config_dict.ConfigDict()
+    config.embedding_dim = EMBEDDING_SIZE
+    db.insert_metadata('db_config', config)
     return db
 
   def _clone_embeddings(
@@ -109,6 +114,10 @@ class HopliteTest(parameterized.TestCase):
     # Insert a few random edges...
     idxes = db.get_embedding_ids()
     self.assertLen(idxes, 1000)
+
+    # Check the metadata.
+    got_md = db.get_metadata('db_config')
+    self.assertEqual(got_md.embedding_dim, EMBEDDING_SIZE)
 
     rng.shuffle(idxes)
     for i in range(db.count_embeddings() - 1):
