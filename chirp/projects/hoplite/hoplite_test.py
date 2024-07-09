@@ -217,10 +217,10 @@ class HopliteTest(parameterized.TestCase):
 
     # Check brute-force search agreement.
     query = rng.normal(size=(128,), loc=0, scale=1.0)
-    results_m = graph_utils.brute_search(
+    results_m, _ = graph_utils.brute_search(
         in_mem_db, query, search_list_size=10, score_fn=np.dot
     )
-    results_s = graph_utils.brute_search(
+    results_s, _ = graph_utils.brute_search(
         sqlite_db, query, search_list_size=10, score_fn=np.dot
     )
     self.assertLen(results_m.search_results, 10)
@@ -230,6 +230,7 @@ class HopliteTest(parameterized.TestCase):
       emb_m = in_mem_db.get_embedding(r_m.embedding_id)
       emb_s = sqlite_db.get_embedding(r_s.embedding_id)
       self.assertEqual(id_mapping[r_m.embedding_id], r_s.embedding_id)
+      # TODO(tomdenton): check that the scores are the same.
       np.testing.assert_equal(emb_m, emb_s)
 
   def test_greedy_search_impl_agreement(self):

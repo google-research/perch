@@ -331,7 +331,7 @@ class HopliteSearchIndex:
       print(f'walk length   : {len(path)}')
 
     start = time.time()
-    brute_results = graph_utils.brute_search(
+    brute_results, _ = graph_utils.brute_search(
         self.db, query, search_list_size=eval_top_k, score_fn=self.score_fn
     )
     brute_elapsed = time.time() - start

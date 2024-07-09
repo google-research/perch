@@ -21,7 +21,9 @@ import numpy as np
 from scipy.io import wavfile
 
 
-def make_wav_files(base_path, classes, filenames, file_len_s=1.0):
+def make_wav_files(
+    base_path, classes, filenames, file_len_s=1.0, sample_rate_hz=16000
+):
   """Create a pile of wav files in a directory structure."""
   rng = np.random.default_rng(seed=42)
   for subdir in classes:
@@ -31,7 +33,7 @@ def make_wav_files(base_path, classes, filenames, file_len_s=1.0):
       with open(
           os.path.join(subdir_path, f'{filename}_{subdir}.wav'), 'wb'
       ) as f:
-        noise = rng.normal(scale=0.2, size=int(file_len_s * 16000))
-        wavfile.write(f, 16000, noise)
+        noise = rng.normal(scale=0.2, size=int(file_len_s * sample_rate_hz))
+        wavfile.write(f, sample_rate_hz, noise)
   audio_glob = os.path.join(base_path, '*/*.wav')
   return audio_glob
