@@ -15,12 +15,28 @@
 
 """Utility functions for graph operations."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 from chirp.projects.hoplite import interface
 from chirp.projects.hoplite import search_results
 import numpy as np
 import tqdm
+
+
+def random_batched_iterator(
+    ids: np.ndarray,
+    batch_size: int,
+    rng: np.random.RandomState,
+) -> Iterator[np.ndarray]:
+  """Yields batches embedding ids, shuffled after each of unlimited epochs."""
+  rng.shuffle(ids)
+  q = 0
+  while True:
+    if q + batch_size >= len(ids):
+      q = 0
+      rng.shuffle(ids)
+    yield ids[q : q + batch_size]
+    q += batch_size
 
 
 def insert_random_embeddings(
@@ -162,7 +178,7 @@ def brute_search(
   """
   results = search_results.TopKSearchResults(search_list_size)
   all_scores = []
-  for idx in tqdm.tqdm(db.get_embedding_ids()):
+  for idx in db.get_embedding_ids():
     target_embedding = db.get_embedding(idx)
     score = score_fn(query_embedding, target_embedding)
     all_scores.append(score)
