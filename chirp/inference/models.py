@@ -49,6 +49,7 @@ def model_class_map() -> dict[str, Any]:
       'placeholder_model': PlaceholderModel,
       'separate_embed_model': SeparateEmbedModel,
       'tfhub_model': TFHubModel,
+      'google_whale': GoogleWhaleModel,
   }
 
 
