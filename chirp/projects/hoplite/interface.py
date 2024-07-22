@@ -55,6 +55,13 @@ class EmbeddingSource:
   source_id: str
   offsets: np.ndarray
 
+  def __eq__(self, other):
+    return (
+        self.dataset_name == other.dataset_name
+        and self.source_id == other.source_id
+        and np.array_equal(self.offsets, other.offsets)
+    )
+
 
 @dataclasses.dataclass
 class EmbeddingMetadata:
@@ -109,8 +116,19 @@ class GraphSearchDBInterface(abc.ABC):
     """Insert a key-value pair into the metadata table."""
 
   @abc.abstractmethod
-  def get_metadata(self, key: str) -> config_dict.ConfigDict:
-    """Get a key-value pair from the metadata table."""
+  def get_metadata(self, key: str | None) -> config_dict.ConfigDict:
+    """Get a key-value pair from the metadata table.
+
+    Args:
+      key: String for metadata key to retrieve. If None, returns all metadata.
+
+    Returns:
+      ConfigDict containing the metadata.
+    """
+
+  @abc.abstractmethod
+  def get_dataset_names(self) -> Sequence[str]:
+    """Get all dataset names in the database."""
 
   @abc.abstractmethod
   def get_embedding_ids(self) -> np.ndarray:
@@ -135,10 +153,21 @@ class GraphSearchDBInterface(abc.ABC):
   def get_embeddings_by_source(
       self,
       dataset_name: str,
-      source_id: str,
+      source_id: str | None,
       offsets: np.ndarray | None = None,
   ) -> np.ndarray:
-    """Get the embedding IDs for all embeddings matching the source."""
+    """Get the embedding IDs for all embeddings matching the source.
+
+    Args:
+      dataset_name: The name of the dataset to search.
+      source_id: The ID of the source to search. If None, all sources are
+        searched.
+      offsets: The offsets of the source to search. If None, all offsets are
+        searched.
+
+    Returns:
+      A list of embedding IDs matching the indicated source parameters.
+    """
 
   @abc.abstractmethod
   def insert_edge(self, x_id: int, y_id: int) -> None:
@@ -178,6 +207,7 @@ class GraphSearchDBInterface(abc.ABC):
     Returns:
       An array of unique embedding id's matching the label.
     """
+    # TODO(tomdenton): Allow fetching by dataset_name.
 
   @abc.abstractmethod
   def get_labels(self, embedding_id: int) -> Sequence[Label]:

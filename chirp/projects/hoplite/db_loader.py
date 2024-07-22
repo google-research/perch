@@ -20,6 +20,8 @@ from chirp.projects.hoplite import in_mem_impl
 from chirp.projects.hoplite import interface
 from chirp.projects.hoplite import sqlite_impl
 from ml_collections import config_dict
+import numpy as np
+import tqdm
 
 
 @dataclasses.dataclass
@@ -42,3 +44,61 @@ class DBConfig(interface.EmbeddingMetadata):
       return in_mem_impl.InMemoryGraphSearchDB.create(**self.db_config)
     else:
       raise ValueError(f'Unknown db_key: {self.db_key}')
+
+
+def duplicate_db(
+    source_db: interface.GraphSearchDBInterface,
+    target_db_key: str,
+    target_db_config: config_dict.ConfigDict,
+):
+  """Create a new DB and copy all data in source_db into it."""
+  target_db = DBConfig(target_db_key, target_db_config).load_db()
+  target_db.setup()
+  target_db.commit()
+
+  # Check that the target_db is empty. If not, we'll have to do something more
+  # sophisticated.
+  if target_db.get_embedding_ids().shape[0] > 0:
+    raise ValueError('Target DB is not empty.')
+
+  # Clone the embeddings and get the id mapping.
+  # This automatically and seamlessly clones the source info as a
+  # side effect.
+  emb_id_mapping = {}
+  for idx in tqdm.tqdm(source_db.get_embedding_ids()):
+    emb = source_db.get_embedding(idx)
+    source = source_db.get_embedding_source(idx)
+    target_id = target_db.insert_embedding(emb, source)
+    emb_id_mapping[idx] = target_id
+
+  target_db.commit()
+
+  # Clone edges.
+  for idx, target_idx in tqdm.tqdm(emb_id_mapping.items()):
+    nbrs = source_db.get_edges(idx)
+    target_nbrs = np.array([emb_id_mapping[nbr] for nbr in nbrs])
+    target_db.insert_edges(target_idx, target_nbrs)
+  target_db.commit()
+
+  # Clone labels.
+  for idx, target_idx in tqdm.tqdm(emb_id_mapping.items()):
+    for lbl in source_db.get_labels(idx):
+      target_label = interface.Label(
+          embedding_id=target_idx,
+          label=lbl.label,
+          provenance=lbl.provenance,
+          type=lbl.type,
+      )
+      target_db.insert_label(target_label)
+  target_db.commit()
+
+  # Clone the KV store, replacing the DBConfig only.
+  metadata = source_db.get_metadata(key=None)
+  for k, v in metadata.items():
+    if k == 'db_config':
+      continue
+    target_db.insert_metadata(k, v)
+  target_db.insert_metadata('db_config', target_db_config)
+  target_db.commit()
+
+  return target_db, emb_id_mapping

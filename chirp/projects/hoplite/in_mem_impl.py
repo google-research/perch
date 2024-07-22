@@ -89,8 +89,17 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
   def insert_metadata(self, key: str, value: config_dict.ConfigDict) -> None:
     self.kv_store[key] = value
 
-  def get_metadata(self, key: str) -> config_dict.ConfigDict:
+  def get_metadata(self, key: str | None) -> config_dict.ConfigDict:
+    if key is None:
+      return config_dict.ConfigDict(self.kv_store)
     return self.kv_store[key]
+
+  def get_dataset_names(self) -> Sequence[str]:
+    """Get all dataset names in the database."""
+    ds_names = set()
+    for source in self.embedding_sources.values():
+      ds_names.add(source.dataset_name)
+    return tuple(ds_names)
 
   def embedding_dimension(self) -> int:
     return self.embedding_dim
@@ -169,21 +178,21 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
   def get_embeddings_by_source(
       self,
       dataset_name: str,
-      source_id: str,
+      source_id: str | None,
       offsets: np.ndarray | None = None,
   ) -> np.ndarray:
     found_idxes = set()
     for idx, embedding_source in self.embedding_sources.items():
       if dataset_name and dataset_name != embedding_source.dataset_name:
         continue
-      if source_id and source_id != embedding_source.source_id:
+      if source_id is not None and source_id != embedding_source.source_id:
         continue
       if offsets is not None and not np.array_equal(
           offsets, embedding_source.offsets
       ):
         continue
       found_idxes.add(idx)
-    return np.array(tuple(found_idxes))
+    return np.array(tuple(found_idxes), np.int64)
 
   def get_edges(self, embedding_id: int) -> np.ndarray:
     mask = self.edges[embedding_id] >= 0
@@ -211,12 +220,12 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
       for emb_label in emb_labels:
         if emb_label.label != label:
           continue
-        if label_type is not None and emb_label.type != label_type:
+        if label_type is not None and emb_label.type.value != label_type.value:
           continue
         if provenance is not None and emb_label.provenance != provenance:
           continue
         found_idxes.add(idx)
-    return np.array(tuple(found_idxes))
+    return np.array(tuple(found_idxes), np.int64)
 
   def get_labels(self, embedding_id: int) -> Sequence[interface.Label]:
     return self.labels[embedding_id]

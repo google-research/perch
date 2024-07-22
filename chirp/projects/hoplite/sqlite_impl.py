@@ -155,7 +155,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
   def get_one_embedding_id(self) -> int:
     cursor = self._get_cursor()
     cursor.execute("""SELECT id FROM hoplite_embeddings;""")
-    return int(cursor.fetchone())
+    return int(cursor.fetchone()[0])
 
   def insert_metadata(self, key: str, value: config_dict.ConfigDict) -> None:
     """Insert a key-value pair into the metadata table."""
@@ -169,8 +169,15 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         (key, json_coded),
     )
 
-  def get_metadata(self, key: str) -> config_dict.ConfigDict:
+  def get_metadata(self, key: str | None) -> config_dict.ConfigDict:
     """Get a key-value pair from the metadata table."""
+    if key is None:
+      cursor = self._get_cursor()
+      cursor.execute("""SELECT key, data FROM hoplite_metadata;""")
+      return config_dict.ConfigDict(
+          {k: json.loads(v) for k, v in cursor.fetchall()}
+      )
+
     cursor = self._get_cursor()
     cursor.execute(
         """
@@ -182,6 +189,12 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     if result is None:
       raise ValueError(f'Metadata key not found: {key}')
     return config_dict.ConfigDict(json.loads(result[0]))
+
+  def get_dataset_names(self) -> tuple[str, ...]:
+    """Get all dataset names in the database."""
+    cursor = self._get_cursor()
+    cursor.execute("""SELECT DISTINCT dataset FROM hoplite_sources;""")
+    return tuple(c[0] for c in cursor.fetchall())
 
   def insert_edge(self, x_id: int, y_id: int):
     cursor = self._get_cursor()
@@ -219,7 +232,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
 
   def _get_source_id(
       self, dataset_name: str, source_id: str, insert: bool = False
-  ) -> int:
+  ) -> int | None:
     cursor = self._get_cursor()
     cursor.execute(
         """
@@ -237,7 +250,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
       )
       return int(cursor.lastrowid)
     elif result is None:
-      raise ValueError(f'Source not found: {dataset_name} / {source_id}')
+      return None
     return int(result[0])
 
   def insert_embedding(
@@ -296,14 +309,14 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         """
         SELECT hs.dataset, hs.source, he.offsets
         FROM hoplite_sources hs
-        JOIN hoplite_embeddings he ON hs.id = he.source
+        JOIN hoplite_embeddings he ON hs.id = he.source_idx
         WHERE he.id = ?;
         """,
         (int(embedding_id),),
     )
     dataset, source, offsets = cursor.fetchall()[0]
     offsets = self.deserialize_embedding(offsets)
-    return interface.EmbeddingSource(dataset, source, offsets)
+    return interface.EmbeddingSource(dataset, str(source), offsets)
 
   def get_embeddings(
       self, embedding_ids: np.ndarray
@@ -326,25 +339,46 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
   def get_embeddings_by_source(
       self,
       dataset_name: str,
-      source_id: str,
+      source_id: str | None,
       offsets: np.ndarray | None = None,
   ) -> np.ndarray:
-    """Get the embedding IDs for all embeddings matching the source."""
-    source_id = self._get_source_id(dataset_name, source_id, insert=False)
-    query = (
-        'SELECT id, offsets FROM hoplite_embeddings '
-        'WHERE hoplite_embeddings.source = ?;'
-    )
+    """Get the embedding IDs for all embeddings matching the indicated source.
+
+    Args:
+      dataset_name: The name of the dataset to search.
+      source_id: The ID of the source to search. If None, all sources are
+        searched.
+      offsets: The offsets of the source to search. If None, all offsets are
+        searched.
+
+    Returns:
+      A list of embedding IDs matching the indicated source parameters.
+    """
     cursor = self._get_cursor()
-    cursor.execute(query, (source_id,))
-    idxes, got_offsets_bytes = cursor.fetchall()
-    outputs = np.array(tuple(e[0] for e in idxes))
-    if offsets is not None:
-      got_offsets = self.deserialize_embedding(got_offsets_bytes)
-      outputs = np.array(
-          tuple(e[0] for e, off in zip(idxes, got_offsets) if off == offsets)
+    source_id = self._get_source_id(dataset_name, source_id, insert=False)
+    if source_id is None:
+      query = (
+          'SELECT id, offsets FROM hoplite_embeddings '
+          'WHERE hoplite_embeddings.source_idx IN ('
+          '  SELECT id FROM hoplite_sources '
+          '  WHERE hoplite_sources.dataset = ?'
+          ');'
       )
-    return outputs
+      cursor.execute(query, (dataset_name,))
+    else:
+      query = (
+          'SELECT id, offsets FROM hoplite_embeddings '
+          'WHERE hoplite_embeddings.source_idx = ?;'
+      )
+      cursor.execute(query, (source_id,))
+    result_pairs = cursor.fetchall()
+    outputs = []
+    for idx, offsets_bytes in result_pairs:
+      got_offsets = self.deserialize_embedding(offsets_bytes)
+      if offsets is not None and not np.array_equal(got_offsets, offsets):
+        continue
+      outputs.append(idx)
+    return np.array(outputs)
 
   def get_edges(self, embedding_id: int) -> np.ndarray:
     query = (
