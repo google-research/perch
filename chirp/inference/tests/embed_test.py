@@ -39,6 +39,7 @@ from etils import epath
 from ml_collections import config_dict
 import numpy as np
 import tensorflow as tf
+import tf_keras
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -760,15 +761,20 @@ class EmbedTest(parameterized.TestCase):
 
   def test_whale_model(self):
     # prereq
-    class FakeModel(tf.keras.Model):
-      """Fake implementation of the humpback_whale SavedModel API."""
+    class FakeModel(tf_keras.Model):
+      """Fake implementation of the humpback_whale SavedModel API.
+
+      The use of `tf_keras` as opposed to `tf.keras` is intentional; the models
+      this fakes were exported using "the pure-TensorFlow implementation of
+      Keras."
+      """
 
       def __init__(self):
         super().__init__()
         self._sample_rate = 10000
         self._classes = ['Mn']
-        self._embedder = tf.keras.layers.Dense(32)
-        self._classifier = tf.keras.layers.Dense(len(self._classes))
+        self._embedder = tf_keras.layers.Dense(32)
+        self._classifier = tf_keras.layers.Dense(len(self._classes))
 
       def call(self, spectrograms, training=False):
         logits = self.logits(spectrograms)
@@ -849,7 +855,8 @@ class EmbedTest(parameterized.TestCase):
     spectrograms = fake_model.front_end(waveform[:, :, np.newaxis])
     fake_model(spectrograms[:, :128, :])
     model_path = os.path.join(tempfile.gettempdir(), 'whale_model')
-    fake_model.save(
+    tf.saved_model.save(
+        fake_model,
         model_path,
         signatures={
             'score': fake_model.score,
