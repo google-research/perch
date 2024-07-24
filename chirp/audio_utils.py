@@ -136,7 +136,10 @@ def load_audio_window_soundfile(
 
 
 def load_audio_window(
-    filepath: str, offset_s: float, sample_rate: int, window_size_s: float
+    filepath: str,
+    offset_s: float,
+    sample_rate: int,
+    window_size_s: float,
 ) -> jnp.ndarray:
   """Load a slice of audio from a file, hopefully efficiently."""
   # TODO(tomdenton): Find a reliable way to load a flac audio window.
