@@ -18,9 +18,12 @@
 import shutil
 import tempfile
 
+from chirp import path_utils
 from chirp.projects.agile2 import classifier_data
+from chirp.projects.agile2 import ingest_annotations
 from chirp.projects.agile2.tests import test_utils
 from chirp.projects.hoplite import interface
+from chirp.taxonomy import annotations_fns
 import numpy as np
 
 from absl.testing import absltest
@@ -212,6 +215,66 @@ class ClassifierDataTest(absltest.TestCase):
       multihot, mask = data_manager.get_multihot_labels(4)
       np.testing.assert_equal(multihot, (0, 1, 1, 0, 0, 1))
       np.testing.assert_equal(mask, (0, 1, 1, 1, 0, 1))
+
+  def test_ingest_annotations(self):
+    rng = np.random.default_rng(42)
+    db = test_utils.make_db(
+        self.tempdir,
+        'in_mem',
+        num_embeddings=0,
+        rng=rng,
+    )
+    emb_offsets = [175, 185, 275, 230, 235]
+    emb_idxes = []
+    for offset in emb_offsets:
+      emb_idx = db.insert_embedding(
+          embedding=rng.normal([db.embedding_dimension()]),
+          source=interface.EmbeddingSource(
+              dataset_name='hawaii',
+              source_id='UHH_001_S01_20161121_150000.flac',
+              offsets=np.array([offset]),
+          ),
+      )
+      emb_idxes.append(emb_idx)
+
+    hawaii_annos_path = path_utils.get_absolute_path(
+        'projects/agile2/tests/testdata/hawaii.csv'
+    )
+    ingestor = ingest_annotations.AnnotatedDatasetIngestor(
+        base_path=hawaii_annos_path.parent,
+        dataset_name='hawaii',
+        annotation_filename='hawaii.csv',
+        annotation_load_fn=annotations_fns.load_cornell_annotations,
+        window_size_s=5.0,
+        provenance='test_dataset',
+    )
+    inserted_labels = ingestor.ingest_dataset(db)
+    self.assertSetEqual(inserted_labels, {'jabwar', 'hawama', 'ercfra'})
+    # Check that individual labels are correctly applied.
+    # The Hawai'i test data CSV contains a total of five annotations.
+    # The window at offset 175 should have no labels.
+    self.assertEmpty(db.get_labels(emb_idxes[0]))  # offset 175
+
+    def _check_label(want_label_str, got_label):
+      self.assertEqual(got_label.label, want_label_str)
+      self.assertEqual(got_label.type, interface.LabelType.POSITIVE)
+      self.assertEqual(got_label.provenance, 'test_dataset')
+
+    # There are two jabwar annotations for the window at offset 185.
+    offset_185_labels = db.get_labels(emb_idxes[1])
+    self.assertLen(offset_185_labels, 2)
+    _check_label('jabwar', offset_185_labels[0])
+    _check_label('jabwar', offset_185_labels[1])
+
+    offset_275_labels = db.get_labels(emb_idxes[2])
+    self.assertLen(offset_275_labels, 1)
+    _check_label('hawama', offset_275_labels[0])
+
+    self.assertEmpty(db.get_labels(emb_idxes[3]))  # offset 230
+
+    offset_235_labels = db.get_labels(emb_idxes[4])
+    self.assertLen(offset_235_labels, 1)
+    _check_label('ercfra', offset_235_labels[0])
 
 
 if __name__ == '__main__':

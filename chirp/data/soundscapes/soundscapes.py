@@ -24,8 +24,8 @@ from absl import logging
 from chirp import audio_utils
 from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import bird_taxonomy
-from chirp.data.soundscapes import dataset_fns
 from chirp.data.soundscapes import soundscapes_lib
+from chirp.taxonomy import annotations_fns
 from etils import epath
 import numpy as np
 import pandas as pd
@@ -137,7 +137,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='caples/audio/*',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_caples_annotations,
+          annotation_load_fn=annotations_fns.load_caples_annotations,
           description='Annotated Caples recordings from 2018/2019.',
       ),
       SoundscapesConfig(
@@ -145,7 +145,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           class_list_name='caples',
           audio_glob='caples/audio/*',
           annotation_filename='caples.csv',
-          annotation_load_fn=dataset_fns.load_caples_annotations,
+          annotation_load_fn=annotations_fns.load_caples_annotations,
           keep_unknown_annotation=True,
           # Some recordings in Caples are only partially-annotated, so to avoid
           # scoring legitimate model predictions as false positives we pad with
@@ -159,7 +159,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='hawaii/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -171,7 +171,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='hawaii_full_length',
           audio_glob='hawaii/audio/*.flac',
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -185,7 +185,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='ssw/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           description=(
               'Annotated Sapsucker Woods recordings. '
@@ -196,7 +196,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='ssw_full_length',
           audio_glob='ssw/audio/*.flac',
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -208,7 +208,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='coffee_farms',
           audio_glob='coffee_farms/audio/*.flac',
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
@@ -222,7 +222,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='coffee_farms_full_length',
           audio_glob='coffee_farms/audio/*.flac',
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -236,7 +236,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='high_sierras/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -247,7 +247,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='high_sierras_full_length',
           audio_glob='high_sierras/audio/*.flac',
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -261,7 +261,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='sierras_kahl/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -272,7 +272,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='sierras_kahl_full_length',
           audio_glob='sierras_kahl/audio/*.flac',
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -286,7 +286,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='powdermill/*/*.wav',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_powdermill_annotations,
+          annotation_load_fn=annotations_fns.load_powdermill_annotations,
           description=(
               'New England recordings from Powdermill Nature Reserve, '
               'Rector, PA. https://doi.org/10.1002/ecy.3329'
@@ -297,7 +297,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           name='powdermill_full_length',
           audio_glob='powdermill/*/*.wav',
           annotation_filename='powdermill.csv',
-          annotation_load_fn=dataset_fns.load_powdermill_annotations,
+          annotation_load_fn=annotations_fns.load_powdermill_annotations,
           keep_unknown_annotation=True,
           description=(
               'Full-length New England recordings from Powdermill '
@@ -311,7 +311,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           audio_glob='peru/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -323,7 +323,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='peru_full_length',
           audio_glob='peru/audio/*.flac',
-          annotation_load_fn=dataset_fns.load_cornell_annotations,
+          annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -335,7 +335,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='weldy_calltype_full_length',
           audio_glob='weldy_calltype/annotated_recordings/*.wav',
-          annotation_load_fn=dataset_fns.load_weldy_annotations,
+          annotation_load_fn=annotations_fns.load_weldy_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
@@ -347,7 +347,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
       SoundscapesConfig(
           name='anuraset_full_length',
           audio_glob='anuraset/raw_data/*/*.wav',
-          annotation_load_fn=dataset_fns.load_anuraset_annotations,
+          annotation_load_fn=annotations_fns.load_anuraset_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
           description=(
