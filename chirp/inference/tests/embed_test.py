@@ -855,8 +855,7 @@ class EmbedTest(parameterized.TestCase):
     spectrograms = fake_model.front_end(waveform[:, :, np.newaxis])
     fake_model(spectrograms[:, :128, :])
     model_path = os.path.join(tempfile.gettempdir(), 'whale_model')
-    tf.saved_model.save(
-        fake_model,
+    fake_model.save(
         model_path,
         signatures={
             'score': fake_model.score,
