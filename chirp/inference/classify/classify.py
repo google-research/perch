@@ -282,3 +282,5 @@ def write_inference_parquet(
             tmp_df = pd.DataFrame()
         else:
           nondetection_count += 1
+  print('\n\n\n   Detection count: ', detection_count)
+  print('NonDetection count: ', nondetection_count)
