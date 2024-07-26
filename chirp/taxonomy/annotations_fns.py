@@ -57,7 +57,9 @@ def load_caples_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   return segments
 
 
-def load_cornell_annotations(annotations_path: epath.Path) -> pd.DataFrame:
+def load_cornell_annotations(
+    annotations_path: epath.Path, file_id_prefix: str = ''
+) -> pd.DataFrame:
   """Load the annotations from a Cornell Zenodo dataset."""
   start_time_fn = lambda row: float(row['Start Time (s)'])
   end_time_fn = lambda row: float(row['End Time (s)'])
@@ -66,7 +68,7 @@ def load_cornell_annotations(annotations_path: epath.Path) -> pd.DataFrame:
       row['Species eBird Code'].strip().replace('????', 'unknown')
   ]
 
-  filename_fn = lambda filepath, row: row['Filename'].strip()
+  filename_fn = lambda filepath, row: file_id_prefix + row['Filename'].strip()
   annos = annotations.read_dataset_annotations_csvs(
       [annotations_path],
       filename_fn=filename_fn,
