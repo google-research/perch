@@ -238,7 +238,7 @@ def write_inference_parquet(
 ):
   """Write a Parquet file of inference results.
 
-  Uses Polars to write to a partitioned Parquet file.
+  Uses Pandas to write to a partitioned Parquet file.
   Each partition has a maximum of `row_size` rows.
   Setting `row_size` too large will result in too few partitions
   and may cause memory issues. Setting `row_size` too small will
