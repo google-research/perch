@@ -70,7 +70,7 @@ class ClassifierDataTest(absltest.TestCase):
         positive_label_prob=0.5,
         rng=np.random.default_rng(42),
     )
-    data_manager = classifier_data.ClassifierDataManager(
+    data_manager = classifier_data.AgileDataManager(
         target_labels=test_utils.CLASS_LABELS,
         db=db,
         train_ratio=0.8,
@@ -103,7 +103,7 @@ class ClassifierDataTest(absltest.TestCase):
         positive_label_prob=0.5,
         rng=np.random.default_rng(42),
     )
-    data_manager = classifier_data.ClassifierDataManager(
+    data_manager = classifier_data.AgileDataManager(
         target_labels=test_utils.CLASS_LABELS,
         db=db,
         train_ratio=0.8,
@@ -136,7 +136,7 @@ class ClassifierDataTest(absltest.TestCase):
         rng=np.random.default_rng(42),
     )
     # Only use three labels, which is half the length of the full class list.
-    data_manager = classifier_data.ClassifierDataManager(
+    data_manager = classifier_data.AgileDataManager(
         target_labels=test_utils.CLASS_LABELS[:3],
         db=db,
         train_ratio=0.8,
@@ -166,7 +166,7 @@ class ClassifierDataTest(absltest.TestCase):
         num_embeddings=100,
         rng=np.random.default_rng(42),
     )
-    data_manager = classifier_data.ClassifierDataManager(
+    data_manager = classifier_data.AgileDataManager(
         target_labels=test_utils.CLASS_LABELS,
         db=db,
         train_ratio=0.8,

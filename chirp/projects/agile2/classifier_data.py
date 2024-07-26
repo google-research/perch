@@ -15,6 +15,7 @@
 
 """Tools for processing data for the Agile2 classifier."""
 
+import abc
 import dataclasses
 import itertools
 from typing import Any, Iterator, Sequence
@@ -61,7 +62,80 @@ class LabeledExample:
 
 
 @dataclasses.dataclass
-class ClassifierDataManager:
+class DataManager:
+  """Base class for managing data for training and evaluation."""
+
+  target_labels: tuple[str, ...]
+  db: interface.GraphSearchDBInterface
+  batch_size: int
+  rng: np.random.Generator
+
+  def get_train_test_split(self) -> tuple[np.ndarray, np.ndarray]:
+    """Create a train/test split over all labels.
+
+    Returns:
+      Two numpy arrays contianing train and eval embedding ids, respectively.
+    """
+    raise NotImplementedError('get_train_test_split is not implemented.')
+
+  def get_multihot_labels(self, idx: int) -> tuple[np.ndarray, np.ndarray]:
+    """Create the multihot label for one example."""
+    labels = self.db.get_labels(idx)
+    lbl_idxes = {label: i for i, label in enumerate(self.target_labels)}
+    pos = np.zeros(len(self.target_labels), dtype=np.float32)
+    neg = np.zeros(len(self.target_labels), dtype=np.float32)
+    for label in labels:
+      if label.type == interface.LabelType.POSITIVE:
+        pos[lbl_idxes[label.label]] += 1.0
+      elif label.type == interface.LabelType.NEGATIVE:
+        neg[lbl_idxes[label.label]] += 1.0
+    count = pos + neg
+    mask = count > 0
+    denom = np.maximum(count, 1.0)
+    multihot = pos / denom
+    return multihot, mask
+
+  def labeled_example_iterator(
+      self, ids: np.ndarray, repeat: bool = False
+  ) -> Iterator[LabeledExample]:
+    """Create an iterator for training a classifier for target_labels.
+
+    Args:
+      ids: The embedding IDs to iterate over.
+      repeat: If True, repeat the iterator indefinitely.
+
+    Yields:
+      LabeledExample objects.
+    """
+    ids = ids.copy()
+    self.rng.shuffle(ids)
+    q = 0
+    while True:
+      x = ids[q]
+      x_emb = self.db.get_embedding(x)
+      x_multihot, x_is_labeled = self.get_multihot_labels(x)
+      yield LabeledExample(x, x_emb, x_multihot, x_is_labeled)
+      q += 1
+      if q >= len(ids) and repeat:
+        q = 0
+        self.rng.shuffle(ids)
+      elif q >= len(ids):
+        break
+
+  def batched_example_iterator(
+      self,
+      labeled_ids: np.ndarray,
+      repeat: bool = False,
+      **unused_kwargs,
+  ) -> Iterator[LabeledExample]:
+    """Labeled training data iterator with weak negatives."""
+    example_iterator = self.labeled_example_iterator(labeled_ids, repeat=repeat)
+    for ex_batch in batched(example_iterator, self.batch_size):
+      yield LabeledExample.create_batched(ex_batch)
+
+
+@dataclasses.dataclass
+class AgileDataManager(DataManager):
   """Collects labeled data for training classifiers.
 
   Attributes:
@@ -74,14 +148,9 @@ class ClassifierDataManager:
     weak_negatives_batch_size: The batch size for weak negatives.
     rng: The random number generator to use.
   """
-
-  target_labels: tuple[str, ...]
-  db: interface.GraphSearchDBInterface
   train_ratio: float
   min_eval_examples: int
-  batch_size: int
   weak_negatives_batch_size: int
-  rng: np.random.Generator
 
   def get_single_label_train_test_split(
       self, label: str
@@ -148,59 +217,19 @@ class ClassifierDataManager:
     all_train = np.setdiff1d(all_ids, all_eval)
     return all_train, all_eval
 
-  def get_multihot_labels(self, idx: int) -> tuple[np.ndarray, np.ndarray]:
-    """Create the multihot label for one example."""
-    labels = self.db.get_labels(idx)
-    lbl_idxes = {label: i for i, label in enumerate(self.target_labels)}
-    pos = np.zeros(len(self.target_labels), dtype=np.float32)
-    neg = np.zeros(len(self.target_labels), dtype=np.float32)
-    for label in labels:
-      if label.type == interface.LabelType.POSITIVE:
-        pos[lbl_idxes[label.label]] += 1.0
-      elif label.type == interface.LabelType.NEGATIVE:
-        neg[lbl_idxes[label.label]] += 1.0
-    count = pos + neg
-    mask = count > 0
-    denom = np.maximum(count, 1.0)
-    multihot = pos / denom
-    return multihot, mask
-
-  def labeled_example_iterator(
-      self, ids: np.ndarray, repeat: bool = False
-  ) -> Iterator[LabeledExample]:
-    """Create an iterator for training a classifier for target_labels.
-
-    Args:
-      ids: The embedding IDs to iterate over.
-      repeat: If True, repeat the iterator indefinitely.
-
-    Yields:
-      LabeledExample objects.
-    """
-    ids = ids.copy()
-    self.rng.shuffle(ids)
-    q = 0
-    while True:
-      x = ids[q]
-      x_emb = self.db.get_embedding(x)
-      x_multihot, x_is_labeled = self.get_multihot_labels(x)
-      yield LabeledExample(x, x_emb, x_multihot, x_is_labeled)
-      q += 1
-      if q >= len(ids) and repeat:
-        q = 0
-        self.rng.shuffle(ids)
-      elif q >= len(ids):
-        break
-
   def batched_example_iterator(
       self,
       labeled_ids: np.ndarray,
-      add_weak_negatives: bool = False,
       repeat: bool = False,
+      add_weak_negatives: bool = False,
   ) -> Iterator[LabeledExample]:
     """Labeled training data iterator with weak negatives."""
     example_iterator = self.labeled_example_iterator(labeled_ids, repeat=repeat)
     example_iterator = batched(example_iterator, self.batch_size)
+    if not add_weak_negatives:
+      for ex_batch in example_iterator:
+        yield LabeledExample.create_batched(ex_batch)
+      return
 
     weak_ids = np.setdiff1d(self.db.get_embedding_ids(), labeled_ids)
     weak_iterator = self.labeled_example_iterator(weak_ids, repeat=True)
@@ -214,6 +243,48 @@ class ClassifierDataManager:
         yield ex_batch.join_batches(weak_ex_batch)
       else:
         yield ex_batch
+
+
+@dataclasses.dataclass
+class FullyAnnotatedDataManager(DataManager):
+  """A DataManager for fully-annotated datasets."""
+
+  train_examples_per_class: int
+  min_eval_examples: int
+  add_unlabeled_train_examples: bool
+
+  def get_train_test_split(self) -> tuple[np.ndarray, np.ndarray]:
+    """Create a train/test split over the fully-annotated dataset."""
+    pos_id_sets = {}
+    eval_id_sets = {}
+    for label in self.target_labels:
+      pos_id_sets[label] = self.db.get_embeddings_by_label(
+          label, interface.LabelType.POSITIVE, None
+      )
+      self.rng.shuffle(pos_id_sets[label])
+      eval_id_sets[label] = pos_id_sets[label][: self.min_eval_examples]
+    all_eval_ids = np.concatenate(tuple(eval_id_sets.values()), axis=0)
+
+    # Now produce train sets of the desired size,
+    # avoiding the selected eval examples.
+    train_id_sets = {}
+    for label in self.target_labels:
+      pos_set = np.setdiff1d(pos_id_sets[label], all_eval_ids)
+      train_id_sets[label] = pos_set[: self.train_examples_per_class]
+    if self.add_unlabeled_train_examples:
+      unlabeled_ids = np.setdiff1d(
+          self.db.get_embedding_ids(),
+          np.concatenate(tuple(pos_id_sets.values()), axis=0),
+      )
+      np.setdiff1d(unlabeled_ids, all_eval_ids)
+      train_id_sets['UNLABELED'] = unlabeled_ids[
+          : self.train_examples_per_class
+      ]
+
+    # The final eval set is the complement of all selected training id's.
+    all_train_ids = np.concatenate(tuple(train_id_sets.values()), axis=0)
+    eval_ids = np.setdiff1d(self.db.get_embedding_ids(), all_train_ids)
+    return all_train_ids, eval_ids
 
 
 def batched(iterable: Iterator[Any], n: int) -> Iterator[Any]:
