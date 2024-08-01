@@ -35,6 +35,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
   """SQLite implementation of graph search database."""
 
   db: sqlite3.Connection
+  db_path: str
   embedding_dim: int
   embedding_dtype: type[Any] = np.float16
   _cursor: sqlite3.Cursor | None = None
@@ -50,7 +51,11 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     cursor = db.cursor()
     cursor.execute('PRAGMA journal_mode=WAL;')  # Enable WAL mode
     db.commit()
-    return SQLiteGraphSearchDB(db, embedding_dim)
+    return SQLiteGraphSearchDB(db, db_path, embedding_dim, embedding_dtype)
+
+  def thread_split(self):
+    """Get a new instance of the SQLite DB."""
+    return self.create(self.db_path, self.embedding_dim, self.embedding_dtype)
 
   def _get_cursor(self) -> sqlite3.Cursor:
     if self._cursor is None:
@@ -189,7 +194,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     )
     result = cursor.fetchone()
     if result is None:
-      raise ValueError(f'Metadata key not found: {key}')
+      raise KeyError(f'Metadata key not found: {key}')
     return config_dict.ConfigDict(json.loads(result[0]))
 
   def get_dataset_names(self) -> tuple[str, ...]:

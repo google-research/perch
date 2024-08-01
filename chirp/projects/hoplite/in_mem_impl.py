@@ -78,6 +78,11 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
     # Dropping all edges initializes the edge table.
     self.drop_all_edges()
 
+  def thread_split(self) -> interface.GraphSearchDBInterface:
+    """Return a readable instance of the database."""
+    # Since numpy arrays are in shared memory, we can reuse the same object.
+    return self
+
   def count_embeddings(self) -> int:
     """Return a count of all embeddings in the database."""
     return len(self.embedding_ids)

@@ -15,10 +15,9 @@
 
 """Utility functions for graph operations."""
 
-from collections.abc import Callable, Iterator
+from typing import Iterator
 
 from chirp.projects.hoplite import interface
-from chirp.projects.hoplite import search_results
 import numpy as np
 import tqdm
 
@@ -47,10 +46,10 @@ def insert_random_embeddings(
 ):
   """Insert randomly generated embedding vectors into the DB."""
   rng = np.random.default_rng(seed=seed)
-  np_alpha = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+  np_alpha = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
   dataset_names = ('a', 'b', 'c')
   for _ in tqdm.tqdm(range(num_embeddings)):
-    embedding = np.float32(rng.normal(size=emb_dim, loc=0, scale=1.0))
+    embedding = np.float32(rng.normal(size=emb_dim, loc=0, scale=0.1))
     dataset_name = rng.choice(dataset_names)
     source_name = ''.join(
         [str(a) for a in np.random.choice(np_alpha, size=3, replace=False)]
@@ -156,35 +155,3 @@ def random_walk(
       break
     idx = edges[rng.integers(0, len(edges))]
   return idx
-
-
-def brute_search(
-    db: interface.GraphSearchDBInterface,
-    query_embedding: np.ndarray,
-    search_list_size: int,
-    score_fn: Callable[[np.ndarray, np.ndarray], float],
-) -> tuple[search_results.TopKSearchResults, np.ndarray]:
-  """Performs a brute-force search for neighbors of the query embedding.
-
-  Args:
-    db: Graph DB instance.
-    query_embedding: Query embedding vector.
-    search_list_size: Number of results to return.
-    score_fn: Scoring function to use for ranking results.
-
-  Returns:
-    A TopKSearchResults object containing the search results, and a list of
-    all scores computed during the search.
-  """
-  results = search_results.TopKSearchResults(search_list_size)
-  all_scores = []
-  for idx in db.get_embedding_ids():
-    target_embedding = db.get_embedding(idx)
-    score = score_fn(query_embedding, target_embedding)
-    all_scores.append(score)
-    # Check filtering and then force insert to avoid creating a SearchResult
-    # object for discarded objects. This saves a small amount of time in the
-    # inner loop.
-    if not results.will_filter(idx, score):
-      results.update(search_results.SearchResult(idx, score), force_insert=True)
-  return results, np.array(all_scores)

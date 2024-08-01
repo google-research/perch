@@ -112,6 +112,13 @@ class GraphSearchDBInterface(abc.ABC):
     """Commit any pending transactions to the database."""
 
   @abc.abstractmethod
+  def thread_split(self) -> 'GraphSearchDBInterface':
+    """Get a new instance of the database with the same contents.
+
+    For example, SQLite DB's need a distinct object in each thread.
+    """
+
+  @abc.abstractmethod
   def insert_metadata(self, key: str, value: config_dict.ConfigDict) -> None:
     """Insert a key-value pair into the metadata table."""
 
