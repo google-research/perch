@@ -213,6 +213,22 @@ class GraphSearchDBInterface(abc.ABC):
   def get_labels(self, embedding_id: int) -> Sequence[Label]:
     """Get all labels for the indicated embedding_id."""
 
+  @abc.abstractmethod
+  def get_classes(self) -> Sequence[str]:
+    """Get all distinct classes (label strings) in the database."""
+
+  @abc.abstractmethod
+  def get_class_counts(
+      self, label_type: LabelType = LabelType.POSITIVE
+  ) -> dict[str, int]:
+    """Count the number of occurences of each class in the database.
+
+    Classes with zero matching occurences are still included in the result.
+
+    Args:
+      label_type: Type of label to count. By default, counts positive labels.
+    """
+
   # Composite methods
 
   def get_one_embedding_id(self) -> int:
@@ -229,6 +245,10 @@ class GraphSearchDBInterface(abc.ABC):
     for idx in self.get_embedding_ids():
       ct += self.get_edges(idx).shape[0]
     return ct
+
+  def count_classes(self) -> int:
+    """Return a count of all distinct classes in the database."""
+    return len(self.get_classes())
 
   def get_embeddings(
       self, embedding_ids: np.ndarray

@@ -249,6 +249,22 @@ class HopliteTest(parameterized.TestCase):
       got = db.get_labels(ids[0])
       self.assertLen(got, 3)
 
+    with self.subTest('get_classes'):
+      got = db.get_classes()
+      self.assertSequenceEqual(got, ['hawgoo', 'rewbla'])
+
+    with self.subTest('get_class_counts'):
+      # 2 positive labels for 'hawgoo' ignoring provenance, 0 for 'rewbla'.
+      got = db.get_class_counts(interface.LabelType.POSITIVE)
+      self.assertDictEqual(got, {'hawgoo': 2, 'rewbla': 0})
+
+      # 1 negative label for 'rewbla', 0 for 'hawgoo'.
+      got = db.get_class_counts(interface.LabelType.NEGATIVE)
+      self.assertDictEqual(got, {'hawgoo': 0, 'rewbla': 1})
+
+    with self.subTest('count_classes'):
+      self.assertEqual(db.count_classes(), 2)
+
   def test_brute_search_impl_agreement(self):
     rng = np.random.default_rng(42)
     in_mem_db = self._make_db('in_mem', 1000, rng)

@@ -15,6 +15,8 @@
 
 """SQLite Implementation of a searchable embeddings database."""
 
+import collections
+from collections.abc import Sequence
 import dataclasses
 import json
 import sqlite3
@@ -443,6 +445,31 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         interface.Label(int(r[0]), r[1], interface.LabelType(r[2]), r[3])
         for r in results
     )
+
+  def get_classes(self) -> Sequence[str]:
+    cursor = self._get_cursor()
+    cursor.execute('SELECT DISTINCT label FROM hoplite_labels ORDER BY label;')
+    return tuple(r[0] for r in cursor.fetchall())
+
+  def get_class_counts(
+      self, label_type: interface.LabelType = interface.LabelType.POSITIVE
+  ) -> dict[str, int]:
+    cursor = self._get_cursor()
+    # Subselect with distinct is needed to avoid double-counting the same label
+    # on the same embedding because of different provenances.
+    cursor.execute("""
+      SELECT label, type, COUNT(*)
+      FROM (
+          SELECT DISTINCT embedding_id, label, type FROM hoplite_labels)
+      GROUP BY label, type;
+    """)
+    results = collections.defaultdict(int)
+    for r in cursor.fetchall():
+      if r[1] == label_type.value:
+        results[r[0]] = r[2]
+      else:
+        results[r[0]] += 0
+    return results
 
   def print_table_values(self, table_name):
     """Prints all values from the specified table in the SQLite database."""
