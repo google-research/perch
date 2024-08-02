@@ -42,7 +42,7 @@ import csv
 import os
 
 from absl import logging
-import dataset_info
+from chirp.birb_sep_paper import dataset_info
 import numpy as np
 
 SPECIES = 'species'
