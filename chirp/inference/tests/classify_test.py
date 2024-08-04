@@ -15,16 +15,20 @@
 
 """Test small-model classification."""
 
+import os
 import tempfile
+from etils import epath
 
-from chirp.inference import interface
+from chirp.inference import embed_lib, interface
 from chirp.inference.classify import classify
 from chirp.inference.classify import data_lib
+from chirp.inference.search import bootstrap
 from chirp.taxonomy import namespace
 import numpy as np
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from bootstrap_test import BootstrapTest
 
 
 class ClassifyTest(parameterized.TestCase):
@@ -99,6 +103,58 @@ class ClassifyTest(parameterized.TestCase):
     error = np.abs(restored_logits - logits).sum()
     self.assertEqual(error, 0)
 
+  def test_write_inference_file(self):
+    # copy from test_train_linear_model to get the model
+    embedding_dim = 128
+    num_classes = 4
+    model = classify.get_linear_model(embedding_dim, num_classes)
+    
+    classes = ['a', 'b', 'c', 'd']
+    logits_model = interface.LogitsOutputHead(
+        model_path='./test_model',
+        logits_key='some_model',
+        logits_model=model,
+        class_list=namespace.ClassList('classes', classes),
+    )
+    
+    # make a fake embeddings dataset
+    filenames = ['file1', 'file2', 'file3']
+    bt = BootstrapTest()
+    bt.setUp()
+    audio_glob = bt.make_wav_files(classes, filenames)
+    source_infos = embed_lib.create_source_infos([audio_glob], shard_len_s=5.0)
+
+    embed_dir = os.path.join(bt.tempdir, 'embeddings')
+    labeled_dir = os.path.join(bt.tempdir, 'labeled')
+    epath.Path(embed_dir).mkdir(parents=True, exist_ok=True)
+    epath.Path(labeled_dir).mkdir(parents=True, exist_ok=True)
+    
+    print(source_infos)
+    print(bt.tempdir)
+
+    bt.write_placeholder_embeddings(audio_glob, source_infos, embed_dir)
+
+    bootstrap_config = bootstrap.BootstrapConfig.load_from_embedding_path(
+        embeddings_path=embed_dir,
+        annotated_path=labeled_dir,
+    )
+    print('config hash : ', bootstrap_config.embedding_config_hash())
+
+    project_state = bootstrap.BootstrapState(
+        config=bootstrap_config,
+    )
+    
+    embeddings_ds = project_state.create_embeddings_dataset()
+    
+    classify.write_inference_file(
+        embeddings_ds=embeddings_ds,
+        model=logits_model,
+        labels=classes,
+        output_filepath='./test_output',
+        embedding_hop_size_s=5.0,
+        row_size=1,
+        format='csv'
+    )
 
 if __name__ == '__main__':
   absltest.main()
