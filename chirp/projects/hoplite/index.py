@@ -16,9 +16,11 @@
 """Vamana implementation."""
 
 import collections
+import concurrent
 import dataclasses
 from typing import Callable
 
+from chirp.projects.hoplite import brutalism
 from chirp.projects.hoplite import graph_utils
 from chirp.projects.hoplite import interface
 from chirp.projects.hoplite import score_functions
@@ -454,7 +456,7 @@ class HopliteSearchIndex:
     graph_results = search_fn(query)
     graph_keys = set(r.embedding_id for r in graph_results)
 
-    brute_results, _ = graph_utils.brute_search(
+    brute_results, _ = brutalism.brute_search(
         self.db, query, search_list_size=eval_top_k, score_fn=self.score_fn
     )
     brute_keys = set(r.embedding_id for r in brute_results)

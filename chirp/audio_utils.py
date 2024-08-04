@@ -17,6 +17,7 @@
 
 General utilities for processing audio and spectrograms.
 """
+
 import concurrent
 import itertools
 import logging
@@ -32,6 +33,7 @@ from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax import scipy as jsp
+from jax.typing import ArrayLike  # pylint: disable=g-importing-member
 import librosa
 import numpy as np
 import requests
@@ -602,7 +604,7 @@ def pad_to_length_if_shorter(audio: jnp.ndarray, target_length: int):
 
 
 def slice_peaked_audio(
-    audio: jnp.ndarray,
+    audio: ArrayLike,
     sample_rate_hz: int,
     interval_length_s: float = 6.0,
     max_intervals: int = 5,
@@ -616,8 +618,7 @@ def slice_peaked_audio(
     max_intervals: upper-bound on the number of audio intervals to extract.
 
   Returns:
-    Sequence of extracted audio intervals, each of shape
-    [sample_rate_hz * interval_length_s].
+    Sequence of start and stop indices for the extracted audio intervals.
   """
   target_length = int(sample_rate_hz * interval_length_s)
 

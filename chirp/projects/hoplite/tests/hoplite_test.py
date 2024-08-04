@@ -15,17 +15,13 @@
 
 """Tests for Hoplite."""
 
-import os
 import shutil
 import tempfile
 
-from chirp.projects.hoplite import db_loader
-from chirp.projects.hoplite import graph_utils
-from chirp.projects.hoplite import in_mem_impl
+from chirp.projects.hoplite import brutalism
 from chirp.projects.hoplite import index
 from chirp.projects.hoplite import interface
-from chirp.projects.hoplite import sqlite_impl
-from ml_collections import config_dict
+from chirp.projects.hoplite.tests import test_utils
 import numpy as np
 
 from absl.testing import absltest
@@ -44,49 +40,6 @@ class HopliteTest(parameterized.TestCase):
     super().tearDown()
     shutil.rmtree(self.tempdir)
 
-  def _make_db(
-      self, db_type: str, num_embeddings: int, rng: np.random.Generator
-  ) -> interface.GraphSearchDBInterface:
-    if db_type == 'in_mem':
-      db = in_mem_impl.InMemoryGraphSearchDB.create(
-          embedding_dim=EMBEDDING_SIZE,
-          max_size=2000,
-          degree_bound=1000,
-      )
-    elif db_type == 'sqlite':
-      # TODO(tomdenton): use tempfile.
-      db = sqlite_impl.SQLiteGraphSearchDB.create(
-          db_path=os.path.join(self.tempdir, 'other_db.sqlite'),
-          embedding_dim=EMBEDDING_SIZE,
-      )
-    else:
-      raise ValueError(f'Unknown db type: {db_type}')
-    db.setup()
-    # Insert a few embeddings...
-    graph_utils.insert_random_embeddings(
-        db, EMBEDDING_SIZE, num_embeddings, rng
-    )
-
-    config = config_dict.ConfigDict()
-    config.embedding_dim = EMBEDDING_SIZE
-    db.insert_metadata('db_config', config)
-    return db
-
-  def _clone_embeddings(
-      self,
-      source_db: interface.GraphSearchDBInterface,
-      target_db: interface.GraphSearchDBInterface,
-  ):
-    """Copy all embeddings to target_db and provide an id mapping."""
-    id_mapping = {}
-
-    for idx in source_db.get_embedding_ids():
-      emb = source_db.get_embedding(idx)
-      source = source_db.get_embedding_source(idx)
-      target_id = target_db.insert_embedding(emb, source)
-      id_mapping[idx] = target_id
-    return id_mapping
-
   def _add_random_edges(
       self,
       rng: np.random.Generator,
@@ -103,10 +56,13 @@ class HopliteTest(parameterized.TestCase):
           'in_mem',
           'sqlite',
       ),
+      thread_split=(True, False),
   )
-  def test_graph_db_interface(self, db_type):
+  def test_graph_db_interface(self, db_type, thread_split):
     rng = np.random.default_rng(42)
-    db = self._make_db(db_type, 1000, rng)
+    db = test_utils.make_db(self.tempdir, db_type, 1000, rng, EMBEDDING_SIZE)
+    if thread_split:
+      db = db.thread_split()
 
     # Run all methods in the interface...
     self.assertEqual(db.count_embeddings(), 1000)
@@ -115,6 +71,9 @@ class HopliteTest(parameterized.TestCase):
     # Insert a few random edges...
     idxes = db.get_embedding_ids()
     self.assertLen(idxes, 1000)
+
+    one_idx = db.get_one_embedding_id()
+    self.assertIn(one_idx, idxes)
 
     # Check the metadata.
     got_md = db.get_metadata('db_config')
@@ -151,49 +110,9 @@ class HopliteTest(parameterized.TestCase):
           'sqlite',
       ),
   )
-  def test_get_embeddings_by_source(self, db_type):
-    rng = np.random.default_rng(42)
-    db = self._make_db(db_type, 1000, rng)
-
-    test_id = db.get_one_embedding_id()
-    test_source = db.get_embedding_source(test_id)
-    with self.subTest('get_embeddings_by_source_dataset'):
-      ds_sources = db.get_embeddings_by_source(
-          test_source.dataset_name, None, None
-      )
-      self.assertIn(test_id, ds_sources)
-      # About one-third of the embeddings should be from the same dataset.
-      self.assertAlmostEqual(
-          db.count_embeddings() / 3, ds_sources.shape[0], delta=100
-      )
-
-    with self.subTest('get_embeddings_by_source_file_id'):
-      ds_sources = db.get_embeddings_by_source(
-          test_source.dataset_name, test_source.source_id, None
-      )
-      self.assertIn(test_id, ds_sources)
-
-    with self.subTest('get_embeddings_by_source_file_id_and_offsets'):
-      ds_sources = db.get_embeddings_by_source(
-          test_source.dataset_name, test_source.source_id, test_source.offsets
-      )
-      self.assertIn(test_id, ds_sources)
-
-    with self.subTest('get_embeddings_by_source_miss'):
-      ds_sources = db.get_embeddings_by_source(
-          'missing_dataset', test_source.source_id, test_source.offsets
-      )
-      self.assertEqual(0, ds_sources.shape[0])
-
-  @parameterized.product(
-      db_type=(
-          'in_mem',
-          'sqlite',
-      ),
-  )
   def test_labels_db_interface(self, db_type):
     rng = np.random.default_rng(42)
-    db = self._make_db(db_type, 1000, rng)
+    db = test_utils.make_db(self.tempdir, db_type, 1000, rng, EMBEDDING_SIZE)
     ids = db.get_embedding_ids()
     db.insert_label(
         interface.Label(ids[0], 'hawgoo', interface.LabelType.POSITIVE, 'human')
@@ -249,19 +168,38 @@ class HopliteTest(parameterized.TestCase):
       got = db.get_labels(ids[0])
       self.assertLen(got, 3)
 
+    with self.subTest('get_classes'):
+      got = db.get_classes()
+      self.assertSequenceEqual(got, ['hawgoo', 'rewbla'])
+
+    with self.subTest('get_class_counts'):
+      # 2 positive labels for 'hawgoo' ignoring provenance, 0 for 'rewbla'.
+      got = db.get_class_counts(interface.LabelType.POSITIVE)
+      self.assertDictEqual(got, {'hawgoo': 2, 'rewbla': 0})
+
+      # 1 negative label for 'rewbla', 0 for 'hawgoo'.
+      got = db.get_class_counts(interface.LabelType.NEGATIVE)
+      self.assertDictEqual(got, {'hawgoo': 0, 'rewbla': 1})
+
+    with self.subTest('count_classes'):
+      self.assertEqual(db.count_classes(), 2)
+
   def test_brute_search_impl_agreement(self):
     rng = np.random.default_rng(42)
-    in_mem_db = self._make_db('in_mem', 1000, rng)
-
-    sqlite_db = self._make_db('sqlite', 0, rng)
-    id_mapping = self._clone_embeddings(in_mem_db, sqlite_db)
+    in_mem_db = test_utils.make_db(
+        self.tempdir, 'in_mem', 1000, rng, EMBEDDING_SIZE
+    )
+    sqlite_db = test_utils.make_db(
+        self.tempdir, 'sqlite', 0, rng, EMBEDDING_SIZE
+    )
+    id_mapping = test_utils.clone_embeddings(in_mem_db, sqlite_db)
 
     # Check brute-force search agreement.
     query = rng.normal(size=(128,), loc=0, scale=1.0)
-    results_m, _ = graph_utils.brute_search(
+    results_m, _ = brutalism.brute_search(
         in_mem_db, query, search_list_size=10, score_fn=np.dot
     )
-    results_s, _ = graph_utils.brute_search(
+    results_s, _ = brutalism.brute_search(
         sqlite_db, query, search_list_size=10, score_fn=np.dot
     )
     self.assertLen(results_m.search_results, 10)
@@ -276,11 +214,15 @@ class HopliteTest(parameterized.TestCase):
 
   def test_greedy_search_impl_agreement(self):
     rng = np.random.default_rng(42)
-    in_mem_db = self._make_db('in_mem', 1000, rng)
+    in_mem_db = test_utils.make_db(
+        self.tempdir, 'in_mem', 1000, rng, EMBEDDING_SIZE
+    )
     self._add_random_edges(rng, in_mem_db, degree=10)
 
-    sqlite_db = self._make_db('sqlite', 0, rng)
-    id_mapping = self._clone_embeddings(in_mem_db, sqlite_db)
+    sqlite_db = test_utils.make_db(
+        self.tempdir, 'sqlite', 0, rng, EMBEDDING_SIZE
+    )
+    id_mapping = test_utils.clone_embeddings(in_mem_db, sqlite_db)
 
     for x in in_mem_db.get_embedding_ids():
       nbrs = in_mem_db.get_edges(x)
@@ -306,85 +248,6 @@ class HopliteTest(parameterized.TestCase):
         [id_mapping[r.embedding_id] for r in results_m.search_results],
         [r.embedding_id for r in results_s.search_results],
     )
-
-  @parameterized.product(
-      source_db_type=(
-          'in_mem',
-          'sqlite',
-      ),
-      target_db_type=(
-          'in_mem',
-          'sqlite',
-      ),
-  )
-  def test_duplicate_db(self, source_db_type, target_db_type):
-    rng = np.random.default_rng(42)
-    source_db = self._make_db(source_db_type, 1000, rng)
-    self._add_random_edges(rng, source_db, degree=10)
-
-    target_db_config = config_dict.ConfigDict()
-    target_db_config.embedding_dim = source_db.embedding_dimension()
-    if target_db_type == 'sqlite':
-      target_db_config.db_path = os.path.join(self.tempdir, 'db.sqlite')
-    elif target_db_type == 'in_mem':
-      target_db_config.max_size = 2000
-      target_db_config.degree_bound = 1000
-    else:
-      raise ValueError(f'Unknown target_db_type: {target_db_type}')
-
-    labeled_idx = source_db.get_one_embedding_id()
-    source_db_label = interface.Label(
-        labeled_idx, 'hawgoo', interface.LabelType.POSITIVE, 'human'
-    )
-    source_db.insert_label(source_db_label)
-
-    target_db, id_mapping = db_loader.duplicate_db(
-        source_db, target_db_type, target_db_config
-    )
-    self.assertLen(id_mapping, 1000)
-
-    with self.subTest('embeddings'):
-      # Check that the target DB is a faithful copy of the source DB.
-      for idx in source_db.get_embedding_ids():
-        source_emb = source_db.get_embedding(idx)
-        source_source = source_db.get_embedding_source(idx)
-        target_emb = target_db.get_embedding(id_mapping[idx])
-        target_source = target_db.get_embedding_source(id_mapping[idx])
-        np.testing.assert_array_equal(source_emb, target_emb)
-        self.assertEqual(target_source.dataset_name, source_source.dataset_name)
-        self.assertEqual(target_source.source_id, source_source.source_id)
-        np.testing.assert_array_equal(
-            source_source.offsets, target_source.offsets
-        )
-
-    with self.subTest('edges'):
-      for idx in source_db.get_embedding_ids():
-        # Check that the edges are the same.
-        source_nbrs = source_db.get_edges(idx)
-        target_nbrs = target_db.get_edges(id_mapping[idx])
-        mapped_source_nbrs = np.array([id_mapping[nbr] for nbr in source_nbrs])
-        self.assertSameElements(mapped_source_nbrs, target_nbrs)
-
-    with self.subTest('metadata'):
-      source_metadata = source_db.get_metadata(key=None)
-      target_metadata = target_db.get_metadata(key=None)
-      for k, v in source_metadata.items():
-        if k == 'db_config':
-          continue
-        self.assertEqual(v, target_metadata[k])
-
-    with self.subTest('labels'):
-      source_labels = source_db.get_labels(labeled_idx)
-      target_labels = target_db.get_labels(id_mapping[labeled_idx])
-      self.assertLen(source_labels, 1)
-      self.assertLen(target_labels, 1)
-      self.assertEqual(source_labels[0].label, target_labels[0].label)
-      self.assertEqual(source_labels[0].type, target_labels[0].type)
-      self.assertEqual(source_labels[0].provenance, target_labels[0].provenance)
-      self.assertEqual(
-          id_mapping[source_labels[0].embedding_id],
-          target_labels[0].embedding_id,
-      )
 
 
 if __name__ == '__main__':

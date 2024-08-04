@@ -78,6 +78,11 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
     # Dropping all edges initializes the edge table.
     self.drop_all_edges()
 
+  def thread_split(self) -> interface.GraphSearchDBInterface:
+    """Return a readable instance of the database."""
+    # Since numpy arrays are in shared memory, we can reuse the same object.
+    return self
+
   def count_embeddings(self) -> int:
     """Return a count of all embeddings in the database."""
     return len(self.embedding_ids)
@@ -229,3 +234,30 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
 
   def get_labels(self, embedding_id: int) -> Sequence[interface.Label]:
     return self.labels[embedding_id]
+
+  def get_classes(self) -> Sequence[str]:
+    label_set = set()
+    for labels in self.labels.values():
+      for l in labels:
+        label_set.add(l.label)
+    return tuple(sorted(label_set))
+
+  def get_class_counts(
+      self, label_type: interface.LabelType = interface.LabelType.POSITIVE
+  ) -> dict[str, int]:
+    class_counts = collections.defaultdict(int)
+    for labels in self.labels.values():
+      counted_labels = set()
+      for l in labels:
+        # Avoid double-counting the same label on the same embedding because of
+        # different provenances.
+        if l.label in counted_labels:
+          continue
+        if l.type.value == label_type.value:
+          class_counts[l.label] += 1
+          counted_labels.add(l.label)
+        else:
+          # Creates a key in the dict for all labels, even if they have no
+          # matching type counts.
+          class_counts[l.label] += 0
+    return class_counts
