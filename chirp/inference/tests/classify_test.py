@@ -17,18 +17,18 @@
 
 import os
 import tempfile
-from etils import epath
 
-from chirp.inference import embed_lib, interface
+import pandas as pd
+
+from chirp.inference import interface, tf_examples
 from chirp.inference.classify import classify
 from chirp.inference.classify import data_lib
-from chirp.inference.search import bootstrap
 from chirp.taxonomy import namespace
 import numpy as np
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from bootstrap_test import BootstrapTest
+import shutil
 
 
 class ClassifyTest(parameterized.TestCase):
@@ -102,8 +102,33 @@ class ClassifyTest(parameterized.TestCase):
       restored_logits = restored_model(query)
     error = np.abs(restored_logits - logits).sum()
     self.assertEqual(error, 0)
+    
+  def write_random_embeddings(self, embedding_dim, filenames, tempdir):
+    """Write random embeddings to a temporary directory."""
+    rng = np.random.default_rng(42)
+    with tf_examples.EmbeddingsTFRecordMultiWriter(
+        output_dir=tempdir, num_files=1
+    ) as file_writer:
+      for filename in filenames:
+        embedding = rng.normal(size=(1, 1, embedding_dim)).astype(np.float32)
+        model_outputs = interface.InferenceOutputs(embedding)
+        example = tf_examples.model_outputs_to_tf_example(
+          model_outputs=model_outputs,
+          file_id=filename,
+          audio=np.array([]),
+          timestamp_offset_s=0,
+          write_raw_audio=False,
+          write_separated_audio=False,
+          write_embeddings=True,
+          write_logits=False,
+        )
+        file_writer.write(example.SerializeToString())
+      file_writer.flush()
 
   def test_write_inference_file(self):
+    """Test writing inference files."""
+    tempdir = tempfile.mkdtemp()
+    
     # copy from test_train_linear_model to get the model
     embedding_dim = 128
     num_classes = 4
@@ -111,50 +136,56 @@ class ClassifyTest(parameterized.TestCase):
     
     classes = ['a', 'b', 'c', 'd']
     logits_model = interface.LogitsOutputHead(
-        model_path='./test_model',
+        model_path=os.path.join(tempdir, 'model'),
         logits_key='some_model',
         logits_model=model,
         class_list=namespace.ClassList('classes', classes),
     )
     
     # make a fake embeddings dataset
-    filenames = ['file1', 'file2', 'file3']
-    bt = BootstrapTest()
-    bt.setUp()
-    audio_glob = bt.make_wav_files(classes, filenames)
-    source_infos = embed_lib.create_source_infos([audio_glob], shard_len_s=5.0)
-
-    embed_dir = os.path.join(bt.tempdir, 'embeddings')
-    labeled_dir = os.path.join(bt.tempdir, 'labeled')
-    epath.Path(embed_dir).mkdir(parents=True, exist_ok=True)
-    epath.Path(labeled_dir).mkdir(parents=True, exist_ok=True)
+    filenames = [f'file_{i}' for i in range(100)]
     
-    print(source_infos)
-    print(bt.tempdir)
-
-    bt.write_placeholder_embeddings(audio_glob, source_infos, embed_dir)
-
-    bootstrap_config = bootstrap.BootstrapConfig.load_from_embedding_path(
-        embeddings_path=embed_dir,
-        annotated_path=labeled_dir,
-    )
-    print('config hash : ', bootstrap_config.embedding_config_hash())
-
-    project_state = bootstrap.BootstrapState(
-        config=bootstrap_config,
-    )
+    self.write_random_embeddings(embedding_dim, filenames, tempdir)
     
-    embeddings_ds = project_state.create_embeddings_dataset()
+    embeddings_ds = tf_examples.create_embeddings_dataset(embeddings_dir=tempdir)
+    
+    parquet_path = os.path.join(tempdir, 'output.parquet')
+    csv_path = os.path.join(tempdir, 'output.csv')
     
     classify.write_inference_file(
         embeddings_ds=embeddings_ds,
         model=logits_model,
         labels=classes,
-        output_filepath='./test_output',
+        output_filepath=parquet_path,
         embedding_hop_size_s=5.0,
-        row_size=1,
-        format='csv'
+        row_size=10,
+        format='parquet',
     )
+    
+    classify.write_inference_file(
+      embeddings_ds=embeddings_ds,
+      model=logits_model,
+      labels=classes,
+      output_filepath=csv_path,
+      embedding_hop_size_s=5.0,
+      format='csv',
+    )
+    
+    parquet = pd.read_parquet(parquet_path)
+    parquet['filename_i'] = parquet['filename'].str.split('_').str[1].astype(int)
+    parquet = parquet.sort_values(by=['filename_i', 'timestamp_s']).reset_index(drop=True)
+    
+    csv = pd.read_csv(csv_path)
+    csv['filename_i'] = csv['filename'].str.split('_').str[1].astype(int)
+    csv = csv.sort_values(by=['filename_i', 'timestamp_s']).reset_index(drop=True)
+    
+    n_expected_rows = len(filenames) * len(classes)
+    self.assertTrue(np.allclose(parquet['logit'], csv['logit'], atol=1e-2))
+    self.assertEqual(len(parquet), n_expected_rows)
+    self.assertEqual(len(csv), n_expected_rows)
+    
+    shutil.rmtree(tempdir)
+    
 
 if __name__ == '__main__':
   absltest.main()

@@ -205,10 +205,15 @@ def write_inference_file(
       output_filepath = output_filepath[:-4]
     if not output_filepath.endswith('.parquet'):
       output_filepath += '.parquet'
-    
-    parquet_count = 0
     os.mkdir(output_filepath)
-    rows = []  
+  if format == 'csv':
+    if output_filepath.endswith('.parquet'):
+      output_filepath = output_filepath[:-8]
+    if not output_filepath.endswith('.csv'):
+      output_filepath += '.csv'
+    
+  parquet_count = 0
+  rows = []
   
   inference_ds = get_inference_dataset(embeddings_ds, model)
 
@@ -229,7 +234,7 @@ def write_inference_file(
           continue
         if threshold is None or ex['logits'][t, i] > threshold[label]:
           offset = ex['timestamp_s'] + t * embedding_hop_size_s
-          logit = '{:.2f}'.format(ex['logits'][t, i])
+          logit = ex['logits'][t, i]
           if format == 'parquet':
             row = {
               headers[0]: ex["filename"].decode("utf-8"),
@@ -248,7 +253,7 @@ def write_inference_file(
                 ex['filename'].decode('utf-8'),
                 '{:.2f}'.format(offset),
                 label,
-                logit,
+                '{:.2f}'.format(logit),
             ]
             f.write(','.join(row) + '\n')
           detection_count += 1
