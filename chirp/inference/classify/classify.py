@@ -206,7 +206,6 @@ def write_inference_file(
     if not output_filepath.endswith('.parquet'):
       output_filepath += '.parquet'
     
-    tmp_df = pd.DataFrame()
     parquet_count = 0
     os.mkdir(output_filepath)
     rows = []  
@@ -243,7 +242,7 @@ def write_inference_file(
               tmp_df = pd.DataFrame(rows)
               tmp_df.to_parquet(f'{output_filepath}/part.{parquet_count}.parquet')
               parquet_count += 1
-              tmp_df = pd.DataFrame()
+              rows = []
           elif format == 'csv':
             row = [
                 ex['filename'].decode('utf-8'),
@@ -255,6 +254,7 @@ def write_inference_file(
           detection_count += 1
         else:
           nondetection_count += 1
+  # write remaining rows if parquet format
   if format == 'parquet' and rows:
     tmp_df = pd.DataFrame(rows)
     tmp_df.to_parquet(f'{output_filepath}/part.{parquet_count}.parquet')
