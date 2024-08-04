@@ -183,7 +183,7 @@ def get_inference_dataset(
   return inference_ds
 
 
-def write_inference_csv(
+def write_inference_file(
     embeddings_ds: tf.data.Dataset,
     model: interface.LogitsOutputHead,
     labels: Sequence[str],
@@ -192,26 +192,59 @@ def write_inference_csv(
     threshold: dict[str, float] | None = None,
     exclude_classes: Sequence[str] = ('unknown',),
     include_classes: Sequence[str] = (),
+    row_size: int = 1_000_000,
+    format: str = 'parquet',
 ):
-  """Write a CSV file of inference results."""
+  """Write inference results."""
+  
+  if format != 'parquet' and format != 'csv':
+    raise ValueError('Format must be either "parquet" or "csv"')
+  
+  if format == 'parquet':
+    if output_filepath.endswith('.csv'):
+      output_filepath = output_filepath[:-4]
+    if not output_filepath.endswith('.parquet'):
+      output_filepath += '.parquet'
+    
+    tmp_df = pd.DataFrame()
+    parquet_count = 0
+    os.mkdir(output_filepath)
+    rows = []  
+  
   inference_ds = get_inference_dataset(embeddings_ds, model)
 
   detection_count = 0
   nondetection_count = 0
-  with open(output_filepath, 'w') as f:
-    # Write column headers.
-    headers = ['filename', 'timestamp_s', 'label', 'logit']
-    f.write(', '.join(headers) + '\n')
-    for ex in tqdm.tqdm(inference_ds.as_numpy_iterator()):
-      for t in range(ex['logits'].shape[0]):
-        for i, label in enumerate(labels):
-          if label in exclude_classes:
-            continue
-          if include_classes and label not in include_classes:
-            continue
-          if threshold is None or ex['logits'][t, i] > threshold[label]:
-            offset = ex['timestamp_s'] + t * embedding_hop_size_s
-            logit = '{:.2f}'.format(ex['logits'][t, i])
+  if format == 'csv':
+    f = open(output_filepath, 'w')
+  headers = ['filename', 'timestamp_s', 'label', 'logit']
+  # Write column headers if CSV format
+  if format == 'csv':
+    f.write(','.join(headers) + '\n')
+  for ex in tqdm.tqdm(inference_ds.as_numpy_iterator()):
+    for t in range(ex['logits'].shape[0]):
+      for i, label in enumerate(labels):
+        if label in exclude_classes:
+          continue
+        if include_classes and label not in include_classes:
+          continue
+        if threshold is None or ex['logits'][t, i] > threshold[label]:
+          offset = ex['timestamp_s'] + t * embedding_hop_size_s
+          logit = '{:.2f}'.format(ex['logits'][t, i])
+          if format == 'parquet':
+            row = {
+              headers[0]: ex["filename"].decode("utf-8"),
+              headers[1]: offset,
+              headers[2]: label,
+              headers[3]: logit,
+            }
+            rows.append(row)
+            if len(rows) >= row_size:
+              tmp_df = pd.DataFrame(rows)
+              tmp_df.to_parquet(f'{output_filepath}/part.{parquet_count}.parquet')
+              parquet_count += 1
+              tmp_df = pd.DataFrame()
+          elif format == 'csv':
             row = [
                 ex['filename'].decode('utf-8'),
                 '{:.2f}'.format(offset),
@@ -219,68 +252,13 @@ def write_inference_csv(
                 logit,
             ]
             f.write(','.join(row) + '\n')
-            detection_count += 1
-          else:
-            nondetection_count += 1
-  print('\n\n\n   Detection count: ', detection_count)
-  print('NonDetection count: ', nondetection_count)
-
-def write_inference_parquet(
-    embeddings_ds: tf.data.Dataset,
-    model: interface.LogitsOutputHead,
-    labels: Sequence[str],
-    output_filepath: str,
-    embedding_hop_size_s: float,
-    threshold: dict[str, float] | None = None,
-    exclude_classes: Sequence[str] = ("unknown",),
-    include_classes: Sequence[str] = (),
-    row_size: int = 1_000_000,
-):
-  """Write a Parquet file of inference results.
-
-  Uses Pandas to write to a partitioned Parquet file.
-  Each partition has a maximum of `row_size` rows.
-  Setting `row_size` too large will result in too few partitions
-  and may cause memory issues. Setting `row_size` too small will
-  result in many partitions and may slow down the writing process.
-  """
-  inference_ds = get_inference_dataset(embeddings_ds, model)
-
-  if output_filepath.endswith(".csv"):
-    output_filepath = output_filepath[:-4]
-  if not output_filepath.endswith(".parquet"):
-    output_filepath += ".parquet"
-
-  tmp_df = pd.DataFrame()
-  detection_count = 0
-  nondetection_count = 0
-  parquet_count = 0
-  os.mkdir(output_filepath)
-  headers = ["filename", "timestamp_s", "label", "logit"]
-  for ex in tqdm.tqdm(inference_ds.as_numpy_iterator()):
-    for t in range(ex["logits"].shape[0]):
-      for i, label in enumerate(labels):
-        if label in exclude_classes:
-          continue
-        if include_classes and label not in include_classes:
-          continue
-        if threshold is None or ex["logits"][t, i] > threshold[label]:
-          offset = ex["timestamp_s"] + t * embedding_hop_size_s
-          logit = ex["logits"][t, i]
-          row = {
-            headers[0]: ex["filename"].decode("utf-8"),
-            headers[1]: offset,
-            headers[2]: label,
-            headers[3]: logit,
-          }
-          tmp_df = pd.concat([tmp_df, pd.DataFrame([row])])
           detection_count += 1
-          if len(tmp_df) >= row_size:
-            tmp_df.to_parquet(
-              f"{output_filepath}/part.{parquet_count}.parquet")
-            parquet_count += 1
-            tmp_df = pd.DataFrame()
         else:
           nondetection_count += 1
+  if format == 'parquet' and rows:
+    tmp_df = pd.DataFrame(rows)
+    tmp_df.to_parquet(f'{output_filepath}/part.{parquet_count}.parquet')
+  if format == 'csv':
+    f.close()
   print('\n\n\n   Detection count: ', detection_count)
   print('NonDetection count: ', nondetection_count)
