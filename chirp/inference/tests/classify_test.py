@@ -143,7 +143,7 @@ class ClassifyTest(parameterized.TestCase):
     )
     
     # make a fake embeddings dataset
-    filenames = [f'file_{i}' for i in range(100)]
+    filenames = [f'file_{i}' for i in range(101)]
     
     self.write_random_embeddings(embedding_dim, filenames, tempdir)
     
@@ -158,8 +158,7 @@ class ClassifyTest(parameterized.TestCase):
         labels=classes,
         output_filepath=parquet_path,
         embedding_hop_size_s=5.0,
-        row_size=10,
-        format='parquet',
+        shard_size=10,
     )
     
     classify.write_inference_file(
@@ -168,7 +167,7 @@ class ClassifyTest(parameterized.TestCase):
       labels=classes,
       output_filepath=csv_path,
       embedding_hop_size_s=5.0,
-      format='csv',
+      shard_size=10,
     )
     
     parquet = pd.read_parquet(parquet_path)
