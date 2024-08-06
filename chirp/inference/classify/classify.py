@@ -183,7 +183,7 @@ def get_inference_dataset(
   )
   return inference_ds
 
-def flush_rows(
+def flush_inference_rows(
   output_path: epath.Path, 
   shard_num: int, 
   rows: list[dict[str, str]],
@@ -239,7 +239,6 @@ def write_inference_file(
   detection_count = 0
   nondetection_count = 0
   headers = ['filename', 'timestamp_s', 'label', 'logit']
-  # Write column headers if CSV format
   for ex in tqdm.tqdm(inference_ds.as_numpy_iterator()):
     for t in range(ex['logits'].shape[0]):
       for i, label in enumerate(labels):
@@ -258,13 +257,13 @@ def write_inference_file(
           }
           rows.append(row)
           if len(rows) >= shard_size:
-            flush_rows(output_filepath, shard_num, rows, format, headers)
+            flush_inference_rows(output_filepath, shard_num, rows, format, headers)
             rows = []
             shard_num += 1
           detection_count += 1
         else:
           nondetection_count += 1
   # write remaining rows
-  flush_rows(output_filepath, shard_num, rows, format, headers)
+  flush_inference_rows(output_filepath, shard_num, rows, format, headers)
   print('\n\n\n   Detection count: ', detection_count)
   print('NonDetection count: ', nondetection_count)
