@@ -25,9 +25,6 @@ from chirp.models import metrics
 import numpy as np
 import tensorflow as tf
 import tqdm
-import pandas as pd
-import os
-from etils import epath
 
 
 @dataclasses.dataclass
@@ -183,87 +180,45 @@ def get_inference_dataset(
   )
   return inference_ds
 
-def flush_inference_rows(
-  output_path: epath.Path, 
-  shard_num: int, 
-  rows: list[dict[str, str]],
-  format: str,
-  headers: list[str],
-):
-  """Helper method to write rows to disk."""
-  if format == 'csv':
-    if shard_num == 0:
-      with output_path.open('w') as f:
-        f.write(','.join(headers) + '\n')
-    with output_path.open('a') as f:
-      for row in rows:
-        csv_row = [
-            '{:.2f}'.format(row.get(h, '')) if isinstance(row.get(h, ''), np.float32) else row.get(h, '') 
-            for h in row
-        ]        
-        f.write(','.join(csv_row) + '\n')
-  elif format == 'parquet':
-    output_path.mkdir(parents=True, exist_ok=True)
-    parquet_path = output_path / f'part.{shard_num}.parquet'
-    pd.DataFrame(rows).to_parquet(parquet_path)
-  else:
-    raise ValueError('Output format must be either csv or parquet')
 
-
-def write_inference_file(
+def write_inference_csv(
     embeddings_ds: tf.data.Dataset,
     model: interface.LogitsOutputHead,
     labels: Sequence[str],
-    output_filepath: epath.PathLike,
+    output_filepath: str,
     embedding_hop_size_s: float,
     threshold: dict[str, float] | None = None,
     exclude_classes: Sequence[str] = ('unknown',),
     include_classes: Sequence[str] = (),
-    shard_size: int = 1_000_000,
 ):
-  """Write inference results."""
-  output_filepath = epath.Path(output_filepath)
-  
-  if str(output_filepath).endswith('.csv'):
-    format = 'csv'
-  elif str(output_filepath).endswith('.parquet'):
-    format = 'parquet'
-  else:
-    raise ValueError('Output file must end with either .csv or .parquet')
-    
-  shard_num = 0
-  rows = []
-  
+  """Write a CSV file of inference results."""
   inference_ds = get_inference_dataset(embeddings_ds, model)
 
   detection_count = 0
   nondetection_count = 0
-  headers = ['filename', 'timestamp_s', 'label', 'logit']
-  for ex in tqdm.tqdm(inference_ds.as_numpy_iterator()):
-    for t in range(ex['logits'].shape[0]):
-      for i, label in enumerate(labels):
-        if label in exclude_classes:
-          continue
-        if include_classes and label not in include_classes:
-          continue
-        if threshold is None or ex['logits'][t, i] > threshold[label]:
-          offset = ex['timestamp_s'] + t * embedding_hop_size_s
-          logit = ex['logits'][t, i]
-          row = {
-            headers[0]: ex["filename"].decode("utf-8"),
-            headers[1]: np.float32(offset),
-            headers[2]: label,
-            headers[3]: np.float32(logit),
-          }
-          rows.append(row)
-          if len(rows) >= shard_size:
-            flush_inference_rows(output_filepath, shard_num, rows, format, headers)
-            rows = []
-            shard_num += 1
-          detection_count += 1
-        else:
-          nondetection_count += 1
-  # write remaining rows
-  flush_inference_rows(output_filepath, shard_num, rows, format, headers)
+  with open(output_filepath, 'w') as f:
+    # Write column headers.
+    headers = ['filename', 'timestamp_s', 'label', 'logit']
+    f.write(', '.join(headers) + '\n')
+    for ex in tqdm.tqdm(inference_ds.as_numpy_iterator()):
+      for t in range(ex['logits'].shape[0]):
+        for i, label in enumerate(labels):
+          if label in exclude_classes:
+            continue
+          if include_classes and label not in include_classes:
+            continue
+          if threshold is None or ex['logits'][t, i] > threshold[label]:
+            offset = ex['timestamp_s'] + t * embedding_hop_size_s
+            logit = '{:.2f}'.format(ex['logits'][t, i])
+            row = [
+                ex['filename'].decode('utf-8'),
+                '{:.2f}'.format(offset),
+                label,
+                logit,
+            ]
+            f.write(','.join(row) + '\n')
+            detection_count += 1
+          else:
+            nondetection_count += 1
   print('\n\n\n   Detection count: ', detection_count)
   print('NonDetection count: ', nondetection_count)
