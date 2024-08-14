@@ -17,6 +17,7 @@
 
 import collections
 import dataclasses
+import functools
 from typing import Any, Sequence
 
 from chirp.projects.hoplite import interface
@@ -78,6 +79,10 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
     # Dropping all edges initializes the edge table.
     self.drop_all_edges()
 
+  @functools.cached_property
+  def empty_edges(self):
+    return -1 * np.ones((self.degree_bound,), dtype=np.int64)
+
   def thread_split(self) -> interface.GraphSearchDBInterface:
     """Return a readable instance of the database."""
     # Since numpy arrays are in shared memory, we can reuse the same object.
@@ -113,8 +118,12 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
     """Add an edge between two embeddings."""
     self.insert_edges(x_id, np.array([y_id]))
 
-  def insert_edges(self, x_id: int, y_ids: np.ndarray) -> None:
+  def insert_edges(
+      self, x_id: int, y_ids: np.ndarray, replace: bool = False
+  ) -> None:
     """Add an edge from a source to each element of an array of targets."""
+    if replace:
+      self.edges[x_id] = self.empty_edges
     # find a -1 in the edge list.
     locs = np.argwhere(self.edges[x_id] == -1)[: y_ids.shape[0]]
     self.edges[x_id, locs[:, 0]] = y_ids

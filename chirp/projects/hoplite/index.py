@@ -92,24 +92,13 @@ class HopliteSearchIndex:
     for idx in tqdm.tqdm(embedding_ids):
       candidates = next(random_id_generator)
       p_out = self.robust_prune_vertex(idx, candidates, alpha, target_degree)
-      self.db.insert_edges(idx, p_out)
-
-      if add_reverse_edges:
-        for nbr_idx in p_out:
-          if len(self.db.get_edges(nbr_idx)) < target_degree:
-            self.db.insert_edge(nbr_idx, idx)
+      self.db.insert_edges(idx, p_out, replace=True)
 
     if add_reverse_edges:
-      # Remove duplicate edges, if any.
-      for idx in embedding_ids:
-        nbrs = self.db.get_edges(idx)
-        deduped_nbrs = np.unique(nbrs)
-        if len(nbrs) > len(deduped_nbrs):
-          self.db.delete_edges(idx)
-          self.db.insert_edges(idx, deduped_nbrs)
+      self.add_reverse_edges(target_degree)
 
     if pad_edges:
-      # Add a random set of edges to each vertex to reach target degree.
+      # Add a random set of edges to (best-effort) reach target degree.
       random_padding_generator = graph_utils.random_batched_iterator(
           embedding_ids, batch_size=target_degree, rng=pad_rng
       )
@@ -119,9 +108,10 @@ class HopliteSearchIndex:
         pad_amount = target_degree - edges.shape[0]
         if pad_amount <= 0:
           continue
-        candidates = next(random_padding_generator)
-        candidates = np.setdiff1d(candidates, edges)[:pad_amount]
-        self.db.insert_edges(idx, candidates)
+        new_edges = np.unique(
+            np.concatenate([edges, next(random_padding_generator)], axis=0)
+        )
+        self.db.insert_edges(idx, new_edges[:target_degree], replace=True)
 
   def greedy_search(
       self,
@@ -233,8 +223,7 @@ class HopliteSearchIndex:
           search_list_size=top_k,
       )
       p_out = self.robust_prune_vertex(idx, visited, alpha, degree_bound)
-      self.db.delete_edges(idx)
-      self.db.insert_edges(idx, p_out)
+      self.db.insert_edges(idx, p_out, replace=True)
 
       # Check for edge size violations in neighbors of idx.
       nbrs = self.db.get_edges(idx)
@@ -246,8 +235,7 @@ class HopliteSearchIndex:
           p_out = self.robust_prune_vertex(
               nbr_idx, candidates, alpha, degree_bound
           )
-          self.db.delete_edges(nbr_idx)
-          self.db.insert_edges(nbr_idx, p_out)
+          self.db.insert_edges(nbr_idx, p_out, replace=True)
         else:
           self.db.insert_edge(nbr_idx, idx)
     self.db.commit()
@@ -306,17 +294,21 @@ class HopliteSearchIndex:
     return visited
 
   def add_reverse_edges(self, degree_bound: int):
+    reverse_edges = collections.defaultdict(list)
     for r in self.db.get_embedding_ids():
       for nbr in np.unique(self.db.get_edges(r)):
-        nbr_edges = self.db.get_edges(nbr)
-        if nbr_edges.shape[0] < degree_bound and r not in nbr_edges:
-          self.db.insert_edge(nbr, r)
+        reverse_edges[nbr].append(r)
+    for r in self.db.get_embedding_ids():
+      new_edges = np.unique(
+          np.concatenate([self.db.get_edges(r), reverse_edges[r]])
+      )
+      new_edges = new_edges[:degree_bound]
+      self.db.insert_edges(r, new_edges, replace=True)
 
   def dedupe_edges(self):
     for r in self.db.get_embedding_ids():
       updated_edges = np.unique(self.db.get_edges(r))
-      self.db.delete_edges(r)
-      self.db.insert_edges(r, updated_edges)
+      self.db.insert_edges(r, updated_edges, replace=True)
 
   def index_delegates_single(
       self,
@@ -340,8 +332,8 @@ class HopliteSearchIndex:
       target_edges = self.db.get_edges(target)
       if candidates.shape[0] + target_edges.shape[0] <= degree_bound:
         # Instead of pruning low-degree nodes, just add the edges.
-        new_edges = np.setdiff1d(candidates, target_edges)
-        self.db.insert_edges(target, new_edges)
+        new_edges = np.union1d(candidates, target_edges)
+        self.db.insert_edges(target, new_edges, replace=True)
         continue
 
       p_out = self.robust_prune_vertex(
@@ -352,8 +344,7 @@ class HopliteSearchIndex:
       )
       new_delegate_sets = self.assign_delegates(p_out, candidates)
 
-      self.db.delete_edges(target)
-      self.db.insert_edges(target, p_out)
+      self.db.insert_edges(target, p_out, replace=True)
       delegate_sets.update(new_delegate_sets)
 
   def assign_delegates(self, targets: np.ndarray, candidates: np.ndarray):

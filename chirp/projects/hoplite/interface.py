@@ -277,8 +277,19 @@ class GraphSearchDBInterface(abc.ABC):
     embeddings = [self.get_embedding(int(idx)) for idx in embedding_ids]
     return embedding_ids, np.array(embeddings)
 
-  def insert_edges(self, x_id: int, y_ids: np.ndarray) -> None:
-    """Add a set of directed edges from x_id to each id in y_ids."""
+  def insert_edges(
+      self, x_id: int, y_ids: np.ndarray, replace: bool = False
+  ) -> None:
+    """Add a set of directed edges from x_id to each id in y_ids.
+
+    Args:
+      x_id: The source embedding id.
+      y_ids: The target embedding id's to insert as edges.
+      replace: If True, delete all existing edges from x_id before adding the
+        new ones.
+    """
+    if replace:
+      self.delete_edges(x_id)
     for y_id in y_ids:
       self.insert_edge(x_id, int(y_id))
 
