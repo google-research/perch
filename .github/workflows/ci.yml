@@ -36,3 +36,7 @@ jobs:
         run: poetry run python -m unittest discover -s chirp/train_tests -p "*test.py"
       - name: Test inference with unittest
         run: poetry run python -m unittest discover -s chirp/inference/tests -p "*test.py"
+      - name: Test hoplite with unittest
+        run: poetry run python -m unittest discover -s chirp/projects/agile2/tests -p "*test.py"
+      - name: Test agile2 with unittest
+        run: poetry run python -m unittest discover -s chirp/projects/hoplite/tests -p "*test.py"

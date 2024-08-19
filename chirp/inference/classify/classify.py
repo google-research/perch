@@ -224,7 +224,7 @@ def write_inference_csv(
                 label,
                 logit,
             ]
-            f.write(', '.join(row) + '\n')
+            f.write(','.join(row) + '\n')
             detection_count += 1
           else:
             nondetection_count += 1

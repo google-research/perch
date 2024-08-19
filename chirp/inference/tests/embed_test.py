@@ -39,6 +39,7 @@ from etils import epath
 from ml_collections import config_dict
 import numpy as np
 import tensorflow as tf
+import tf_keras
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -435,7 +436,11 @@ class EmbedTest(parameterized.TestCase):
 
   def test_create_source_infos(self):
     # Just one file, but it's all good.
-    globs = [path_utils.get_absolute_path('inference/tests/testdata/clap.wav')]
+    globs = [
+        path_utils.get_absolute_path(
+            'inference/tests/testdata/clap.wav'
+        ).as_posix()
+    ]
     # Disable sharding by setting shard_len_s <= 0.
     got_infos = embed_lib.create_source_infos(
         globs, shard_len_s=-1, num_shards_per_file=100
@@ -753,6 +758,150 @@ class EmbedTest(parameterized.TestCase):
     self.assertTrue(outputs.batched)
     self.assertSequenceEqual(outputs.embeddings.shape, [2, 4, 1, 256])
     self.assertSequenceEqual(outputs.logits['label'].shape, [2, 4, 3])
+
+  def test_whale_model(self):
+    # prereq
+    class FakeModel(tf_keras.Model):
+      """Fake implementation of the humpback_whale SavedModel API.
+
+      The use of `tf_keras` as opposed to `tf.keras` is intentional; the models
+      this fakes were exported using "the pure-TensorFlow implementation of
+      Keras."
+      """
+
+      def __init__(self):
+        super().__init__()
+        self._sample_rate = 10000
+        self._classes = ['Mn']
+        self._embedder = tf_keras.layers.Dense(32)
+        self._classifier = tf_keras.layers.Dense(len(self._classes))
+
+      def call(self, spectrograms, training=False):
+        logits = self.logits(spectrograms)
+        return tf.nn.sigmoid(logits)
+
+      @tf.function(
+          input_signature=[tf.TensorSpec([None, None, 1], tf.dtypes.float32)]
+      )
+      def front_end(self, waveform):
+        return tf.math.abs(
+            tf.signal.stft(
+                tf.squeeze(waveform, -1),
+                frame_length=1024,
+                frame_step=300,
+                fft_length=128,
+            )[..., 1:]
+        )
+
+      @tf.function(
+          input_signature=[tf.TensorSpec([None, 128, 64], tf.dtypes.float32)]
+      )
+      def features(self, spectrogram):
+        return self._embedder(tf.math.reduce_mean(spectrogram, axis=-2))
+
+      @tf.function(
+          input_signature=[tf.TensorSpec([None, 128, 64], tf.dtypes.float32)]
+      )
+      def logits(self, spectrogram):
+        features = self.features(spectrogram)
+        return self._classifier(features)
+
+      @tf.function(
+          input_signature=[
+              tf.TensorSpec([None, None, 1], tf.dtypes.float32),
+              tf.TensorSpec([], tf.dtypes.int64),
+          ]
+      )
+      def score(self, waveform, context_step_samples):
+        spectrogram = self.front_end(waveform)
+        windows = tf.signal.frame(
+            spectrogram, frame_length=128, frame_step=128, axis=1
+        )
+        shape = tf.shape(windows)
+        batch_size = shape[0]
+        num_windows = shape[1]
+        frame_length = shape[2]
+        tf.debugging.assert_equal(frame_length, 128)
+        channels_len = shape[3]
+        logits = self.logits(
+            tf.reshape(
+                windows, (batch_size * num_windows, frame_length, channels_len)
+            )
+        )
+        return {'score': tf.nn.sigmoid(logits)}
+
+      @tf.function(input_signature=[])
+      def metadata(self):
+        return {
+            'input_sample_rate': tf.constant(
+                self._sample_rate, tf.dtypes.int64
+            ),
+            'context_width_samples': tf.constant(39124, tf.dtypes.int64),
+            'class_names': tf.constant(self._classes),
+        }
+
+    # setup
+    fake_model = FakeModel()
+    batch_size = 2
+    duration_seconds = 10
+    sample_rate = fake_model.metadata()['input_sample_rate']
+    waveform = np.random.randn(
+        batch_size,
+        sample_rate * duration_seconds,
+    )
+    expected_frames = int(10 / 3.9124) + 1
+    # Call the model to avoid "forward pass of the model is not defined" on
+    # save.
+    spectrograms = fake_model.front_end(waveform[:, :, np.newaxis])
+    fake_model(spectrograms[:, :128, :])
+    model_path = os.path.join(tempfile.gettempdir(), 'whale_model')
+    fake_model.save(
+        model_path,
+        signatures={
+            'score': fake_model.score,
+            'metadata': fake_model.metadata,
+            'serving_default': fake_model.score,
+            'front_end': fake_model.front_end,
+            'features': fake_model.features,
+            'logits': fake_model.logits,
+        },
+    )
+
+    with self.subTest('from_url'):
+      # invoke
+      model = models.GoogleWhaleModel.load_humpback_model(model_path)
+      outputs = model.batch_embed(waveform)
+
+      # verify
+      self.assertTrue(outputs.batched)
+      self.assertSequenceEqual(
+          outputs.embeddings.shape, [batch_size, expected_frames, 1, 32]
+      )
+      self.assertSequenceEqual(
+          outputs.logits['humpback'].shape, [batch_size, expected_frames, 1]
+      )
+
+    with self.subTest('from_config'):
+      # invoke
+      config = config_dict.ConfigDict()
+      config.model_url = model_path
+      config.sample_rate = float(sample_rate)
+      config.window_size_s = 3.9124
+      config.peak_norm = 0.02
+      class_list = namespace.ClassList('humpback', ['mooooooooohhhhhaaaaaaa'])
+      config.class_list = class_list
+      model = models.GoogleWhaleModel.from_config(config)
+      # Let's check the regular embed this time.
+      outputs = model.embed(waveform[0])
+
+      # verify
+      self.assertFalse(outputs.batched)
+      self.assertSequenceEqual(
+          outputs.embeddings.shape, [expected_frames, 1, 32]
+      )
+      self.assertSequenceEqual(
+          outputs.logits['humpback'].shape, [expected_frames, 1]
+      )
 
 
 if __name__ == '__main__':

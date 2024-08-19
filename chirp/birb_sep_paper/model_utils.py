@@ -429,6 +429,7 @@ def separate_classify(
       batch_size=batch_size,
       verbose=verbose,
   )
+  assert sep_mels is not None
   sep_mels = np.reshape(
       sep_mels,
       [
@@ -438,6 +439,7 @@ def separate_classify(
           sep_mels.shape[-1],
       ],
   )
+  assert sep_logits is not None
   sep_logits = np.reshape(
       sep_logits,
       [

@@ -49,6 +49,7 @@ def model_class_map() -> dict[str, Any]:
       'placeholder_model': PlaceholderModel,
       'separate_embed_model': SeparateEmbedModel,
       'tfhub_model': TFHubModel,
+      'google_whale': GoogleWhaleModel,
   }
 
 
@@ -648,6 +649,87 @@ class HandcraftedFeaturesModel(interface.EmbeddingModel):
 
   def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
     return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+
+
+@dataclasses.dataclass
+class GoogleWhaleModel(interface.EmbeddingModel):
+  """Wrapper for Google Humpback model.
+
+  Attributes:
+    model_url: Path to model files.
+    window_size_s: Window size for framing audio in seconds. 3.915 seems to work
+      well for the Humpback model.
+    hop_size_s: Hop size for inference.
+    peak_norm: Peak normalizaiton target. Ignore if <= 0.
+    model: Loaded TF SavedModel.
+  """
+
+  model_url: str
+  window_size_s: float
+  peak_norm: float
+  class_list: namespace.ClassList
+  model: Any  # TF SavedModel
+
+  @classmethod
+  def load_humpback_model(
+      cls,
+      model_url: str = 'https://tfhub.dev/google/humpback_whale/1',
+      **kwargs,
+  ) -> 'GoogleWhaleModel':
+    model = hub.load(model_url)
+    class_list = namespace.ClassList('humpback', ('humpback',))
+    sample_rate = model.metadata()['input_sample_rate'].numpy()
+    window_size_s = model.metadata()['context_width_samples'] / sample_rate
+    return cls(
+        model=model,
+        sample_rate=sample_rate,
+        window_size_s=window_size_s,
+        model_url=model_url,
+        peak_norm=0.02,
+        class_list=class_list,
+        **kwargs,
+    )
+
+  @classmethod
+  def from_config(cls, config: config_dict.ConfigDict) -> 'GoogleWhaleModel':
+    model = hub.load(config.model_url)
+    return cls(model=model, **config)
+
+  @property
+  def hop_size_s(self) -> float:
+    return self.window_size_s
+
+  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
+    # Renormalize to 0.02 peak.
+    if self.peak_norm > 0:
+      audio_batch = self.normalize_audio(audio_batch, self.peak_norm)
+    spectrogram = self.model.front_end(audio_batch[:, :, np.newaxis])
+    framed_spec = tf.signal.frame(
+        spectrogram, frame_length=128, frame_step=128, pad_end=True, axis=1
+    )
+    rebatched_spec = tf.reshape(framed_spec, [-1, 128, framed_spec.shape[-1]])
+    embeddings = self.model.features(rebatched_spec)
+
+    # Recover batch and time dimensions, and add a channel dimension.
+    embeddings = tf.reshape(
+        embeddings,
+        [framed_spec.shape[0], framed_spec.shape[1], 1, embeddings.shape[-1]],
+    )
+    logits = self.model.logits(rebatched_spec)
+    logits = tf.reshape(
+        logits, [framed_spec.shape[0], framed_spec.shape[1], logits.shape[-1]]
+    )
+    logits = {self.class_list.namespace: logits}
+    outputs = interface.InferenceOutputs(
+        embeddings=embeddings,
+        logits=logits,
+        frontend=spectrogram,
+        batched=True,
+    )
+    return outputs
+
+  def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
+    return interface.embed_from_batch_embed_fn(self.batch_embed, audio_array)
 
 
 @dataclasses.dataclass

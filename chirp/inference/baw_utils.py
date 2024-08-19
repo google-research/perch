@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Utility functions for working with a Bioacoustic Workbench (baw) (e.g. A2O) API."""
+"""Handlers for the Bio-Acoustics Workbench (BAW/A2O) API."""
 
 import io
 import os
@@ -29,24 +29,27 @@ import requests
 import soundfile
 
 
+FILE_ID_TO_UID_PATTERN = re.compile(r".*_(\d+).[^\.]+$")
+
+
 def make_baw_audio_url_from_file_id(
-    file_id: str, offset_s: float, window_size_s: float, baw_domain: str = "data.acousticsobervatory.org"
+    file_id: str,
+    offset_s: float,
+    window_size_s: float,
+    baw_domain: str = "api.acousticobservatory.org",
 ) -> str:
   """Construct an baw audio URL."""
   # Extract the recording UID. Example:
   # 'site_0277/20210428T100000+1000_Five-Rivers-Dry-A_909057.flac' -> 909057
   # 'site_0277/20210428T100000+1000_Five-Rivers-Dry-A_909057.wav' -> 909057
-  pattern = re.compile(r'.*_(\d+)\.[^\.]+$')
+  pattern = re.compile(r".*_(\d+)\.[^\.]+$")
   match = pattern.search(file_id)
   if not match:
-      raise ValueError("Invalid file_id format")
+    raise ValueError("Invalid file_id format")
   file_id = match.group(1)
   offset_s = int(offset_s)
   # See: https://api.staging.ecosounds.org/api-docs/index.html
-  audio_path = (
-      f"https://{baw_domain}/audio_recordings/"
-      f"{file_id}/media.flac"
-  )
+  audio_path = f"https://{baw_domain}/audio_recordings/{file_id}/media.flac"
   if offset_s <= 0 and window_size_s <= 0:
     return audio_path
   params = {}
@@ -64,11 +67,11 @@ def load_baw_audio(
     sample_rate: int,
     session: requests.Session,
 ) -> np.ndarray | None:
-  """Load audio from the baw API.
+  """Load audio from the Bioacoustics Workbench API.
 
   Args:
     audio_url: URL to load the audio from.
-    auth_token: The baw API auth token.
+    auth_token: The BAW API auth token.
     sample_rate: The sample rate to resample the audio to.
     session: The requests session to use.
 
@@ -107,7 +110,7 @@ def multi_load_baw_audio(
     sample_rate: int = 32000,
     **kwargs,
 ) -> Generator[np.ndarray, None, None]:
-  """Creates a generator that loads audio from the baw API."""
+  """Creates a generator that loads audio from the BAW API."""
   session = requests.Session()
   session.mount(
       "https://",
@@ -129,3 +132,44 @@ def multi_load_baw_audio(
       yield ex
   finally:
     session.close()
+
+
+def get_a2o_embeddings_config() -> config_dict.ConfigDict:
+  """Returns an embeddings config for the public A2O embeddings."""
+  chirp_public_bucket = "gs://chirp-public-bucket"
+  perch_512_model_path = os.path.join(chirp_public_bucket, "models/perch_4_512")
+  embeddings_uri = os.path.join(
+      chirp_public_bucket, "embeddings/a2o_embeddings_perch512"
+  )
+
+  config = config_dict.ConfigDict({
+      "output_dir": embeddings_uri,
+      "source_file_patterns": [
+          "https://api.acousticobservatory.org/audio_recordings/download/flac/*",
+      ],
+      "num_shards_per_file": 1,
+      "shard_len_s": 60,
+      "start_shard_idx": 0,
+      "num_direct_workers": 8,
+      "embed_fn_config": {
+          "write_embeddings": True,
+          "write_logits": False,
+          "write_separated_audio": False,
+          "write_raw_audio": False,
+          "file_id_depth": 1,
+          "model_key": "taxonomy_model_tf",
+          "tensor_dtype": "float16",
+          "model_config": {
+              "model_path": perch_512_model_path,
+              "window_size_s": 5.0,
+              "hop_size_s": 5.0,
+              "sample_rate": 32000,
+          },
+          "logits_head_config": {
+              "model_path": perch_512_model_path + "/speech_empty_filter",
+              "logits_key": "nuisances",
+              "channel_pooling": "",
+          },
+      },
+  })
+  return config

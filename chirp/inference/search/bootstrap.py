@@ -49,7 +49,7 @@ class BootstrapState:
   embeddings_dataset: tf.data.Dataset | None = None
   source_map: Callable[[str, float], str] | None = None
   baw_auth_token: str = ''
-  baw_domain: str = 'data.acousticsobervatory.org'
+  baw_domain: str = 'api.acousticobservatory.org/'
 
   def __post_init__(self):
     if self.embedding_model is None:

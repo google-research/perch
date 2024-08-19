@@ -51,7 +51,7 @@ class TopKSearchResults:
 
   def __post_init__(self):
     heapq.heapify(self.search_results)
-    self._ids = set([q.embedding_id for q in self.search_results])
+    self._ids = set(q.embedding_id for q in self.search_results)
 
   def __iter__(self):
     for q in sorted(self.search_results, reverse=True):
@@ -69,6 +69,10 @@ class TopKSearchResults:
     heapq.heappush(self.search_results, search_result)
     self._ids.add(search_result.embedding_id)
 
+  @property
+  def min_score(self) -> float:
+    return self.search_results[0].sort_score
+
   def will_filter(self, idx: int, score: float) -> bool:
     """Check whether a score is relevant."""
     if idx in self._ids:
@@ -76,4 +80,4 @@ class TopKSearchResults:
     if len(self.search_results) < self.top_k:
       # Add the result, regardless of score, until we have k results.
       return False
-    return score < self.search_results[0].sort_score
+    return score < self.min_score

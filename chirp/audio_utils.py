@@ -17,6 +17,7 @@
 
 General utilities for processing audio and spectrograms.
 """
+
 import concurrent
 import itertools
 import logging
@@ -32,6 +33,7 @@ from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax import scipy as jsp
+from jax.typing import ArrayLike  # pylint: disable=g-importing-member
 import librosa
 import numpy as np
 import requests
@@ -86,18 +88,21 @@ def load_audio_file(
   # Handle other audio formats.
   # Because librosa passes file handles to soundfile, we need to copy the file
   # to a temporary file before passing it to librosa.
-  with tempfile.NamedTemporaryFile(mode='w+b', suffix=extension) as f:
+  with tempfile.NamedTemporaryFile(
+      mode='w+b', suffix=extension, delete=False
+  ) as f:
     with filepath.open('rb') as sf:
       f.write(sf.read())
-    # librosa outputs lots of warnings which we can safely ignore when
-    # processing all Xeno-Canto files and PySoundFile is unavailable.
-    with warnings.catch_warnings():
-      warnings.simplefilter('ignore')
-      audio, _ = librosa.load(
-          f.name,
-          sr=target_sample_rate,
-          res_type=resampling_type,
-      )
+  # librosa outputs lots of warnings which we can safely ignore when
+  # processing all Xeno-Canto files and PySoundFile is unavailable.
+  with warnings.catch_warnings():
+    warnings.simplefilter('ignore')
+    audio, _ = librosa.load(
+        f.name,
+        sr=target_sample_rate,
+        res_type=resampling_type,
+    )
+  os.unlink(f.name)
   return audio
 
 
@@ -136,7 +141,10 @@ def load_audio_window_soundfile(
 
 
 def load_audio_window(
-    filepath: str, offset_s: float, sample_rate: int, window_size_s: float
+    filepath: str,
+    offset_s: float,
+    sample_rate: int,
+    window_size_s: float,
 ) -> jnp.ndarray:
   """Load a slice of audio from a file, hopefully efficiently."""
   # TODO(tomdenton): Find a reliable way to load a flac audio window.
@@ -247,20 +255,22 @@ def load_xc_audio(xc_id: str, sample_rate: int) -> jnp.ndarray:
     raise requests.exceptions.RequestException(
         f'Failed to load audio from Xeno-Canto {xc_id}'
     ) from e
-  with tempfile.NamedTemporaryFile(suffix='.mp3', mode='wb') as f:
+  with tempfile.NamedTemporaryFile(suffix='.mp3', mode='wb', delete=False) as f:
     f.write(data)
     f.flush()
-    audio = load_audio_file(f.name, target_sample_rate=sample_rate)
+  audio = load_audio_file(f.name, target_sample_rate=sample_rate)
+  os.unlink(f.name)
   return audio
 
 
 def load_url_audio(url: str, sample_rate: int) -> jnp.ndarray:
   """Load audio from a URL."""
   data = requests.get(url).content
-  with tempfile.NamedTemporaryFile(mode='wb') as f:
+  with tempfile.NamedTemporaryFile(mode='wb', delete=False) as f:
     f.write(data)
     f.flush()
-    audio = load_audio_file(f.name, target_sample_rate=sample_rate)
+  audio = load_audio_file(f.name, target_sample_rate=sample_rate)
+  os.unlink(f.name)
   return audio
 
 
@@ -599,7 +609,7 @@ def pad_to_length_if_shorter(audio: jnp.ndarray, target_length: int):
 
 
 def slice_peaked_audio(
-    audio: jnp.ndarray,
+    audio: ArrayLike,
     sample_rate_hz: int,
     interval_length_s: float = 6.0,
     max_intervals: int = 5,
@@ -613,8 +623,7 @@ def slice_peaked_audio(
     max_intervals: upper-bound on the number of audio intervals to extract.
 
   Returns:
-    Sequence of extracted audio intervals, each of shape
-    [sample_rate_hz * interval_length_s].
+    Sequence of start and stop indices for the extracted audio intervals.
   """
   target_length = int(sample_rate_hz * interval_length_s)
 
@@ -627,7 +636,7 @@ def slice_peaked_audio(
 
   # Ensure that the peak locations are such that
   # `audio[peak - left_shift: peak + right_shift]` is a non-truncated slice.
-  peaks = jnp.clip(peaks, left_shift, audio.shape[0] - right_shift)
+  peaks = jnp.clip(peaks, left_shift, jnp.array(audio).shape[0] - right_shift)
   # As a result, it's possible that some (start, stop) pairs become identical;
   # eliminate duplicates.
   start_stop = jnp.unique(
