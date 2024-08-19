@@ -41,7 +41,7 @@ class BootstrapState:
     embedding_model: The model used to compute embeddings, loaded on init.
     embeddings_dataset: A TF Dataset of the embeddings, loaded on init.
     source_map: A Callable mapping file_id to full filepath.
-    baw_auth_token: Auth token for fetching Bioacoustic Workbench (e.g. A2O) data.
+    baw_auth_token: Auth token for fetching BAW/A2O data.
   """
 
   config: 'BootstrapConfig'

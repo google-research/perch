@@ -16,6 +16,7 @@
 """Test small-model classification."""
 
 import tempfile
+import tensorflow as tf
 
 from chirp.inference import interface
 from chirp.inference.classify import classify
@@ -35,12 +36,13 @@ class ClassifyTest(parameterized.TestCase):
       rng: np.random.RandomState,
       num_classes: int = 4,
       embedding_dim: int = 16,
+      dtype: np.dtype = np.float32
   ):
     """Create a MergedDataset with random data."""
     # Merged dataset's data dict contains keys:
     # ['embeddings', 'filename', 'label', 'label_str', 'label_hot']
     data = {}
-    data['embeddings'] = np.float32(
+    data['embeddings'] = dtype(
         rng.normal(size=(num_points, embedding_dim))
     )
     data['label'] = rng.integers(0, num_classes, size=num_points)
@@ -55,18 +57,55 @@ class ClassifyTest(parameterized.TestCase):
         embedding_dim=embedding_dim,
         labels=letters[:num_classes],
     )
+  
+  def save_and_load_model(self, model):
+    with tempfile.TemporaryDirectory() as model_dir:
+      tf.saved_model.save(model, model_dir)
+      restored_model = tf.saved_model.load(model_dir)
+    return restored_model
 
-  def test_train_linear_model(self):
+#   @parameterized.named_parameters(
+#     {
+#         'testcase_name': 'float32_float32',
+#         'embedding_dtype': np.float32,
+#         'model_input_dtype': np.float32
+#     },
+#     {
+#         'testcase_name': 'float32_float16',
+#         'embedding_dtype': np.float32,
+#         'model_input_dtype': np.float16
+#     },
+#         {
+#         'testcase_name': 'float16_float32',
+#         'embedding_dtype': np.float16,
+#         'model_input_dtype': np.float32
+#     },
+#     {
+#         'testcase_name': 'float16_float16',
+#         'embedding_dtype': np.float16,
+#         'model_input_dtype': np.float16
+#     }
+#   )
+  @parameterized.product(
+    embedding_dtype=[np.float32, np.float16],
+    model_input_dtype=[np.float32, np.float16],
+    use_saved=[True, False]
+  )
+  def test_train_linear_model(self, embedding_dtype, model_input_dtype, use_saved):
     embedding_dim = 16
     num_classes = 4
     num_points = 100
-    model = classify.get_linear_model(embedding_dim, num_classes)
+    model = classify.get_linear_model(embedding_dim, num_classes, dtype=model_input_dtype)
+    if use_saved:
+        model = self.save_and_load_model(model)
+      
     rng = np.random.default_rng(42)
     merged = self.make_merged_dataset(
         num_points=num_points,
         rng=rng,
         num_classes=num_classes,
         embedding_dim=embedding_dim,
+        dtype=embedding_dtype
     )
     unused_metrics = classify.train_embedding_model(
         model,
