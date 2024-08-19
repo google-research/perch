@@ -18,7 +18,8 @@
 import collections
 import concurrent
 import dataclasses
-from typing import Callable
+import threading
+from typing import Any, Callable
 
 from chirp.projects.hoplite import brutalism
 from chirp.projects.hoplite import graph_utils
@@ -120,6 +121,7 @@ class HopliteSearchIndex:
       search_list_size: int = 100,
       deterministic: bool = False,
       max_visits: int | None = None,
+      max_workers: int = 10,
   ) -> tuple[search_results.TopKSearchResults, np.ndarray]:
     """Apply the Vamana greedy search.
 
@@ -129,56 +131,64 @@ class HopliteSearchIndex:
       search_list_size: Top-k value for search.
       deterministic: Ensure that the search path is fully reproducible.
       max_visits: Visit no more than this many nodes.
+      max_workers: Max number of worker threads.
 
     Returns:
       The TopKSearchResults and the sequence of all 'visited' nodes.
     """
-    visited = {}
+    visited = np.array([], dtype=np.int64)
     results = search_results.TopKSearchResults(search_list_size)
+    state = {}
+    state['db'] = self.db
+    state['score_fn'] = self.score_fn
 
     # Insert start node into the TopKResults.
     start_node_embedding = self.db.get_embedding(start_node)
     start_score = self.score_fn(start_node_embedding, query_embedding)
     result = search_results.SearchResult(start_node, start_score)
     results.update(result)
-
-    while max_visits is None or len(visited) < max_visits:
-      # Get the best result we have not yet visited.
-      for r in results:
-        if r.embedding_id not in visited:
-          visit_idx = r.embedding_id
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max_workers,
+        initializer=brutalism.worker_initializer,
+        initargs=(state,),
+    ) as executor:
+      while max_visits is None or len(visited) < max_visits:
+        jobs = []
+        if len(results.search_results) >= search_list_size:
+          min_score = results.min_score
+        else:
+          min_score = -np.inf
+        result_ids = np.array([r.embedding_id for r in results.search_results])
+        unvisited = np.setdiff1d(result_ids, visited)
+        if unvisited.shape[0] == 0:
+          # All candidates visited; we're done.
           break
-      else:
-        break
 
-      # Add the selected node to 'visited'.
-      visited[visit_idx] = None
+        for r in unvisited:
+          jobs.append(
+              executor.submit(
+                  greedy_search_worker,
+                  query_embedding,
+                  r,
+                  min_score,
+                  visited,
+                  state,
+                  deterministic,
+              )
+          )
 
-      # We will examine neighbors of the visited node.
-      nbrs = self.db.get_edges(visit_idx)
-      # Filter visited neighbors.
-      nbrs = nbrs[np.array(tuple(n not in visited for n in nbrs), dtype=bool)]
-
-      nbrs, nbr_embeddings = self.db.get_embeddings(nbrs)
-      if deterministic:
-        order = np.argsort(nbrs)
-        nbr_embeddings = nbr_embeddings[order]
-        nbrs = nbrs[order]
-      nbr_scores = self.score_fn(nbr_embeddings, query_embedding)
-
-      if len(results.search_results) >= search_list_size:
-        # Drop any elements bigger than the current result set's min_score.
-        keep_args = np.where(nbr_scores >= results.min_score)
-        nbrs = nbrs[keep_args]
-        nbr_scores = nbr_scores[keep_args]
-
-      for nbr_idx, nbr_score in zip(nbrs, nbr_scores):
-        if results.will_filter(nbr_idx, nbr_score):
-          continue
-        results.update(
-            search_results.SearchResult(nbr_idx, nbr_score), force_insert=True
-        )
-    return results, np.array(tuple(visited.keys()))
+        # Process the results.
+        for job in jobs:
+          nbrs, nbr_scores = job.result()
+          for nbr_idx, nbr_score in zip(nbrs, nbr_scores):
+            if results.will_filter(nbr_idx, nbr_score):
+              continue
+            results.update(
+                search_results.SearchResult(nbr_idx, nbr_score),
+                force_insert=True,
+            )
+        visited = np.concatenate([visited, np.array(unvisited)], axis=0)
+    return results, visited
 
   def index(
       self,
@@ -484,3 +494,36 @@ class HopliteSearchIndex:
       )
       recalls.append(recall)
     return float(np.mean(recalls))
+
+
+def greedy_search_worker(
+    query_embedding: np.ndarray,
+    target_idx: int,
+    min_score: float,
+    visited: np.ndarray,
+    state: dict[str, Any],
+    deterministic: bool = False,
+):
+  """Worker task for threaded greedy search."""
+  name = threading.current_thread().name
+  db = state[name + 'db']
+
+  # We will examine neighbors of the visited node.
+  nbrs = db.get_edges(target_idx)
+  # Filter visited neighbors.
+  nbrs = np.setdiff1d(nbrs, visited)
+  if not nbrs.shape[0]:
+    return nbrs, np.array([], np.float16)
+
+  nbrs, nbr_embeddings = db.get_embeddings(nbrs)
+  if deterministic:
+    order = np.argsort(nbrs)
+    nbr_embeddings = nbr_embeddings[order]
+    nbrs = nbrs[order]
+  nbr_scores = state['score_fn'](nbr_embeddings, query_embedding)
+
+  # Drop any elements bigger than the current result set's min_score.
+  keep_args = np.where(nbr_scores >= min_score)
+  nbrs = nbrs[keep_args]
+  nbr_scores = nbr_scores[keep_args]
+  return nbrs, nbr_scores
