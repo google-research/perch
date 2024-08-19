@@ -89,7 +89,10 @@ def connected_components(
 
 
 def add_random_edges(
-    graph_db: interface.GraphSearchDBInterface, out_degree: int, seed: int = 42
+    graph_db: interface.GraphSearchDBInterface,
+    out_degree: int,
+    seed: int = 42,
+    replace: bool = True,
 ):
   """Add edges to form a random connected graph to the DB.
 
@@ -100,6 +103,7 @@ def add_random_edges(
     graph_db: Graph DB instance.
     out_degree: Target number of outgoing edges per node.
     seed: Random seed.
+    replace: If True, clear the existing edges before inserting new ones.
   """
   num_embeddings = graph_db.count_embeddings()
   np.random.seed(seed)
@@ -126,7 +130,7 @@ def add_random_edges(
     else:
       outs = np.concatenate([outs, [cyclic_edge]])
       q += out_degree
-    graph_db.insert_edges(idx, outs)
+    graph_db.insert_edges(idx, outs, replace=replace)
 
     if q + out_degree + 1 >= num_embeddings:
       q = 0
