@@ -58,46 +58,26 @@ class ClassifyTest(parameterized.TestCase):
         labels=letters[:num_classes],
     )
   
-  def save_and_load_model(self, model):
-    with tempfile.TemporaryDirectory() as model_dir:
-      tf.saved_model.save(model, model_dir)
-      restored_model = tf.saved_model.load(model_dir)
-    return restored_model
 
-#   @parameterized.named_parameters(
-#     {
-#         'testcase_name': 'float32_float32',
-#         'embedding_dtype': np.float32,
-#         'model_input_dtype': np.float32
-#     },
-#     {
-#         'testcase_name': 'float32_float16',
-#         'embedding_dtype': np.float32,
-#         'model_input_dtype': np.float16
-#     },
-#         {
-#         'testcase_name': 'float16_float32',
-#         'embedding_dtype': np.float16,
-#         'model_input_dtype': np.float32
-#     },
-#     {
-#         'testcase_name': 'float16_float16',
-#         'embedding_dtype': np.float16,
-#         'model_input_dtype': np.float16
-#     }
-#   )
+
   @parameterized.product(
-    embedding_dtype=[np.float32, np.float16],
+    training_embedding_dtype=[np.float32, np.float16],
     model_input_dtype=[np.float32, np.float16],
-    use_saved=[True, False]
+    query_embedding_dtype=[np.float32, np.float16], 
+    num_hiddens=[-1, 1]
   )
-  def test_train_linear_model(self, embedding_dtype, model_input_dtype, use_saved):
+  def test_train_linear_model(self, 
+                              training_embedding_dtype, 
+                              model_input_dtype, 
+                              query_embedding_dtype, 
+                              num_hiddens):
     embedding_dim = 16
     num_classes = 4
     num_points = 100
-    model = classify.get_linear_model(embedding_dim, num_classes, dtype=model_input_dtype)
-    if use_saved:
-        model = self.save_and_load_model(model)
+    if num_hiddens == -1:
+      model = classify.get_linear_model(embedding_dim, num_classes, dtype=model_input_dtype)
+    else:
+      model = classify.get_two_layer_model(num_hiddens, embedding_dim, num_classes, batch_norm=True, dtype=model_input_dtype) 
       
     rng = np.random.default_rng(42)
     merged = self.make_merged_dataset(
@@ -105,7 +85,7 @@ class ClassifyTest(parameterized.TestCase):
         rng=rng,
         num_classes=num_classes,
         embedding_dim=embedding_dim,
-        dtype=embedding_dtype
+        dtype=training_embedding_dtype
     )
     unused_metrics = classify.train_embedding_model(
         model,
@@ -117,7 +97,7 @@ class ClassifyTest(parameterized.TestCase):
         batch_size=16,
         learning_rate=0.01,
     )
-    query = rng.normal(size=(num_points, embedding_dim)).astype(np.float32)
+    query = rng.normal(size=(num_points, embedding_dim)).astype(query_embedding_dtype)
 
     logits = model(query)
 
@@ -134,7 +114,16 @@ class ClassifyTest(parameterized.TestCase):
       restored_model = interface.LogitsOutputHead.from_config_file(
           logits_model_dir
       )
+    
       restored_logits = restored_model(query)
+      #debug:
+      print(f'training_embedding_dtype {training_embedding_dtype}')
+      print(f'model_input_dtype {model_input_dtype}')
+      print(f'query_embedding_dtype {query_embedding_dtype}')
+      print(f'original_model_input_signature: {model.input.dtype}')
+      print(f"restored_model_input_signature: {restored_model.logits_model.signatures['serving_default'].structured_input_signature}")
+      print(f"prediction dtype: {restored_logits.dtype}")
+ 
     error = np.abs(restored_logits - logits).sum()
     self.assertEqual(error, 0)
 
