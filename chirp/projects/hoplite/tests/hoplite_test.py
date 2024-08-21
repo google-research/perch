@@ -228,6 +228,7 @@ class HopliteTest(parameterized.TestCase):
       nbrs = in_mem_db.get_edges(x)
       for y in nbrs:
         sqlite_db.insert_edge(id_mapping[x], id_mapping[y])
+    sqlite_db.commit()
 
     rng = np.random.default_rng(42)
     query = rng.normal(size=(EMBEDDING_SIZE,), loc=0, scale=1.0)
@@ -239,7 +240,7 @@ class HopliteTest(parameterized.TestCase):
         query, search_list_size=32, start_node=0, deterministic=True
     )
     results_s, path_s = v_s.greedy_search(
-        query, search_list_size=32, start_node=1, deterministic=True
+        query, search_list_size=32, start_node=id_mapping[0], deterministic=True
     )
     self.assertSameElements((id_mapping[x] for x in path_m), path_s)
 

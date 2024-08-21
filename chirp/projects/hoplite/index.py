@@ -18,7 +18,8 @@
 import collections
 import concurrent
 import dataclasses
-from typing import Callable
+import threading
+from typing import Any, Callable
 
 from chirp.projects.hoplite import brutalism
 from chirp.projects.hoplite import graph_utils
@@ -92,24 +93,13 @@ class HopliteSearchIndex:
     for idx in tqdm.tqdm(embedding_ids):
       candidates = next(random_id_generator)
       p_out = self.robust_prune_vertex(idx, candidates, alpha, target_degree)
-      self.db.insert_edges(idx, p_out)
-
-      if add_reverse_edges:
-        for nbr_idx in p_out:
-          if len(self.db.get_edges(nbr_idx)) < target_degree:
-            self.db.insert_edge(nbr_idx, idx)
+      self.db.insert_edges(idx, p_out, replace=True)
 
     if add_reverse_edges:
-      # Remove duplicate edges, if any.
-      for idx in embedding_ids:
-        nbrs = self.db.get_edges(idx)
-        deduped_nbrs = np.unique(nbrs)
-        if len(nbrs) > len(deduped_nbrs):
-          self.db.delete_edges(idx)
-          self.db.insert_edges(idx, deduped_nbrs)
+      self.add_reverse_edges(target_degree)
 
     if pad_edges:
-      # Add a random set of edges to each vertex to reach target degree.
+      # Add a random set of edges to (best-effort) reach target degree.
       random_padding_generator = graph_utils.random_batched_iterator(
           embedding_ids, batch_size=target_degree, rng=pad_rng
       )
@@ -119,9 +109,10 @@ class HopliteSearchIndex:
         pad_amount = target_degree - edges.shape[0]
         if pad_amount <= 0:
           continue
-        candidates = next(random_padding_generator)
-        candidates = np.setdiff1d(candidates, edges)[:pad_amount]
-        self.db.insert_edges(idx, candidates)
+        new_edges = np.unique(
+            np.concatenate([edges, next(random_padding_generator)], axis=0)
+        )
+        self.db.insert_edges(idx, new_edges[:target_degree], replace=True)
 
   def greedy_search(
       self,
@@ -130,6 +121,7 @@ class HopliteSearchIndex:
       search_list_size: int = 100,
       deterministic: bool = False,
       max_visits: int | None = None,
+      max_workers: int = 10,
   ) -> tuple[search_results.TopKSearchResults, np.ndarray]:
     """Apply the Vamana greedy search.
 
@@ -139,56 +131,64 @@ class HopliteSearchIndex:
       search_list_size: Top-k value for search.
       deterministic: Ensure that the search path is fully reproducible.
       max_visits: Visit no more than this many nodes.
+      max_workers: Max number of worker threads.
 
     Returns:
       The TopKSearchResults and the sequence of all 'visited' nodes.
     """
-    visited = {}
+    visited = np.array([], dtype=np.int64)
     results = search_results.TopKSearchResults(search_list_size)
+    state = {}
+    state['db'] = self.db
+    state['score_fn'] = self.score_fn
 
     # Insert start node into the TopKResults.
     start_node_embedding = self.db.get_embedding(start_node)
     start_score = self.score_fn(start_node_embedding, query_embedding)
     result = search_results.SearchResult(start_node, start_score)
     results.update(result)
-
-    while max_visits is None or len(visited) < max_visits:
-      # Get the best result we have not yet visited.
-      for r in results:
-        if r.embedding_id not in visited:
-          visit_idx = r.embedding_id
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max_workers,
+        initializer=brutalism.worker_initializer,
+        initargs=(state,),
+    ) as executor:
+      while max_visits is None or len(visited) < max_visits:
+        jobs = []
+        if len(results.search_results) >= search_list_size:
+          min_score = results.min_score
+        else:
+          min_score = -np.inf
+        result_ids = np.array([r.embedding_id for r in results.search_results])
+        unvisited = np.setdiff1d(result_ids, visited)
+        if unvisited.shape[0] == 0:
+          # All candidates visited; we're done.
           break
-      else:
-        break
 
-      # Add the selected node to 'visited'.
-      visited[visit_idx] = None
+        for r in unvisited:
+          jobs.append(
+              executor.submit(
+                  greedy_search_worker,
+                  query_embedding,
+                  r,
+                  min_score,
+                  visited,
+                  state,
+                  deterministic,
+              )
+          )
 
-      # We will examine neighbors of the visited node.
-      nbrs = self.db.get_edges(visit_idx)
-      # Filter visited neighbors.
-      nbrs = nbrs[np.array(tuple(n not in visited for n in nbrs), dtype=bool)]
-
-      nbrs, nbr_embeddings = self.db.get_embeddings(nbrs)
-      if deterministic:
-        order = np.argsort(nbrs)
-        nbr_embeddings = nbr_embeddings[order]
-        nbrs = nbrs[order]
-      nbr_scores = self.score_fn(nbr_embeddings, query_embedding)
-
-      if len(results.search_results) >= search_list_size:
-        # Drop any elements bigger than the current result set's min_score.
-        keep_args = np.where(nbr_scores >= results.min_score)
-        nbrs = nbrs[keep_args]
-        nbr_scores = nbr_scores[keep_args]
-
-      for nbr_idx, nbr_score in zip(nbrs, nbr_scores):
-        if results.will_filter(nbr_idx, nbr_score):
-          continue
-        results.update(
-            search_results.SearchResult(nbr_idx, nbr_score), force_insert=True
-        )
-    return results, np.array(tuple(visited.keys()))
+        # Process the results.
+        for job in jobs:
+          nbrs, nbr_scores = job.result()
+          for nbr_idx, nbr_score in zip(nbrs, nbr_scores):
+            if results.will_filter(nbr_idx, nbr_score):
+              continue
+            results.update(
+                search_results.SearchResult(nbr_idx, nbr_score),
+                force_insert=True,
+            )
+        visited = np.concatenate([visited, np.array(unvisited)], axis=0)
+    return results, visited
 
   def index(
       self,
@@ -233,8 +233,7 @@ class HopliteSearchIndex:
           search_list_size=top_k,
       )
       p_out = self.robust_prune_vertex(idx, visited, alpha, degree_bound)
-      self.db.delete_edges(idx)
-      self.db.insert_edges(idx, p_out)
+      self.db.insert_edges(idx, p_out, replace=True)
 
       # Check for edge size violations in neighbors of idx.
       nbrs = self.db.get_edges(idx)
@@ -246,8 +245,7 @@ class HopliteSearchIndex:
           p_out = self.robust_prune_vertex(
               nbr_idx, candidates, alpha, degree_bound
           )
-          self.db.delete_edges(nbr_idx)
-          self.db.insert_edges(nbr_idx, p_out)
+          self.db.insert_edges(nbr_idx, p_out, replace=True)
         else:
           self.db.insert_edge(nbr_idx, idx)
     self.db.commit()
@@ -306,17 +304,21 @@ class HopliteSearchIndex:
     return visited
 
   def add_reverse_edges(self, degree_bound: int):
+    reverse_edges = collections.defaultdict(list)
     for r in self.db.get_embedding_ids():
       for nbr in np.unique(self.db.get_edges(r)):
-        nbr_edges = self.db.get_edges(nbr)
-        if nbr_edges.shape[0] < degree_bound and r not in nbr_edges:
-          self.db.insert_edge(nbr, r)
+        reverse_edges[nbr].append(r)
+    for r in self.db.get_embedding_ids():
+      new_edges = np.unique(
+          np.concatenate([self.db.get_edges(r), reverse_edges[r]])
+      )
+      new_edges = new_edges[:degree_bound]
+      self.db.insert_edges(r, new_edges, replace=True)
 
   def dedupe_edges(self):
     for r in self.db.get_embedding_ids():
       updated_edges = np.unique(self.db.get_edges(r))
-      self.db.delete_edges(r)
-      self.db.insert_edges(r, updated_edges)
+      self.db.insert_edges(r, updated_edges, replace=True)
 
   def index_delegates_single(
       self,
@@ -340,8 +342,8 @@ class HopliteSearchIndex:
       target_edges = self.db.get_edges(target)
       if candidates.shape[0] + target_edges.shape[0] <= degree_bound:
         # Instead of pruning low-degree nodes, just add the edges.
-        new_edges = np.setdiff1d(candidates, target_edges)
-        self.db.insert_edges(target, new_edges)
+        new_edges = np.union1d(candidates, target_edges)
+        self.db.insert_edges(target, new_edges, replace=True)
         continue
 
       p_out = self.robust_prune_vertex(
@@ -352,8 +354,7 @@ class HopliteSearchIndex:
       )
       new_delegate_sets = self.assign_delegates(p_out, candidates)
 
-      self.db.delete_edges(target)
-      self.db.insert_edges(target, p_out)
+      self.db.insert_edges(target, p_out, replace=True)
       delegate_sets.update(new_delegate_sets)
 
   def assign_delegates(self, targets: np.ndarray, candidates: np.ndarray):
@@ -493,3 +494,36 @@ class HopliteSearchIndex:
       )
       recalls.append(recall)
     return float(np.mean(recalls))
+
+
+def greedy_search_worker(
+    query_embedding: np.ndarray,
+    target_idx: int,
+    min_score: float,
+    visited: np.ndarray,
+    state: dict[str, Any],
+    deterministic: bool = False,
+):
+  """Worker task for threaded greedy search."""
+  name = threading.current_thread().name
+  db = state[name + 'db']
+
+  # We will examine neighbors of the visited node.
+  nbrs = db.get_edges(target_idx)
+  # Filter visited neighbors.
+  nbrs = np.setdiff1d(nbrs, visited)
+  if not nbrs.shape[0]:
+    return nbrs, np.array([], np.float16)
+
+  nbrs, nbr_embeddings = db.get_embeddings(nbrs)
+  if deterministic:
+    order = np.argsort(nbrs)
+    nbr_embeddings = nbr_embeddings[order]
+    nbrs = nbrs[order]
+  nbr_scores = state['score_fn'](nbr_embeddings, query_embedding)
+
+  # Drop any elements bigger than the current result set's min_score.
+  keep_args = np.where(nbr_scores >= min_score)
+  nbrs = nbrs[keep_args]
+  nbr_scores = nbr_scores[keep_args]
+  return nbrs, nbr_scores

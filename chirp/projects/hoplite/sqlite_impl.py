@@ -73,6 +73,15 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         dtype=np.dtype(self.embedding_dtype).newbyteorder('<'),
     )
 
+  def serialize_edges(self, edges: np.ndarray) -> bytes:
+    return edges.astype(np.dtype(np.int64).newbyteorder('<')).tobytes()
+
+  def deserialize_edges(self, serialized_edges: bytes) -> np.ndarray:
+    return np.frombuffer(
+        serialized_edges,
+        dtype=np.dtype(np.int64).newbyteorder('<'),
+    )
+
   def setup(self, index=True):
     cursor = self._get_cursor()
     # Create embedding sources table
@@ -107,10 +116,10 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     CREATE TABLE IF NOT EXISTS hoplite_edges (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         source_embedding_id INTEGER NOT NULL,
-        target_embedding_id INTEGER NOT NULL,
-        FOREIGN KEY (source_embedding_id) REFERENCES embeddings(id),
-        FOREIGN KEY (target_embedding_id) REFERENCES embeddings(id)
-    )""")
+        target_embedding_ids BLOB NOT NULL,
+        FOREIGN KEY (source_embedding_id) REFERENCES embeddings(id)
+    );
+    """)
 
     # Create hoplite_labels table.
     cursor.execute("""
@@ -137,14 +146,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
       CREATE INDEX IF NOT EXISTS embedding_source ON hoplite_embeddings (source_idx);
       """)
       cursor.execute("""
-      CREATE INDEX IF NOT EXISTS idx_source_embedding ON hoplite_edges (source_embedding_id);
-      """)
-      cursor.execute("""
-      CREATE INDEX IF NOT EXISTS idx_target_embedding ON hoplite_edges (target_embedding_id);
-      """)
-      cursor.execute("""
-      CREATE UNIQUE INDEX IF NOT EXISTS
-          idx_edge ON hoplite_edges (source_embedding_id, target_embedding_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_source_embedding ON hoplite_edges (source_embedding_id);
       """)
       cursor.execute("""
       CREATE INDEX IF NOT EXISTS idx_label ON hoplite_labels (embedding_id, label);
@@ -203,23 +205,28 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     cursor.execute("""SELECT DISTINCT dataset FROM hoplite_sources;""")
     return tuple(c[0] for c in cursor.fetchall())
 
-  def insert_edge(self, x_id: int, y_id: int):
+  def insert_edges(
+      self, x_id: int, y_ids: np.ndarray, replace: bool = False
+  ) -> None:
     cursor = self._get_cursor()
+    if not replace:
+      existing = self.get_edges(x_id)
+      y_ids = np.unique(np.concatenate([existing, y_ids], axis=0))
     cursor.execute(
         """
-      INSERT INTO hoplite_edges (source_embedding_id, target_embedding_id) VALUES (?, ?);
-    """,
-        (int(x_id), int(y_id)),
+        REPLACE INTO hoplite_edges (source_embedding_id, target_embedding_ids)
+        VALUES (?, ?);
+        """,
+        (int(x_id), self.serialize_edges(y_ids)),
     )
 
+  def insert_edge(self, x_id: int, y_id: int):
+    self.insert_edges(x_id, np.array([y_id]))
+
   def delete_edge(self, x_id: int, y_id: int):
-    cursor = self._get_cursor()
-    cursor.execute(
-        """
-      DELETE FROM hoplite_edges WHERE source_embedding_id = ? AND target_embedding_id = ?;
-    """,
-        (int(x_id), int(y_id)),
-    )
+    existing = self.get_edges(x_id)
+    new_edges = existing[existing != y_id]
+    self.insert_edges(x_id, new_edges, replace=True)
 
   def delete_edges(self, x_id: int):
     cursor = self._get_cursor()
@@ -289,13 +296,6 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
 
   def embedding_dimension(self) -> int:
     return self.embedding_dim
-
-  def count_edges(self) -> int:
-    """Counts the number of hoplite_embeddings in the 'embeddings' table."""
-    cursor = self._get_cursor()
-    cursor.execute('SELECT COUNT(*) FROM hoplite_edges;')
-    result = cursor.fetchone()
-    return result[0]  # Extract the count from the result tuple
 
   def get_embedding(self, embedding_id: int):
     cursor = self._get_cursor()
@@ -389,7 +389,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
 
   def get_edges(self, embedding_id: int) -> np.ndarray:
     query = (
-        'SELECT hoplite_edges.target_embedding_id FROM hoplite_edges '
+        'SELECT hoplite_edges.target_embedding_ids FROM hoplite_edges '
         'WHERE hoplite_edges.source_embedding_id = ?;'
     )
     cursor = self._get_cursor()
@@ -397,8 +397,10 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         query,
         (int(embedding_id),),
     )
-    edges = cursor.fetchall()
-    return np.array(tuple(e[0] for e in edges))
+    edge_bytes = cursor.fetchall()
+    if not edge_bytes:
+      return np.array([])
+    return self.deserialize_edges(edge_bytes[0][0])
 
   def insert_label(self, label: interface.Label):
     if label.type is None:
