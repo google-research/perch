@@ -120,7 +120,7 @@ class ClassifyTest(parameterized.TestCase):
       print(f'training_embedding_dtype {training_embedding_dtype}')
       print(f'model_input_dtype {model_input_dtype}')
       print(f'query_embedding_dtype {query_embedding_dtype}')
-      print(f'original_model_input_signature: {model.input.dtype}')
+      print(f'original_model_input_signature: {model.inputs[0].dtype}')
       print(f"restored_model_input_signature: {restored_model.logits_model.signatures['serving_default'].structured_input_signature}")
       print(f"prediction dtype: {restored_logits.dtype}")
  
