@@ -105,8 +105,9 @@ def create_source_infos(
       end_shard_idx = start_shard_idx + num_shards_per_file
     else:
       try:
-        sf = soundfile.SoundFile(source)
-        file_length_s = sf.frames / sf.samplerate
+        with source.open('rb') as f:
+          sf = soundfile.SoundFile(source)
+          file_length_s = sf.frames / sf.samplerate
         end_shard_idx = int(file_length_s // shard_len_s + 1)
       except Exception as exc:  # pylint: disable=broad-exception-caught
         logging.error('Failed to parse audio file (%s) : %s.', source, exc)
