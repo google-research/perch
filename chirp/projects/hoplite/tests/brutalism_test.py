@@ -43,8 +43,13 @@ class BrutalismTest(parameterized.TestCase):
           'in_mem',
           'sqlite',
       ),
+      sample_size=(
+          None,
+          0.5,
+          128,
+      ),
   )
-  def test_threaded_brute_search(self, db_type):
+  def test_threaded_brute_search(self, db_type, sample_size):
     rng = np.random.default_rng(42)
     db = test_utils.make_db(self.tempdir, db_type, 1000, rng, EMBEDDING_SIZE)
     query_idx = db.get_one_embedding_id()
@@ -54,11 +59,18 @@ class BrutalismTest(parameterized.TestCase):
         query_embedding,
         search_list_size=10,
         score_fn=np.dot,
+        sample_size=sample_size,
+        rng_seed=42,
     )
-    self.assertSequenceEqual(scores.shape, (1000,))
-    self.assertLen(results.search_results, 10)
     got_ids = [r.embedding_id for r in results]
-    self.assertIn(query_idx, got_ids)
+    if sample_size is None:
+      self.assertEqual(scores.shape, (1000,))
+      self.assertIn(query_idx, got_ids)
+    elif isinstance(sample_size, float):
+      self.assertEqual(scores.shape, (int(sample_size * 1000),))
+    else:
+      self.assertEqual(scores.shape, (sample_size,))
+    self.assertLen(results.search_results, 10)
 
     # Check agreement of threaded brute search with the non-threaded version.
     t_results, t_scores = brutalism.threaded_brute_search(
@@ -67,6 +79,8 @@ class BrutalismTest(parameterized.TestCase):
         search_list_size=10,
         batch_size=128,
         score_fn=np.dot,
+        sample_size=sample_size,
+        rng_seed=42,
     )
     np.testing.assert_equal(np.sort(t_scores), np.sort(scores))
     t_got_ids = [r.embedding_id for r in t_results]

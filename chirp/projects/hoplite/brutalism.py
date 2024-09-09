@@ -44,6 +44,8 @@ def threaded_brute_search(
     score_fn: Callable[[np.ndarray, np.ndarray], float],
     batch_size: int = 1024,
     max_workers: int = 8,
+    sample_size: int | float | None = None,
+    rng_seed: int | None = None,
 ) -> tuple[search_results.TopKSearchResults, np.ndarray]:
   """Performs a brute-force search for neighbors of the query embedding.
 
@@ -54,6 +56,10 @@ def threaded_brute_search(
     score_fn: Scoring function to use for ranking results.
     batch_size: Number of embeddings to score in each thread.
     max_workers: Maximum number of threads to use for the search.
+    sample_size: Number of embeddings to compare with. If None, all embeddings
+      are used. For floats between 0 and 1, sample a proportion of the database.
+      For ints, sample the specified number of embeddings.
+    rng_seed: Random number generator seed to use for sampled search.
 
   Returns:
     A TopKSearchResults object containing the search results, and a list of
@@ -73,7 +79,7 @@ def threaded_brute_search(
       initializer=worker_initializer,
       initargs=(state,),
   ) as executor:
-    ids = db.get_embedding_ids()
+    ids = get_brute_search_ids(db, sample_size, rng_seed)
     futures = []
     for q in range(0, ids.shape[0], batch_size):
       futures.append(
@@ -99,6 +105,8 @@ def brute_search(
     query_embedding: np.ndarray,
     search_list_size: int,
     score_fn: Callable[[np.ndarray, np.ndarray], float],
+    sample_size: int | float | None = None,
+    rng_seed: int | None = None,
 ) -> tuple[search_results.TopKSearchResults, np.ndarray]:
   """Performs a brute-force search for neighbors of the query embedding.
 
@@ -107,6 +115,10 @@ def brute_search(
     query_embedding: Query embedding vector.
     search_list_size: Number of results to return.
     score_fn: Scoring function to use for ranking results.
+    sample_size: Number of embeddings to compare with. If None, all embeddings
+      are used. For floats between 0 and 1, sample a proportion of the database.
+      For ints, sample the specified number of embeddings.
+    rng_seed: Random number generator seed to use for sampled search.
 
   Returns:
     A TopKSearchResults object containing the search results, and a list of
@@ -114,7 +126,8 @@ def brute_search(
   """
   results = search_results.TopKSearchResults(search_list_size)
   all_scores = []
-  for idx in db.get_embedding_ids():
+  ids = get_brute_search_ids(db, sample_size, rng_seed)
+  for idx in ids:
     target_embedding = db.get_embedding(idx)
     score = score_fn(query_embedding, target_embedding)
     all_scores.append(score)
@@ -124,6 +137,23 @@ def brute_search(
     if not results.will_filter(idx, score):
       results.update(search_results.SearchResult(idx, score), force_insert=True)
   return results, np.array(all_scores)
+
+
+def get_brute_search_ids(
+    db: interface.GraphSearchDBInterface,
+    sample_size: int | float | None = None,
+    rng_seed: int | None = None,
+):
+  """Get IDs for brute force search, subsampling as needed."""
+  ids = db.get_embedding_ids()
+  if sample_size is None:
+    return ids
+  if isinstance(sample_size, float):
+    if sample_size < 0 or sample_size > 1:
+      raise ValueError('FLoat sample size must be between 0 and 1.')
+    sample_size = int(sample_size * db.count_embeddings())
+  np.random.default_rng(rng_seed).shuffle(ids)
+  return ids[:sample_size]
 
 
 def rerank(
