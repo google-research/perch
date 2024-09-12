@@ -106,7 +106,7 @@ def create_source_infos(
     else:
       try:
         with source.open('rb') as f:
-          sf = soundfile.SoundFile(source)
+          sf = soundfile.SoundFile(f)
           file_length_s = sf.frames / sf.samplerate
         end_shard_idx = int(file_length_s // shard_len_s + 1)
       except Exception as exc:  # pylint: disable=broad-exception-caught
@@ -345,7 +345,7 @@ class EmbedFn(beam.DoFn):
         self._log_exception(source_info, inst, 'audio_runtime_error')
       return
 
-    if audio is None:
+    if audio is None or audio.shape[0] == 0:
       self._log_exception(source_info, 'no_exception', 'audio_empty')
       return
     if audio.shape[0] < self.min_audio_s * self.target_sample_rate:
