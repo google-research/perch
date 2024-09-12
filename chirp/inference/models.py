@@ -38,6 +38,10 @@ PERCH_TF_HUB_URL = (
     'variations/bird-vocalization-classifier/versions'
 )
 
+SURFPERCH_TF_HUB_URL = (
+    'https://www.kaggle.com/models/google/surfperch/TensorFlow2/1'
+)
+
 
 def model_class_map() -> dict[str, Any]:
   """Get the mapping of model keys to classes."""
@@ -287,12 +291,18 @@ class TaxonomyModelTF(interface.EmbeddingModel):
       raise ValueError(
           'Exactly one of tfhub_version and model_path should be set.'
       )
-    if config.tfhub_version in (5, 6, 7):
+    if hasattr(config, 'tfhub_path'):
+      tfhub_path = config.tfhub_path
+      del config.tfhub_path
+    else:
+      tfhub_path = PERCH_TF_HUB_URL
+
+    if tfhub_path == PERCH_TF_HUB_URL and config.tfhub_version in (5, 6, 7):
       # Due to SNAFUs uploading the new model version to KaggleModels,
       # some version numbers were skipped.
       raise ValueError('TFHub version 5, 6, and 7 do not exist.')
 
-    model_url = f'{PERCH_TF_HUB_URL}/{config.tfhub_version}'
+    model_url = f'{tfhub_path}/{config.tfhub_version}'
     # This model behaves exactly like the usual saved_model.
     model = hub.load(model_url)
 
@@ -318,6 +328,22 @@ class TaxonomyModelTF(interface.EmbeddingModel):
         'hop_size_s': hop_size_s,
         'target_peak': 0.25,
         'tfhub_version': tfhub_version,
+    })
+    return cls.from_tfhub(cfg)
+
+  @classmethod
+  def load_surfperch_version(
+      cls, tfhub_version: int, hop_size_s: float = 5.0
+  ) -> 'TaxonomyModelTF':
+    """Load a model from TFHub."""
+    cfg = config_dict.ConfigDict({
+        'model_path': '',
+        'sample_rate': 32000,
+        'window_size_s': 5.0,
+        'hop_size_s': hop_size_s,
+        'target_peak': 0.25,
+        'tfhub_version': tfhub_version,
+        'tfhub_path': SURFPERCH_TF_HUB_URL,
     })
     return cls.from_tfhub(cfg)
 
