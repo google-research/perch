@@ -171,6 +171,7 @@ def multi_load_audio_window(
     audio_loader: Callable[[str, float], np.ndarray],
     max_workers: int = 5,
     buffer_size: int = -1,
+    dtype: str = 'float32',
 ) -> Generator[np.ndarray, None, None]:
   """Generator for loading audio windows in parallel.
 
@@ -204,6 +205,7 @@ def multi_load_audio_window(
     max_workers: Number of threads to allocate.
     buffer_size: Max number of audio windows to queue up. Defaults to 10x the
       number of workers.
+    dtype: Data type of the returned audio array.
 
   Yields:
     Loaded audio windows.
@@ -221,7 +223,7 @@ def multi_load_audio_window(
 
   task_iterator = zip(filepaths, offsets)
   batched_iterator = batched(task_iterator, buffer_size)
-  mapping = lambda x: audio_loader(x[0], x[1])
+  mapping = lambda x: audio_loader(x[0], x[1]).astype(dtype)
 
   executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
   try:
