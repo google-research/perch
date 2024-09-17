@@ -175,12 +175,15 @@ class BootstrapConfig:
       model_config = embed_fn_config.model_config
     if embeddings_path is None:
       embeddings_path = embedding_config.output_dir
+    embedding_hop_size_s = model_config.get(
+        'hop_size_s', model_config.window_size_s
+    )
     return BootstrapConfig(
         embeddings_path=embeddings_path,
         annotated_path=annotated_path,
         model_key=model_key,
         model_config=model_config,
-        embedding_hop_size_s=model_config.hop_size_s,
+        embedding_hop_size_s=embedding_hop_size_s,
         file_id_depth=embed_fn_config.file_id_depth,
         audio_globs=embedding_config.source_file_patterns,
         tensor_dtype=tensor_dtype,
