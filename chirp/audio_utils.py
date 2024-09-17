@@ -49,22 +49,26 @@ _BOUNDARY_TO_PADDING_MODE = {'zeros': 'CONSTANT'}
 
 
 def load_audio(
-    path: epath.PathLike, target_sample_rate: int, **kwargs
+    path: epath.PathLike,
+    target_sample_rate: int,
+    dtype: str = 'float32',
+    **kwargs,
 ) -> jnp.ndarray:
   """Load a general audio resource."""
   path = os.fspath(path)
   if path.startswith('xc'):
-    return load_xc_audio(path, target_sample_rate)
+    return load_xc_audio(path, target_sample_rate, dtype=dtype)
   elif path.startswith('http'):
-    return load_url_audio(path, target_sample_rate)
+    return load_url_audio(path, target_sample_rate, dtype=dtype)
   else:
-    return load_audio_file(path, target_sample_rate, **kwargs)
+    return load_audio_file(path, target_sample_rate, dtype=dtype, **kwargs)
 
 
 def load_audio_file(
     filepath: str | epath.Path,
     target_sample_rate: int,
     resampling_type: str = 'polyphase',
+    dtype: str = 'float32',
 ) -> jnp.ndarray:
   """Read an audio file, and resample it using librosa."""
   filepath = epath.Path(filepath)
@@ -83,7 +87,7 @@ def load_audio_file(
             target_sr=target_sample_rate,
             res_type=resampling_type,
         )
-      return audio
+      return audio.astype(dtype)
 
   # Handle other audio formats.
   # Because librosa passes file handles to soundfile, we need to copy the file
@@ -103,11 +107,15 @@ def load_audio_file(
         res_type=resampling_type,
     )
   os.unlink(f.name)
-  return audio
+  return audio.astype(dtype)
 
 
 def load_audio_window_soundfile(
-    filepath: str, offset_s: float, sample_rate: int, window_size_s: float
+    filepath: str,
+    offset_s: float,
+    sample_rate: int,
+    window_size_s: float,
+    dtype: str = 'float32',
 ) -> jnp.ndarray:
   """Load an audio window using Soundfile.
 
@@ -116,6 +124,7 @@ def load_audio_window_soundfile(
     offset_s: Read offset within the file.
     sample_rate: Sample rate for returned audio.
     window_size_s: Length of audio to read. Reads all if <0.
+    dtype: Audio dtype.
 
   Returns:
     Numpy array of loaded audio.
@@ -137,7 +146,7 @@ def load_audio_window_soundfile(
     a = librosa.resample(
         y=a, orig_sr=sf.samplerate, target_sr=sample_rate, res_type='polyphase'
     )
-  return a
+  return a.astype(dtype)
 
 
 def load_audio_window(
@@ -145,6 +154,7 @@ def load_audio_window(
     offset_s: float,
     sample_rate: int,
     window_size_s: float,
+    dtype: str = 'float32',
 ) -> jnp.ndarray:
   """Load a slice of audio from a file, hopefully efficiently."""
   # TODO(tomdenton): Find a reliable way to load a flac audio window.
@@ -153,7 +163,7 @@ def load_audio_window(
   # that we don't risk it.
   try:
     return load_audio_window_soundfile(
-        filepath, offset_s, sample_rate, window_size_s
+        filepath, offset_s, sample_rate, window_size_s, dtype
     )
   except soundfile.LibsndfileError:
     logging.info('Failed to load audio with libsndfile: %s', filepath)
@@ -162,7 +172,7 @@ def load_audio_window(
   audio = load_audio(filepath, sample_rate)
   offset = int(offset_s * sample_rate)
   window_size = int(window_size_s * sample_rate)
-  return audio[offset : offset + window_size]
+  return audio[offset : offset + window_size].astype(dtype)
 
 
 def multi_load_audio_window(
@@ -171,7 +181,6 @@ def multi_load_audio_window(
     audio_loader: Callable[[str, float], np.ndarray],
     max_workers: int = 5,
     buffer_size: int = -1,
-    dtype: str = 'float32',
 ) -> Generator[np.ndarray, None, None]:
   """Generator for loading audio windows in parallel.
 
@@ -205,7 +214,6 @@ def multi_load_audio_window(
     max_workers: Number of threads to allocate.
     buffer_size: Max number of audio windows to queue up. Defaults to 10x the
       number of workers.
-    dtype: Data type of the returned audio array.
 
   Yields:
     Loaded audio windows.
@@ -223,7 +231,7 @@ def multi_load_audio_window(
 
   task_iterator = zip(filepaths, offsets)
   batched_iterator = batched(task_iterator, buffer_size)
-  mapping = lambda x: audio_loader(x[0], x[1]).astype(dtype)
+  mapping = lambda x: audio_loader(x[0], x[1])
 
   executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
   try:
@@ -234,7 +242,9 @@ def multi_load_audio_window(
     executor.shutdown(wait=False, cancel_futures=True)
 
 
-def load_xc_audio(xc_id: str, sample_rate: int) -> jnp.ndarray:
+def load_xc_audio(
+    xc_id: str, sample_rate: int, dtype: str = 'float32'
+) -> jnp.ndarray:
   """Load audio from Xeno-Canto given an ID like 'xc12345'."""
   if not xc_id.startswith('xc'):
     raise ValueError(f'XenoCanto id {xc_id} does not start with "xc".')
@@ -262,10 +272,12 @@ def load_xc_audio(xc_id: str, sample_rate: int) -> jnp.ndarray:
     f.flush()
   audio = load_audio_file(f.name, target_sample_rate=sample_rate)
   os.unlink(f.name)
-  return audio
+  return audio.astype(dtype)
 
 
-def load_url_audio(url: str, sample_rate: int) -> jnp.ndarray:
+def load_url_audio(
+    url: str, sample_rate: int, dtype: str = 'float32'
+) -> jnp.ndarray:
   """Load audio from a URL."""
   data = requests.get(url).content
   with tempfile.NamedTemporaryFile(mode='wb', delete=False) as f:
@@ -273,7 +285,7 @@ def load_url_audio(url: str, sample_rate: int) -> jnp.ndarray:
     f.flush()
   audio = load_audio_file(f.name, target_sample_rate=sample_rate)
   os.unlink(f.name)
-  return audio
+  return audio.astype(dtype)
 
 
 # pylint: disable=g-doc-return-or-yield,g-doc-args,unused-argument
