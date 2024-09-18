@@ -23,7 +23,7 @@ import tempfile
 from chirp.inference import call_density
 from etils import epath
 import numpy as np
-import sklearn
+from sklearn import metrics
 
 from absl.testing import absltest
 
@@ -116,7 +116,7 @@ class CallDensityTest(absltest.TestCase):
     noise_scores = np.random.normal(size=num_samples)
     labels = np.random.randint(0, 2, size=num_samples)
     scores = noise_mu * noise_scores + (1 - noise_mu) * labels
-    gt_roc_auc = sklearn.metrics.roc_auc_score(labels, scores)
+    gt_roc_auc = metrics.roc_auc_score(labels, scores)
 
     # Generate some validation examples.
     quantile_bounds = np.array([0.0, 0.5, 0.75, 0.825, 1.0])
