@@ -57,6 +57,65 @@ def model_class_map() -> dict[str, Any]:
   }
 
 
+def get_preset_model_config(preset_name):
+  """Get a config_dict for a known model."""
+  model_config = config_dict.ConfigDict()
+
+  if preset_name == 'perch_8':
+    model_key = 'taxonomy_model_tf'
+    model_config.window_size_s = 5.0
+    model_config.hop_size_s = 5.0
+    model_config.sample_rate = 32000
+    model_config.tfhub_version = 8
+    model_config.model_path = ''
+  elif preset_name == 'humpback':
+    model_key = 'google_whale'
+    model_config.window_size_s = 3.9124
+    model_config.sample_rate = 10000
+    model_config.model_url = 'https://tfhub.dev/google/humpback_whale/1'
+    model_config.peak_norm = 0.02
+    class_list = {'namespace': 'humpback', 'classes': ['humpback']}
+    model_config.class_list = class_list
+  elif preset_name == 'multispecies_whale':
+    model_key = 'google_whale'
+    model_config.window_size_s = 5.0
+    model_config.sample_rate = 24000
+    model_config.model_url = 'https://www.kaggle.com/models/google/multispecies-whale/TensorFlow2/default/2'
+    model_config.peak_norm = -1.0
+  elif preset_name == 'surfperch':
+    model_key = 'taxonomy_model_tf'
+    model_config.window_size_s = 5.0
+    model_config.hop_size_s = 5.0
+    model_config.sample_rate = 32000
+    model_config.tfhub_version = 1
+    model_config.tfhub_path = SURFPERCH_TF_HUB_URL
+  elif preset_name.startswith('birdnet'):
+    model_key = 'birdnet'
+    birdnet_version = preset_name.split('_')[-1]
+    if birdnet_version not in ('V2.1', 'V2.2', 'V2.3'):
+      raise ValueError(f'Birdnet version not supported: {birdnet_version}')
+    base_path = 'gs://chirp-public-bucket/models/birdnet'
+    if birdnet_version == 'V2.1':
+      model_path = 'V2.1/BirdNET_GLOBAL_2K_V2.1_Model_FP16.tflite'
+    elif birdnet_version == 'V2.2':
+      model_path = 'V2.2/BirdNET_GLOBAL_3K_V2.2_Model_FP16.tflite'
+    elif birdnet_version == 'V2.3':
+      model_path = 'V2.3/BirdNET_GLOBAL_3K_V2.3_Model_FP16.tflite'
+    else:
+      # TODO(tomdenton): Support V2.4.
+      raise ValueError(f'Birdnet version not supported: {birdnet_version}')
+    model_config.window_size_s = 3.0
+    model_config.hop_size_s = 3.0
+    model_config.sample_rate = 48000
+    model_config.model_path = f'{base_path}/{model_path}'
+    # Note: The v2_1 class list is appropriate for Birdnet 2.1, 2.2, and 2.3.
+    model_config.class_list_name = 'birdnet_v2_1'
+    model_config.num_tflite_threads = 4
+  else:
+    raise ValueError('Unsupported model preset: %s' % preset_name)
+  return model_key, model_config
+
+
 @dataclasses.dataclass
 class SeparateEmbedModel(interface.EmbeddingModel):
   """Wrapper for separate separation and embedding models.
@@ -719,7 +778,11 @@ class GoogleWhaleModel(interface.EmbeddingModel):
   @classmethod
   def from_config(cls, config: config_dict.ConfigDict) -> 'GoogleWhaleModel':
     model = hub.load(config.model_url)
-    return cls(model=model, **config)
+    class_names = tuple(
+        [str(c.numpy(), 'utf8') for c in model.metadata()['class_names']]
+    )
+    class_list = namespace.ClassList('multispecies_whale', class_names)
+    return cls(model=model, class_list=class_list, **config)
 
   @property
   def hop_size_s(self) -> float:

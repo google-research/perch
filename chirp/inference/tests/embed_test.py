@@ -888,8 +888,6 @@ class EmbedTest(parameterized.TestCase):
       config.sample_rate = float(sample_rate)
       config.window_size_s = 3.9124
       config.peak_norm = 0.02
-      class_list = namespace.ClassList('humpback', ['mooooooooohhhhhaaaaaaa'])
-      config.class_list = class_list
       model = models.GoogleWhaleModel.from_config(config)
       # Let's check the regular embed this time.
       outputs = model.embed(waveform[0])
@@ -900,7 +898,7 @@ class EmbedTest(parameterized.TestCase):
           outputs.embeddings.shape, [expected_frames, 1, 32]
       )
       self.assertSequenceEqual(
-          outputs.logits['humpback'].shape, [expected_frames, 1]
+          outputs.logits['multispecies_whale'].shape, [expected_frames, 1]
       )
 
 
