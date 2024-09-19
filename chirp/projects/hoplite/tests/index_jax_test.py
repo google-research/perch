@@ -20,6 +20,7 @@ import functools
 from chirp.projects.hoplite import index
 from chirp.projects.hoplite import index_jax
 from chirp.projects.hoplite.tests import test_utils
+import jax
 from jax import numpy as jnp
 import numpy as np
 
@@ -132,6 +133,31 @@ class IndexJaxTest(absltest.TestCase):
         output_data.delegate_scores.shape, [1024, max_delegates]
     )
     db.edges = np.asarray(output_data.edges).copy()
+
+    v = index.HopliteSearchIndex.from_db(db, score_fn_name='dot')
+    search_partial_fn = functools.partial(
+        v.greedy_search, start_node=0, search_list_size=128
+    )
+    search_fn = lambda q: search_partial_fn(q)[0]
+    recall = v.multi_test_recall(search_fn)
+    self.assertGreater(recall, 0.9)
+
+  def test_run_sharded_e2e(self):
+    rng = np.random.default_rng(seed=22)
+    db = test_utils.make_db('test_db', 'in_mem', 1024, rng, embedding_dim=16)
+    with jax.disable_jit():
+      index_jax.build_sharded_index(
+          db,
+          shard_size=64,
+          shard_degree_bound=32,
+          degree_bound=64,
+          alpha=0.5,
+          num_steps=-1,
+          random_seed=42,
+          max_violations=1,
+          sample_size=0,
+          max_delegates=32,
+      )
 
     v = index.HopliteSearchIndex.from_db(db, score_fn_name='dot')
     search_partial_fn = functools.partial(

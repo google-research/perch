@@ -188,6 +188,10 @@ class GraphSearchDBInterface(abc.ABC):
   def get_edges(self, embedding_id: int) -> np.ndarray:
     """Get all embedding_id's adjacent to the target embedding_id."""
 
+  def get_degree_bound(self) -> int:
+    """Get the maximum degree allowed by the DB, or -1 if no limit."""
+    return -1
+
   @abc.abstractmethod
   def insert_label(self, label: Label) -> None:
     """Add a label to the db."""

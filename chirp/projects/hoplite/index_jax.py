@@ -13,14 +13,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tooling for building a Hoplite index using GPU."""
+"""Tooling for building a Hoplite index using GPU.
 
+For datasets larger than can fit in GPU memory (ie, any dataset worth indexing),
+use `build_sharded_index` to create a search index.
+"""
+
+import collections
+import concurrent
 import dataclasses
+import functools
 import itertools
+import time
 
+from chirp.projects.hoplite import graph_utils
+from chirp.projects.hoplite import interface
 import jax
 from jax import numpy as jnp
 import numpy as np
+import tqdm
 
 
 @dataclasses.dataclass
@@ -56,6 +67,98 @@ jax.tree_util.register_dataclass(
 )
 
 
+def build_sharded_index(
+    db: interface.GraphSearchDBInterface,
+    shard_size: int,
+    shard_degree_bound: int,
+    degree_bound: int,
+    alpha: float,
+    num_steps: int,
+    random_seed: int,
+    max_violations: int,
+    **kwargs,
+):
+  """Build an index from sharded indices.
+
+  Handles large datasets by breaking them up into random shards, indexing the
+  shard, and finally merging the shard edges.
+
+  The finalized index edges are directly added to the database.
+
+  The bulk of the GPU memory is used by the shard embeddings, shard edges, and
+  delegate lists, which have size [S, D], [S, E] and [S, K], where S=shard_size,
+  D=embedding dimension, E=shard_degree_bound, and K=max_delegates.
+  Embeddings are typically float16 (2 bytes), while embedding ids will be
+  handled as int32s (4 bytes). Then the total memory usage is somewhat greater
+  than S * (4 * E + 4 * K + 2 * D).
+
+  Args:
+    db: Hoplite database to index.
+    shard_size: Number of embeddings to index in each step.
+    shard_degree_bound: Max number of outgoing edges per embedding when indexing
+      a shard.
+    degree_bound: Pruning degree bound.
+    alpha: Vamana hyperparameter.
+    num_steps: Number of random shards to index. If <=0, will default to two
+      full passes over the (shuffled) dataset.
+    max_violations: Hyperparameter for pruning. Usually 1 is a good choice.
+    kwargs: Other args for delegate_pruning.
+  """
+  idxes = db.get_embedding_ids()
+  root_node = db.get_one_embedding_id()
+  # We will include the root_node in every shard, so remove it from idxes to
+  # avoid repeat inclusion.
+  idxes = idxes[idxes != root_node]
+  rng = np.random.default_rng(random_seed)
+  index_batches = graph_utils.random_batched_iterator(idxes, shard_size, rng)
+  if num_steps <= 0:
+    num_steps = 2 * int(np.ceil(idxes.shape[0] / shard_size))
+  shards = []
+  edges = collections.defaultdict(list)
+  st = time.time()
+
+  for _ in tqdm.tqdm(range(num_steps)):
+    shard = next(index_batches)
+    # Ensure that every shard is connected to the root node.
+    shard = np.concatenate([shard, [root_node]], axis=0)
+    shards.append(shard)
+    new_edges = index_shard(
+        db,
+        shard,
+        alpha=alpha,
+        shard_degree_bound=shard_degree_bound,
+        max_violations=max_violations,
+        **kwargs,
+    )
+    for s, e in zip(shard, new_edges):
+      edges[s].append(e)
+
+  print('\nMerging edge sets...')
+  jitted_prune = jax.jit(
+      functools.partial(prune_jax, alpha=alpha, max_violations=max_violations)
+  )
+  for target in tqdm.tqdm(edges):
+    candidates = np.unique(np.concatenate(edges[target]))
+    candidates = candidates[candidates != -1]
+    if candidates.shape[0] < degree_bound:
+      db.insert_edges(target, candidates, replace=True)
+      continue
+    t_emb = db.get_embedding(target)
+    t_edges = db.get_edges(target)
+    candidates = np.concatenate([t_edges, candidates], axis=0)
+    c, c_emb = db.get_embeddings(candidates)
+    p_out, _, _ = jitted_prune(t_emb, c, c_emb)
+    db.insert_edges(target, p_out[:degree_bound], replace=True)
+
+  print('\nAdding reverse edges...', flush=True)
+  rev_st = time.time()
+  graph_utils.add_reverse_edges(db, degree_bound)
+  rev_elapsed = time.time() - rev_st
+  elapsed = time.time() - st
+  print(f'edge reverse time   : {rev_elapsed:.2f}')
+  print(f'total indexing time : {elapsed:.2f}')
+
+
 def delegate_indexing(
     embeddings: jnp.ndarray,
     edges: jnp.ndarray,
@@ -65,7 +168,7 @@ def delegate_indexing(
     max_delegates: int,
     alpha: float,
     max_violations: int,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> IndexingData:
   """Create an edge set using delegated pruning.
 
   This is the main indexing method in this library, which uses the JIT-compiled
@@ -251,6 +354,51 @@ def prune_jax(
   empty_edges = -1 * jnp.ones_like(p_out)
   p_out = jnp.where(violation_mask, empty_edges, p_out)
   return p_out, candidates, scores_c_c
+
+
+def index_shard(db, shard, shard_degree_bound, **kwargs):
+  """Index a subset of embeddings."""
+  shard, embs = db.get_embeddings(shard)
+  embs = jnp.asarray(embs)
+  shard_edges = -1 * jnp.ones([embs.shape[0], shard_degree_bound], jnp.int32)
+  # Index the shard.
+  indexing_data = delegate_indexing(
+      embs, shard_edges, delegate_lists=None, delegate_scores=None, **kwargs
+  )
+  # Convert edges back to original indexing.
+  edges = indexing_data.edges
+  shard_edges = jnp.where(edges != -1, shard[edges], edges)
+  return shard_edges
+
+
+@functools.partial(jax.jit, static_argnames=('top_k',))
+def multi_brute_search(
+    queries: jnp.ndarray, embeddings: jnp.ndarray, top_k: int
+):
+  dots = jnp.tensordot(queries, embeddings, axes=(-1, -1))
+  top_args = jnp.argsort(dots, descending=True, axis=1)[:, :top_k]
+  top_dots = jnp.take_along_axis(dots, top_args, axis=-1)
+  return top_args, top_dots
+
+
+def batched_brute_search(
+    queries: np.ndarray, embeddings: np.ndarray, top_k: int, batch_size: int
+):
+  """Perform a GPU brute-force search on batches of embeddings."""
+  queries = jnp.asarray(queries)
+  batch_top_args = []
+  batch_top_dots = []
+  for q in range(0, embeddings.shape[0], batch_size):
+    embs = jnp.asarray(embeddings[q : q + batch_size])
+    top_args, top_dots = multi_brute_search(queries, embs, top_k)
+    top_args = top_args + q
+    batch_top_args.append(top_args)
+    batch_top_dots.append(top_dots)
+  # Concatenate and merge the batch results.
+  top_args = jnp.concatenate(batch_top_args, axis=1)
+  top_dots = jnp.concatenate(batch_top_dots, axis=1)
+  top_dots, top_args = cosort(top_dots, top_args, descending=True)
+  return top_args[:, :top_k], top_dots[:, :top_k]
 
 
 def make_delegate_lists(

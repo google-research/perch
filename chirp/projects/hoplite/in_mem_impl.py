@@ -144,6 +144,9 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
         (self.max_size, self.degree_bound), dtype=np.int64
     )
 
+  def get_degree_bound(self) -> int:
+    return self.degree_bound
+
   def insert_embedding(
       self, embedding: np.ndarray, source: interface.EmbeddingSource
   ) -> int:

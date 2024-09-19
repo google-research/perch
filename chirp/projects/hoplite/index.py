@@ -96,7 +96,7 @@ class HopliteSearchIndex:
       self.db.insert_edges(idx, p_out, replace=True)
 
     if add_reverse_edges:
-      self.add_reverse_edges(target_degree)
+      graph_utils.add_reverse_edges(self.db, degree_bound=target_degree)
 
     if pad_edges:
       # Add a random set of edges to (best-effort) reach target degree.
@@ -268,7 +268,7 @@ class HopliteSearchIndex:
     )
     print(f'Root node degree is {len(self.db.get_edges(root_node))}.')
     print('Adding reverse edges...')
-    self.add_reverse_edges(degree_bound)
+    graph_utils.add_reverse_edges(self.db, degree_bound)
     self.dedupe_edges()
 
     visited = [root_node]
@@ -299,21 +299,9 @@ class HopliteSearchIndex:
     edge_count = self.db.count_edges()
     print(f'\nGraph has {edge_count} internal edges.')
     print('Adding reverse edges...')
-    self.add_reverse_edges(degree_bound)
+    graph_utils.add_reverse_edges(self.db, degree_bound)
     self.dedupe_edges()
     return visited
-
-  def add_reverse_edges(self, degree_bound: int):
-    reverse_edges = collections.defaultdict(list)
-    for r in self.db.get_embedding_ids():
-      for nbr in np.unique(self.db.get_edges(r)):
-        reverse_edges[nbr].append(r)
-    for r in self.db.get_embedding_ids():
-      new_edges = np.unique(
-          np.concatenate([self.db.get_edges(r), reverse_edges[r]])
-      )
-      new_edges = new_edges[:degree_bound]
-      self.db.insert_edges(r, new_edges, replace=True)
 
   def dedupe_edges(self):
     for r in self.db.get_embedding_ids():
@@ -457,7 +445,7 @@ class HopliteSearchIndex:
     graph_results = search_fn(query)
     graph_keys = set(r.embedding_id for r in graph_results)
 
-    brute_results, _ = brutalism.brute_search(
+    brute_results, _ = brutalism.threaded_brute_search(
         self.db, query, search_list_size=eval_top_k, score_fn=self.score_fn
     )
     brute_keys = set(r.embedding_id for r in brute_results)

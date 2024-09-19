@@ -15,6 +15,7 @@
 
 """Utility functions for graph operations."""
 
+import collections
 from typing import Iterator
 
 from chirp.projects.hoplite import interface
@@ -28,14 +29,41 @@ def random_batched_iterator(
     rng: np.random.RandomState,
 ) -> Iterator[np.ndarray]:
   """Yields batches embedding ids, shuffled after each of unlimited epochs."""
+  if batch_size > len(ids):
+    raise ValueError('Not enough ids to fill a batch.')
   rng.shuffle(ids)
   q = 0
   while True:
     if q + batch_size >= len(ids):
-      q = 0
+      overflow = q + batch_size - len(ids)
+      partial = ids[q : len(ids)]
       rng.shuffle(ids)
+      batch = np.concatenate([partial, ids[:overflow]], axis=0)
+      q = overflow
+      yield batch
     yield ids[q : q + batch_size]
     q += batch_size
+
+
+def add_reverse_edges(
+    db: interface.GraphSearchDBInterface, degree_bound: int = -1
+):
+  """Add reverse edges to the DB, up to the stated degree bound."""
+  reverse_edges = collections.defaultdict(list)
+  if degree_bound < 0:
+    degree_bound = db.get_degree_bound()
+  elif db.get_degree_bound() > 0:
+    # Avoid violating the DB's degree bound.
+    degree_bound = min(degree_bound, db.get_degree_bound())
+
+  for r in db.get_embedding_ids():
+    for nbr in np.unique(db.get_edges(r)):
+      reverse_edges[nbr].append(r)
+  for r in db.get_embedding_ids():
+    new_edges = np.unique(np.concatenate([db.get_edges(r), reverse_edges[r]]))
+    if degree_bound > 0:
+      new_edges = new_edges[:degree_bound]
+    db.insert_edges(r, new_edges, replace=True)
 
 
 def insert_random_embeddings(
