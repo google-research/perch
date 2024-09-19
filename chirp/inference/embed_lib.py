@@ -261,6 +261,15 @@ class EmbedFn(beam.DoFn):
         exception,
     )
 
+  def validate_audio(self, source_info: SourceInfo, audio: np.ndarray) -> bool:
+    if audio is None or audio.shape[0] == 0:
+      self._log_exception(source_info, 'no_exception', 'audio_empty')
+      return False
+    if audio.shape[0] < self.min_audio_s * self.target_sample_rate:
+      self._log_exception(source_info, 'no_exception', 'audio_too_short')
+      return False
+    return True
+
   def audio_to_example(
       self, file_id: str, timestamp_offset_s: float, audio: np.ndarray
   ) -> tf.train.Example:
@@ -345,11 +354,7 @@ class EmbedFn(beam.DoFn):
         self._log_exception(source_info, inst, 'audio_runtime_error')
       return
 
-    if audio is None or audio.shape[0] == 0:
-      self._log_exception(source_info, 'no_exception', 'audio_empty')
-      return
-    if audio.shape[0] < self.min_audio_s * self.target_sample_rate:
-      self._log_exception(source_info, 'no_exception', 'audio_too_short')
+    if not self.validate_audio(source_info, audio):
       return
 
     logging.info(
