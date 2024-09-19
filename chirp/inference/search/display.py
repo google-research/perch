@@ -52,6 +52,7 @@ def plot_melspec(
     newfig: bool = False,
     sample_rate: int = 32000,
     frame_rate: int = 100,
+    cmap: str = 'Greys',
     **specshow_kwargs,
 ):
   """Plot a melspectrogram."""
@@ -63,7 +64,7 @@ def plot_melspec(
       y_axis='mel',
       x_axis='time',
       hop_length=sample_rate // frame_rate,
-      cmap='Greys',
+      cmap=cmap,
       **specshow_kwargs,
   )
 
@@ -72,7 +73,9 @@ def plot_audio_melspec(
     audio: np.ndarray,
     sample_rate: int,
     newfig: bool = False,
-    display_audio=True,
+    display_audio: bool = True,
+    cmap: str = 'Greys',
+    **specshow_kwargs,
 ):
   """Plot a melspectrogram from audio."""
   melspec_layer = get_melspec_layer(sample_rate)
@@ -81,7 +84,14 @@ def plot_audio_melspec(
     zs = np.zeros([sample_rate // 10], dtype=audio.dtype)
     audio = np.concatenate([zs, audio, zs], axis=0)
   melspec = melspec_layer.apply({}, audio[np.newaxis, :])[0]
-  plot_melspec(melspec, newfig=newfig, sample_rate=sample_rate, frame_rate=100)
+  plot_melspec(
+      melspec,
+      newfig=newfig,
+      sample_rate=sample_rate,
+      frame_rate=100,
+      cmap=cmap,
+      **specshow_kwargs,
+  )
   plt.show()
   if display_audio:
     ipy_display(IPython.display.Audio(audio, rate=sample_rate))
@@ -126,6 +136,8 @@ def display_search_results(
     checkbox_labels: Sequence[str] = (),
     exclusive_labels=False,
     rank_offset: int = 0,
+    cmap: str = 'Greys',
+    fmax: float | None = None,
     **kwargs,
 ):
   """Display search results, and add audio and annotation info to results."""
@@ -136,7 +148,9 @@ def display_search_results(
   # Parallel load the audio windows.
   for rank, result in enumerate(results_iterator):
     if result.audio is not None:
-      plot_audio_melspec(result.audio, embedding_sample_rate)
+      plot_audio_melspec(
+          result.audio, embedding_sample_rate, cmap=cmap, fmax=fmax
+      )
       plt.show()
     else:
       print('Failed to load audio for result.')
