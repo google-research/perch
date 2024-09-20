@@ -16,12 +16,12 @@
 """Model callbacks library."""
 
 import dataclasses
-from typing import cast, Sequence
+from typing import Sequence, cast
 
 from absl import logging
 from chirp.eval import eval_lib
-from chirp.inference import interface
-from chirp.inference import models as inference_models
+from chirp.projects.zoo import models as inference_models
+from chirp.projects.zoo import zoo_interface
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 from chirp.train import classifier
@@ -263,7 +263,7 @@ class EmbeddingModelCallback:
   channel_pooling: str = 'squeeze'
 
   # The following are populated during init.
-  loaded_model: interface.EmbeddingModel = dataclasses.field(init=False)
+  loaded_model: zoo_interface.EmbeddingModel = dataclasses.field(init=False)
   model_callback: eval_lib.EvalModelCallable = dataclasses.field(init=False)
   # We don't use learned_representations with the simple wrapper, but need to
   # provide an empty mapping for the API.

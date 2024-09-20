@@ -25,8 +25,6 @@ from chirp import config_utils
 from chirp import path_utils
 from chirp.inference import colab_utils
 from chirp.inference import embed_lib
-from chirp.inference import interface
-from chirp.inference import models
 from chirp.inference import tf_examples
 from chirp.inference.classify import classify
 from chirp.inference.classify import data_lib
@@ -34,6 +32,8 @@ from chirp.inference.search import bootstrap
 from chirp.inference.search import display
 from chirp.inference.search import search
 from chirp.models import metrics
+from chirp.projects.zoo import models
+from chirp.projects.zoo import zoo_interface
 from chirp.taxonomy import namespace
 from etils import epath
 from ml_collections import config_dict
@@ -52,7 +52,7 @@ def _make_output_head_model(model_path: str, embedding_dim: int = 1280):
       tf.keras.layers.Dense(len(classes)),
   ])
   class_list = namespace.ClassList('custom', classes)
-  return interface.LogitsOutputHead(
+  return zoo_interface.LogitsOutputHead(
       model_path, 'other_label', model, class_list
   )
 
@@ -352,7 +352,7 @@ class EmbedTest(parameterized.TestCase):
     # Save and restore the model.
     with tempfile.TemporaryDirectory() as logits_model_dir:
       logits_model.save_model(logits_model_dir, '')
-      restored_model = interface.LogitsOutputHead.from_config_file(
+      restored_model = zoo_interface.LogitsOutputHead.from_config_file(
           logits_model_dir
       )
     reupdated_outputs = restored_model.add_logits(
@@ -465,7 +465,7 @@ class EmbedTest(parameterized.TestCase):
     output_dir.mkdir(parents=True, exist_ok=True)
     fake_examples = []
     for idx in range(20):
-      outputs = interface.InferenceOutputs(
+      outputs = zoo_interface.InferenceOutputs(
           embeddings=np.zeros([10, 2, 8], dtype=np.float32), batched=False
       )
       fake_examples.append(
@@ -504,7 +504,7 @@ class EmbedTest(parameterized.TestCase):
     output_dir.mkdir(parents=True, exist_ok=True)
     fake_examples = []
     for idx in range(20):
-      outputs = interface.InferenceOutputs(
+      outputs = zoo_interface.InferenceOutputs(
           embeddings=np.zeros([10, 2, 8], dtype=np.float32), batched=False
       )
       fake_examples.append(
@@ -614,10 +614,10 @@ class EmbedTest(parameterized.TestCase):
     )
 
   def test_pooled_embeddings(self):
-    outputs = interface.InferenceOutputs(
+    outputs = zoo_interface.InferenceOutputs(
         embeddings=np.zeros([10, 2, 8]), batched=False
     )
-    batched_outputs = interface.InferenceOutputs(
+    batched_outputs = zoo_interface.InferenceOutputs(
         embeddings=np.zeros([3, 10, 2, 8]), batched=True
     )
 
@@ -629,7 +629,7 @@ class EmbedTest(parameterized.TestCase):
         batched_non_pooled.shape, batched_outputs.embeddings.shape
     )
 
-    for pooling_method in interface.POOLING_METHODS:
+    for pooling_method in zoo_interface.POOLING_METHODS:
       if pooling_method == 'squeeze':
         # The 'squeeze' pooling method throws an exception if axis size is > 1.
         with self.assertRaises(ValueError):

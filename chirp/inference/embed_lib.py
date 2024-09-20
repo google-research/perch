@@ -26,9 +26,9 @@ import apache_beam as beam
 import audioread
 from chirp import audio_utils
 from chirp import path_utils
-from chirp.inference import interface
-from chirp.inference import models
 from chirp.inference import tf_examples
+from chirp.projects.zoo import models
+from chirp.projects.zoo import zoo_interface
 from etils import epath
 from ml_collections import config_dict
 import numpy as np
@@ -171,7 +171,7 @@ class EmbedFn(beam.DoFn):
       file_id_depth: int,
       crop_s: float = -1.0,
       min_audio_s: float = 1.0,
-      embedding_model: interface.EmbeddingModel | None = None,
+      embedding_model: zoo_interface.EmbeddingModel | None = None,
       target_sample_rate: int = -2,
       logits_head_config: config_dict.ConfigDict | None = None,
       tensor_dtype: str = 'float32',
@@ -236,7 +236,7 @@ class EmbedFn(beam.DoFn):
     else:
       raise ValueError('Invalid target_sample_rate.')
     if self.logits_head_config is not None:
-      self.logits_head = interface.LogitsOutputHead.from_config(
+      self.logits_head = zoo_interface.LogitsOutputHead.from_config(
           self.logits_head_config
       )
 

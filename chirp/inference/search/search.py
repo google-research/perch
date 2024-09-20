@@ -21,8 +21,8 @@ import functools
 import heapq
 from typing import Any, Callable, List, Sequence
 
-from chirp.inference import interface
 from chirp.inference import tf_examples
+from chirp.projects.zoo import zoo_interface
 from etils import epath
 import numpy as np
 from scipy.io import wavfile
@@ -317,7 +317,7 @@ def search_embeddings_parallel(
 
 
 def classifer_search_embeddings_parallel(
-    embeddings_classifier: interface.LogitsOutputHead,
+    embeddings_classifier: zoo_interface.LogitsOutputHead,
     target_index: int,
     **kwargs,
 ):

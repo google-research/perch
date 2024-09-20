@@ -13,20 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Utility functions for scann search"""
+"""Utility functions for scann search."""
 
 import dataclasses
-import math
 import os
-import sys
-import time
 
 from absl import logging
 from chirp import audio_utils
-from chirp.inference import models
 from chirp.inference.embed_lib import load_embedding_config
-from chirp.inference.search import bootstrap
 from chirp.inference.tf_examples import get_example_parser
+from chirp.projects.zoo import models
 from etils import epath
 from ml_collections import config_dict
 import numpy as np
@@ -37,7 +33,9 @@ from scann.scam_ops.py import scam_ops_pybind
 
 @dataclasses.dataclass(frozen=True)
 class AudioSearchResult:
-  """Attributes:
+  """Results from SCANN search.
+
+  Attributes:
 
   index: Index for the searcher ndarray.
   distance: The nearest neighbor distance calculated by scann searcher.

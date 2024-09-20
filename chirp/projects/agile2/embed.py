@@ -21,11 +21,11 @@ from typing import Iterator
 from absl import logging
 import audioread
 from chirp import audio_utils
-from chirp.inference import interface
-from chirp.inference import models
 from chirp.projects.agile2 import source_info
 from chirp.projects.hoplite import db_loader
 from chirp.projects.hoplite import interface as hoplite_interface
+from chirp.projects.zoo import models
+from chirp.projects.zoo import zoo_interface
 from ml_collections import config_dict
 import numpy as np
 import soundfile
@@ -70,7 +70,7 @@ class EmbedWorker:
       embed_config: EmbedConfig,
       model_config: ModelConfig,
       db_config: db_loader.DBConfig,
-      embedding_model: interface.EmbeddingModel | None = None,
+      embedding_model: zoo_interface.EmbeddingModel | None = None,
   ):
     self.model_config = model_config
     self.embed_config = embed_config

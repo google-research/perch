@@ -17,9 +17,9 @@
 
 import tempfile
 
-from chirp.inference import interface
 from chirp.inference.classify import classify
 from chirp.inference.classify import data_lib
+from chirp.projects.zoo import zoo_interface
 from chirp.taxonomy import namespace
 import numpy as np
 
@@ -85,14 +85,14 @@ class ClassifyTest(parameterized.TestCase):
     # Save and restore the model.
     class_names = ['a', 'b', 'c', 'd']
     with tempfile.TemporaryDirectory() as logits_model_dir:
-      logits_model = interface.LogitsOutputHead(
+      logits_model = zoo_interface.LogitsOutputHead(
           model_path=logits_model_dir,
           logits_key='some_model',
           logits_model=model,
           class_list=namespace.ClassList('classes', class_names),
       )
       logits_model.save_model(logits_model_dir, '')
-      restored_model = interface.LogitsOutputHead.from_config_file(
+      restored_model = zoo_interface.LogitsOutputHead.from_config_file(
           logits_model_dir
       )
       restored_logits = restored_model(query)

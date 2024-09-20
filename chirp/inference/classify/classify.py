@@ -18,10 +18,10 @@
 import dataclasses
 from typing import Sequence
 
-from chirp.inference import interface
 from chirp.inference import tf_examples
 from chirp.inference.classify import data_lib
 from chirp.models import metrics
+from chirp.projects.zoo import zoo_interface
 import numpy as np
 import tensorflow as tf
 import tqdm
@@ -157,7 +157,7 @@ def train_embedding_model(
 
 def get_inference_dataset(
     embeddings_ds: tf.data.Dataset,
-    model: interface.LogitsOutputHead,
+    model: zoo_interface.LogitsOutputHead,
 ):
   """Create a dataset which includes the model's predictions."""
 
@@ -183,7 +183,7 @@ def get_inference_dataset(
 
 def write_inference_csv(
     embeddings_ds: tf.data.Dataset,
-    model: interface.LogitsOutputHead,
+    model: zoo_interface.LogitsOutputHead,
     labels: Sequence[str],
     output_filepath: str,
     embedding_hop_size_s: float,

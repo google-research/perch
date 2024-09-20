@@ -23,10 +23,10 @@ from typing import Callable, Iterator, Sequence
 from chirp import audio_utils
 from chirp.inference import baw_utils
 from chirp.inference import embed_lib
-from chirp.inference import interface
-from chirp.inference import models
 from chirp.inference import tf_examples
 from chirp.inference.search import search
+from chirp.projects.zoo import models
+from chirp.projects.zoo import zoo_interface
 from etils import epath
 from ml_collections import config_dict
 import tensorflow as tf
@@ -45,7 +45,7 @@ class BootstrapState:
   """
 
   config: 'BootstrapConfig'
-  embedding_model: interface.EmbeddingModel | None = None
+  embedding_model: zoo_interface.EmbeddingModel | None = None
   embeddings_dataset: tf.data.Dataset | None = None
   source_map: Callable[[str, float], str] | None = None
   baw_auth_token: str = ''

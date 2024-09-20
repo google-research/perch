@@ -33,8 +33,8 @@ import time
 from typing import Dict, Sequence, Tuple
 
 from chirp import audio_utils
-from chirp.inference import interface
 from chirp.inference import tf_examples
+from chirp.projects.zoo import zoo_interface
 from etils import epath
 import numpy as np
 import tensorflow as tf
@@ -62,7 +62,7 @@ class MergedDataset:
   def from_folder_of_folders(
       cls,
       base_dir: str,
-      embedding_model: interface.EmbeddingModel,
+      embedding_model: zoo_interface.EmbeddingModel,
       time_pooling: str = 'mean',
       exclude_classes: Sequence[str] = (),
       load_audio: bool = False,
@@ -290,7 +290,7 @@ class MergedDataset:
     for embedding, filename in zip(embeddings, filename):
       examples.append(
           tf_examples.model_outputs_to_tf_example(
-              model_outputs=interface.InferenceOutputs(embedding),
+              model_outputs=zoo_interface.InferenceOutputs(embedding),
               file_id=filename,
               audio=np.empty(1),
               timestamp_offset_s=0,
@@ -466,7 +466,7 @@ def labels_from_folder_of_folders(
 
 def embed_dataset(
     base_dir: str,
-    embedding_model: interface.EmbeddingModel,
+    embedding_model: zoo_interface.EmbeddingModel,
     time_pooling: str,
     exclude_classes: Sequence[str] = (),
     load_audio: bool = False,
@@ -638,12 +638,12 @@ def read_embedded_dataset(
     if len(ex['embedding'].shape) == 1:
       outputs = ex['embedding']
     else:
-      outputs = interface.pool_axis(ex['embedding'], -3, time_pooling)
+      outputs = zoo_interface.pool_axis(ex['embedding'], -3, time_pooling)
       if ex['embedding'].shape[-2] == 1:
         channel_pooling = 'squeeze'
       else:
         channel_pooling = 'first'
-      outputs = interface.pool_axis(outputs, -2, channel_pooling)
+      outputs = zoo_interface.pool_axis(outputs, -2, channel_pooling)
 
     merged['embeddings'].append(outputs)
     merged['filename'].append(ex['filename'].decode())

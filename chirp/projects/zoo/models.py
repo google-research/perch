@@ -20,9 +20,9 @@ import tempfile
 from typing import Any
 
 from absl import logging
-from chirp.inference import interface
 from chirp.models import frontend
 from chirp.models import handcrafted_features
+from chirp.projects.zoo import zoo_interface
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
 from etils import epath
@@ -117,7 +117,7 @@ def get_preset_model_config(preset_name):
 
 
 @dataclasses.dataclass
-class SeparateEmbedModel(interface.EmbeddingModel):
+class SeparateEmbedModel(zoo_interface.EmbeddingModel):
   """Wrapper for separate separation and embedding models.
 
   Note: Use the separation model's sample rate. The embedding model's sample
@@ -157,7 +157,7 @@ class SeparateEmbedModel(interface.EmbeddingModel):
           'Separation and embedding models must have matching rates.'
       )
 
-  def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
+  def embed(self, audio_array: np.ndarray) -> zoo_interface.InferenceOutputs:
     # Frame the audio according to the embedding model's config.
     # We then apply separation to each frame independently, and embed
     # the separated audio.
@@ -205,7 +205,7 @@ class SeparateEmbedModel(interface.EmbeddingModel):
     else:
       max_logits = None
 
-    return interface.InferenceOutputs(
+    return zoo_interface.InferenceOutputs(
         embeddings=embedding_outputs.embeddings,
         logits=max_logits,
         # Because the separated audio is framed, it does not match the
@@ -215,12 +215,12 @@ class SeparateEmbedModel(interface.EmbeddingModel):
 
 
 @dataclasses.dataclass
-class BirbSepModelTF1(interface.EmbeddingModel):
+class BirbSepModelTF1(zoo_interface.EmbeddingModel):
   """Separation model from the Bird MixIT paper.
 
   Example usage:
   ```
-  from chirp.inference import models
+  from chirp.projects.zoo import models
   birbsep1_config = config_dict.ConfigDict({
     'model_path': $MODEL_PATH,
     'window_size_s': 60.0,
@@ -273,7 +273,7 @@ class BirbSepModelTF1(interface.EmbeddingModel):
         **config,
     )
 
-  def embed(self, audio_array: Any) -> interface.InferenceOutputs:
+  def embed(self, audio_array: Any) -> zoo_interface.InferenceOutputs:
     start_sample = 0
     window_size = int(self.window_size_s * self.sample_rate)
     sep_chunks = []
@@ -298,14 +298,16 @@ class BirbSepModelTF1(interface.EmbeddingModel):
       sep_chunks = np.concatenate(
           [sep_chunks, raw_chunks[np.newaxis, :]], axis=0
       )
-    return interface.InferenceOutputs(separated_audio=sep_chunks)
+    return zoo_interface.InferenceOutputs(separated_audio=sep_chunks)
 
-  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
-    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+  def batch_embed(
+      self, audio_batch: np.ndarray
+  ) -> zoo_interface.InferenceOutputs:
+    return zoo_interface.batch_embed_from_embed_fn(self.embed, audio_batch)
 
 
 @dataclasses.dataclass
-class TaxonomyModelTF(interface.EmbeddingModel):
+class TaxonomyModelTF(zoo_interface.EmbeddingModel):
   """Taxonomy SavedModel.
 
   Attributes:
@@ -434,8 +436,10 @@ class TaxonomyModelTF(interface.EmbeddingModel):
         model=model, class_list=class_lists, batchable=batchable, **config
     )
 
-  def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
-    return interface.embed_from_batch_embed_fn(self.batch_embed, audio_array)
+  def embed(self, audio_array: np.ndarray) -> zoo_interface.InferenceOutputs:
+    return zoo_interface.embed_from_batch_embed_fn(
+        self.batch_embed, audio_array
+    )
 
   def _nonbatchable_batch_embed(self, audio_batch: np.ndarray):
     """Embed a batch of audio with an old non-batchable model."""
@@ -460,7 +464,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
 
   def batch_embed(
       self, audio_batch: np.ndarray[Any, Any]
-  ) -> interface.InferenceOutputs:
+  ) -> zoo_interface.InferenceOutputs:
     framed_audio = self.frame_audio(
         audio_batch, self.window_size_s, self.hop_size_s
     )
@@ -498,7 +502,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
             embeddings.shape[-1],
         ),
     )
-    return interface.InferenceOutputs(
+    return zoo_interface.InferenceOutputs(
         embeddings=embeddings,
         logits=logits,
         separated_audio=None,
@@ -508,7 +512,7 @@ class TaxonomyModelTF(interface.EmbeddingModel):
 
 
 @dataclasses.dataclass
-class SeparatorModelTF(interface.EmbeddingModel):
+class SeparatorModelTF(zoo_interface.EmbeddingModel):
   """Separator SavedModel.
 
   Attributes:
@@ -536,7 +540,7 @@ class SeparatorModelTF(interface.EmbeddingModel):
       class_list = namespace.ClassList.from_csv(f)
     return cls(model=model, class_list=class_list, **config)
 
-  def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
+  def embed(self, audio_array: np.ndarray) -> zoo_interface.InferenceOutputs:
     # Drop samples to allow reshaping to frame_size
     excess_samples = audio_array.shape[0] % self.frame_size
     if excess_samples > 0:
@@ -567,16 +571,18 @@ class SeparatorModelTF(interface.EmbeddingModel):
     sep_audio = np.reshape(sep_audio, [-1, sep_audio.shape[-1]])
     all_logits = np.reshape(all_logits, [-1, all_logits.shape[-1]])
     all_embeddings = np.reshape(all_embeddings, [-1, all_embeddings.shape[-1]])
-    return interface.InferenceOutputs(
+    return zoo_interface.InferenceOutputs(
         all_embeddings, {'label': all_logits}, sep_audio
     )
 
-  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
-    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+  def batch_embed(
+      self, audio_batch: np.ndarray
+  ) -> zoo_interface.InferenceOutputs:
+    return zoo_interface.batch_embed_from_embed_fn(self.embed, audio_batch)
 
 
 @dataclasses.dataclass
-class BirdNet(interface.EmbeddingModel):
+class BirdNet(zoo_interface.EmbeddingModel):
   """Wrapper for BirdNet models.
 
   Attributes:
@@ -625,18 +631,20 @@ class BirdNet(interface.EmbeddingModel):
 
   def embed_saved_model(
       self, audio_array: np.ndarray
-  ) -> interface.InferenceOutputs:
+  ) -> zoo_interface.InferenceOutputs:
     """Get logits using the BirdNet SavedModel."""
     # Note that there is no easy way to get the embedding from the SavedModel.
     all_logits = self.model(audio_array[:1])
     for window in audio_array[1:]:
       logits = self.model(window[np.newaxis, :])
       all_logits = np.concatenate([all_logits, logits], axis=0)
-    return interface.InferenceOutputs(
+    return zoo_interface.InferenceOutputs(
         None, {self.class_list_name: all_logits}, None
     )
 
-  def embed_tflite(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
+  def embed_tflite(
+      self, audio_array: np.ndarray
+  ) -> zoo_interface.InferenceOutputs:
     """Create an embedding and logits using the BirdNet TFLite model."""
     input_details = self.model.get_input_details()[0]
     output_details = self.model.get_output_details()[0]
@@ -653,11 +661,11 @@ class BirdNet(interface.EmbeddingModel):
     # Create [Batch, 1, Features]
     embeddings = np.array(embeddings)
     logits = np.array(logits)
-    return interface.InferenceOutputs(
+    return zoo_interface.InferenceOutputs(
         embeddings, {self.class_list_name: logits}, None
     )
 
-  def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
+  def embed(self, audio_array: np.ndarray) -> zoo_interface.InferenceOutputs:
     framed_audio = self.frame_audio(
         audio_array, self.window_size_s, self.hop_size_s
     )
@@ -666,12 +674,14 @@ class BirdNet(interface.EmbeddingModel):
     else:
       return self.embed_saved_model(framed_audio)
 
-  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
-    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+  def batch_embed(
+      self, audio_batch: np.ndarray
+  ) -> zoo_interface.InferenceOutputs:
+    return zoo_interface.batch_embed_from_embed_fn(self.embed, audio_batch)
 
 
 @dataclasses.dataclass
-class HandcraftedFeaturesModel(interface.EmbeddingModel):
+class HandcraftedFeaturesModel(zoo_interface.EmbeddingModel):
   """Wrapper for simple feature extraction."""
 
   window_size_s: float
@@ -720,7 +730,7 @@ class HandcraftedFeaturesModel(interface.EmbeddingModel):
     # pylint: disable=unexpected-keyword-arg
     return HandcraftedFeaturesModel.from_config(config)
 
-  def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
+  def embed(self, audio_array: np.ndarray) -> zoo_interface.InferenceOutputs:
     framed_audio = self.frame_audio(
         audio_array, self.window_size_s, self.hop_size_s
     )
@@ -730,14 +740,16 @@ class HandcraftedFeaturesModel(interface.EmbeddingModel):
     )
     # Add a trivial channels dimension.
     features = features[:, np.newaxis, :]
-    return interface.InferenceOutputs(features, None, None)
+    return zoo_interface.InferenceOutputs(features, None, None)
 
-  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
-    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+  def batch_embed(
+      self, audio_batch: np.ndarray
+  ) -> zoo_interface.InferenceOutputs:
+    return zoo_interface.batch_embed_from_embed_fn(self.embed, audio_batch)
 
 
 @dataclasses.dataclass
-class GoogleWhaleModel(interface.EmbeddingModel):
+class GoogleWhaleModel(zoo_interface.EmbeddingModel):
   """Wrapper for Google Humpback model.
 
   Attributes:
@@ -788,7 +800,9 @@ class GoogleWhaleModel(interface.EmbeddingModel):
   def hop_size_s(self) -> float:
     return self.window_size_s
 
-  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
+  def batch_embed(
+      self, audio_batch: np.ndarray
+  ) -> zoo_interface.InferenceOutputs:
     # Renormalize to 0.02 peak.
     if self.peak_norm > 0:
       audio_batch = self.normalize_audio(audio_batch, self.peak_norm)
@@ -809,7 +823,7 @@ class GoogleWhaleModel(interface.EmbeddingModel):
         logits, [framed_spec.shape[0], framed_spec.shape[1], logits.shape[-1]]
     )
     logits = {self.class_list.namespace: logits}
-    outputs = interface.InferenceOutputs(
+    outputs = zoo_interface.InferenceOutputs(
         embeddings=embeddings,
         logits=logits,
         frontend=spectrogram,
@@ -817,12 +831,14 @@ class GoogleWhaleModel(interface.EmbeddingModel):
     )
     return outputs
 
-  def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
-    return interface.embed_from_batch_embed_fn(self.batch_embed, audio_array)
+  def embed(self, audio_array: np.ndarray) -> zoo_interface.InferenceOutputs:
+    return zoo_interface.embed_from_batch_embed_fn(
+        self.batch_embed, audio_array
+    )
 
 
 @dataclasses.dataclass
-class TFHubModel(interface.EmbeddingModel):
+class TFHubModel(zoo_interface.EmbeddingModel):
   """Generic wrapper for TFHub models which produce embeddings."""
 
   model: Any  # TFHub loaded model.
@@ -861,7 +877,7 @@ class TFHubModel(interface.EmbeddingModel):
 
   def embed(
       self, audio_array: np.ndarray[Any, np.dtype[Any]]
-  ) -> interface.InferenceOutputs:
+  ) -> zoo_interface.InferenceOutputs:
     outputs = self.model(audio_array)
     if self.embedding_index < 0:
       embeddings = outputs
@@ -877,15 +893,17 @@ class TFHubModel(interface.EmbeddingModel):
     else:
       logits = None
     embeddings = embeddings[:, np.newaxis, :]
-    return interface.InferenceOutputs(embeddings, logits, None, False)
+    return zoo_interface.InferenceOutputs(embeddings, logits, None, False)
 
-  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
-    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+  def batch_embed(
+      self, audio_batch: np.ndarray
+  ) -> zoo_interface.InferenceOutputs:
+    return zoo_interface.batch_embed_from_embed_fn(self.embed, audio_batch)
 
 
 @dataclasses.dataclass
-class PlaceholderModel(interface.EmbeddingModel):
-  """Test implementation of the EmbeddingModel interface."""
+class PlaceholderModel(zoo_interface.EmbeddingModel):
+  """Test implementation of the EmbeddingModel zoo_interface."""
 
   embedding_size: int = 128
   make_embeddings: bool = True
@@ -905,7 +923,7 @@ class PlaceholderModel(interface.EmbeddingModel):
     db = namespace_db.load_db()
     self.class_list = db.class_lists['caples']
 
-  def embed(self, audio_array: np.ndarray) -> interface.InferenceOutputs:
+  def embed(self, audio_array: np.ndarray) -> zoo_interface.InferenceOutputs:
     outputs = {}
     if self.do_frame_audio:
       audio_array = self.frame_audio(
@@ -935,7 +953,9 @@ class PlaceholderModel(interface.EmbeddingModel):
       outputs['separated_audio'] = np.zeros(
           [2, audio_array.shape[-1]], np.float32
       )
-    return interface.InferenceOutputs(**outputs)
+    return zoo_interface.InferenceOutputs(**outputs)
 
-  def batch_embed(self, audio_batch: np.ndarray) -> interface.InferenceOutputs:
-    return interface.batch_embed_from_embed_fn(self.embed, audio_batch)
+  def batch_embed(
+      self, audio_batch: np.ndarray
+  ) -> zoo_interface.InferenceOutputs:
+    return zoo_interface.batch_embed_from_embed_fn(self.embed, audio_batch)

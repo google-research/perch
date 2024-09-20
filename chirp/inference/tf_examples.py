@@ -20,7 +20,7 @@ import datetime
 import os
 from typing import Sequence
 
-from chirp.inference import interface
+from chirp.projects.zoo import zoo_interface
 from etils import epath
 import numpy as np
 import tensorflow as tf
@@ -141,7 +141,7 @@ def serialize_tensor(tensor: np.ndarray, tensor_dtype: str) -> np.ndarray:
 
 
 def model_outputs_to_tf_example(
-    model_outputs: interface.InferenceOutputs,
+    model_outputs: zoo_interface.InferenceOutputs,
     file_id: str,
     audio: np.ndarray,
     timestamp_offset_s: float,
