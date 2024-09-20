@@ -67,15 +67,17 @@ class EmbedTest(absltest.TestCase):
         model_config=placeholder_model_config,
     )
 
+    db = db_config.load_db()
+
     embed_worker = embed.EmbedWorker(
         embed_config=embed_config,
         model_config=model_config,
-        db_config=db_config,
+        db=db,
     )
     embed_worker.process_all()
     # The hop size is 1.0s and each file is 6.0s, so we should get 6 embeddings
     # per file. There are six files, so we should get 36 embeddings.
-    self.assertEqual(embed_worker.db.count_embeddings(), 36)
+    self.assertEqual(db.count_embeddings(), 36)
 
 
 if __name__ == '__main__':

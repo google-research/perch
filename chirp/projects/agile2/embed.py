@@ -69,9 +69,10 @@ class EmbedWorker:
       self,
       embed_config: EmbedConfig,
       model_config: ModelConfig,
-      db_config: db_loader.DBConfig,
+      db: hoplite_interface.GraphSearchDBInterface,
       embedding_model: zoo_interface.EmbeddingModel | None = None,
   ):
+    self.db = db
     self.model_config = model_config
     self.embed_config = embed_config
     if embedding_model is None:
@@ -79,11 +80,6 @@ class EmbedWorker:
       self.embedding_model = model_class.from_config(model_config.model_config)
     else:
       self.embedding_model = embedding_model
-    # TODO(tomdenton): Check that the DB's model config matches ours.
-    self.db = db_config.load_db()
-    self.db.setup()
-    self.db.insert_metadata('embed_config', embed_config.to_config_dict())
-    self.db.insert_metadata('model_config', model_config.to_config_dict())
 
   def _log_error(self, source_id, exception, counter_name):
     logging.warning(
