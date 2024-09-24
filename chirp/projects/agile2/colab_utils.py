@@ -20,27 +20,9 @@ import dataclasses
 from chirp.projects.agile2 import embed
 from chirp.projects.hoplite import db_loader
 from chirp.projects.hoplite import interface
+from chirp.projects.zoo import models
 from etils import epath
 from ml_collections import config_dict
-
-
-def supported_models() -> dict[str, dict[str, int | embed.ModelConfig]]:
-  """Returns the set of supported models and their corresponding configs."""
-  return {
-      'perch': {
-          'embedding_dim': 1280,
-          'model_config': embed.ModelConfig(
-              model_key='taxonomy_model_tf',
-              model_config=config_dict.ConfigDict({
-                  'tfhub_version': 8,
-                  'window_size_s': 5.0,
-                  'hop_size_s': 5.0,
-                  'model_path': '',
-                  'sample_rate': 32000,
-              }),
-          ),
-      },
-  }
 
 
 @dataclasses.dataclass
@@ -90,7 +72,7 @@ def validate_and_save_configs(
 def load_configs(
     audio_globs: dict[str, tuple[str, str]],
     db_path: str,
-    model_config_key: str = 'perch',
+    model_config_key: str = 'perch_8',
 ) -> AgileConfigs:
   """Load default configs for the notebook and return them as an AgileConfigs.
 
@@ -100,11 +82,10 @@ def load_configs(
     db_path: Location of the database.  If None, the database will be created in
       the same directory as the audio.
     model_config_key: Name of the embedding model to use.
-  """
-  if model_config_key not in supported_models():
-    # TODO(roblaber): Add support for other models.
-    raise ValueError(f'Unsupported model: {model_config_key}')
 
+  Returns:
+    AgileConfigs object with the loaded configs.
+  """
   if db_path is None:
     if len(audio_globs) > 1:
       raise ValueError(
@@ -115,10 +96,17 @@ def load_configs(
         epath.Path(next(iter(audio_globs.values()))[0]) / 'hoplite_db.sqlite'
     )
 
-  model_config = supported_models()[model_config_key]
+  model_key, embedding_dim, model_config = models.get_preset_model_config(
+      model_config_key
+  )
+  db_model_config = embed.ModelConfig(
+      model_key=model_key,
+      embedding_dim=embedding_dim,
+      model_config=model_config,
+  )
   db_config = config_dict.ConfigDict({
       'db_path': db_path,
-      'embedding_dim': model_config['embedding_dim'],
+      'embedding_dim': embedding_dim,
   })
 
   audio_srcs_config = embed.EmbedConfig(
@@ -129,5 +117,5 @@ def load_configs(
   return AgileConfigs(
       audio_sources_config=audio_srcs_config,
       db_config=db_loader.DBConfig('sqlite', db_config),
-      model_config=model_config['model_config'],
+      model_config=db_model_config,
   )

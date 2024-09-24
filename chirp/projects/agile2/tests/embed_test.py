@@ -64,6 +64,7 @@ class EmbedTest(absltest.TestCase):
     placeholder_model_config.sample_rate = 16000
     model_config = embed.ModelConfig(
         model_key='placeholder_model',
+        embedding_dim=32,
         model_config=placeholder_model_config,
     )
 

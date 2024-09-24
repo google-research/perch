@@ -22,7 +22,6 @@ from absl import logging
 import audioread
 from chirp import audio_utils
 from chirp.projects.agile2 import source_info
-from chirp.projects.hoplite import db_loader
 from chirp.projects.hoplite import interface as hoplite_interface
 from chirp.projects.zoo import models
 from chirp.projects.zoo import zoo_interface
@@ -37,10 +36,12 @@ class ModelConfig(hoplite_interface.EmbeddingMetadata):
 
   Attributes:
     model_key: Key for the model wrapper class.
+    embedding_dim: Dimensionality of the embedding.
     model_config: Config dict of arguments to instantiate the model wrapper.
   """
 
   model_key: str
+  embedding_dim: int
   model_config: config_dict.ConfigDict
 
 
@@ -127,6 +128,15 @@ class EmbedWorker:
       else:
         self._log_error(source_id, inst, 'audio_runtime_error')
 
+  def embedding_exists(self, source_id: source_info.SourceId) -> bool:
+    """Check whether embeddings already exist for the given source ID."""
+    embs = self.db.get_embeddings_by_source(
+        dataset_name=source_id.dataset_name,
+        source_id=source_id.file_id,
+        offsets=np.array([source_id.offset_s], np.float16),
+    )
+    return embs.shape[0] > 0
+
   def process_source_id(
       self, source_id: source_info.SourceId
   ) -> Iterator[tuple[hoplite_interface.EmbeddingSource, np.ndarray]]:
@@ -140,17 +150,22 @@ class EmbedWorker:
     ):
       self._log_error(source_id, 'no_exception', 'audio_too_short')
       return
+
+    if self.embedding_exists(source_id):
+      self._log_error(source_id, 'no_exception', 'embeddings already exist')
+      return
+
     outputs = self.embedding_model.embed(audio_array)
     embeddings = outputs.embeddings
     if embeddings is None:
       return
     hop_size_s = getattr(self.embedding_model, 'hop_size_s', 0.0)
     for t, embedding in enumerate(embeddings):
-      offset_s = t * hop_size_s
+      offset_s = source_id.offset_s + t * hop_size_s
       emb_source_id = hoplite_interface.EmbeddingSource(
           dataset_name=source_id.dataset_name,
           source_id=source_id.file_id,
-          offsets=np.array([offset_s]),
+          offsets=np.array([offset_s], np.float16),
       )
       for channel_embedding in embedding:
         yield (emb_source_id, channel_embedding)
@@ -159,7 +174,6 @@ class EmbedWorker:
     """Process all audio examples."""
     audio_sources = source_info.AudioSources(self.embed_config.audio_globs)
     for source_id in audio_sources.iterate_all_sources():
-      # TODO(tomdenton): Avoid recomputing / reinserting existing embeddings.
       for emb_source_id, embedding in self.process_source_id(source_id):
         self.db.insert_embedding(embedding, emb_source_id)
     self.db.commit()

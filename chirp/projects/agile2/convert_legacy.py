@@ -65,6 +65,7 @@ def convert_tfrecords(
   legacy_config = embed_lib.load_embedding_config(embeddings_path)
   model_config = embed.ModelConfig(
       model_key=legacy_config.embed_fn_config.model_key,
+      embedding_dim=emb_dim,
       model_config=legacy_config.embed_fn_config.model_config,
   )
   file_id_depth = legacy_config.embed_fn_config['file_id_depth']
