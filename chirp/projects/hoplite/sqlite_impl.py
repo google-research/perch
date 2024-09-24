@@ -18,6 +18,7 @@
 import collections
 from collections.abc import Sequence
 import dataclasses
+import functools
 import json
 import sqlite3
 from typing import Any
@@ -44,34 +45,36 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
   def create(
       cls,
       db_path: str,
-      embedding_dim: int,
+      embedding_dim: int | None = None,
       embedding_dtype: type[Any] = np.float16,
   ):
     db = sqlite3.connect(db_path)
     cursor = db.cursor()
     cursor.execute('PRAGMA journal_mode=WAL;')  # Enable WAL mode
     db.commit()
+    if embedding_dim is None:
+      # Get an embedding from the DB to check its dimension.
+      cursor = db.cursor()
+      cursor.execute("""SELECT embedding FROM hoplite_embeddings LIMIT 1;""")
+      try:
+        embedding = cursor.fetchall()[0][0]
+      except IndexError as exc:
+        raise ValueError(
+            'Must specify embedding dimension for empty databases.'
+        ) from exc
+      embedding = deserialize_embedding(embedding, embedding_dtype)
+      embedding_dim = embedding.shape[-1]
+
     return SQLiteGraphSearchDB(db, db_path, embedding_dim, embedding_dtype)
 
   def thread_split(self):
     """Get a new instance of the SQLite DB."""
-    return self.create(self.db_path, self.embedding_dim, self.embedding_dtype)
+    return self.create(self.db_path, self.embedding_dtype)
 
   def _get_cursor(self) -> sqlite3.Cursor:
     if self._cursor is None:
       self._cursor = self.db.cursor()
     return self._cursor
-
-  def serialize_embedding(self, embedding: np.ndarray) -> bytes:
-    return embedding.astype(
-        np.dtype(self.embedding_dtype).newbyteorder('<')
-    ).tobytes()
-
-  def deserialize_embedding(self, serialized_embedding: bytes) -> np.ndarray:
-    return np.frombuffer(
-        serialized_embedding,
-        dtype=np.dtype(self.embedding_dtype).newbyteorder('<'),
-    )
 
   def serialize_edges(self, edges: np.ndarray) -> bytes:
     return edges.astype(np.dtype(np.int64).newbyteorder('<')).tobytes()
@@ -163,7 +166,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
 
   def get_one_embedding_id(self) -> int:
     cursor = self._get_cursor()
-    cursor.execute("""SELECT id FROM hoplite_embeddings;""")
+    cursor.execute("""SELECT id FROM hoplite_embeddings LIMIT 1;""")
     return int(cursor.fetchone()[0])
 
   def insert_metadata(self, key: str, value: config_dict.ConfigDict) -> None:
@@ -273,11 +276,11 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     if embedding.shape[-1] != self.embedding_dim:
       raise ValueError('Incorrect embedding dimension.')
     cursor = self._get_cursor()
-    embedding_bytes = self.serialize_embedding(embedding)
+    embedding_bytes = serialize_embedding(embedding, self.embedding_dtype)
     source_id = self._get_source_id(
         source.dataset_name, source.source_id, insert=True
     )
-    offset_bytes = self.serialize_embedding(source.offsets)
+    offset_bytes = serialize_embedding(source.offsets, self.embedding_dtype)
     cursor.execute(
         """
       INSERT INTO hoplite_embeddings (embedding, source_idx, offsets) VALUES (?, ?, ?);
@@ -306,7 +309,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         (int(embedding_id),),
     )
     embedding = cursor.fetchall()[0][0]
-    return self.deserialize_embedding(embedding)
+    return deserialize_embedding(embedding, self.embedding_dtype)
 
   def get_embedding_source(
       self, embedding_id: int
@@ -322,7 +325,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         (int(embedding_id),),
     )
     dataset, source, offsets = cursor.fetchall()[0]
-    offsets = self.deserialize_embedding(offsets)
+    offsets = deserialize_embedding(offsets, self.embedding_dtype)
     return interface.EmbeddingSource(dataset, str(source), offsets)
 
   def get_embeddings(
@@ -339,7 +342,9 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     ).fetchall()
     result_ids = np.array(tuple(int(c[0]) for c in results))
     embeddings = np.array(
-        tuple(self.deserialize_embedding(c[1]) for c in results)
+        tuple(
+            deserialize_embedding(c[1], self.embedding_dtype) for c in results
+        )
     )
     return result_ids, embeddings
 
@@ -362,7 +367,6 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
       A list of embedding IDs matching the indicated source parameters.
     """
     cursor = self._get_cursor()
-    source_id = self._get_source_id(dataset_name, source_id, insert=False)
     if source_id is None:
       query = (
           'SELECT id, offsets FROM hoplite_embeddings '
@@ -373,15 +377,16 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
       )
       cursor.execute(query, (dataset_name,))
     else:
+      source_idx = self._get_source_id(dataset_name, source_id, insert=False)
       query = (
           'SELECT id, offsets FROM hoplite_embeddings '
           'WHERE hoplite_embeddings.source_idx = ?;'
       )
-      cursor.execute(query, (source_id,))
+      cursor.execute(query, (source_idx,))
     result_pairs = cursor.fetchall()
     outputs = []
     for idx, offsets_bytes in result_pairs:
-      got_offsets = self.deserialize_embedding(offsets_bytes)
+      got_offsets = deserialize_embedding(offsets_bytes, self.embedding_dtype)
       if offsets is not None and not np.array_equal(got_offsets, offsets):
         continue
       outputs.append(idx)
@@ -495,3 +500,18 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     # Print each row as a comma-separated string
     for row in rows:
       print(', '.join(str(value) for value in row))
+
+
+def serialize_embedding(
+    embedding: np.ndarray, embedding_dtype: type[Any]
+) -> bytes:
+  return embedding.astype(np.dtype(embedding_dtype).newbyteorder('<')).tobytes()
+
+
+def deserialize_embedding(
+    serialized_embedding: bytes, embedding_dtype: type[Any]
+) -> np.ndarray:
+  return np.frombuffer(
+      serialized_embedding,
+      dtype=np.dtype(embedding_dtype).newbyteorder('<'),
+  )

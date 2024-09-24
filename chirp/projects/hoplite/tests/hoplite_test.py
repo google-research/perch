@@ -99,6 +99,23 @@ class HopliteTest(parameterized.TestCase):
     self.assertEmpty(edges)
     self.assertEqual(db.count_edges(), 499)
 
+    with self.subTest('test_embedding_sources'):
+      source = db.get_embedding_source(idxes[1])
+      # The embeddings are given one of three randomly selected dataset names.
+      embs = db.get_embeddings_by_source(source.dataset_name, None, None)
+      self.assertGreater(embs.shape[0], db.count_embeddings() / 6)
+      # For an unknown dataset name, we should get no embeddings.
+      embs = db.get_embeddings_by_source('fake_name', None, None)
+      self.assertEqual(embs.shape[0], 0)
+      # Source ids are approximately unique.
+      embs = db.get_embeddings_by_source(
+          source.dataset_name, source.source_id, None
+      )
+      self.assertLen(embs, 1)
+      # For an unknown source id, we should get no embeddings.
+      embs = db.get_embeddings_by_source(source.dataset_name, 'fake_id', None)
+      self.assertEqual(embs.shape[0], 0)
+
     db.drop_all_edges()
     self.assertEqual(db.count_edges(), 0)
 
@@ -134,7 +151,7 @@ class HopliteTest(parameterized.TestCase):
     )
 
     with self.subTest('get_embeddings_by_label'):
-      # When both label_type and source are unspecified, we should get all
+      # When both label_type and provenance are unspecified, we should get all
       # unique IDs with the target label. Id's 0 and 1 both have some kind of
       # 'hawgoo' label.
       got = db.get_embeddings_by_label('hawgoo', None, None)
@@ -142,7 +159,7 @@ class HopliteTest(parameterized.TestCase):
 
     with self.subTest('get_embeddings_by_label_type'):
       # Now we should get the ID's for all POSITIVE 'hawgoo' labels, regardless
-      # of source.
+      # of provenance.
       got = db.get_embeddings_by_label(
           'hawgoo', interface.LabelType.POSITIVE, None
       )
@@ -154,7 +171,7 @@ class HopliteTest(parameterized.TestCase):
       )
       self.assertEqual(got.shape[0], 0)
 
-    with self.subTest('get_embeddings_by_label_source'):
+    with self.subTest('get_embeddings_by_label_provenance'):
       # There is only one hawgoo labeled by a human.
       got = db.get_embeddings_by_label('hawgoo', None, 'human')
       self.assertSequenceEqual(got, [ids[0]])
