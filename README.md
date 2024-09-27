@@ -79,7 +79,7 @@ Some users have successfully used our repository with the Windows Linux
 Subsystem, or with Docker in a cloud-based virtual machine. Anecdotally,
 installation on OS X is difficult.
 
-You might need the following dependencies.
+You will need the following dependencies.
 
 ```bash
 # Install Poetry for package management
@@ -88,8 +88,10 @@ curl -sSL https://install.python-poetry.org | python3 -
 # Install dependencies for librosa
 sudo apt-get install libsndfile1 ffmpeg
 
-# Install all dependencies specified in the poetry configs
-poetry install  --with jaxtrain
+# Install all dependencies specified in the poetry configs.
+# Note that for Windows machines, you can remove the `--with nonwindows`
+# option to drop some optional dependencies which do not build for Windows.
+poetry install  --with jaxtrain --with nonwindows
 ```
 
 Running `poetry install` installs all Perch dependencies into a new virtual environment, in which you can run the Perch code base. To run the tests, use:

@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install libsndfile1 ffmpeg
-          poetry install --without jaxtrain
+          poetry install --without jaxtrain --with nonwindows
       - name: Test with unittest
         run: poetry run python -m unittest discover -s chirp/tests -p "*test.py"
       - name: Test inference with unittest
