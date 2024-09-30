@@ -407,11 +407,16 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
       return np.array([])
     return self.deserialize_edges(edge_bytes[0][0])
 
-  def insert_label(self, label: interface.Label):
+  def insert_label(
+      self, label: interface.Label, skip_duplicates: bool = False
+  ) -> bool:
     if label.type is None:
       raise ValueError('label type must be set')
     if label.provenance is None:
       raise ValueError('label source must be set')
+    if skip_duplicates and label in self.get_labels(label.embedding_id):
+      return False
+
     cursor = self._get_cursor()
     cursor.execute(
         """
@@ -424,6 +429,7 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
             label.provenance,
         ),
     )
+    return True
 
   def get_embeddings_by_label(
       self,

@@ -219,12 +219,18 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
     """Commit any pending transactions to the database."""
     pass
 
-  def insert_label(self, label: interface.Label) -> None:
+  def insert_label(
+      self, label: interface.Label, skip_duplicates: bool = False
+  ) -> bool:
     if label.type is None:
       raise ValueError('label type must be set')
     if label.provenance is None:
       raise ValueError('label source must be set')
+    if skip_duplicates and label in self.get_labels(label.embedding_id):
+      return False
+
     self.labels[label.embedding_id].append(label)
+    return True
 
   def get_embeddings_by_label(
       self,

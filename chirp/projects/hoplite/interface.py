@@ -193,8 +193,20 @@ class GraphSearchDBInterface(abc.ABC):
     return -1
 
   @abc.abstractmethod
-  def insert_label(self, label: Label) -> None:
-    """Add a label to the db."""
+  def insert_label(self, label: Label, skip_duplicates: bool = False) -> bool:
+    """Add a label to the db.
+
+    Args:
+      label: The label to insert.
+      skip_duplicates: If True, and the label already exists, return False.
+        Otherwise, the label is inserted regardless of duplicates.
+
+    Returns:
+      True if the label was inserted, False if it was a duplicate and
+      skip_duplicates was True.
+    Raises:
+      ValueError if the label type or provenance is not set.
+    """
 
   @abc.abstractmethod
   def embedding_dimension(self) -> int:

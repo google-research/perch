@@ -201,6 +201,13 @@ class HopliteTest(parameterized.TestCase):
     with self.subTest('count_classes'):
       self.assertEqual(db.count_classes(), 2)
 
+    with self.subTest('duplicate_labels'):
+      dupe_label = interface.Label(
+          ids[0], 'hawgoo', interface.LabelType.POSITIVE, 'human'
+      )
+      self.assertFalse(db.insert_label(dupe_label, skip_duplicates=True))
+      self.assertTrue(db.insert_label(dupe_label, skip_duplicates=False))
+
   def test_brute_search_impl_agreement(self):
     rng = np.random.default_rng(42)
     in_mem_db = test_utils.make_db(
