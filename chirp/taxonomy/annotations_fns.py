@@ -137,10 +137,12 @@ def load_weldy_annotations(annotations_path: epath.Path) -> pd.DataFrame:
   return segments
 
 
-def load_anuraset_annotations(annotations_path: epath.Path) -> pd.DataFrame:
+def load_anuraset_annotations(
+    annotations_path: epath.Path, prefix: str = 'raw_data'
+) -> pd.DataFrame:
   """Loads raw audio annotations from https://zenodo.org/records/8342596."""
   filename_fn = lambda _, row: os.path.join(  # pylint: disable=g-long-lambda
-      row['filename'].split('_')[0], row['filename'].strip()
+      prefix, row['filename'].split('_')[0], row['filename'].strip()
   )
   start_time_fn = lambda row: float(row['start_time_s'])
   end_time_fn = lambda row: float(row['end_time_s'])

@@ -50,7 +50,12 @@ def annotations_to_dataframe(
   )
 
 
-def write_annotations_csv(filepath, annotations):
+def write_annotations_csv(
+    filepath: str | epath.Path,
+    annotations: Sequence[TimeWindowAnnotation],
+    label_separator: str = ' ',
+) -> None:
+  """Write annotations to a CSV file."""
   fieldnames = [f.name for f in dataclasses.fields(TimeWindowAnnotation)]
   fieldnames.remove('namespace')
   with epath.Path(filepath).open('w') as f:
@@ -58,8 +63,28 @@ def write_annotations_csv(filepath, annotations):
     dr.writeheader()
     for anno in annotations:
       anno_dict = {f: getattr(anno, f) for f in fieldnames}
-      anno_dict['label'] = ' '.join(anno_dict['label'])
+      anno_dict['label'] = label_separator.join(anno_dict['label'])
       dr.writerow(anno_dict)
+
+
+def read_annotations_csv(
+    annotations_filepath: epath.Path, namespace: str, label_separator: str = ' '
+) -> Sequence[TimeWindowAnnotation]:
+  """Read annotations as written by write_annotations_csv."""
+  got_annotations = []
+  with epath.Path(annotations_filepath).open('r') as f:
+    dr = csv.DictReader(f)
+    for row in dr:
+      got_annotations.append(
+          TimeWindowAnnotation(
+              filename=row['filename'],
+              namespace=namespace,
+              start_time_s=float(row['start_time_s']),
+              end_time_s=float(row['end_time_s']),
+              label=row['label'].split(label_separator),
+          )
+      )
+  return got_annotations
 
 
 def read_dataset_annotations_csvs(

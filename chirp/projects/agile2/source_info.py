@@ -71,9 +71,11 @@ class AudioSources:
         shard_len_s (ie, the final shard).
     """
     for dataset_name, (root_dir, file_glob) in self.audio_globs.items():
-      filepaths = tuple(epath.Path(root_dir).glob(file_glob))
+      # If root_dir is a URL, the posix path may not match the original string.
+      base_path = epath.Path(root_dir)
+      filepaths = tuple(base_path.glob(file_glob))
       for filepath in tqdm.tqdm(filepaths):
-        file_id = filepath.as_posix()[len(root_dir) + 1 :]
+        file_id = filepath.as_posix()[len(base_path.as_posix()) + 1 :]
         if shard_len_s < 0:
           yield SourceId(
               dataset_name=dataset_name,
