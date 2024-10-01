@@ -15,7 +15,6 @@
 
 """Tools for processing data for the Agile2 classifier."""
 
-import abc
 import dataclasses
 import itertools
 from typing import Any, Iterator, Sequence
@@ -65,7 +64,7 @@ class LabeledExample:
 class DataManager:
   """Base class for managing data for training and evaluation."""
 
-  target_labels: tuple[str, ...]
+  target_labels: tuple[str, ...] | None
   db: interface.GraphSearchDBInterface
   batch_size: int
   rng: np.random.Generator
@@ -78,12 +77,18 @@ class DataManager:
     """
     raise NotImplementedError('get_train_test_split is not implemented.')
 
+  def get_target_labels(self) -> tuple[str, ...]:
+    if self.target_labels is None:
+      return tuple(self.db.get_classes())
+    return self.target_labels
+
   def get_multihot_labels(self, idx: int) -> tuple[np.ndarray, np.ndarray]:
     """Create the multihot label for one example."""
     labels = self.db.get_labels(idx)
-    lbl_idxes = {label: i for i, label in enumerate(self.target_labels)}
-    pos = np.zeros(len(self.target_labels), dtype=np.float32)
-    neg = np.zeros(len(self.target_labels), dtype=np.float32)
+    target_labels = self.get_target_labels()
+    lbl_idxes = {label: i for i, label in enumerate(target_labels)}
+    pos = np.zeros(len(target_labels), dtype=np.float32)
+    neg = np.zeros(len(target_labels), dtype=np.float32)
     for label in labels:
       if label.type == interface.LabelType.POSITIVE:
         pos[lbl_idxes[label.label]] += 1.0
@@ -203,7 +208,7 @@ class AgileDataManager(DataManager):
       Two numpy arrays contianing train and eval embedding ids, respectively.
     """
     train_ids, eval_ids = [], []
-    for label in self.target_labels:
+    for label in self.get_target_labels():
       lbl_train, lbl_eval = self.get_single_label_train_test_split(label)
       train_ids.append(lbl_train)
       eval_ids.append(lbl_eval)
@@ -257,7 +262,7 @@ class FullyAnnotatedDataManager(DataManager):
     """Create a train/test split over the fully-annotated dataset."""
     pos_id_sets = {}
     eval_id_sets = {}
-    for label in self.target_labels:
+    for label in self.get_target_labels():
       pos_id_sets[label] = self.db.get_embeddings_by_label(
           label, interface.LabelType.POSITIVE, None
       )
@@ -268,7 +273,7 @@ class FullyAnnotatedDataManager(DataManager):
     # Now produce train sets of the desired size,
     # avoiding the selected eval examples.
     train_id_sets = {}
-    for label in self.target_labels:
+    for label in self.get_target_labels():
       pos_set = np.setdiff1d(pos_id_sets[label], all_eval_ids)
       train_id_sets[label] = pos_set[: self.train_examples_per_class]
     if self.add_unlabeled_train_examples:

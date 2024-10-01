@@ -156,6 +156,29 @@ class ClassifierDataTest(absltest.TestCase):
       self.assertEqual(eval_count, 0)
       self.assertEqual(train_count, 0)
 
+  def test_auto_labels(self):
+    num_embeddings = 5_000
+    db = self.make_db_with_labels(
+        num_embeddings=num_embeddings,
+        # Add a label to every embedding.
+        unlabeled_prob=0.0,
+        positive_label_prob=0.5,
+        rng=np.random.default_rng(42),
+    )
+    # Only use three labels, which is half the length of the full class list.
+    data_manager = classifier_data.AgileDataManager(
+        target_labels=None,
+        db=db,
+        train_ratio=0.8,
+        min_eval_examples=10,
+        batch_size=10,
+        weak_negatives_batch_size=10,
+        rng=np.random.default_rng(42),
+    )
+    self.assertLen(
+        data_manager.get_target_labels(), len(test_utils.CLASS_LABELS)
+    )
+
   def test_multihot_labels(self):
     db = test_utils.make_db(
         self.tempdir,

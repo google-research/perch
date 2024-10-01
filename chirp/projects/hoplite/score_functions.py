@@ -15,7 +15,34 @@
 
 """Score functions for Hoplite."""
 
+from typing import Callable
 import numpy as np
+
+
+def get_score_fn(
+    name: str, bias: float | None = None, target_score: float | None = None
+) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+  """Get a score function by name."""
+  if name == 'dot':
+    score_fn = numpy_dot
+  elif name == 'cos':
+    score_fn = numpy_cos
+  elif name == 'euclidean':
+    score_fn = numpy_euclidean
+  else:
+    raise ValueError('Unknown score function: ', name)
+
+  if bias is not None:
+    bias_fn = lambda x, y: score_fn(x, y) + bias
+  else:
+    bias_fn = score_fn
+
+  if target_score is not None:
+    targeted_fn = lambda x, y: np.abs(bias_fn(x, y) - target_score)
+  else:
+    targeted_fn = bias_fn
+
+  return targeted_fn
 
 
 def numpy_dot(data: np.ndarray, query: np.ndarray) -> np.ndarray:
@@ -27,7 +54,7 @@ def numpy_dot(data: np.ndarray, query: np.ndarray) -> np.ndarray:
   return np.dot(data, query)
 
 
-def numpy_cos(data, query):
+def numpy_cos(data: np.ndarray, query: np.ndarray) -> np.ndarray:
   """Simple numpy cosine similarity, allowing multiple queries."""
   data_norms = np.linalg.norm(data, axis=1)
   query_norms = np.linalg.norm(query, axis=-1)
@@ -40,7 +67,7 @@ def numpy_cos(data, query):
   return np.dot(unit_data, unit_query)
 
 
-def numpy_euclidean(data, query):
+def numpy_euclidean(data: np.ndarray, query: np.ndarray) -> np.ndarray:
   """Numpy L2 distance allowing multiple queries."""
   data_norms = np.linalg.norm(data, axis=-1)
   if len(query.shape) > 1:

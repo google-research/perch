@@ -20,7 +20,7 @@ import shutil
 import tempfile
 from unittest import mock
 
-from chirp import audio_utils
+from chirp.projects.agile2 import audio_loader
 from chirp.projects.agile2 import embedding_display
 from chirp.projects.agile2.tests import test_utils
 from chirp.projects.hoplite import interface
@@ -156,7 +156,7 @@ class EmbeddingDisplayTest(absltest.TestCase):
     member0 = embedding_display.EmbeddingDisplay(
         embedding_id=123,
         dataset_name='test_dataset',
-        uri=os.path.join(self.tempdir, 'pos', 'foo_pos.wav'),
+        uri=os.path.join('pos', 'foo_pos.wav'),
         offset_s=1.0,
         score=0.5,
         sample_rate_hz=sample_rate_hz,
@@ -164,26 +164,30 @@ class EmbeddingDisplayTest(absltest.TestCase):
     member1 = embedding_display.EmbeddingDisplay(
         embedding_id=456,
         dataset_name='test_dataset',
-        uri=os.path.join(self.tempdir, 'neg', 'bar_neg.wav'),
+        uri=os.path.join('neg', 'bar_neg.wav'),
         offset_s=2.0,
         score=0.6,
         sample_rate_hz=sample_rate_hz,
     )
 
-    audio_loader = lambda uri, offset_s: audio_utils.load_audio_window(
-        uri, offset_s=offset_s, sample_rate=sample_rate_hz, window_size_s=3.0
+    audio_globs = {
+        'test_dataset': (self.tempdir, '*/*.wav'),
+    }
+    filepath_audio_loader = audio_loader.make_filepath_loader(
+        audio_globs, sample_rate_hz=sample_rate_hz, window_size_s=1.0
     )
     group = embedding_display.EmbeddingDisplayGroup.create(
         members=[member0, member1],
         sample_rate_hz=sample_rate_hz,
-        audio_loader=audio_loader,
+        audio_loader=filepath_audio_loader,
     )
     self.assertLen(group.members, 2)
     self.assertEqual(group.members[0].embedding_id, 123)
     self.assertEqual(group.members[1].embedding_id, 456)
-    self.assertEqual(group.members[0].dataset_name, 'test_dataset')
     for got_member in group.iterator_with_audio():
+      self.assertEqual(got_member.dataset_name, 'test_dataset')
       self.assertIsNotNone(got_member.audio)
+      self.assertEqual(got_member.audio.shape[0], 16000)
       self.assertIsNotNone(got_member.spectrogram)
 
 

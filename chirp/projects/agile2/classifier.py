@@ -124,7 +124,7 @@ def train_linear_classifier(
   """Train a linear classifier."""
   optimizer = optax.adam(learning_rate=learning_rate)
   embedding_dim = data_manager.db.embedding_dimension()
-  num_classes = len(data_manager.target_labels)
+  num_classes = len(data_manager.get_target_labels())
   params = {
       'beta': jnp.zeros((embedding_dim, num_classes)),
       'beta_bias': jnp.zeros((num_classes,)),
