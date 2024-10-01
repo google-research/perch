@@ -20,9 +20,9 @@ import os
 
 from absl import logging
 from chirp import audio_utils
-from chirp.inference.embed_lib import load_embedding_config
-from chirp.inference.tf_examples import get_example_parser
-from chirp.projects.zoo import models
+from chirp.inference import embed_lib
+from chirp.inference import tf_examples
+from chirp.projects.zoo import taxonomy_model_tf
 from etils import epath
 from ml_collections import config_dict
 import numpy as np
@@ -36,11 +36,10 @@ class AudioSearchResult:
   """Results from SCANN search.
 
   Attributes:
-
-  index: Index for the searcher ndarray.
-  distance: The nearest neighbor distance calculated by scann searcher.
-  filename: The filename of the source audio file.
-  timestamp_offset_s: Timestamp offset in seconds for the audio file.
+    index: Index for the searcher ndarray.
+    distance: The nearest neighbor distance calculated by scann searcher.
+    filename: The filename of the source audio file.
+    timestamp_offset_s: Timestamp offset in seconds for the audio file.
   """
 
   index: int
@@ -54,7 +53,7 @@ def create_searcher(
     embeddings_glob: str,
     output_dir: str,
     num_neighbors: int = 10,
-    embedding_shape: tuple = (12, 1, 1280),
+    embedding_shape: tuple[int, ...] = (12, 1, 1280),
     distance_measure: str = "squared_l2",
     embedding_list_filename="embedding_list.txt",
     timestamps_list_filename="timestamps_list.txt",
@@ -70,7 +69,7 @@ def create_searcher(
   shape can be slightly shorter because of the remainder chunk when dividing.
 
   Args:
-    embedding_glob: Path the directory containing audio embeddings produced by
+    embeddings_glob: Path the directory containing audio embeddings produced by
       the embedding model that matches the embedding_shape.
     output_dir: Output directory path to save the scann artifacts.
     num_neighbors: Number of neighbors for scann search.
@@ -112,10 +111,10 @@ def create_searcher(
   ds = tf.data.TFRecordDataset(
       embeddings_files, num_parallel_reads=tf.data.AUTOTUNE
   )
-  parser = get_example_parser()
+  parser = tf_examples.get_example_parser()
   ds = ds.map(parser)
 
-  embedding_config = load_embedding_config(embeddings_glob)
+  embedding_config = embed_lib.load_embedding_config(embeddings_glob)
   hop_size_s = embedding_config.embed_fn_config.model_config.hop_size_s
 
   # These will be saved to output files.
@@ -173,7 +172,6 @@ def embed_query_audio(
     sample_rate: int = 32000,
     window_size_s: float = 5.0,
     hop_size_s: float = 5.0,
-    embedding_hidden_dims: int = 1280,
 ) -> np.ndarray:
   """Embeds the audio query through embedding the model.
 
@@ -183,7 +181,6 @@ def embed_query_audio(
     sample_rate: Sampling rate for the model.
     window_size_s: Window size of the model in seconds.
     hop_size_s: Hop size for processing longer audio files.
-    embedding_hidden_dims: Embedding model's hidden dimension size.
 
   Returns:
     Query audio embedding as numpy array.
@@ -197,7 +194,7 @@ def embed_query_audio(
       "window_size_s": window_size_s,
       "hop_size_s": hop_size_s,
   })
-  embedding_model = models.TaxonomyModelTF.from_config(config)
+  embedding_model = taxonomy_model_tf.TaxonomyModelTF.from_config(config)
 
   outputs = embedding_model.embed(np.array(query_audio))
 
