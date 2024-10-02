@@ -23,7 +23,6 @@ from chirp import path_utils
 from chirp.projects.agile2 import embed
 from chirp.projects.agile2 import ingest_annotations
 from chirp.projects.agile2.tests import test_utils
-from chirp.projects.hoplite import db_loader
 from chirp.projects.hoplite import interface
 from chirp.taxonomy import annotations
 from chirp.taxonomy import annotations_fns

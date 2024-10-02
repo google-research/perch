@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Perch Taxonomy Model."""
+"""Perch Taxonomy Model class."""
 
 import dataclasses
 from typing import Any
