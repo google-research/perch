@@ -108,6 +108,20 @@ def get_preset_model_config(preset_name):
     # Note: The v2_1 class list is appropriate for Birdnet 2.1, 2.2, and 2.3.
     model_config.class_list_name = 'birdnet_v2_1'
     model_config.num_tflite_threads = 4
+  elif preset_name == 'yamnet':
+    model_key = 'tfhub_model'
+    embedding_dim = 1024
+    model_config.sample_rate = 16000
+    model_config.model_url = 'https://tfhub.dev/google/yamnet/1'
+    model_config.embedding_index = 1
+    model_config.logits_index = 0
+  elif preset_name == 'vggish':
+    model_key = 'tfhub_model'
+    embedding_dim = 128
+    model_config.sample_rate = 16000
+    model_config.model_url = 'https://tfhub.dev/google/vggish/1'
+    model_config.embedding_index = -1
+    model_config.logits_index = -1
   else:
     raise ValueError('Unsupported model preset: %s' % preset_name)
   return model_key, embedding_dim, model_config
