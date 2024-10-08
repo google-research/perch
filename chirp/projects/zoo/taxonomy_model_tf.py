@@ -105,7 +105,6 @@ class TaxonomyModelTF(zoo_interface.EmbeddingModel):
 
     # Get the labels CSV from TFHub.
     model_path = hub.resolve(model_url)
-    config.model_path = model_path
     class_lists_glob = (epath.Path(model_path) / 'assets').glob('*.csv')
     class_lists = cls.load_class_lists(class_lists_glob)
     return cls(
