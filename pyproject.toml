@@ -16,6 +16,7 @@ apache-beam = {version = "^2.50.0", extras = ["gcp"]}
 clu = "^0.0.9"
 flax = "^0.8.1"
 jax = "^0.4.16"
+ai-edge-litert = "^1.0"
 ml-collections = "^0.1.1"
 optax = ">=0.1.7"
 tensorflow = "^2.15"
