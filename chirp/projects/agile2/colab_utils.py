@@ -18,6 +18,7 @@
 import dataclasses
 
 from chirp.projects.agile2 import embed
+from chirp.projects.agile2 import source_info
 from chirp.projects.hoplite import db_loader
 from chirp.projects.hoplite import interface
 from chirp.projects.zoo import models
@@ -30,7 +31,7 @@ class AgileConfigs:
   """Container for the various configs used in the Agile notebooks."""
 
   # Config for the raw audio sources.
-  audio_sources_config: embed.EmbedConfig
+  audio_sources_config: source_info.AudioSources
   # Database config for the embeddings database.
   db_config: db_loader.DBConfig
   # Config for the embedding model.
@@ -45,33 +46,9 @@ class AgileConfigs:
     })
 
 
-def validate_and_save_configs(
-    configs: AgileConfigs,
-    db: interface.GraphSearchDBInterface,
-):
-  """Validates that the model config is compatible with the DB."""
-
-  model_config = configs.model_config
-  db_metadata = db.get_metadata(None)
-  if 'model_config' in db_metadata:
-    if db_metadata['model_config'].model_key != model_config.model_key:
-      raise AssertionError(
-          'The configured embedding model does not match the embedding model'
-          ' that is already in the DB.  You either need to drop the database or'
-          " use the '%s' model confg."
-          % db_metadata['model_config'].model_key
-      )
-
-  db.insert_metadata('model_config', model_config.to_config_dict())
-  db.insert_metadata(
-      'embed_config', configs.audio_sources_config.to_config_dict()
-  )
-  db.commit()
-
-
 def load_configs(
-    audio_globs: dict[str, tuple[str, str]],
-    db_path: str,
+    audio_sources: source_info.AudioSources,
+    db_path: str | None = None,
     model_config_key: str = 'perch_8',
 ) -> AgileConfigs:
   """Load default configs for the notebook and return them as an AgileConfigs.
@@ -87,13 +64,14 @@ def load_configs(
     AgileConfigs object with the loaded configs.
   """
   if db_path is None:
-    if len(audio_globs) > 1:
+    if len(audio_sources.audio_globs) > 1:
       raise ValueError(
           'db_path must be specified when embedding multiple datasets.'
       )
     # Put the DB in the same directory as the audio.
     db_path = (
-        epath.Path(next(iter(audio_globs.values()))[0]) / 'hoplite_db.sqlite'
+        epath.Path(next(iter(audio_sources.audio_globs)).base_path)
+        / 'hoplite_db.sqlite'
     )
 
   model_key, embedding_dim, model_config = models.get_preset_model_config(
@@ -109,13 +87,8 @@ def load_configs(
       'embedding_dim': embedding_dim,
   })
 
-  audio_srcs_config = embed.EmbedConfig(
-      audio_globs=audio_globs,
-      min_audio_len_s=1.0,
-  )
-
   return AgileConfigs(
-      audio_sources_config=audio_srcs_config,
+      audio_sources_config=audio_sources,
       db_config=db_loader.DBConfig('sqlite', db_config),
       model_config=db_model_config,
   )

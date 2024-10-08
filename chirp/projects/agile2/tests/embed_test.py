@@ -19,6 +19,7 @@ import shutil
 import tempfile
 
 from chirp.projects.agile2 import embed
+from chirp.projects.agile2 import source_info
 from chirp.projects.agile2.tests import test_utils
 from chirp.projects.hoplite import db_loader
 from ml_collections import config_dict
@@ -43,11 +44,16 @@ class EmbedTest(absltest.TestCase):
     filenames = ['foo', 'bar', 'baz']
     test_utils.make_wav_files(self.tempdir, classes, filenames, file_len_s=6.0)
 
-    audio_globs = {'test': (self.tempdir, '*/*.wav')}
-    embed_config = embed.EmbedConfig(
-        audio_globs=audio_globs,
-        min_audio_len_s=0.0,
-        target_sample_rate_hz=16000,
+    aduio_sources = source_info.AudioSources(
+        audio_globs=(
+            source_info.AudioSourceConfig(
+                dataset_name='test',
+                base_path=self.tempdir,
+                file_glob='*/*.wav',
+                min_audio_len_s=0.0,
+                target_sample_rate_hz=16000,
+            ),
+        )
     )
 
     in_mem_db_config = config_dict.ConfigDict()
@@ -71,7 +77,7 @@ class EmbedTest(absltest.TestCase):
     db = db_config.load_db()
 
     embed_worker = embed.EmbedWorker(
-        embed_config=embed_config,
+        audio_sources=aduio_sources,
         model_config=model_config,
         db=db,
     )
@@ -79,6 +85,11 @@ class EmbedTest(absltest.TestCase):
     # The hop size is 1.0s and each file is 6.0s, so we should get 6 embeddings
     # per file. There are six files, so we should get 36 embeddings.
     self.assertEqual(db.count_embeddings(), 36)
+
+    # Check that the metadata is set correctly.
+    got_md = db.get_metadata(key=None)
+    self.assertIn('audio_sources', got_md)
+    self.assertIn('model_config', got_md)
 
 
 if __name__ == '__main__':

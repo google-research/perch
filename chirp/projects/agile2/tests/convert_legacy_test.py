@@ -133,7 +133,7 @@ class ConvertLegacyTest(parameterized.TestCase):
     self.assertEqual(db.count_embeddings(), 72)
     metadata = db.get_metadata(key=None)
     self.assertIn('legacy_config', metadata)
-    self.assertIn('embed_config', metadata)
+    self.assertIn('audio_sources', metadata)
     self.assertIn('model_config', metadata)
 
 

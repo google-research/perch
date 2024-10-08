@@ -20,6 +20,7 @@ import dataclasses
 from typing import Callable
 
 from chirp.projects.agile2 import embed
+from chirp.projects.agile2 import source_info
 from chirp.projects.hoplite import db_loader
 from chirp.projects.hoplite import interface
 from chirp.taxonomy import annotations_fns
@@ -191,20 +192,22 @@ def embed_annotated_dataset(
   })
   db_config = db_loader.DBConfig('sqlite', db_config)
   print(ingestor)
-  audio_srcs_config = embed.EmbedConfig(
-      audio_globs={
-          ingestor.dataset_name: (
-              ingestor.base_path.as_posix(),
-              ingestor.audio_glob,
-          )
-      },
-      min_audio_len_s=1.0,
+  audio_srcs_config = source_info.AudioSources(
+      audio_globs=(
+          source_info.AudioSourceConfig(
+              dataset_name=ingestor.dataset_name,
+              base_path=ingestor.base_path.as_posix(),
+              file_glob=ingestor.audio_glob,
+              min_audio_len_s=1.0,
+              target_sample_rate_hz=-2,
+          ),
+      )
   )
   db = db_config.load_db()
   db.setup()
   print('Initialized DB located at ', db_filepath)
   worker = embed.EmbedWorker(
-      embed_config=audio_srcs_config, db=db, model_config=db_model_config
+      audio_sources=audio_srcs_config, db=db, model_config=db_model_config
   )
   worker.process_all()
   print(f'DB contains {db.count_embeddings()} embeddings.')

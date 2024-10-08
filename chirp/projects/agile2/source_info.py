@@ -19,7 +19,9 @@ import dataclasses
 from typing import Iterator
 
 from absl import logging
+from chirp.projects.hoplite import interface as hoplite_interface
 from etils import epath
+from ml_collections import config_dict
 import soundfile
 import tqdm
 
@@ -39,10 +41,87 @@ class SourceId:
 
 
 @dataclasses.dataclass
-class AudioSources:
-  """Mapping from dataset name to root directory and file glob."""
+class AudioSourceConfig(hoplite_interface.EmbeddingMetadata):
+  """Configuration for embedding a collection of audio sources.
 
-  audio_globs: dict[str, tuple[str, str]]
+  Attributes:
+    dataset_name: Name of the dataset. (Must be unique for each set of files.)
+    base_path: Root directory of the dataset.
+    file_glob: Glob pattern for the audio files.
+    min_audio_len_s: Minimum audio length to process.
+    target_sample_rate_hz: Target sample rate for audio. If -2, use the
+      embedding model's declared sample rate. If -1, use the file's native
+      sample rate. If > 0, resample to the specified rate.
+    shard_len_s: If not None, shard the audio into segments of this length.
+    max_shards_per_file: If not None, maximum number of shards per file.
+  """
+
+  dataset_name: str
+  base_path: str
+  file_glob: str
+  min_audio_len_s: float = 1.0
+  target_sample_rate_hz: int = -2
+  shard_len_s: float | None = 60.0
+  max_shards_per_file: int | None = None
+
+  def is_compatible(self, other: 'AudioSourceConfig') -> bool:
+    """Returns True if other is expected to produce comparable embeddings."""
+    return (
+        self.dataset_name == other.dataset_name
+        and self.target_sample_rate_hz == other.target_sample_rate_hz
+        and self.min_audio_len_s == other.min_audio_len_s
+    )
+
+
+@dataclasses.dataclass
+class AudioSources(hoplite_interface.EmbeddingMetadata):
+  """A collection of AudioSourceConfig, with SourceId iterator."""
+
+  audio_globs: tuple[AudioSourceConfig, ...]
+
+  def __post_init__(self):
+    dataset_names = set(
+        audio_glob.dataset_name for audio_glob in self.audio_globs
+    )
+    if len(dataset_names) < len(self.audio_globs):
+      raise ValueError('Dataset names must be unique.')
+
+  def to_config_dict(self) -> config_dict.ConfigDict:
+    """Convert to a config dict."""
+    globs = tuple(g.to_config_dict() for g in self.audio_globs)
+    return config_dict.ConfigDict({'audio_globs': globs})
+
+  @classmethod
+  def from_config_dict(cls, config: config_dict.ConfigDict) -> 'AudioSources':
+    """Create an AudioSources from a config dict."""
+    globs = tuple(
+        AudioSourceConfig(**audio_glob) for audio_glob in config.audio_globs
+    )
+    return cls(audio_globs=globs)
+
+  def merge_update(self, other: 'AudioSources') -> 'AudioSources':
+    """Update the audio sources with the new sources.
+
+    Args:
+      other: The new audio sources.
+
+    Raises:
+      ValueError if any audio globs appear in both and are incompatible.
+    Returns:
+      A new AudioSources object with the merged audio globs. In case of a
+      conflict, the values in the 'other' audio glob takes precedence.
+    """
+    my_globs = {g.dataset_name: g for g in self.audio_globs}
+    other_globs = {g.dataset_name: g for g in other.audio_globs}
+    for dataset_name, my_glob in my_globs.items():
+      if dataset_name not in other_globs:
+        other_globs[dataset_name] = my_glob
+      elif not other_globs[dataset_name].is_compatible(my_glob):
+        raise ValueError(
+            f'Audio glob {other_globs[dataset_name]} '
+            f'is incompatible with {my_glob}.'
+        )
+    return AudioSources(tuple(other_globs.values()))
 
   def get_file_length_s(self, filepath: str) -> float:
     """Returns the length of the audio file in seconds."""
@@ -56,29 +135,33 @@ class AudioSources:
 
   def iterate_all_sources(
       self,
-      shard_len_s: float = -1,
-      max_shards_per_file: int = -1,
-      drop_short_shards: bool = False,
+      target_dataset_name: str | None = None,
   ) -> Iterator[SourceId]:
-    """Yields all sources for all datasets.
+    """Yields all sources for all datasets (or just a single dataset).
 
     Args:
-      shard_len_s: Length of each audio shard. If less than zero, yields one
-        SourceId per file.
-      max_shards_per_file: Maximum number of shards to yield per file. If less
-        than zero, yields all shards.
-      drop_short_shards: If True, drop shards that are shorter than the
-        shard_len_s (ie, the final shard).
+      target_dataset_name: If not None, only yield sources for this dataset.
+
+    Yields:
+      SourceId objects.
     """
-    for dataset_name, (root_dir, file_glob) in self.audio_globs.items():
-      # If root_dir is a URL, the posix path may not match the original string.
-      base_path = epath.Path(root_dir)
-      filepaths = tuple(base_path.glob(file_glob))
+    for glob in self.audio_globs:
+      if (
+          target_dataset_name is not None
+          and glob.dataset_name != target_dataset_name
+      ):
+        continue
+      # If base_path is a URL, the posix path may not match the original string.
+      base_path = epath.Path(glob.base_path)
+      filepaths = tuple(base_path.glob(glob.file_glob))
+      shard_len_s = glob.shard_len_s
+      max_shards_per_file = glob.max_shards_per_file
+
       for filepath in tqdm.tqdm(filepaths):
         file_id = filepath.as_posix()[len(base_path.as_posix()) + 1 :]
-        if shard_len_s < 0:
+        if shard_len_s is None:
           yield SourceId(
-              dataset_name=dataset_name,
+              dataset_name=glob.dataset_name,
               file_id=file_id,
               offset_s=0,
               shard_len_s=-1,
@@ -91,14 +174,19 @@ class AudioSources:
         if audio_len_s <= 0:
           continue
         shard_num = 0
-        while shard_num < max_shards_per_file or max_shards_per_file <= 0:
+        while max_shards_per_file is None or shard_num < max_shards_per_file:
           offset_s = shard_num * shard_len_s
           if offset_s >= audio_len_s:
             break
-          if offset_s + shard_len_s > audio_len_s and drop_short_shards:
+          # When the new shard extends beyond the end of the audio, and the
+          # shard will be shorter than the minimum audio length, we are done.
+          if (
+              offset_s + shard_len_s > audio_len_s
+              and audio_len_s - offset_s < glob.min_audio_len_s
+          ):
             break
           yield SourceId(
-              dataset_name=dataset_name,
+              dataset_name=glob.dataset_name,
               file_id=file_id,
               offset_s=offset_s,
               shard_len_s=shard_len_s,

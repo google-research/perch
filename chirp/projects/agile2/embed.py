@@ -45,42 +45,27 @@ class ModelConfig(hoplite_interface.EmbeddingMetadata):
   model_config: config_dict.ConfigDict
 
 
-@dataclasses.dataclass
-class EmbedConfig(hoplite_interface.EmbeddingMetadata):
-  """Configuration for embedding processing.
-
-  Attributes:
-    audio_globs: Mapping from dataset name to pairs of `(root directory, file
-      glob)`.
-    min_audio_len_s: Minimum audio length to process.
-    target_sample_rate_hz: Target sample rate for audio. If -2, use the
-      embedding model's declared sample rate. If -1, use the file's native
-      sample rate. If > 0, resample to the specified rate.
-  """
-
-  audio_globs: dict[str, tuple[str, str]]
-  min_audio_len_s: float
-  target_sample_rate_hz: int = -1
-
-
 class EmbedWorker:
   """Worker for embedding audio examples."""
 
   def __init__(
       self,
-      embed_config: EmbedConfig,
+      audio_sources: source_info.AudioSources,
       model_config: ModelConfig,
       db: hoplite_interface.GraphSearchDBInterface,
       embedding_model: zoo_interface.EmbeddingModel | None = None,
   ):
     self.db = db
     self.model_config = model_config
-    self.embed_config = embed_config
+    self.audio_sources = audio_sources
     if embedding_model is None:
       model_class = models.model_class_map()[model_config.model_key]
       self.embedding_model = model_class.from_config(model_config.model_config)
     else:
       self.embedding_model = embedding_model
+    self.audio_globs = {
+        g.dataset_name: g for g in self.audio_sources.audio_globs
+    }
 
   def _log_error(self, source_id, exception, counter_name):
     logging.warning(
@@ -92,15 +77,68 @@ class EmbedWorker:
         exception,
     )
 
-  def get_sample_rate_hz(self) -> int:
+  def _update_audio_sources(self):
+    """Validates the embed config and/or saves it to the DB."""
+    db_metadata = self.db.get_metadata(None)
+    if 'audio_sources' not in db_metadata:
+      self.db.insert_metadata(
+          'audio_sources', self.audio_sources.to_config_dict()
+      )
+      return
+
+    db_audio_sources = source_info.AudioSources.from_config_dict(
+        db_metadata['audio_sources']
+    )
+    merged = self.audio_sources.merge_update(db_audio_sources)
+    self.db.insert_metadata('audio_sources', merged.to_config_dict())
+    self.audio_sources = merged
+
+  def _update_model_config(self):
+    """Validates the model config and/or saves it to the DB."""
+    db_metadata = self.db.get_metadata(None)
+    if 'model_config' not in db_metadata:
+      self.db.insert_metadata(
+          'model_config', self.model_config.to_config_dict()
+      )
+      return
+
+    db_model_config = ModelConfig(**db_metadata['model_config'])
+    if self.model_config == db_model_config:
+      return
+
+    # Validate the config against the DB.
+    # TODO(tomdenton): Implement compatibility checks for model configs.
+    if self.model_config.model_key != db_model_config.model_key:
+      raise AssertionError(
+          'The configured model key does not match the model key that is '
+          'already in the DB.'
+      )
+    if self.model_config.embedding_dim != db_model_config.embedding_dim:
+      raise AssertionError(
+          'The configured embedding dimension does not match the embedding '
+          'dimension that is already in the DB.'
+      )
+    self.db.insert_metadata('model_config', self.model_config.to_config_dict())
+
+  def update_configs(self):
+    """Validates the configs and saves them to the DB."""
+    self._update_model_config()
+    self._update_audio_sources()
+    self.db.commit()
+
+  def get_sample_rate_hz(self, source_id: source_info.SourceId) -> int:
     """Get the sample rate of the embedding model."""
-    if self.embed_config.target_sample_rate_hz == -2:
+    dataset_name = source_id.dataset_name
+    if dataset_name not in self.audio_globs:
+      raise ValueError(f'Dataset name {dataset_name} not found in audio globs.')
+    audio_glob = self.audio_globs[dataset_name]
+    if audio_glob.target_sample_rate_hz == -2:
       return self.embedding_model.sample_rate
-    elif self.embed_config.target_sample_rate_hz == -1:
+    elif audio_glob.target_sample_rate_hz == -1:
       # Uses the file's native sample rate.
       return -1
-    elif self.embed_config.target_sample_rate_hz > 0:
-      return self.embed_config.target_sample_rate_hz
+    elif audio_glob.target_sample_rate_hz > 0:
+      return audio_glob.target_sample_rate_hz
     else:
       raise ValueError('Invalid target_sample_rate.')
 
@@ -110,7 +148,7 @@ class EmbedWorker:
       audio_array = audio_utils.load_audio_window(
           source_id.filepath,
           source_id.offset_s,
-          self.embed_config.target_sample_rate_hz,
+          self.get_sample_rate_hz(source_id),
           source_id.shard_len_s,
       )
       return np.array(audio_array)
@@ -141,12 +179,13 @@ class EmbedWorker:
       self, source_id: source_info.SourceId
   ) -> Iterator[tuple[hoplite_interface.EmbeddingSource, np.ndarray]]:
     """Process a single audio source."""
+    glob = self.audio_globs[source_id.dataset_name]
     audio_array = self.load_audio(source_id)
     if audio_array is None:
       return
     if (
         audio_array.shape[0]
-        < self.embed_config.min_audio_len_s * self.embedding_model.sample_rate
+        < glob.min_audio_len_s * self.embedding_model.sample_rate
     ):
       self._log_error(source_id, 'no_exception', 'audio_too_short')
       return
@@ -170,10 +209,13 @@ class EmbedWorker:
       for channel_embedding in embedding:
         yield (emb_source_id, channel_embedding)
 
-  def process_all(self):
+  def process_all(self, target_dataset_name: str | None = None):
     """Process all audio examples."""
-    audio_sources = source_info.AudioSources(self.embed_config.audio_globs)
-    for source_id in audio_sources.iterate_all_sources():
+    self.update_configs()
+    # TODO(tomdenton): Prefetch audio in parallel for faster execution.
+    for source_id in self.audio_sources.iterate_all_sources(
+        target_dataset_name
+    ):
       for emb_source_id, embedding in self.process_source_id(source_id):
         self.db.insert_embedding(embedding, emb_source_id)
     self.db.commit()

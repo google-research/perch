@@ -19,6 +19,7 @@ import os
 from chirp.inference import embed_lib
 from chirp.inference import tf_examples
 from chirp.projects.agile2 import embed
+from chirp.projects.agile2 import source_info
 from chirp.projects.hoplite import in_mem_impl
 from chirp.projects.hoplite import interface
 from chirp.projects.hoplite import sqlite_impl
@@ -70,19 +71,27 @@ def convert_tfrecords(
   )
   file_id_depth = legacy_config.embed_fn_config['file_id_depth']
   audio_globs = []
-  for glob in legacy_config.source_file_patterns:
-    new_glob = glob.split('/')[-file_id_depth - 1 :]
-    audio_globs.append(new_glob)
+  for i, glob in enumerate(legacy_config.source_file_patterns):
+    base_path, file_glob = glob.split('/')[-file_id_depth - 1 :]
+    if i > 0:
+      partial_dataset_name = f'{dataset_name}_{i}'
+    else:
+      partial_dataset_name = dataset_name
+    audio_globs.append(
+        source_info.AudioSourceConfig(
+            dataset_name=partial_dataset_name,
+            base_path=base_path,
+            file_glob=file_glob,
+            min_audio_len_s=legacy_config.embed_fn_config.min_audio_s,
+            target_sample_rate_hz=legacy_config.embed_fn_config.get(
+                'target_sample_rate_hz', -2
+            ),
+        )
+    )
 
-  embed_config = embed.EmbedConfig(
-      audio_globs={dataset_name: tuple(audio_globs)},
-      min_audio_len_s=legacy_config.embed_fn_config.min_audio_s,
-      target_sample_rate_hz=legacy_config.embed_fn_config.get(
-          'target_sample_rate_hz', -1
-      ),
-  )
+  audio_sources = source_info.AudioSources(audio_globs=tuple(audio_globs))
   db.insert_metadata('legacy_config', legacy_config)
-  db.insert_metadata('embed_config', embed_config.to_config_dict())
+  db.insert_metadata('audio_sources', audio_sources.to_config_dict())
   db.insert_metadata('model_config', model_config.to_config_dict())
   hop_size_s = model_config.model_config.hop_size_s
 
