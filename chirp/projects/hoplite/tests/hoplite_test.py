@@ -28,9 +28,13 @@ from absl.testing import absltest
 from absl.testing import parameterized
 
 EMBEDDING_SIZE = 128
-DB_TYPES = ('in_mem', 'sqlite')
-DB_TYPE_NAMED_PAIRS = (('in_mem-sqlite', 'in_mem', 'sqlite'),)
-PERSISTENT_DB_TYPES = ('sqlite',)
+DB_TYPES = ('in_mem', 'sqlite', 'sqlite_usearch')
+DB_TYPE_NAMED_PAIRS = (
+    ('in_mem-sqlite', 'in_mem', 'sqlite'),
+    ('in_mem-sqlite_usearch', 'in_mem', 'sqlite_usearch'),
+    ('sqlite-sqlite_usearch', 'sqlite', 'sqlite_usearch'),
+)
+PERSISTENT_DB_TYPES = ('sqlite', 'sqlite_usearch')
 
 
 class HopliteTest(parameterized.TestCase):
