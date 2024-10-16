@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for Hoplite."""
+"""Tests for Hoplite databases."""
 
 import shutil
 import tempfile
@@ -28,6 +28,9 @@ from absl.testing import absltest
 from absl.testing import parameterized
 
 EMBEDDING_SIZE = 128
+DB_TYPES = ('in_mem', 'sqlite')
+DB_TYPE_NAMED_PAIRS = (('in_mem-sqlite', 'in_mem', 'sqlite'),)
+PERSISTENT_DB_TYPES = ('sqlite',)
 
 
 class HopliteTest(parameterized.TestCase):
@@ -52,10 +55,7 @@ class HopliteTest(parameterized.TestCase):
       db.insert_edges(idx, ys)
 
   @parameterized.product(
-      db_type=(
-          'in_mem',
-          'sqlite',
-      ),
+      db_type=DB_TYPES,
       thread_split=(True, False),
   )
   def test_graph_db_interface(self, db_type, thread_split):
@@ -121,12 +121,37 @@ class HopliteTest(parameterized.TestCase):
 
     db.commit()
 
-  @parameterized.product(
-      db_type=(
-          'in_mem',
-          'sqlite',
-      ),
-  )
+  @parameterized.product(db_type=PERSISTENT_DB_TYPES)
+  def test_persistence(self, db_type):
+    rng = np.random.default_rng(42)
+    db = test_utils.make_db(self.tempdir, db_type, 1000, rng, EMBEDDING_SIZE)
+    self._add_random_edges(rng, db, degree=10)
+    one_emb = np.random.normal(size=(EMBEDDING_SIZE,), loc=0, scale=0.05)
+    one_emb_id = db.insert_embedding(
+        one_emb, source=interface.EmbeddingSource('q', 'x', np.array([5.0]))
+    )
+    self.assertEqual(db.get_embedding_ids().shape[0], 1001)
+    db.commit()
+
+    got_emb = db.get_embedding(one_emb_id)
+    np.testing.assert_equal(got_emb, np.float16(one_emb))
+
+    # "Making" the persistent DB without adding any new embeddings gives us a
+    # view of the saved DB.
+    test_db = test_utils.make_db(self.tempdir, db_type, 0, rng, EMBEDDING_SIZE)
+    self.assertIn(one_emb_id, test_db.get_embedding_ids())
+    # Check that the embeddings are the same in the two DB's.
+    for idx in db.get_embedding_ids():
+      emb = db.get_embedding(idx)
+      test_emb = test_db.get_embedding(idx)
+      np.testing.assert_equal(emb, test_emb)
+
+    for idx in db.get_embedding_ids():
+      edges = db.get_edges(idx)
+      test_edges = test_db.get_edges(idx)
+      self.assertSameElements(edges, test_edges)
+
+  @parameterized.product(db_type=DB_TYPES)
   def test_labels_db_interface(self, db_type):
     rng = np.random.default_rng(42)
     db = test_utils.make_db(self.tempdir, db_type, 1000, rng, EMBEDDING_SIZE)
@@ -208,70 +233,77 @@ class HopliteTest(parameterized.TestCase):
       self.assertFalse(db.insert_label(dupe_label, skip_duplicates=True))
       self.assertTrue(db.insert_label(dupe_label, skip_duplicates=False))
 
-  def test_brute_search_impl_agreement(self):
+  @parameterized.named_parameters(*DB_TYPE_NAMED_PAIRS)
+  def test_brute_search_impl_agreement(self, target_db_type, source_db_type):
     rng = np.random.default_rng(42)
-    in_mem_db = test_utils.make_db(
-        self.tempdir, 'in_mem', 1000, rng, EMBEDDING_SIZE
+    source_db = test_utils.make_db(
+        self.tempdir, source_db_type, 1000, rng, EMBEDDING_SIZE
     )
-    sqlite_db = test_utils.make_db(
-        self.tempdir, 'sqlite', 0, rng, EMBEDDING_SIZE
+    target_db = test_utils.make_db(
+        self.tempdir, target_db_type, 0, rng, EMBEDDING_SIZE
     )
-    id_mapping = test_utils.clone_embeddings(in_mem_db, sqlite_db)
+    id_mapping = test_utils.clone_embeddings(source_db, target_db)
 
     # Check brute-force search agreement.
     query = rng.normal(size=(128,), loc=0, scale=1.0)
     results_m, _ = brutalism.brute_search(
-        in_mem_db, query, search_list_size=10, score_fn=np.dot
+        source_db, query, search_list_size=10, score_fn=np.dot
     )
     results_s, _ = brutalism.brute_search(
-        sqlite_db, query, search_list_size=10, score_fn=np.dot
+        target_db, query, search_list_size=10, score_fn=np.dot
     )
     self.assertLen(results_m.search_results, 10)
     self.assertLen(results_s.search_results, 10)
     # Search results are iterated over in sorted order.
     for r_m, r_s in zip(results_m, results_s):
-      emb_m = in_mem_db.get_embedding(r_m.embedding_id)
-      emb_s = sqlite_db.get_embedding(r_s.embedding_id)
+      emb_m = source_db.get_embedding(r_m.embedding_id)
+      emb_s = target_db.get_embedding(r_s.embedding_id)
       self.assertEqual(id_mapping[r_m.embedding_id], r_s.embedding_id)
       # TODO(tomdenton): check that the scores are the same.
       np.testing.assert_equal(emb_m, emb_s)
 
-  def test_greedy_search_impl_agreement(self):
+  @parameterized.named_parameters(*DB_TYPE_NAMED_PAIRS)
+  def test_greedy_search_impl_agreement(self, source_db_type, target_db_type):
     rng = np.random.default_rng(42)
-    in_mem_db = test_utils.make_db(
-        self.tempdir, 'in_mem', 1000, rng, EMBEDDING_SIZE
+    source_db = test_utils.make_db(
+        self.tempdir, source_db_type, 1000, rng, EMBEDDING_SIZE
     )
-    self._add_random_edges(rng, in_mem_db, degree=10)
+    self._add_random_edges(rng, source_db, degree=10)
+    source_db.commit()
 
-    sqlite_db = test_utils.make_db(
-        self.tempdir, 'sqlite', 0, rng, EMBEDDING_SIZE
+    target_db = test_utils.make_db(
+        self.tempdir, target_db_type, 0, rng, EMBEDDING_SIZE
     )
-    id_mapping = test_utils.clone_embeddings(in_mem_db, sqlite_db)
+    id_mapping = test_utils.clone_embeddings(source_db, target_db)
 
-    for x in in_mem_db.get_embedding_ids():
-      nbrs = in_mem_db.get_edges(x)
+    for x in source_db.get_embedding_ids():
+      nbrs = source_db.get_edges(x)
       for y in nbrs:
-        sqlite_db.insert_edge(id_mapping[x], id_mapping[y])
-    sqlite_db.commit()
+        target_db.insert_edge(id_mapping[x], id_mapping[y])
+    target_db.commit()
 
     rng = np.random.default_rng(42)
-    query = rng.normal(size=(EMBEDDING_SIZE,), loc=0, scale=1.0)
+    query = rng.normal(size=(EMBEDDING_SIZE,), loc=0, scale=0.05)
 
-    v_m = index.HopliteSearchIndex.from_db(in_mem_db)
-    v_s = index.HopliteSearchIndex.from_db(sqlite_db)
+    v_s = index.HopliteSearchIndex.from_db(source_db)
+    v_t = index.HopliteSearchIndex.from_db(target_db)
 
-    results_m, path_m = v_m.greedy_search(
-        query, search_list_size=32, start_node=0, deterministic=True
-    )
+    start_node = source_db.get_one_embedding_id()
     results_s, path_s = v_s.greedy_search(
-        query, search_list_size=32, start_node=id_mapping[0], deterministic=True
+        query, search_list_size=32, start_node=start_node, deterministic=True
     )
-    self.assertSameElements((id_mapping[x] for x in path_m), path_s)
+    results_t, path_t = v_t.greedy_search(
+        query,
+        search_list_size=32,
+        start_node=id_mapping[start_node],
+        deterministic=True,
+    )
+    self.assertSameElements((id_mapping[x] for x in path_s), path_t)
 
     # Iterating over the search results proceeds in sorted order.
     np.testing.assert_equal(
-        [id_mapping[r.embedding_id] for r in results_m.search_results],
-        [r.embedding_id for r in results_s.search_results],
+        [id_mapping[r.embedding_id] for r in results_s.search_results],
+        [r.embedding_id for r in results_t.search_results],
     )
 
 
