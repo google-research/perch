@@ -19,9 +19,12 @@ import collections
 import shutil
 import string
 import tempfile
+from unittest import mock
 
 from chirp.inference import call_density
 from etils import epath
+import IPython
+import ipywidgets
 import numpy as np
 from sklearn import metrics
 
@@ -31,6 +34,18 @@ from absl.testing import absltest
 class CallDensityTest(absltest.TestCase):
 
   def setUp(self):
+    # Without this, unit tests using Ipywidgets will fail with 'Comms cannot be
+    # opened without a kernel and a comm_manager attached to that kernel'. This
+    # mocks out the comms. This is a little fragile because it sets a private
+    # attribute and may break for future Ipywidget library upgrades.
+    setattr(
+        ipywidgets.Widget,
+        '_comm_default',
+        lambda self: mock.MagicMock(spec=IPython.kernel.comm.Comm),
+    )
+
+    super().setUp()
+
     super().setUp()
     self.tempdir = tempfile.mkdtemp()
 
@@ -156,6 +171,19 @@ class CallDensityTest(absltest.TestCase):
       got_examples = call_density.load_validation_log(log_filepath)
       self.assertLen(got_examples, len(examples))
 
+    with self.subTest('to_result'):
+      r = got_examples[0].to_search_result('someclass')
+      self.assertEqual(r.filename, got_examples[0].filename)
+      self.assertEqual(r.timestamp_offset, got_examples[0].timestamp_offset)
+      self.assertEqual(r.score, got_examples[0].score)
+      if examples[0].is_pos == 1:
+        self.assertEqual(r.label_widgets[0].value, 'someclass')
+      elif examples[0].is_pos == -1:
+        self.assertEqual(r.label_widgets[0].value, 'not someclass')
+      elif examples[0].is_pos == 0:
+        self.assertEqual(r.label_widgets[0].value, 'unsure')
+      else:
+        raise ValueError(f'unexpected value ({examples[0].is_pos})')
 
 if __name__ == '__main__':
   absltest.main()
