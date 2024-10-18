@@ -20,7 +20,7 @@ from typing import Sequence, cast
 
 from absl import logging
 from chirp.eval import eval_lib
-from chirp.projects.zoo import models as inference_models
+from chirp.projects.zoo import model_configs
 from chirp.projects.zoo import zoo_interface
 from chirp.taxonomy import namespace
 from chirp.taxonomy import namespace_db
@@ -273,7 +273,7 @@ class EmbeddingModelCallback:
 
   def __post_init__(self):
     logging.info('Loading separation model...')
-    model_class = inference_models.model_class_map()[self.model_key]
+    model_class = model_configs.MODEL_CLASS_MAP[self.model_key]
     self.loaded_model = model_class(**self.model_config)
     # Set the object's call method as the model_callback.
     self.model_callback = self.__call__

@@ -20,8 +20,7 @@ import dataclasses
 from chirp.projects.agile2 import embed
 from chirp.projects.agile2 import source_info
 from chirp.projects.hoplite import db_loader
-from chirp.projects.hoplite import interface
-from chirp.projects.zoo import models
+from chirp.projects.zoo import model_configs
 from etils import epath
 from ml_collections import config_dict
 
@@ -74,8 +73,8 @@ def load_configs(
         / 'hoplite_db.sqlite'
     )
 
-  model_key, embedding_dim, model_config = models.get_preset_model_config(
-      model_config_key
+  model_key, embedding_dim, model_config = (
+      model_configs.get_preset_model_config(model_config_key)
   )
   db_model_config = embed.ModelConfig(
       model_key=model_key,

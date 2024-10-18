@@ -23,7 +23,7 @@ import audioread
 from chirp import audio_utils
 from chirp.projects.agile2 import source_info
 from chirp.projects.hoplite import interface as hoplite_interface
-from chirp.projects.zoo import models
+from chirp.projects.zoo import model_configs
 from chirp.projects.zoo import zoo_interface
 from ml_collections import config_dict
 import numpy as np
@@ -59,7 +59,7 @@ class EmbedWorker:
     self.model_config = model_config
     self.audio_sources = audio_sources
     if embedding_model is None:
-      model_class = models.model_class_map()[model_config.model_key]
+      model_class = model_configs.MODEL_CLASS_MAP[model_config.model_key]
       self.embedding_model = model_class.from_config(model_config.model_config)
     else:
       self.embedding_model = embedding_model

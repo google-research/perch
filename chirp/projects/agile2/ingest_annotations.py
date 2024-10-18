@@ -212,8 +212,12 @@ def embed_annotated_dataset(
   worker.process_all()
   print(f'DB contains {db.count_embeddings()} embeddings.')
 
-  class_counts = ingestor.ingest_dataset(
-      db, window_size_s=worker.embedding_model.window_size_s
-  )
+  if not hasattr(worker.embedding_model, 'window_size_s'):
+    raise ValueError(
+        'Model does not have a defined window size, which is needed to compute '
+        'relevant annotations for each embedding.'
+    )
+  window_size_s = getattr(worker.embedding_model, 'window_size_s')
+  class_counts = ingestor.ingest_dataset(db, window_size_s=window_size_s)
   db.commit()
   return db, class_counts

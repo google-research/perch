@@ -18,6 +18,7 @@
 import os
 import tempfile
 
+from chirp.projects.zoo import model_configs
 from chirp.projects.zoo import models
 from chirp.projects.zoo import taxonomy_model_tf
 from chirp.projects.zoo import zoo_interface
@@ -331,6 +332,16 @@ class ZooTest(parameterized.TestCase):
       self.assertSequenceEqual(
           outputs.logits['multispecies_whale'].shape, [expected_frames, 1]
       )
+
+  def test_configs(self):
+    for model_config_name in model_configs.ModelConfigName:
+      with self.subTest(model_config_name):
+        model_key, embedding_dim, model_config = (
+            model_configs.get_preset_model_config(model_config_name)
+        )
+        self.assertGreaterEqual(embedding_dim, 0)
+        self.assertIsInstance(model_config, config_dict.ConfigDict)
+        self.assertIn(model_key, model_configs.MODEL_CLASS_MAP)
 
 
 if __name__ == '__main__':
