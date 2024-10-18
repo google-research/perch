@@ -42,7 +42,8 @@ class SearchResult:
   # Source file contianing corresponding audio.
   filename: str
   # Time offset for audio.
-  timestamp_offset: int
+  # TODO(tomdenton): Convert to float only; this is measured in seconds.
+  timestamp_offset: int | float
 
   # The following are populated as needed.
   audio: np.ndarray | None = None

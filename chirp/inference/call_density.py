@@ -21,6 +21,7 @@ from typing import Optional
 
 from chirp.inference.search import search
 from etils import epath
+import ipywidgets
 import numpy as np
 import pandas as pd
 import scipy
@@ -58,6 +59,29 @@ class ValidationExample:
         self.bin,
         self.bin_weight,
     ]
+
+  def to_search_result(self, target_class: str):
+    """Convert to a search result for display only."""
+    result = search.SearchResult(
+        filename=self.filename,
+        timestamp_offset=self.timestamp_offset,
+        score=self.score,
+        sort_score=np.random.uniform(),
+        embedding=np.zeros(shape=(0,), dtype=np.float32),
+    )
+    b = ipywidgets.RadioButtons(
+        options=[target_class, f'not {target_class}', 'unsure']
+    )
+    if self.is_pos == 1:
+      b.value = target_class
+    elif self.is_pos == -1:
+      b.value = f'not {target_class}'
+    elif self.is_pos == 0:
+      b.value = 'unsure'
+    else:
+      raise ValueError(f'unexpected value ({self.is_pos})')
+    result.label_widgets = [b]
+    return result
 
   @classmethod
   def from_search_result(
