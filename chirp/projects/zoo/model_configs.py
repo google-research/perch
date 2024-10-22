@@ -24,7 +24,7 @@ from chirp.projects.zoo import zoo_interface
 from ml_collections import config_dict
 
 
-class ModelConfigName(enum.StrEnum):
+class ModelConfigName(enum.Enum):
   """Names of known preset configs."""
 
   BEANS_BASELINE = 'beans_baseline'
@@ -100,7 +100,7 @@ def get_preset_model_config(preset_name: str | ModelConfigName):
     model_config.model_path = ''
   elif preset_name.value.startswith('birdnet'):
     model_key = 'birdnet'
-    birdnet_version = preset_name.split('_')[-1]
+    birdnet_version = preset_name.value.split('_')[-1]
     if birdnet_version not in ('V2.1', 'V2.2', 'V2.3'):
       raise ValueError(f'Birdnet version not supported: {birdnet_version}')
     base_path = 'gs://chirp-public-bucket/models/birdnet'
