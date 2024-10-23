@@ -85,26 +85,10 @@ notebook file into Google Drive and open it with Colab. Then use the
 
 ## The Embedding Model Interface
 
-We provide a model wrapping interface `interface.EmbeddingModel` which can be
-implemented by a wide range of models providing some combination of
-classification logits, embeddings, and separated audio. Implementations are
-provided in `models.py`, including:
-* a `PlaceholderModel` which can be used for testing,
-* `TaxonomyModelTF`: an exported Chirp classifier SavedModel,
-* `SeparatorModelTF`: an exported Chirp separation model,
-* `BirdNet`: applies the BirdNet saved model, which can be obtained from the
-  BirdNET-Analyzer git repository.
-* `BirbSepModelTF1`: Applies the separation model described in [the Bird MixIT
-  paper](https://arxiv.org/abs/2110.03209)
-* `SeparateEmbedModel`: Combines different separation and embedding/inference
-  models, by separating the target audio and then embedding each separate
-  channel. If the embedding model produces logits, the max logits are taken
-  over the separated channels.
+To allow simple substitution of different models, we provide an `EmbeddingModel`
+interface, with a variety of implementations for common models (the model zoo).
+This is described in further detail in `chirp/projects/zoo/README.md`.
 
-The primary function in the `EmbeddingModel` interface is
-`EmbeddingModel.embed(audio_array)` which runs model inference on the provided
-audio array. The outputs are an `interface.InferenceOutputs` instance, which
-contains optional embeddings, logits, and separated audio.
 
 # Inference Pipeline
 
