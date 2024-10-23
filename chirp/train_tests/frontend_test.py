@@ -23,7 +23,6 @@ import tensorflow as tf
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from ai_edge_litert import interpreter as tfl_interpreter  # pylint: disable=g-direct-tensorflow-import
 
 
 class FrontendTest(parameterized.TestCase):
@@ -201,7 +200,7 @@ class FrontendTest(parameterized.TestCase):
     tflite_float_model = converter.convert()
 
     # Use the converted TFLite model.
-    interpreter = tfl_interpreter.Interpreter(model_content=tflite_float_model)
+    interpreter = tf.lite.Interpreter(model_content=tflite_float_model)
     interpreter.allocate_tensors()
     input_tensor = interpreter.get_input_details()[0]
     output_tensor = interpreter.get_output_details()[0]
@@ -248,7 +247,7 @@ class FrontendTest(parameterized.TestCase):
     tflite_float_model = converter.convert()
 
     # Use the converted TFLite model.
-    interpreter = tfl_interpreter.Interpreter(model_content=tflite_float_model)
+    interpreter = tf.lite.Interpreter(model_content=tflite_float_model)
     interpreter.allocate_tensors()
     input_tensor = interpreter.get_input_details()[0]
     output_tensor = interpreter.get_output_details()[0]
