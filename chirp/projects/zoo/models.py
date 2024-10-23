@@ -33,6 +33,8 @@ import tensorflow as tf
 import tensorflow.compat.v1 as tf1
 import tensorflow_hub as hub
 
+from ai_edge_litert import interpreter as tfl_interpreter  # pylint: disable=g-direct-tensorflow-import
+
 
 @dataclasses.dataclass
 class SeparateEmbedModel(zoo_interface.EmbeddingModel):
@@ -326,7 +328,7 @@ class BirdNet(zoo_interface.EmbeddingModel):
       with tempfile.NamedTemporaryFile() as tmpf:
         model_file = epath.Path(config.model_path)
         model_file.copy(tmpf.name, overwrite=True)
-        model = tf.lite.Interpreter(
+        model = tfl_interpreter.Interpreter(
             tmpf.name, num_threads=config.num_tflite_threads
         )
       model.allocate_tensors()
