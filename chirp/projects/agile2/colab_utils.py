@@ -23,6 +23,7 @@ from chirp.projects.hoplite import db_loader
 from chirp.projects.zoo import model_configs
 from etils import epath
 from ml_collections import config_dict
+import numpy as np
 
 
 @dataclasses.dataclass
@@ -49,15 +50,17 @@ def load_configs(
     audio_sources: source_info.AudioSources,
     db_path: str | None = None,
     model_config_key: str = 'perch_8',
+    db_key: str = 'sqlite_usearch',
 ) -> AgileConfigs:
   """Load default configs for the notebook and return them as an AgileConfigs.
 
   Args:
-    audio_globs: Mapping from dataset name to pairs of `(root directory, file
+    audio_sources: Mapping from dataset name to pairs of `(root directory, file
       glob)`.
     db_path: Location of the database.  If None, the database will be created in
       the same directory as the audio.
     model_config_key: Name of the embedding model to use.
+    db_key: The type of database to use.
 
   Returns:
     AgileConfigs object with the loaded configs.
@@ -68,10 +71,7 @@ def load_configs(
           'db_path must be specified when embedding multiple datasets.'
       )
     # Put the DB in the same directory as the audio.
-    db_path = (
-        epath.Path(next(iter(audio_sources.audio_globs)).base_path)
-        / 'hoplite_db.sqlite'
-    )
+    db_path = epath.Path(next(iter(audio_sources.audio_globs)).base_path)
 
   model_key, embedding_dim, model_config = (
       model_configs.get_preset_model_config(model_config_key)
@@ -83,11 +83,19 @@ def load_configs(
   )
   db_config = config_dict.ConfigDict({
       'db_path': db_path,
-      'embedding_dim': embedding_dim,
   })
+  if db_key == 'sqlite_usearch':
+    # A sane default.
+    db_config.usearch_cfg = config_dict.ConfigDict({
+        'embedding_dim': embedding_dim,
+        'metric_name': 'IP',
+        'expansion_add': 256,
+        'expansion_search': 128,
+        'dtype': 'float16',
+    })
 
   return AgileConfigs(
       audio_sources_config=audio_sources,
-      db_config=db_loader.DBConfig('sqlite', db_config),
+      db_config=db_loader.DBConfig(db_key, db_config),
       model_config=db_model_config,
   )

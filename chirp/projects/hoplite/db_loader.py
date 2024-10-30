@@ -16,9 +16,11 @@
 """Database configuration and constructor."""
 
 import dataclasses
+
 from chirp.projects.hoplite import in_mem_impl
 from chirp.projects.hoplite import interface
 from chirp.projects.hoplite import sqlite_impl
+from chirp.projects.hoplite import sqlite_usearch_impl
 from ml_collections import config_dict
 import numpy as np
 import tqdm
@@ -40,6 +42,8 @@ class DBConfig(interface.EmbeddingMetadata):
     """Load the database from the specified path."""
     if self.db_key == 'sqlite':
       return sqlite_impl.SQLiteGraphSearchDB.create(**self.db_config)
+    elif self.db_key == 'sqlite_usearch':
+      return sqlite_usearch_impl.SQLiteUsearchDB.create(**self.db_config)
     elif self.db_key == 'in_mem':
       return in_mem_impl.InMemoryGraphSearchDB.create(**self.db_config)
     else:
