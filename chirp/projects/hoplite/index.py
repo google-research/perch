@@ -42,18 +42,7 @@ class HopliteSearchIndex:
       cls, db: interface.GraphSearchDBInterface, score_fn_name: str = 'dot'
   ) -> 'HopliteSearchIndex':
     """Create a VamanaSearchIndex from a GraphSearchDBInterface impl."""
-    # TODO(tomdenton): Use an enum for metric_name.
-    if score_fn_name in ('mip', 'dot'):
-      # mip == Max Inner Prouct
-      score_fn = score_functions.numpy_dot
-    elif score_fn_name in ('jax_mip', 'jax_dot'):
-      score_fn = score_functions.get_jax_dot()
-    elif score_fn_name == 'cosine':
-      score_fn = score_functions.numpy_cos
-    elif score_fn_name == 'euclidean':
-      score_fn = score_functions.numpy_euclidean
-    else:
-      raise ValueError(f'Unknown metric name: {score_fn_name}')
+    score_fn = score_functions.get_score_fn(score_fn_name)
     return cls(db, score_fn=score_fn)
 
   def initialize_index(self, out_degree: int, seed: int = 42) -> None:
