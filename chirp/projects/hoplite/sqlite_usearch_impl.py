@@ -167,10 +167,7 @@ class SQLiteUsearchDB(interface.GraphSearchDBInterface):
         dtype=np.dtype(np.int64).newbyteorder('<'),
     )
 
-  def setup(self):
-    pass
-
-  def commit(self):
+  def commit(self) -> None:
     self.db.commit()
     if self._cursor is not None:
       self._cursor.close()
@@ -179,6 +176,16 @@ class SQLiteUsearchDB(interface.GraphSearchDBInterface):
       # We have added something to the in-memory index, so persist to disk.
       # This check is sufficient because the index is strictly additive.
       self.ui.save(self._usearch_filepath.as_posix())
+
+  def vacuum_db(self) -> None:
+    """Clears out the WAL log and defragments data."""
+    cursor = self._get_cursor()
+    cursor.execute('VACUUM;')
+    self.db.commit()
+    cursor.close()
+    self._cursor = None
+    self.db.close()
+    self.db = sqlite3.connect(self.db_path)
 
   def get_embedding_ids(self) -> np.ndarray:
     # Note that USearch can also create a list of all keys, but it seems

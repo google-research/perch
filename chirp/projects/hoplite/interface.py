@@ -104,10 +104,6 @@ class GraphSearchDBInterface(abc.ABC):
     """Connect to and, if needed, initialize the database."""
 
   @abc.abstractmethod
-  def setup(self):
-    """Initialize an empty database."""
-
-  @abc.abstractmethod
   def commit(self) -> None:
     """Commit any pending transactions to the database."""
 

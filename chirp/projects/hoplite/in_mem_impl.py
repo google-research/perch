@@ -64,20 +64,13 @@ class InMemoryGraphSearchDB(interface.GraphSearchDBInterface):
         db.drop_all_edges()
       return db
 
-    embeddings = np.zeros([
-        1,
-    ])
-    db = cls(embeddings=embeddings, **kwargs)
-    db.setup()
-    return db
-
-  def setup(self):
-    """Initialize an empty database."""
-    self.embeddings = np.zeros(
-        (self.max_size, self.embedding_dim), dtype=self.embedding_dtype
+    embeddings = np.zeros(
+        [kwargs['max_size'], kwargs['embedding_dim']],
+        dtype=kwargs.get('embedding_dtype', np.float16),
     )
-    # Dropping all edges initializes the edge table.
-    self.drop_all_edges()
+    db = cls(embeddings=embeddings, **kwargs)
+    db.drop_all_edges()
+    return db
 
   @functools.cached_property
   def empty_edges(self):

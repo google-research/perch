@@ -60,7 +60,6 @@ def convert_tfrecords(
     )
   else:
     raise ValueError(f'Unknown db type: {db_type}')
-  db.setup()
 
   # Convert embedding config to new format and insert into the DB.
   legacy_config = embed_lib.load_embedding_config(embeddings_path)

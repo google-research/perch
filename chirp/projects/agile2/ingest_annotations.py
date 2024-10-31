@@ -204,7 +204,6 @@ def embed_annotated_dataset(
       )
   )
   db = db_config.load_db()
-  db.setup()
   print('Initialized DB located at ', db_filepath)
   worker = embed.EmbedWorker(
       audio_sources=audio_srcs_config, db=db, model_config=db_model_config

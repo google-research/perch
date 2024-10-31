@@ -69,7 +69,6 @@ def make_db(
     )
   else:
     raise ValueError(f'Unknown db type: {db_type}')
-  db.setup()
   # Insert a few embeddings...
   graph_utils.insert_random_embeddings(db, embedding_dim, num_embeddings, rng)
 

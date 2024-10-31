@@ -57,7 +57,6 @@ def duplicate_db(
 ):
   """Create a new DB and copy all data in source_db into it."""
   target_db = DBConfig(target_db_key, target_db_config).load_db()
-  target_db.setup()
   target_db.commit()
 
   # Check that the target_db is empty. If not, we'll have to do something more

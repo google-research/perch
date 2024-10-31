@@ -18,7 +18,6 @@
 import collections
 from collections.abc import Sequence
 import dataclasses
-import functools
 import json
 import sqlite3
 from typing import Any
@@ -51,7 +50,9 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     db = sqlite3.connect(db_path)
     cursor = db.cursor()
     cursor.execute('PRAGMA journal_mode=WAL;')  # Enable WAL mode
+    _setup_sqlite_tables(cursor)
     db.commit()
+
     if embedding_dim is None:
       # Get an embedding from the DB to check its dimension.
       cursor = db.cursor()
@@ -64,7 +65,6 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         ) from exc
       embedding = deserialize_embedding(embedding, embedding_dtype)
       embedding_dim = embedding.shape[-1]
-
     return SQLiteGraphSearchDB(db, db_path, embedding_dim, embedding_dtype)
 
   def thread_split(self):
@@ -85,79 +85,18 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
         dtype=np.dtype(np.int64).newbyteorder('<'),
     )
 
-  def setup(self, index=True):
+  def commit(self) -> None:
+    self.db.commit()
+
+  def vacuum_db(self) -> None:
+    """Clears out the WAL log and defragments data."""
     cursor = self._get_cursor()
-    # Create embedding sources table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS hoplite_sources (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            dataset STRING NOT NULL,
-            source STRING NOT NULL
-        );
-    """)
-
-    # Create embeddings table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS hoplite_embeddings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            embedding BLOB NOT NULL,
-            source_idx INTEGER NOT NULL,
-            offsets BLOB NOT NULL,
-            FOREIGN KEY (source_idx) REFERENCES hoplite_sources(id)
-        );
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS hoplite_metadata (
-            key STRING PRIMARY KEY,
-            data STRING NOT NULL
-        );
-    """)
-
-    # Create hoplite_edges table.
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS hoplite_edges (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        source_embedding_id INTEGER NOT NULL,
-        target_embedding_ids BLOB NOT NULL,
-        FOREIGN KEY (source_embedding_id) REFERENCES embeddings(id)
-    );
-    """)
-
-    # Create hoplite_labels table.
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS hoplite_labels (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        embedding_id INTEGER NOT NULL,
-        label STRING NOT NULL,
-        type INT NOT NULL,
-        provenance STRING NOT NULL,
-        FOREIGN KEY (embedding_id) REFERENCES embeddings(id)
-    )""")
-
-    if index:
-      # Create indices for efficient lookups.
-      cursor.execute("""
-      CREATE UNIQUE INDEX IF NOT EXISTS
-          idx_embedding ON hoplite_embeddings (id);
-      """)
-      cursor.execute("""
-      CREATE UNIQUE INDEX IF NOT EXISTS
-          source_pairs ON hoplite_sources (dataset, source);
-      """)
-      cursor.execute("""
-      CREATE INDEX IF NOT EXISTS embedding_source ON hoplite_embeddings (source_idx);
-      """)
-      cursor.execute("""
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_source_embedding ON hoplite_edges (source_embedding_id);
-      """)
-      cursor.execute("""
-      CREATE INDEX IF NOT EXISTS idx_label ON hoplite_labels (embedding_id, label);
-      """)
+    cursor.execute('VACUUM;')
     self.db.commit()
-
-  def commit(self):
-    self.db.commit()
+    cursor.close()
+    self._cursor = None
+    self.db.close()
+    self.db = sqlite3.connect(self.db_path)
 
   def get_embedding_ids(self) -> np.ndarray:
     cursor = self._get_cursor()
@@ -506,6 +445,83 @@ class SQLiteGraphSearchDB(interface.GraphSearchDBInterface):
     # Print each row as a comma-separated string
     for row in rows:
       print(', '.join(str(value) for value in row))
+
+
+def _setup_sqlite_tables(cursor: sqlite3.Cursor) -> None:
+  """ "Create all needed tables in the SQLite database."""
+  cursor.execute("""
+      SELECT name FROM sqlite_master
+      WHERE type='table' AND name='hoplite_labels';
+  """)
+  if cursor.fetchone() is not None:
+    return
+
+  # Create embedding sources table
+  cursor.execute("""
+      CREATE TABLE IF NOT EXISTS hoplite_sources (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          dataset STRING NOT NULL,
+          source STRING NOT NULL
+      );
+  """)
+
+  # Create embeddings table
+  cursor.execute("""
+      CREATE TABLE IF NOT EXISTS hoplite_embeddings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          embedding BLOB NOT NULL,
+          source_idx INTEGER NOT NULL,
+          offsets BLOB NOT NULL,
+          FOREIGN KEY (source_idx) REFERENCES hoplite_sources(id)
+      );
+  """)
+
+  cursor.execute("""
+      CREATE TABLE IF NOT EXISTS hoplite_metadata (
+          key STRING PRIMARY KEY,
+          data STRING NOT NULL
+      );
+  """)
+
+  # Create hoplite_edges table.
+  cursor.execute("""
+  CREATE TABLE IF NOT EXISTS hoplite_edges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_embedding_id INTEGER NOT NULL,
+      target_embedding_ids BLOB NOT NULL,
+      FOREIGN KEY (source_embedding_id) REFERENCES embeddings(id)
+  );
+  """)
+
+  # Create hoplite_labels table.
+  cursor.execute("""
+  CREATE TABLE IF NOT EXISTS hoplite_labels (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      embedding_id INTEGER NOT NULL,
+      label STRING NOT NULL,
+      type INT NOT NULL,
+      provenance STRING NOT NULL,
+      FOREIGN KEY (embedding_id) REFERENCES embeddings(id)
+  )""")
+
+  # Create indices for efficient lookups.
+  cursor.execute("""
+  CREATE UNIQUE INDEX IF NOT EXISTS
+      idx_embedding ON hoplite_embeddings (id);
+  """)
+  cursor.execute("""
+  CREATE UNIQUE INDEX IF NOT EXISTS
+      source_pairs ON hoplite_sources (dataset, source);
+  """)
+  cursor.execute("""
+  CREATE INDEX IF NOT EXISTS embedding_source ON hoplite_embeddings (source_idx);
+  """)
+  cursor.execute("""
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_source_embedding ON hoplite_edges (source_embedding_id);
+  """)
+  cursor.execute("""
+  CREATE INDEX IF NOT EXISTS idx_label ON hoplite_labels (embedding_id, label);
+  """)
 
 
 def serialize_embedding(
