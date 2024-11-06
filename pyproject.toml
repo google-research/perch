@@ -12,7 +12,7 @@ license = "Apache 2.0"
 # See: https://python-poetry.org/docs/managing-dependencies/#dependency-groups
 python = ">=3.10,<3.12"
 absl-py = "^1.4.0"
-ai-edge-litert-nightly = "^1.0.0"
+ai-edge-litert = "^1.0.0"
 apache-beam = {version = "^2.50.0", extras = ["gcp"]}
 clu = "^0.0.9"
 flax = "^0.8.1"
