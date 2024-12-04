@@ -1,9 +1,25 @@
 [tool.poetry]
-name = "chirp"
+name = "hoplite"
 version = "0.1.0"
-description = "A bioacoustics research project."
-authors = ["Chirp Team <chirp-bio@google.com>"]
+description = "Tooling for agile modeling on large machine perception embedding databases."
+authors = ["Perch Team <chirp-bio@google.com>"]
 license = "Apache 2.0"
+
+[project]
+# Project metadata. Available keys are documented at:
+# https://packaging.python.org/en/latest/specifications/declaring-project-metadata
+name = "hoplite"
+description = "Tooling for agile modeling on large machine perception embedding databases."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [
+    {name = "tom denton", email="tomdenton@google.com"},
+    {name = "Vincent Dumoulin", email="vdumoulin@google.com"},
+    {name = "Jeninka Hamer", email="hamer@google.com"},
+    {name = "Bart van Merriënboer", email="bartvm@google.com"},
+    {name = "Frank Zhang", email="zhangfrank@google.com"},
+]
 
 [tool.poetry.dependencies]
 # These dependencies are part of the implicit 'main' group, meaning
@@ -12,50 +28,18 @@ license = "Apache 2.0"
 # See: https://python-poetry.org/docs/managing-dependencies/#dependency-groups
 python = ">=3.10,<3.12"
 absl-py = "^1.4.0"
-apache-beam = {version = "^2.50.0", extras = ["gcp"]}
-clu = "^0.0.9"
-flax = "^0.8.1"
-jax = "^0.4.16"
 ml-collections = "^0.1.1"
-optax = ">=0.1.7"
-tensorflow = "^2.15"
-pandas = {version = "^2.1.1", extras=["gcp"]}
+tensorflow = "^2.16"
 etils = {version = "^1.5.0", extras = ["epath"]}
-SPARQLWrapper = "^2.0.0"
-tensorflow-hub = "^0.16.0"
 imageio = "^2.5.0"
 matplotlib = "^3.6.1"
 notebook = "^7.0.4"
-chex = "^0.1.7"
-numba = "^0.57"
 librosa = "^0.10.1"
 numpy = "^1.24.0"
-tqdm = "^4.6"
 usearch = "^2.15"
+tensorflow-hub = "^0.16.0"
+pandas = {version = "^2.1.1", extras=["gcp"]}
 ipywidgets = "^8.1"
-
-[tool.poetry.group.nonwindows]
-optional = true
-
-[tool.poetry.group.nonwindows.dependencies]
-scann = "^1.3.2"
-
-[tool.poetry.group.jaxtrain]
-optional = true
-
-[tool.poetry.group.jaxtrain.dependencies]
-# TF-io is used for sample rate conversion only in data ingestion pipelines.
-# Note that tensorflow and tensorflow-io versions must be synchronized.
-# See: https://github.com/tensorflow/io#tensorflow-version-compatibility
-tensorflow = "^2.16"
-tensorflow-io = "^0.37"
-tensorflow-datasets = {version = "^4.9.3", extras = ["dev"]}
-# AudioMAE / ViT.
-scenic = {git = "https://github.com/google-research/scenic.git"}
-# Used for crawling datasources.
-ratelimiter = "^1.2.0.post0"
-# Quantization-aware training in Jax.
-aqtp = "^0.5.0"
 
 [build-system]
 requires = ["poetry-core>=1.5.0"]
