@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "hoplite"
+name = "chirp"
 version = "0.1.0"
 description = "Tooling for agile modeling on large machine perception embedding databases."
 authors = ["Perch Team <chirp-bio@google.com>"]
