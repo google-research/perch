@@ -22,8 +22,8 @@ from absl import logging
 from chirp import audio_utils
 from chirp.inference import embed_lib
 from chirp.inference import tf_examples
-from chirp.projects.zoo import taxonomy_model_tf
 from etils import epath
+from hoplite.zoo import taxonomy_model_tf
 from ml_collections import config_dict
 import numpy as np
 import tensorflow as tf

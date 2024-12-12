@@ -25,9 +25,9 @@ from chirp.inference import baw_utils
 from chirp.inference import embed_lib
 from chirp.inference import tf_examples
 from chirp.inference.search import search
-from chirp.projects.zoo import model_configs
-from chirp.projects.zoo import zoo_interface
 from etils import epath
+from hoplite.zoo import model_configs
+from hoplite.zoo import zoo_interface
 from ml_collections import config_dict
 import tensorflow as tf
 
@@ -52,9 +52,9 @@ class BootstrapState:
 
   def __post_init__(self):
     if self.embedding_model is None:
-      self.embedding_model = model_configs.MODEL_CLASS_MAP[
+      self.embedding_model = model_configs.get_model_class(
           self.config.model_key
-      ].from_config(self.config.model_config)
+      ).from_config(self.config.model_config)
     self.create_embeddings_dataset()
     if self.source_map is None:
       if self.baw_auth_token:

@@ -25,8 +25,8 @@ from chirp import audio_utils
 from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.data.soundscapes import soundscapes_lib
-from chirp.taxonomy import annotations_fns
 from etils import epath
+from hoplite.taxonomy import annotations_fns
 import numpy as np
 import pandas as pd
 import tensorflow as tf

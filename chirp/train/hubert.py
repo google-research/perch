@@ -29,7 +29,6 @@ from chirp.models import layers
 from chirp.models import metrics
 from chirp.models import output
 from chirp.models import quantizers
-from chirp.taxonomy import class_utils
 from chirp.train import train_utils
 from clu import checkpoint
 from clu import metric_writers
@@ -38,6 +37,7 @@ from clu import periodic_actions
 import flax
 from flax import traverse_util
 import flax.jax_utils as flax_utils
+from hoplite.taxonomy import class_utils
 import jax
 from jax import numpy as jnp
 from jax import random

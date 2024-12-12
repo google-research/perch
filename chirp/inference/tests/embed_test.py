@@ -32,15 +32,13 @@ from chirp.inference.search import bootstrap
 from chirp.inference.search import display
 from chirp.inference.search import search
 from chirp.models import metrics
-from chirp.projects.zoo import models
-from chirp.projects.zoo import taxonomy_model_tf
-from chirp.projects.zoo import zoo_interface
-from chirp.taxonomy import namespace
 from etils import epath
-from ml_collections import config_dict
+from hoplite.taxonomy import namespace
+from hoplite.zoo import handcrafted_features_model
+from hoplite.zoo import placeholder_model
+from hoplite.zoo import zoo_interface
 import numpy as np
 import tensorflow as tf
-import tf_keras
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -332,7 +330,7 @@ class EmbedTest(parameterized.TestCase):
     self.assertEqual(got_example['label'].shape, (0,))
 
   def test_logits_output_head(self):
-    base_model = models.PlaceholderModel(
+    base_model = placeholder_model.PlaceholderModel(
         sample_rate=22050,
         make_embeddings=True,
         make_logits=False,
@@ -566,11 +564,11 @@ class EmbedTest(parameterized.TestCase):
     self.assertIsNotNone(config)
 
   def test_handcrafted_features(self):
-    model = models.HandcraftedFeaturesModel.beans_baseline()
+    model = handcrafted_features_model.HandcraftedFeaturesModel.beans_baseline()
 
     audio = np.zeros([5 * 32000], dtype=np.float32)
     outputs = model.embed(audio)
-    # Five frames because we have 5s of audio with window 1.0 and hope 1.0.
+    # Five frames because we have 5s of audio with window 1.0 and hop 1.0.
     # Beans aggrregation with mfccs creates 20 MFCC channels, and then computes
     # four summary statistics for each, giving a total of 80 output channels.
     self.assertSequenceEqual([5, 1, 80], outputs.embeddings.shape)
@@ -603,15 +601,15 @@ class EmbedTest(parameterized.TestCase):
         file_id_depth=0,
     )
 
-    metrics = embed_lib.build_run_pipeline(
+    run_metrics = embed_lib.build_run_pipeline(
         base_pipeline, output_dir, source_infos, embed_fn
     )
-    counter = metrics.query(
+    counter = run_metrics.query(
         beam.metrics.MetricsFilter().with_name('examples_processed')
     )['counters']
     self.assertEqual(counter[0].result, 1)
 
-    print(metrics)
+    print(run_metrics)
 
 
 if __name__ == '__main__':

@@ -21,9 +21,9 @@ from unittest import mock
 from chirp.data import utils as data_utils
 from chirp.models import frontend
 from chirp.preprocessing import pipeline
-from chirp.taxonomy import namespace
-from chirp.taxonomy import namespace_db
 from chirp.train_tests import fake_dataset
+from hoplite.taxonomy import namespace
+from hoplite.taxonomy import namespace_db
 from jax import numpy as jnp
 import numpy as np
 import tensorflow as tf

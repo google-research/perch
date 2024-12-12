@@ -19,7 +19,7 @@ import os
 from typing import Sequence
 
 from absl import logging
-from chirp.taxonomy import namespace
+from hoplite.taxonomy import namespace
 from jax.experimental import jax2tf
 import tensorflow as tf
 

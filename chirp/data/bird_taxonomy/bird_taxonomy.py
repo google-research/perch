@@ -26,8 +26,8 @@ from chirp import audio_utils
 from chirp.data import filter_scrub_utils as fsu
 from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import premade_queries
-from chirp.taxonomy import namespace_db
 from etils import epath
+from hoplite.taxonomy import namespace_db
 import jax
 from jax import numpy as jnp
 import numpy as np

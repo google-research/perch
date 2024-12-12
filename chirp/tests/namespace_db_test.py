@@ -20,8 +20,8 @@ import random
 import tempfile
 
 from absl import logging
-from chirp.taxonomy import namespace
-from chirp.taxonomy import namespace_db
+from hoplite.taxonomy import namespace
+from hoplite.taxonomy import namespace_db
 import numpy as np
 import tensorflow as tf
 

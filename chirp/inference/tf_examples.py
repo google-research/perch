@@ -20,8 +20,8 @@ import datetime
 import os
 from typing import Sequence
 
-from chirp.projects.zoo import zoo_interface
 from etils import epath
+from hoplite.zoo import zoo_interface
 import numpy as np
 import tensorflow as tf
 

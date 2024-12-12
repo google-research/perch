@@ -27,11 +27,11 @@ from chirp.data import utils as data_utils
 from chirp.models import efficientnet
 from chirp.models import frontend
 from chirp.preprocessing import pipeline
-from chirp.taxonomy import namespace
-from chirp.train_tests import fake_dataset
 from chirp.train import classifier
+from chirp.train_tests import fake_dataset
 from clu import checkpoint
 from flax import linen as nn
+from hoplite.taxonomy import namespace
 import jax
 from jax import numpy as jnp
 from ml_collections import config_dict

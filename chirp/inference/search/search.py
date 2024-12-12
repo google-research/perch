@@ -22,8 +22,8 @@ import heapq
 from typing import Any, Callable, List, Sequence
 
 from chirp.inference import tf_examples
-from chirp.projects.zoo import zoo_interface
 from etils import epath
+from hoplite.zoo import zoo_interface
 import numpy as np
 from scipy.io import wavfile
 import tensorflow as tf

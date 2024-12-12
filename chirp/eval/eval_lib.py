@@ -23,7 +23,7 @@ from typing import Callable, Iterator, Mapping, Sequence, TypeVar
 from absl import logging
 from chirp.data import utils as data_utils
 from chirp.models import metrics
-from chirp.taxonomy import namespace_db
+from hoplite.taxonomy import namespace_db
 import jax
 import ml_collections
 import numpy as np
