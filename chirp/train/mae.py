@@ -14,17 +14,18 @@
 # limitations under the License.
 
 """Training loop for MAE."""
+
 import functools
 from chirp.data import utils as data_utils
 from chirp.models import mae
 from chirp.models import taxonomy_model
-from chirp.taxonomy import class_utils
 from chirp.train import classifier
 from chirp.train import train_utils
 from clu import checkpoint
 from clu import metric_writers
 from clu import periodic_actions
 import flax.jax_utils as flax_utils
+from hoplite.taxonomy import class_utils
 import jax
 from jax import numpy as jnp
 from jax import random

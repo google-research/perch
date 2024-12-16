@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """Define the globals that can be used in configuration files."""
+
 from typing import Any
 
 from chirp import audio_utils

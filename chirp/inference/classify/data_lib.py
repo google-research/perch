@@ -34,8 +34,8 @@ from typing import Dict, Sequence, Tuple
 
 from chirp import audio_utils
 from chirp.inference import tf_examples
-from chirp.projects.zoo import zoo_interface
 from etils import epath
+from hoplite.zoo import zoo_interface
 import numpy as np
 import tensorflow as tf
 import tqdm

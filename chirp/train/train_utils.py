@@ -23,12 +23,12 @@ from typing import Callable, Sequence
 from absl import logging
 from chirp import path_utils
 from chirp.models import output
-from chirp.taxonomy import namespace
-from chirp.taxonomy import namespace_db
 from clu import checkpoint
 from clu import metrics as clu_metrics
 import flax
 from flax import linen as nn
+from hoplite.taxonomy import namespace
+from hoplite.taxonomy import namespace_db
 import jax
 from jax import numpy as jnp
 import numpy as np
@@ -359,13 +359,11 @@ def taxonomy_loss(
   losses = {'label_loss': loss_fn(getattr(outputs, 'label'), kwargs['label'])}
   losses['loss'] = jnp.mean(losses['label_loss'], axis=-1)
   if taxonomy_loss_weight != 0:
-    losses.update(
-        {
-            f'{key}_loss': loss_fn(getattr(outputs, key), kwargs[key])
-            for key in TAXONOMY_KEYS
-            if key in kwargs
-        }
-    )
+    losses.update({
+        f'{key}_loss': loss_fn(getattr(outputs, key), kwargs[key])
+        for key in TAXONOMY_KEYS
+        if key in kwargs
+    })
     losses['loss'] = losses['loss'] + sum(
         taxonomy_loss_weight * jnp.mean(losses[f'{key}_loss'], axis=-1)
         for key in TAXONOMY_KEYS
