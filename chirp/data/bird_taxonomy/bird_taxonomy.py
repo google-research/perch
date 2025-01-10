@@ -26,12 +26,12 @@ from chirp import audio_utils
 from chirp.data import filter_scrub_utils as fsu
 from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import premade_queries
-from chirp.taxonomy import namespace_db
 from etils import epath
 import jax
 from jax import numpy as jnp
 import numpy as np
 import pandas as pd
+from perch_hoplite.taxonomy import namespace_db
 import tensorflow as tf
 import tensorflow_datasets as tfds
 

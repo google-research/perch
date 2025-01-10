@@ -21,9 +21,9 @@ from unittest import mock
 
 from chirp.data.soundscapes import soundscapes
 from chirp.data.soundscapes import soundscapes_lib
-from chirp.taxonomy import namespace
 from etils import epath
 import pandas as pd
+from perch_hoplite.taxonomy import namespace
 import tensorflow_datasets as tfds
 
 from absl.testing import absltest

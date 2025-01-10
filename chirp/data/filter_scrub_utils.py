@@ -14,14 +14,15 @@
 # limitations under the License.
 
 """Utilities to filter/scrub data."""
+
 import enum
 import functools
 from typing import Any, Dict, NamedTuple, Sequence, Union
 
 from chirp.data import sampling_utils as su
-from chirp.taxonomy import namespace_db
 import numpy as np
 import pandas as pd
+from perch_hoplite.taxonomy import namespace_db
 
 
 class MergeStrategy(enum.Enum):

@@ -23,10 +23,10 @@ from chirp import path_utils
 from chirp.data.soundscapes import dataset_fns
 from chirp.data.soundscapes import soundscapes
 from chirp.data.soundscapes import soundscapes_lib
-from chirp.taxonomy import annotations_fns
-from chirp.taxonomy import namespace_db
 from etils import epath
 import librosa
+from perch_hoplite.taxonomy import annotations_fns
+from perch_hoplite.taxonomy import namespace_db
 import tensorflow_datasets as tfds
 
 from absl.testing import absltest

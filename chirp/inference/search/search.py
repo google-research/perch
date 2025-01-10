@@ -22,9 +22,9 @@ import heapq
 from typing import Any, Callable, List, Sequence
 
 from chirp.inference import tf_examples
-from chirp.projects.zoo import zoo_interface
 from etils import epath
 import numpy as np
+from perch_hoplite.zoo import zoo_interface
 from scipy.io import wavfile
 import tensorflow as tf
 import tqdm
@@ -33,6 +33,7 @@ import tqdm
 @dataclasses.dataclass
 class SearchResult:
   """Container for a single search result."""
+
   # Embedding vector.
   embedding: np.ndarray
   # Raw score for this result.

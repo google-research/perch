@@ -21,11 +21,11 @@ from typing import Any, Iterable, Sequence, Tuple
 from absl import logging
 from chirp import audio_utils
 from chirp.models import frontend
-from chirp.taxonomy import namespace
-from chirp.taxonomy import namespace_db
 import jax
 from jax import numpy as jnp
 import pandas as pd
+from perch_hoplite.taxonomy import namespace
+from perch_hoplite.taxonomy import namespace_db
 import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_io as tfio

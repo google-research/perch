@@ -20,12 +20,12 @@ import os
 from typing import Any, Callable, Iterator, Set
 
 from absl import logging
-from chirp.taxonomy import namespace
-from chirp.taxonomy import namespace_db
 from etils import epath
 from jax import numpy as jnp
 import numpy as np
 import pandas as pd
+from perch_hoplite.taxonomy import namespace
+from perch_hoplite.taxonomy import namespace_db
 import tensorflow_datasets as tfds
 import tqdm
 

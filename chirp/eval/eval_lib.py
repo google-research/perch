@@ -23,11 +23,11 @@ from typing import Callable, Iterator, Mapping, Sequence, TypeVar
 from absl import logging
 from chirp.data import utils as data_utils
 from chirp.models import metrics
-from chirp.taxonomy import namespace_db
 import jax
 import ml_collections
 import numpy as np
 import pandas as pd
+from perch_hoplite.taxonomy import namespace_db
 import tensorflow as tf
 
 _EMBEDDING_KEY = 'embedding'
@@ -691,14 +691,12 @@ def search(
   eval_search_results = dict()
 
   # Gather all query vectors.
-  queries = np.stack(
-      [
-          learned_representations[ces.class_name]
-          if ces.class_name in learned_representations
-          else create_species_query(ces.class_representatives_df['embedding'])
-          for ces in eval_set.classwise_eval_sets
-      ]
-  )
+  queries = np.stack([
+      learned_representations[ces.class_name]
+      if ces.class_name in learned_representations
+      else create_species_query(ces.class_representatives_df['embedding'])
+      for ces in eval_set.classwise_eval_sets
+  ])
 
   # Perform a matrix-matrix scoring using stacked queries and search corpus
   # embeddings.

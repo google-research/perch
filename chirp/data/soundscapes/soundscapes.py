@@ -25,10 +25,10 @@ from chirp import audio_utils
 from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.data.soundscapes import soundscapes_lib
-from chirp.taxonomy import annotations_fns
 from etils import epath
 import numpy as np
 import pandas as pd
+from perch_hoplite.taxonomy import annotations_fns
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -47,6 +47,8 @@ _CITATION = """
   organization={CEUR}
 }
 """
+
+
 @dataclasses.dataclass
 class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
   """Dataset configuration for Soundscape datasets.
@@ -92,6 +94,7 @@ class SoundscapesConfig(bird_taxonomy.BirdTaxonomyConfig):
   full_length_unknown_guard: bool = False
   supervised: bool = True
   audio_dir = epath.Path('gs://chirp-public-bucket/soundscapes')
+
 
 class Soundscapes(bird_taxonomy.BirdTaxonomy):
   """DatasetBuilder for soundscapes data."""
@@ -485,7 +488,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
         segments = segments.drop(k, axis=1)
 
     def _process_group(
-        group: tuple[int, tuple[str, pd.DataFrame]]
+        group: tuple[int, tuple[str, pd.DataFrame]],
     ) -> Sequence[tuple[str, dict[str, Any]]]:
       # Each filename gets a unique ID
       recording_id, (filename, segment_group) = group

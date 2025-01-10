@@ -25,7 +25,6 @@ from chirp.data import utils as data_utils
 from chirp.models import metrics
 from chirp.models import output
 from chirp.models import separation_model
-from chirp.taxonomy import class_utils
 from chirp.train import train_utils
 from clu import checkpoint
 from clu import metric_writers
@@ -43,6 +42,7 @@ import matplotlib.pyplot as plt
 from ml_collections import config_dict
 import numpy as np
 import optax
+from perch_hoplite.taxonomy import class_utils
 import tensorflow as tf
 
 
@@ -65,18 +65,16 @@ TRAIN_METRICS = {
 }
 
 EVAL_METRICS = {
-    'rank_metrics': train_utils.CollectingMetrics.from_funs(
-        **{
-            'label_cmap': (('label_logits', 'label'), metrics.cmap),
-            'genus_cmap': (('genus_logits', 'genus'), metrics.cmap),
-            'family_cmap': (('family_logits', 'family'), metrics.cmap),
-            'order_cmap': (('order_logits', 'order'), metrics.cmap),
-            'label_roc_auc': (('label_logits', 'label'), metrics.roc_auc),
-            'genus_roc_auc': (('genus_logits', 'genus'), metrics.roc_auc),
-            'family_roc_auc': (('family_logits', 'family'), metrics.roc_auc),
-            'order_roc_auc': (('order_logits', 'order'), metrics.roc_auc),
-        }
-    )
+    'rank_metrics': train_utils.CollectingMetrics.from_funs(**{
+        'label_cmap': (('label_logits', 'label'), metrics.cmap),
+        'genus_cmap': (('genus_logits', 'genus'), metrics.cmap),
+        'family_cmap': (('family_logits', 'family'), metrics.cmap),
+        'order_cmap': (('order_logits', 'order'), metrics.cmap),
+        'label_roc_auc': (('label_logits', 'label'), metrics.roc_auc),
+        'genus_roc_auc': (('genus_logits', 'genus'), metrics.roc_auc),
+        'family_roc_auc': (('family_logits', 'family'), metrics.roc_auc),
+        'order_roc_auc': (('order_logits', 'order'), metrics.roc_auc),
+    })
 }
 
 

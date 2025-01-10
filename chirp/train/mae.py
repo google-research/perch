@@ -14,11 +14,11 @@
 # limitations under the License.
 
 """Training loop for MAE."""
+
 import functools
 from chirp.data import utils as data_utils
 from chirp.models import mae
 from chirp.models import taxonomy_model
-from chirp.taxonomy import class_utils
 from chirp.train import classifier
 from chirp.train import train_utils
 from clu import checkpoint
@@ -30,6 +30,7 @@ from jax import numpy as jnp
 from jax import random
 from ml_collections import config_dict
 import optax
+from perch_hoplite.taxonomy import class_utils
 
 
 def initialize_model(

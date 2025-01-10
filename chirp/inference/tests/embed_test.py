@@ -32,13 +32,12 @@ from chirp.inference.search import bootstrap
 from chirp.inference.search import display
 from chirp.inference.search import search
 from chirp.models import metrics
-from chirp.projects.zoo import models
-from chirp.projects.zoo import taxonomy_model_tf
-from chirp.projects.zoo import zoo_interface
-from chirp.taxonomy import namespace
 from etils import epath
-from ml_collections import config_dict
 import numpy as np
+from perch_hoplite.taxonomy import namespace
+from perch_hoplite.zoo import handcrafted_features_model
+from perch_hoplite.zoo import placeholder_model
+from perch_hoplite.zoo import zoo_interface
 import tensorflow as tf
 import tf_keras
 
@@ -332,7 +331,7 @@ class EmbedTest(parameterized.TestCase):
     self.assertEqual(got_example['label'].shape, (0,))
 
   def test_logits_output_head(self):
-    base_model = models.PlaceholderModel(
+    base_model = placeholder_model.PlaceholderModel(
         sample_rate=22050,
         make_embeddings=True,
         make_logits=False,
@@ -530,12 +529,10 @@ class EmbedTest(parameterized.TestCase):
 
     actual_ids = embed_lib.get_existing_source_ids(output_dir, 'embeddings-*')
 
-    expected_ids = set(
-        [
-            embed_lib.SourceId(f'fake_audio_{idx:02d}', float(idx))
-            for idx in range(20)
-        ]
-    )
+    expected_ids = set([
+        embed_lib.SourceId(f'fake_audio_{idx:02d}', float(idx))
+        for idx in range(20)
+    ])
     self.assertSetEqual(expected_ids, actual_ids)
 
   def test_get_new_source_ids(self):
@@ -543,12 +540,10 @@ class EmbedTest(parameterized.TestCase):
         embed_lib.SourceInfo(f'fake_audio_{idx:02d}', idx, shard_len_s=1.0)
         for idx in range(20)
     ]
-    existing_ids = set(
-        [
-            embed_lib.SourceId(f'fake_audio_{idx:02d}', float(idx))
-            for idx in range(10)
-        ]
-    )
+    existing_ids = set([
+        embed_lib.SourceId(f'fake_audio_{idx:02d}', float(idx))
+        for idx in range(10)
+    ])
 
     actual_infos = embed_lib.get_new_source_infos(all_infos, existing_ids, 0)
     expected_infos = all_infos[10:]
@@ -566,7 +561,7 @@ class EmbedTest(parameterized.TestCase):
     self.assertIsNotNone(config)
 
   def test_handcrafted_features(self):
-    model = models.HandcraftedFeaturesModel.beans_baseline()
+    model = handcrafted_features_model.HandcraftedFeaturesModel.beans_baseline()
 
     audio = np.zeros([5 * 32000], dtype=np.float32)
     outputs = model.embed(audio)

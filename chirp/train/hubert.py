@@ -29,7 +29,6 @@ from chirp.models import layers
 from chirp.models import metrics
 from chirp.models import output
 from chirp.models import quantizers
-from chirp.taxonomy import class_utils
 from chirp.train import train_utils
 from clu import checkpoint
 from clu import metric_writers
@@ -46,6 +45,7 @@ from jax.experimental import jax2tf
 from ml_collections import config_dict
 import numpy as np
 import optax
+from perch_hoplite.taxonomy import class_utils
 import tensorflow as tf
 
 

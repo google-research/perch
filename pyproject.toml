@@ -33,6 +33,7 @@ numpy = "^1.24.0"
 tqdm = "^4.6"
 usearch = "^2.15"
 ipywidgets = "^8.1"
+perch_hoplite = {git = "https://github.com/google-research/perch-hoplite.git"}
 
 [tool.poetry.group.nonwindows]
 optional = true

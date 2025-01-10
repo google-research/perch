@@ -27,12 +27,12 @@ from chirp.configs import config_globals
 from chirp.data.bird_taxonomy import bird_taxonomy
 from chirp.eval import callbacks
 from chirp.eval import eval_lib
-from chirp.taxonomy import namespace_db
-from chirp.train_tests import fake_dataset
 from chirp.train import classifier
+from chirp.train_tests import fake_dataset
 import ml_collections
 import numpy as np
 import pandas as pd
+from perch_hoplite.taxonomy import namespace_db
 import tensorflow as tf
 
 from absl.testing import absltest

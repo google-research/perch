@@ -20,10 +20,6 @@ from typing import Sequence, cast
 
 from absl import logging
 from chirp.eval import eval_lib
-from chirp.projects.zoo import model_configs
-from chirp.projects.zoo import zoo_interface
-from chirp.taxonomy import namespace
-from chirp.taxonomy import namespace_db
 from chirp.train import classifier
 from chirp.train import hubert
 from chirp.train import separator
@@ -33,6 +29,9 @@ import jax
 from jax import numpy as jnp
 import ml_collections
 import numpy as np
+from perch_hoplite.taxonomy import namespace
+from perch_hoplite.zoo import model_configs
+from perch_hoplite.zoo import zoo_interface
 import tensorflow as tf
 
 ConfigDict = ml_collections.ConfigDict
@@ -142,13 +141,11 @@ class TaxonomyModelCallback:
 
       head_index = list(model_bundle.model.num_classes.keys()).index('label')
       output_weights = train_state.params[f'Dense_{head_index}']['kernel'].T
-      self.learned_representations.update(
-          {
-              n: w
-              for n, w in zip(class_list.classes, output_weights)
-              if n not in self.learned_representation_blocklist
-          }
-      )
+      self.learned_representations.update({
+          n: w
+          for n, w in zip(class_list.classes, output_weights)
+          if n not in self.learned_representation_blocklist
+      })
 
   def __call__(self, inputs: np.ndarray) -> np.ndarray:
     return np.asarray(self.model_callback(inputs))
@@ -200,13 +197,11 @@ class SeparatorTFCallback:
     else:
       output_weights = tf.train.load_variable(variables_path, candidates[0])
       output_weights = np.squeeze(output_weights)
-    self.learned_representations.update(
-        {
-            n: w
-            for n, w in zip(class_list.classes, output_weights)
-            if n not in self.learned_representation_blocklist
-        }
-    )
+    self.learned_representations.update({
+        n: w
+        for n, w in zip(class_list.classes, output_weights)
+        if n not in self.learned_representation_blocklist
+    })
 
   def __post_init__(self):
     logging.info('Loading separation model...')
@@ -273,7 +268,7 @@ class EmbeddingModelCallback:
 
   def __post_init__(self):
     logging.info('Loading separation model...')
-    model_class = model_configs.MODEL_CLASS_MAP[self.model_key]
+    model_class = model_configs.get_model_class(self.model_key)
     self.loaded_model = model_class(**self.model_config)
     # Set the object's call method as the model_callback.
     self.model_callback = self.__call__

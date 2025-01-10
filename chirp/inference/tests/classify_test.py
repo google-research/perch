@@ -19,9 +19,9 @@ import tempfile
 
 from chirp.inference.classify import classify
 from chirp.inference.classify import data_lib
-from chirp.projects.zoo import zoo_interface
-from chirp.taxonomy import namespace
 import numpy as np
+from perch_hoplite.taxonomy import namespace
+from perch_hoplite.zoo import zoo_interface
 
 from absl.testing import absltest
 from absl.testing import parameterized

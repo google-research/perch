@@ -21,8 +21,8 @@ from typing import Sequence
 from chirp.inference import tf_examples
 from chirp.inference.classify import data_lib
 from chirp.models import metrics
-from chirp.projects.zoo import zoo_interface
 import numpy as np
+from perch_hoplite.zoo import zoo_interface
 import tensorflow as tf
 import tqdm
 

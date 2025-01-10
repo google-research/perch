@@ -22,10 +22,10 @@ from absl import logging
 from chirp import audio_utils
 from chirp.inference import embed_lib
 from chirp.inference import tf_examples
-from chirp.projects.zoo import taxonomy_model_tf
 from etils import epath
 from ml_collections import config_dict
 import numpy as np
+from perch_hoplite.zoo import taxonomy_model_tf
 import tensorflow as tf
 
 from scann.scam_ops.py import scam_ops_pybind

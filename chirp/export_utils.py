@@ -19,8 +19,8 @@ import os
 from typing import Sequence
 
 from absl import logging
-from chirp.taxonomy import namespace
 from jax.experimental import jax2tf
+from perch_hoplite.taxonomy import namespace
 import tensorflow as tf
 
 

@@ -20,9 +20,9 @@ import datetime
 import os
 from typing import Sequence
 
-from chirp.projects.zoo import zoo_interface
 from etils import epath
 import numpy as np
+from perch_hoplite.zoo import zoo_interface
 import tensorflow as tf
 
 

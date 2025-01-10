@@ -14,6 +14,7 @@
 # limitations under the License.
 
 """Tests for pipeline."""
+
 import os
 import tempfile
 from unittest import mock
@@ -21,11 +22,11 @@ from unittest import mock
 from chirp.data import utils as data_utils
 from chirp.models import frontend
 from chirp.preprocessing import pipeline
-from chirp.taxonomy import namespace
-from chirp.taxonomy import namespace_db
 from chirp.train_tests import fake_dataset
 from jax import numpy as jnp
 import numpy as np
+from perch_hoplite.taxonomy import namespace
+from perch_hoplite.taxonomy import namespace_db
 import tensorflow as tf
 
 from absl.testing import absltest
@@ -279,11 +280,9 @@ class PipelineTest(parameterized.TestCase):
         ),
     }
     ds = tf.data.Dataset.from_tensor_slices(examples)
-    ds = pipeline.Pipeline(
-        [
-            pipeline.LabelsToString(),
-        ]
-    )(
+    ds = pipeline.Pipeline([
+        pipeline.LabelsToString(),
+    ])(
         ds, self._builder.info
     ).batch(2)
     class_names = self._builder.info.features['label'].feature.names
@@ -314,11 +313,9 @@ class PipelineTest(parameterized.TestCase):
         ),
     }
     ds = tf.data.Dataset.from_tensor_slices(examples)
-    ds = pipeline.Pipeline(
-        [
-            pipeline.OnlyKeep(names=['segment_start', 'bg_labels']),
-        ]
-    )(ds, self._builder.info).batch(2)
+    ds = pipeline.Pipeline([
+        pipeline.OnlyKeep(names=['segment_start', 'bg_labels']),
+    ])(ds, self._builder.info).batch(2)
     processed_example = next(ds.as_numpy_iterator())
     self.assertSameElements(
         processed_example.keys(), ['segment_start', 'bg_labels']

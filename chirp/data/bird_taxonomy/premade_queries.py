@@ -16,7 +16,7 @@
 """A set of premade queries to generate stable data configs."""
 
 from chirp.data import filter_scrub_utils as fsu
-from chirp.taxonomy import namespace_db
+from perch_hoplite.taxonomy import namespace_db
 
 # SSW_STATS_PATH contains useful statistics for SSW species, used to guide our
 # DFS search in chirp.data.sampling_utils.sample_recordings_under_constraints.

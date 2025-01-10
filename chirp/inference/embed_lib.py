@@ -27,11 +27,11 @@ import audioread
 from chirp import audio_utils
 from chirp import path_utils
 from chirp.inference import tf_examples
-from chirp.projects.zoo import model_configs
-from chirp.projects.zoo import zoo_interface
 from etils import epath
 from ml_collections import config_dict
 import numpy as np
+from perch_hoplite.zoo import model_configs
+from perch_hoplite.zoo import zoo_interface
 import soundfile
 import tensorflow as tf
 
@@ -223,7 +223,7 @@ class EmbedFn(beam.DoFn):
 
   def setup(self):
     if self.embedding_model is None:
-      model_class = model_configs.MODEL_CLASS_MAP[self.model_key]
+      model_class = model_configs.get_model_class(self.model_key)
       self.embedding_model = model_class.from_config(self.model_config)
     if hasattr(self, 'model_key'):
       del self.model_key
