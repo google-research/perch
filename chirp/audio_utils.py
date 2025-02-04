@@ -401,7 +401,8 @@ def ema_conv1d(
   if conv_width == -1:
     conv_width = xs.shape[1]
 
-  left_pad = jnp.repeat(xs[:, 0:1], conv_width - 1, axis=1)
+  xs_slice = lax.slice(xs, (0, 0, 0), (xs.shape[0], 1, xs.shape[2]), (1, 1, 1))
+  left_pad = jnp.repeat(xs_slice, conv_width - 1, axis=1)
   padded_inp = jnp.concatenate([left_pad, xs], axis=1)
 
   kernel = jnp.array(

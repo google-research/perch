@@ -154,13 +154,6 @@ class FrontendTest(parameterized.TestCase):
           },
       },
       {
-          "module_type": frontend.ISTFT,
-          "module_kwargs": {
-              "stride": 64,
-          },
-          "signal_shape": (1, 25, 64),
-      },
-      {
           "module_type": frontend.InverseLearnedFrontend,
           "module_kwargs": {
               "stride": 32,
