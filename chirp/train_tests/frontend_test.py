@@ -132,6 +132,7 @@ class FrontendTest(parameterized.TestCase):
               "freq_range": (60, 10_000),
           },
           "atol": 1e-4,
+          "enable_xla": False,
       },
       {
           "module_type": frontend.SimpleMelspec,
@@ -169,7 +170,12 @@ class FrontendTest(parameterized.TestCase):
       },
   )
   def test_tflite_stft_export(
-      self, module_type, module_kwargs, signal_shape=None, atol=1e-6
+      self,
+      module_type,
+      module_kwargs,
+      signal_shape=None,
+      atol=1e-6,
+      enable_xla=False,
   ):
     # Note that the TFLite stft requires power-of-two nfft, given by:
     # nfft = 2 * (features - 1).
@@ -182,7 +188,8 @@ class FrontendTest(parameterized.TestCase):
 
     tf_predict = tf.function(
         jax2tf.convert(
-            lambda signal: fe.apply(params, signal), enable_xla=False
+            lambda signal: fe.apply(params, signal),
+            enable_xla=enable_xla,
         ),
         input_signature=[
             tf.TensorSpec(shape=signal.shape, dtype=tf.float32, name="input")

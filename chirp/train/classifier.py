@@ -400,6 +400,7 @@ def export_tf_model(
     tf_lite_dtype: str = "float16",
     tf_lite_select_ops: bool = True,
     export_dir: str | None = None,
+    enable_xla: bool = False,
 ):
   """Export SavedModel and TFLite."""
   # Get model_ouput keys from output_head_metadatas and add the 'embedding' key
@@ -427,7 +428,7 @@ def export_tf_model(
     else:
       shape = (1,) + input_shape
     converted_model = export_utils.Jax2TfModelWrapper(
-        infer_fn, variables, shape, False
+        infer_fn, variables, shape, enable_xla=enable_xla
     )
     class_lists = {
         md.key: md.class_list for md in model_bundle.output_head_metadatas

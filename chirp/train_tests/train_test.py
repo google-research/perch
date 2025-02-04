@@ -157,12 +157,20 @@ class TrainTest(parameterized.TestCase):
         jax.tree_util.tree_structure(test_config.to_dict()),
     )
 
-  def test_export_model(self):
+  @parameterized.named_parameters(
+      # Note that b0 tests tend to timeout.
+      # ("xla", True, False),
+      ("no_xla", False, False),
+  )
+  def test_export_model(self, enable_xla, test_b0):
     # NOTE: This test might fail when run on a machine that has a GPU but when
     # CUDA is not linked (JAX will detect the GPU so jax2tf will try to create
     # a TF graph on the GPU and fail)
     config = self._get_test_config()
-    config = self._add_const_model_config(config)
+    if test_b0:
+      config = self._add_b0_model_config(config)
+    else:
+      config = self._add_const_model_config(config)
     config = self._add_pcen_melspec_frontend(config)
 
     model_bundle, train_state = classifier.initialize_model(
@@ -177,6 +185,7 @@ class TrainTest(parameterized.TestCase):
         config.init_config.input_shape,
         num_train_steps=0,
         eval_sleep_s=0,
+        enable_xla=enable_xla,
     )
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite"))
