@@ -327,7 +327,8 @@ class BirdNet(zoo_interface.EmbeddingModel):
         model_file = epath.Path(config.model_path)
         model_file.copy(tmpf.name, overwrite=True)
         model = tf.lite.Interpreter(
-            tmpf.name, num_threads=config.num_tflite_threads
+            tmpf.name, num_threads=config.num_tflite_threads,
+            experimental_preserve_all_tensors=True,
         )
       model.allocate_tensors()
     else:
