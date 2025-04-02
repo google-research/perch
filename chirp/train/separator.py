@@ -483,7 +483,7 @@ def export_tf_model(
 
     logging.info('Creating converted_model...')
     converted_model = export_utils.Jax2TfModelWrapper(
-        infer_fn, variables, [None, None, frame_size], False
+        infer_fn, variables, [None, None, frame_size], True
     )
     logging.info('Exporting converted_model...')
     converted_model.export_converted_model(

@@ -32,7 +32,7 @@ class Jax2TfModelWrapper(tf.Module):
       infer_fn,
       jax_params,
       input_shape: Sequence[int | None],
-      enable_xla: bool = False,
+      enable_xla: bool = True,
       coord_ids: str = 'bt',
       name=None,
   ):

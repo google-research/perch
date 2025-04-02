@@ -159,8 +159,8 @@ class TrainTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
       # Note that b0 tests tend to timeout.
-      # ("xla", True, False),
-      ("no_xla", False, False),
+      ("xla", True, False),
+      # ("no_xla", False, False),
   )
   def test_export_model(self, enable_xla, test_b0):
     # NOTE: This test might fail when run on a machine that has a GPU but when

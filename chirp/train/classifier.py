@@ -400,7 +400,7 @@ def export_tf_model(
     tf_lite_dtype: str = "float16",
     tf_lite_select_ops: bool = True,
     export_dir: str | None = None,
-    enable_xla: bool = False,
+    enable_xla: bool = True,
 ):
   """Export SavedModel and TFLite."""
   # Get model_ouput keys from output_head_metadatas and add the 'embedding' key
