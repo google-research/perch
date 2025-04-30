@@ -409,7 +409,7 @@ def get_labeled_intervals(
   labeled_intervals = {}
   for st, end in interval_timestamps:
     interval_labels = set([])
-    for (
+    for (  # pytype: disable=bad-unpacking
         current_annotation_start,
         currrent_annotation_end,
     ), seg in segments_by_timestamp.items():
