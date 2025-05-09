@@ -6,7 +6,7 @@ version = "1.4.0"
 description = "Abseil Python Common Libraries, see https://github.com/abseil/abseil-py."
 optional = false
 python-versions = ">=3.6"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "absl-py-1.4.0.tar.gz", hash = "sha256:d2c244d01048ba476e7c080bd2c6df5e141d211de80223460d5b3b8a2a58433d"},
@@ -494,7 +494,7 @@ version = "1.6.3"
 description = "An AST unparser for Python"
 optional = false
 python-versions = "*"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "astunparse-1.6.3-py2.py3-none-any.whl", hash = "sha256:c2652417f2c8b5bb325c885ae329bdf3f86424075c4fd1a128674bc6fba4b8e8"},
@@ -667,7 +667,7 @@ version = "2025.1.31"
 description = "Python package for providing Mozilla's CA Bundle."
 optional = false
 python-versions = ">=3.6"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "certifi-2025.1.31-py3-none-any.whl", hash = "sha256:ca78db4565a652026a4db2bcdf68f2fb589ea80d0be70e03929ed730746b84fe"},
@@ -761,7 +761,7 @@ version = "3.4.1"
 description = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
 optional = false
 python-versions = ">=3.7"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "charset_normalizer-3.4.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:91b36a978b5ae0ee86c394f5a54d6ef44db1de0815eb43de826d41d21e4af3de"},
@@ -910,15 +910,15 @@ files = [
 
 [[package]]
 name = "clu"
-version = "0.0.9"
+version = "0.0.12"
 description = "Set of libraries for ML training loops in JAX."
 optional = false
 python-versions = "*"
 groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
-    {file = "clu-0.0.9-py3-none-any.whl", hash = "sha256:2592865ed0bfa27726374e7aaa72b43f20e3b9509f211d064b775d812e794f31"},
-    {file = "clu-0.0.9.tar.gz", hash = "sha256:00e488ebd166f6276f0f56a91142b148e78f460c9382cf6fb022a9cf17ecd531"},
+    {file = "clu-0.0.12-py3-none-any.whl", hash = "sha256:0d183e7d25f7dd0700444510a264e24700e2f068bdabd199ed22866f7e54edba"},
+    {file = "clu-0.0.12.tar.gz", hash = "sha256:f71eaa1afbd30f57f7709257ba7e1feb8ad5c1c3dcae3606672a138678bb3ce4"},
 ]
 
 [package.dependencies]
@@ -934,8 +934,7 @@ typing-extensions = "*"
 wrapt = "*"
 
 [package.extras]
-pytorch = ["torch (>=1.13.0)"]
-test = ["pytest", "tensorflow", "tensorflow-datasets", "torch (>=1.13.0,!=2.0.0)"]
+test = ["pytest", "tensorflow", "tensorflow-datasets", "torch (>=2.0.0)"]
 
 [[package]]
 name = "colorama"
@@ -1553,7 +1552,7 @@ version = "25.2.10"
 description = "The FlatBuffers serialization format for Python"
 optional = false
 python-versions = "*"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "flatbuffers-25.2.10-py2.py3-none-any.whl", hash = "sha256:ebba5f4d5ea615af3f7fd70fc310636fbb2bbd1f566ac0a23d98dd412de50051"},
@@ -1562,34 +1561,34 @@ files = [
 
 [[package]]
 name = "flax"
-version = "0.8.5"
+version = "0.10.6"
 description = "Flax: A neural network library for JAX designed for flexibility"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
-    {file = "flax-0.8.5-py3-none-any.whl", hash = "sha256:c96e46d1c48a300d010ebf5c4846f163bdd7acc6efff5ff2bfb1cb5b08aa65d8"},
-    {file = "flax-0.8.5.tar.gz", hash = "sha256:4a9cb7950ece54b0addaa73d77eba24e46138dbe783d01987be79d20ccb2b09b"},
+    {file = "flax-0.10.6-py3-none-any.whl", hash = "sha256:86a5f0ba0f1603c687714999b58a4e362e784a6d2dc5a510b18a8e7a6c729e18"},
+    {file = "flax-0.10.6.tar.gz", hash = "sha256:8f3d1eb7de9bbaa18e08d0423dce890aef88a8b9dc6daa23baa631e8dfb09618"},
 ]
 
 [package.dependencies]
-jax = ">=0.4.27"
+jax = ">=0.5.1"
 msgpack = "*"
-numpy = [
-    {version = ">=1.22", markers = "python_version < \"3.11\""},
-    {version = ">=1.23.2", markers = "python_version >= \"3.11\""},
-]
+numpy = {version = ">=1.23.2", markers = "python_version >= \"3.11\""}
 optax = "*"
 orbax-checkpoint = "*"
 PyYAML = ">=5.4.1"
 rich = ">=11.1"
 tensorstore = "*"
-typing-extensions = ">=4.2"
+treescope = ">=0.1.7"
+typing_extensions = ">=4.2"
 
 [package.extras]
 all = ["matplotlib"]
-testing = ["black[jupyter] (==23.7.0)", "clu", "clu (<=0.0.9)", "einops", "gymnasium[accept-rom-license,atari]", "jaxlib", "jaxtyping", "jraph (>=0.0.6dev0)", "ml-collections", "mypy", "nbstripout", "opencv-python", "penzai (>=0.1.2)", "pytest", "pytest-cov", "pytest-custom-exit-code", "pytest-xdist", "pytype", "sentencepiece", "tensorflow (>=2.12.0)", "tensorflow-datasets", "tensorflow-text (>=2.11.0)", "torch"]
+dev = ["nanobind (>=2.5.0)", "pre-commit (>=3.8.0)", "scikit-build-core[pyproject] (>=0.11.0)"]
+docs = ["Pygments (>=2.6.1)", "dm-haiku", "docutils (==0.16)", "einops", "ipykernel", "ipython_genutils", "ipywidgets (>=8.1.5)", "jupytext (==1.13.8)", "kagglehub (>=0.3.3)", "matplotlib", "ml_collections", "myst_nb", "nbstripout", "recommonmark", "scikit-learn", "sphinx (>=3.3.1)", "sphinx-book-theme", "sphinx-design"]
+testing = ["ale-py (>=0.10.2)", "cloudpickle (>=3.0.0)", "clu", "clu (<=0.0.9)", "einops", "gymnasium[accept-rom-license,atari]", "jaxlib", "jaxtyping", "jraph (>=0.0.6dev0)", "ml-collections", "mypy", "opencv-python", "pytest", "pytest-cov", "pytest-custom_exit_code", "pytest-xdist", "pytype", "sentencepiece", "tensorflow (>=2.12.0)", "tensorflow_datasets", "tensorflow_text (>=2.11.0)", "torch", "treescope (>=0.1.1)"]
 
 [[package]]
 name = "fonttools"
@@ -1829,7 +1828,7 @@ version = "0.6.0"
 description = "Python AST that abstracts the underlying Python version"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "gast-0.6.0-py3-none-any.whl", hash = "sha256:52b182313f7330389f72b069ba00f174cfe2a06411099547288839c6cbafbd54"},
@@ -2442,7 +2441,7 @@ version = "0.2.0"
 description = "pasta is an AST-based Python refactoring library"
 optional = false
 python-versions = "*"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "google-pasta-0.2.0.tar.gz", hash = "sha256:c9f2c8dfc8f96d0d5808299920721be30c9eec37f2389f28904f454565c8a16e"},
@@ -2536,7 +2535,7 @@ version = "1.65.5"
 description = "HTTP/2-based RPC framework"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "grpcio-1.65.5-cp310-cp310-linux_armv7l.whl", hash = "sha256:b67d450f1e008fedcd81e097a3a400a711d8be1a8b20f852a7b8a73fead50fe3"},
@@ -2627,7 +2626,7 @@ version = "3.13.0"
 description = "Read and write HDF5 files from Python"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "h5py-3.13.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5540daee2b236d9569c950b417f13fd112d51d78b4c43012de05774908dff3f5"},
@@ -2770,7 +2769,7 @@ version = "3.10"
 description = "Internationalized Domain Names in Applications (IDNA)"
 optional = false
 python-versions = ">=3.6"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "idna-3.10-py3-none-any.whl", hash = "sha256:946d195a0d259cbba61165e88e65941f16e9b36ea6ddb97f00452bae8b1287d3"},
@@ -3113,61 +3112,61 @@ type = ["pytest-mypy"]
 
 [[package]]
 name = "jax"
-version = "0.5.3"
+version = "0.6.0"
 description = "Differentiate, compile, and transform Numpy code."
 optional = false
 python-versions = ">=3.10"
 groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
-    {file = "jax-0.5.3-py3-none-any.whl", hash = "sha256:1483dc237b4f47e41755d69429e8c3c138736716147cd43bb2b99b259d4e3c41"},
-    {file = "jax-0.5.3.tar.gz", hash = "sha256:f17fcb0fd61dc289394af6ce4de2dada2312f2689bb0d73642c6f026a95fbb2c"},
+    {file = "jax-0.6.0-py3-none-any.whl", hash = "sha256:22b21827597c6d6b46e88543b4fc372fcddf1cc1247660452de020cc4bda1afc"},
+    {file = "jax-0.6.0.tar.gz", hash = "sha256:abc690c530349ce470eeef92e09a7bd8a0460424b4980bc72feea45332a636bf"},
 ]
 
 [package.dependencies]
-jaxlib = "0.5.3"
-ml_dtypes = ">=0.4.0"
+jaxlib = "0.6.0"
+ml_dtypes = ">=0.5.0"
 numpy = ">=1.25"
 opt_einsum = "*"
 scipy = ">=1.11.1"
 
 [package.extras]
-ci = ["jaxlib (==0.5.1)"]
-cuda = ["jax-cuda12-plugin[with-cuda] (==0.5.3)", "jaxlib (==0.5.3)"]
-cuda12 = ["jax-cuda12-plugin[with-cuda] (==0.5.3)", "jaxlib (==0.5.3)"]
-cuda12-local = ["jax-cuda12-plugin (==0.5.3)", "jaxlib (==0.5.3)"]
-cuda12-pip = ["jax-cuda12-plugin[with-cuda] (==0.5.3)", "jaxlib (==0.5.3)"]
+ci = ["jaxlib (==0.6.0)"]
+cuda = ["jax-cuda12-plugin[with-cuda] (==0.6.0)", "jaxlib (==0.6.0)"]
+cuda12 = ["jax-cuda12-plugin[with-cuda] (==0.6.0)", "jaxlib (==0.6.0)"]
+cuda12-local = ["jax-cuda12-plugin (==0.6.0)", "jaxlib (==0.6.0)"]
 k8s = ["kubernetes"]
-minimum-jaxlib = ["jaxlib (==0.5.3)"]
-rocm = ["jax-rocm60-plugin (==0.5.3)", "jaxlib (==0.5.3)"]
-tpu = ["jaxlib (==0.5.3)", "libtpu (==0.0.11.*)", "requests"]
+minimum-jaxlib = ["jaxlib (==0.6.0)"]
+rocm = ["jax-rocm60-plugin (==0.6.0)", "jaxlib (==0.6.0)"]
+tpu = ["jaxlib (==0.6.0)", "libtpu (==0.0.13.*)", "requests"]
 
 [[package]]
 name = "jaxlib"
-version = "0.5.3"
+version = "0.6.0"
 description = "XLA library for JAX"
 optional = false
 python-versions = ">=3.10"
 groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
-    {file = "jaxlib-0.5.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:48ff5c89fb8a0fe04d475e9ddc074b4879a91d7ab68a51cec5cd1e87f81e6c47"},
-    {file = "jaxlib-0.5.3-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:972400db4af6e85270d81db5e6e620d31395f0472e510c50dfcd4cb3f72b7220"},
-    {file = "jaxlib-0.5.3-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:52be6c9775aff738a61170d8c047505c75bb799a45518e66a7a0908127b11785"},
-    {file = "jaxlib-0.5.3-cp310-cp310-win_amd64.whl", hash = "sha256:b41a6fcaeb374fabc4ee7e74cfed60843bdab607cd54f60a68b7f7655cde2b66"},
-    {file = "jaxlib-0.5.3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:b62bd8b29e5a4f9bfaa57c8daf6e04820b2c994f448f3dec602d64255545e9f2"},
-    {file = "jaxlib-0.5.3-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:a4666f81d72c060ed3e581ded116a9caa9b0a70a148a54cb12a1d3afca3624b5"},
-    {file = "jaxlib-0.5.3-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:29e1530fc81833216f1e28b578d0c59697654f72ee31c7a44ed7753baf5ac466"},
-    {file = "jaxlib-0.5.3-cp311-cp311-win_amd64.whl", hash = "sha256:8eb54e38d789557579f900ea3d70f104a440f8555a9681ed45f4a122dcbfd92e"},
-    {file = "jaxlib-0.5.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:d394dbde4a1c6bd67501cfb29d3819a10b900cb534cc0fc603319f7092f24cfa"},
-    {file = "jaxlib-0.5.3-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:bddf6360377aa1c792e47fd87f307c342e331e5ff3582f940b1bca00f6b4bc73"},
-    {file = "jaxlib-0.5.3-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:5a5e88ab1cd6fdf78d69abe3544e8f09cce200dd339bb85fbe3c2ea67f2a5e68"},
-    {file = "jaxlib-0.5.3-cp312-cp312-win_amd64.whl", hash = "sha256:520665929649f29f7d948d4070dbaf3e032a4c1f7c11f2863eac73320fcee784"},
-    {file = "jaxlib-0.5.3-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:31321c25282a06a6dfc940507bc14d0a0ac838d8ced6c07aa00a7fae34ce7b3f"},
-    {file = "jaxlib-0.5.3-cp313-cp313-manylinux2014_aarch64.whl", hash = "sha256:e904b92dedfbc7e545725a8d7676987030ae9c069001d94701bc109c6dab4100"},
-    {file = "jaxlib-0.5.3-cp313-cp313-manylinux2014_x86_64.whl", hash = "sha256:bb7593cb7fffcb13963f22fa5229ed960b8fb4ae5ec3b0820048cbd67f1e8e31"},
-    {file = "jaxlib-0.5.3-cp313-cp313-win_amd64.whl", hash = "sha256:8019f73a10b1290f988dd3768c684f3a8a147239091c3b790ce7e47e3bbc00bd"},
-    {file = "jaxlib-0.5.3-cp313-cp313t-manylinux2014_x86_64.whl", hash = "sha256:4c9a9d4cda091a3ef068ace8379fff9e98eea2fc51dbdd7c3386144a1bdf715d"},
+    {file = "jaxlib-0.6.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:64a82f8eb40fdb7ba1d46ef907300d42e4f98cbda9602a2ed8e70db1a9ac4a60"},
+    {file = "jaxlib-0.6.0-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:541a418b98b28df5bd3a1e93c62b2d3f64d44b0c70b7b608f7fe2b4aa452b2af"},
+    {file = "jaxlib-0.6.0-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:a4d4254c713388887a321379d3c5b1a20213a8dcdc903faf15139ba81e3ecd61"},
+    {file = "jaxlib-0.6.0-cp310-cp310-win_amd64.whl", hash = "sha256:9494cf32c5894669d785c9e2311d2ac0794b29a1a8e9822593211ab43517e657"},
+    {file = "jaxlib-0.6.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:ef163cf07de00bc5690169e97fafaadc378f1c381f0287e8a473e78ab5bab1b5"},
+    {file = "jaxlib-0.6.0-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:c0ae959899802e1329cc8ec5a2b4d4be9a076b5beb2052eb49ba37514e623ebc"},
+    {file = "jaxlib-0.6.0-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:bed45525e3bb5ec08630bfd207c09af9d62e9ff13f5f07c2ee2cfd8ed8411ba1"},
+    {file = "jaxlib-0.6.0-cp311-cp311-win_amd64.whl", hash = "sha256:ec61ca368d0708e1a7543eae620823025bfd405fa9ab331302f209833e970107"},
+    {file = "jaxlib-0.6.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:7e3ce2ef0edc9b48b36e2704c36181f1ece7a12ac114df753db4286ea2c6e8b8"},
+    {file = "jaxlib-0.6.0-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:2536fa93ec148d5016da8b2077ba66325b0d86aae2289a61c126877f042b3d1c"},
+    {file = "jaxlib-0.6.0-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:b6d85b8d1fd79248b04503517201e72fcbcd3980cf791d37e814709ea50a3c82"},
+    {file = "jaxlib-0.6.0-cp312-cp312-win_amd64.whl", hash = "sha256:554512c1445ee69c566ef097c3dbdd09e9d9908523eef222c589a559f4220370"},
+    {file = "jaxlib-0.6.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:c4e97934cbaf5172343aa5ae8ef0c58462ce26154dfda754202b3034160cac7b"},
+    {file = "jaxlib-0.6.0-cp313-cp313-manylinux2014_aarch64.whl", hash = "sha256:189729639762050c1780b050e98ff620480b1ea32bf167533e000a5cf4c5738e"},
+    {file = "jaxlib-0.6.0-cp313-cp313-manylinux2014_x86_64.whl", hash = "sha256:d0fb122dc7830ca2a5ca3c874a087363a00532b644509c219c3bfd1d54515e8d"},
+    {file = "jaxlib-0.6.0-cp313-cp313-win_amd64.whl", hash = "sha256:1597e972ff0e99abbb5bd376167b0b1d565554da54de94f12a5f5c574082f9c6"},
+    {file = "jaxlib-0.6.0-cp313-cp313t-manylinux2014_aarch64.whl", hash = "sha256:d7ab9eaa6e4db3dc6bfba8a061b660147bcd5a1b9d777fde3d729c794f274ab9"},
+    {file = "jaxlib-0.6.0-cp313-cp313t-manylinux2014_x86_64.whl", hash = "sha256:63106d4e38aec5e4285c8de85e8cddcbb40084c077d07ac03778d3a2bcfa3aae"},
 ]
 
 [package.dependencies]
@@ -3632,7 +3631,7 @@ version = "3.9.2"
 description = "Multi-backend Keras"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "keras-3.9.2-py3-none-any.whl", hash = "sha256:404427856c2dc30e38c9fa6fa6a13ffb1844a8c35af312ca32a8e7dea9840f1e"},
@@ -3869,7 +3868,7 @@ version = "18.1.1"
 description = "Clang Python Bindings, mirrored from the official LLVM repo: https://github.com/llvm/llvm-project/tree/main/clang/bindings/python, to make the installation process easier."
 optional = false
 python-versions = "*"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "libclang-18.1.1-1-py2.py3-none-macosx_11_0_arm64.whl", hash = "sha256:0b2e143f0fac830156feb56f9231ff8338c20aecfe72b4ffe96f19e5a1dbb69a"},
@@ -3955,7 +3954,7 @@ version = "3.7"
 description = "Python implementation of John Gruber's Markdown."
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "Markdown-3.7-py3-none-any.whl", hash = "sha256:7eb6df5690b81a1d7942992c97fad2938e956e79df20cbc6186e9c3a77b1c803"},
@@ -3972,7 +3971,7 @@ version = "3.0.0"
 description = "Python port of markdown-it. Markdown parsing, done right!"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "markdown-it-py-3.0.0.tar.gz", hash = "sha256:e3f60a94fa066dc52ec76661e37c851cb232d92f9886b15cb560aaada2df8feb"},
@@ -3998,7 +3997,7 @@ version = "3.0.2"
 description = "Safely add untrusted strings to HTML/XML markup."
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "MarkupSafe-3.0.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:7e94c425039cde14257288fd61dcfb01963e658efbc0ff54f5306b06054700f8"},
@@ -4158,7 +4157,7 @@ version = "0.1.2"
 description = "Markdown URL utilities"
 optional = false
 python-versions = ">=3.7"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8"},
@@ -4205,7 +4204,7 @@ version = "0.5.1"
 description = ""
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "ml_dtypes-0.5.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:bd73f51957949069573ff783563486339a9285d72e2f36c18e0c1aa9ca7eb190"},
@@ -4443,7 +4442,7 @@ version = "0.0.8"
 description = "A simple utility to separate the implementation of your Python package and its public API surface."
 optional = false
 python-versions = "*"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "namex-0.0.8-py3-none-any.whl", hash = "sha256:7ddb6c2bb0e753a311b7590f84f6da659dd0c05e65cb89d519d54c0a250c0487"},
@@ -4634,7 +4633,7 @@ version = "1.26.4"
 description = "Fundamental package for array computing in Python"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "numpy-1.26.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:9ff0f4f29c51e2803569d7a51c2304de5554655a60c5d776e35b4a41413830d0"},
@@ -4788,7 +4787,7 @@ version = "3.4.0"
 description = "Path optimization of einsum functions."
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "opt_einsum-3.4.0-py3-none-any.whl", hash = "sha256:69bb92469f86a1565195ece4ac0323943e83477171b91d24c35afe028a90d7cd"},
@@ -4831,7 +4830,7 @@ version = "0.15.0"
 description = "Optimized PyTree Utilities."
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "optree-0.15.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:6e73e390520a545ebcaa0b77fd77943a85d1952df658268129e6c523d4d38972"},
@@ -5058,7 +5057,7 @@ version = "24.2"
 description = "Core utilities for Python packages"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "packaging-24.2-py3-none-any.whl", hash = "sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759"},
@@ -5593,7 +5592,7 @@ version = "4.25.6"
 description = ""
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "protobuf-4.25.6-cp310-abi3-win32.whl", hash = "sha256:61df6b5786e2b49fc0055f636c1e8f0aff263808bb724b95b164685ac1bcc13a"},
@@ -5641,7 +5640,7 @@ description = "Run a subprocess in a pseudo terminal"
 optional = false
 python-versions = "*"
 groups = ["main", "jaxtrain"]
-markers = "(os_name != \"nt\" or sys_platform != \"win32\" and sys_platform != \"emscripten\") and python_version <= \"3.11\""
+markers = "(sys_platform != \"win32\" and sys_platform != \"emscripten\" or os_name != \"nt\") and python_version <= \"3.11\""
 files = [
     {file = "ptyprocess-0.7.0-py2.py3-none-any.whl", hash = "sha256:4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35"},
     {file = "ptyprocess-0.7.0.tar.gz", hash = "sha256:5c5d0a3b48ceee0b48485e0c26037c0acd7d29765ca3fbb5cb3831d347423220"},
@@ -5957,7 +5956,7 @@ version = "2.19.1"
 description = "Pygments is a syntax highlighting package written in Python."
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "pygments-2.19.1-py3-none-any.whl", hash = "sha256:9ea1544ad55cecf4b8242fab6dd35a93bbce657034b0611ee383099054ab6d8c"},
@@ -6643,7 +6642,7 @@ version = "2.32.3"
 description = "Python HTTP for Humans."
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "requests-2.32.3-py3-none-any.whl", hash = "sha256:70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6"},
@@ -6715,7 +6714,7 @@ version = "14.0.0"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
 optional = false
 python-versions = ">=3.8.0"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "rich-14.0.0-py3-none-any.whl", hash = "sha256:1c9491e1951aac09caffd42f448ee3d04e58923ffe14993f6e83068dc395d7e0"},
@@ -6870,29 +6869,6 @@ files = [
 
 [package.dependencies]
 pyasn1 = ">=0.1.3"
-
-[[package]]
-name = "scann"
-version = "1.3.5"
-description = "Scalable Nearest Neighbor search library"
-optional = false
-python-versions = "*"
-groups = ["nonwindows"]
-markers = "python_version <= \"3.11\""
-files = [
-    {file = "scann-1.3.5-cp310-cp310-manylinux_2_27_aarch64.whl", hash = "sha256:d3784846788a40865cfbcc1d44cb724bb364fae70941a089b1b71c40cddc29d6"},
-    {file = "scann-1.3.5-cp310-cp310-manylinux_2_27_x86_64.whl", hash = "sha256:ee6e250bc9c6cff707bf10271c14945a5b165ea7b4bb88a0c044da48252f5688"},
-    {file = "scann-1.3.5-cp311-cp311-manylinux_2_27_aarch64.whl", hash = "sha256:8deb8a781ebf3ee8c77d00ab4d8100a151d3e6f495c75c99a0ece18a18308472"},
-    {file = "scann-1.3.5-cp311-cp311-manylinux_2_27_x86_64.whl", hash = "sha256:44610fc072c069a997ed845ac67ce7d0f6d04ab785fbffe09053eb55b0fd01f4"},
-    {file = "scann-1.3.5-cp312-cp312-manylinux_2_27_aarch64.whl", hash = "sha256:75c0e485cc7a4f3bf530a8e968dde0260f619b1ddd1fec1bdb0ac93ad2f1f504"},
-    {file = "scann-1.3.5-cp312-cp312-manylinux_2_27_x86_64.whl", hash = "sha256:7f24d1ee8d8b83a4508e5bd0c52a168338b23c83508ce66672277f6131f5c015"},
-    {file = "scann-1.3.5-cp39-cp39-manylinux_2_27_aarch64.whl", hash = "sha256:894afb14db529ada339261dc3bc170e7506dc29c8fb9c528927ffd8c59a778be"},
-    {file = "scann-1.3.5-cp39-cp39-manylinux_2_27_x86_64.whl", hash = "sha256:5c33af9703651be81d3f7c60bc55a8f7196cbfe68e861c34f9581d92b679e75e"},
-]
-
-[package.dependencies]
-numpy = "*"
-tensorflow = ">=2.18.0,<2.19.0"
 
 [[package]]
 name = "scenic"
@@ -7089,7 +7065,7 @@ version = "78.1.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "setuptools-78.1.0-py3-none-any.whl", hash = "sha256:3e386e96793c8702ae83d17b853fb93d3e09ef82ec62722e61da5cd22376dcd8"},
@@ -7418,7 +7394,7 @@ version = "1.17.0"
 description = "Python 2 and 3 compatibility utilities"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
@@ -7588,14 +7564,14 @@ tests = ["cython", "littleutils", "pygments", "pytest", "typeguard"]
 
 [[package]]
 name = "tensorboard"
-version = "2.18.0"
+version = "2.19.0"
 description = "TensorBoard lets you watch Tensors Flow"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
-    {file = "tensorboard-2.18.0-py3-none-any.whl", hash = "sha256:107ca4821745f73e2aefa02c50ff70a9b694f39f790b11e6f682f7d326745eab"},
+    {file = "tensorboard-2.19.0-py3-none-any.whl", hash = "sha256:5e71b98663a641a7ce8a6e70b0be8e1a4c0c45d48760b076383ac4755c35b9a0"},
 ]
 
 [package.dependencies]
@@ -7616,7 +7592,7 @@ version = "0.7.2"
 description = "Fast data loading for TensorBoard"
 optional = false
 python-versions = ">=3.7"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "tensorboard_data_server-0.7.2-py3-none-any.whl", hash = "sha256:7e0610d205889588983836ec05dc098e80f97b7e7bbff7e994ebb78f578d0ddb"},
@@ -7626,29 +7602,29 @@ files = [
 
 [[package]]
 name = "tensorflow"
-version = "2.18.1"
+version = "2.19.0"
 description = "TensorFlow is an open source machine learning framework for everyone."
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
-    {file = "tensorflow-2.18.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:8baba2b0f9f286f8115a0005d17c020d2febf95e434302eaf758f2020c1c4de5"},
-    {file = "tensorflow-2.18.1-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2dd7284768f5a6b10e41a700e8141de70756dc62ed5d0b93360d131ccc0a6ba8"},
-    {file = "tensorflow-2.18.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1f929842999d60e7da67743ae5204b477259f3b771c02e5e437d232267e49f18"},
-    {file = "tensorflow-2.18.1-cp310-cp310-win_amd64.whl", hash = "sha256:db1d186c17b6a7c51813e275d0a83e964669822372aa01d074cf64b853ee76ac"},
-    {file = "tensorflow-2.18.1-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:661029cd769b311db910b79a3a6ef50a5a61ecc947172228c777a49989722508"},
-    {file = "tensorflow-2.18.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8a6485edd2148f70d011dbd1d8dc2c775e91774a5a159466e83d0d1f21580944"},
-    {file = "tensorflow-2.18.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c9f87e5d2a680a4595f5dc30daf6bbaec9d4129b46d7ef1b2af63c46ac7d2828"},
-    {file = "tensorflow-2.18.1-cp311-cp311-win_amd64.whl", hash = "sha256:99223d0dde08aec4ceebb3bf0f80da7802e18462dab0d5048225925c064d2af7"},
-    {file = "tensorflow-2.18.1-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:98afa9c7f21481cdc6ccd09507a7878d533150fbb001840cc145e2132eb40942"},
-    {file = "tensorflow-2.18.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1ba52b9c06ab8102b31e50acfaf56899b923171e603c8942f2bfeb181d6bb59e"},
-    {file = "tensorflow-2.18.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:442d2a774811789a8ad948e7286cb950fe3d87d3754e8cc6449d53b03dbfdaa6"},
-    {file = "tensorflow-2.18.1-cp312-cp312-win_amd64.whl", hash = "sha256:210baf6d421f3e044b6e09efd04494a33b75334922fe6cf11970e2885172620a"},
-    {file = "tensorflow-2.18.1-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:e0ffa318b969779baad01a11e7799dda9677ee33ccbbcdbf7b735c27f53d2a9b"},
-    {file = "tensorflow-2.18.1-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1c0cd29c323908ed35ce72fbcce66f2ef7c8657f9c5024860ffd7ea64cf5d35d"},
-    {file = "tensorflow-2.18.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4ecbb9b3cd3f223ff6861faa1a4c2719c138d870dba90545826685b1c5ba5901"},
-    {file = "tensorflow-2.18.1-cp39-cp39-win_amd64.whl", hash = "sha256:0f84a4c87a30cfb279c30b0077541cb5aaac7506d32adde585adb185277e49d2"},
+    {file = "tensorflow-2.19.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:c95604f25c3032e9591c7e01e457fdd442dde48e9cc1ce951078973ab1b4ca34"},
+    {file = "tensorflow-2.19.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2b39293cae3aeee534dc4746dc6097b48c281e5e8b9a423efbd14d4495968e5c"},
+    {file = "tensorflow-2.19.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:83e2d6c748105488205d30e43093f28fc90e8da0176db9ddee12e2784cf435e8"},
+    {file = "tensorflow-2.19.0-cp310-cp310-win_amd64.whl", hash = "sha256:d3f47452246bd08902f0c865d3839fa715f1738d801d256934b943aa21c5a1d2"},
+    {file = "tensorflow-2.19.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:68d462278ad88c193c16d7b905864ff0117d61dc20deded9264d1999d513c115"},
+    {file = "tensorflow-2.19.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c92d3ff958ac0ee0eb343f10d4055b3a2815635cb3ee0836f9b1d735c76ee098"},
+    {file = "tensorflow-2.19.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:390747786ac979809fa1cfcf6916220ef0bfed6b9e1b8c643b6b09184a868fe4"},
+    {file = "tensorflow-2.19.0-cp311-cp311-win_amd64.whl", hash = "sha256:ade03804d81e696f8b9045bbe2dd5d0146e36c63d85bf2eae8225ffa74a03713"},
+    {file = "tensorflow-2.19.0-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:821916beebd541c95b451dd911af442e11a7cb3aabde9084cab2be5c4d8b2bae"},
+    {file = "tensorflow-2.19.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:10f4bfbd33ee23408b98c67e63654f4697845f005555dcc6b790ecfaeabd1308"},
+    {file = "tensorflow-2.19.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e28b26594cd793e7f52471b8f2d98aafc6d232868a366462d238f7967935a6f6"},
+    {file = "tensorflow-2.19.0-cp312-cp312-win_amd64.whl", hash = "sha256:5eae58946f5a22f4d5656a95e54c5d7aae5a5483c388922a207667d8858c37b9"},
+    {file = "tensorflow-2.19.0-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:ad15dbf488e287127a18e2274c64a201ea50ee32444a84657ead72d10438cb09"},
+    {file = "tensorflow-2.19.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9cb87fb2052b819adffb749b7e9426bd109c8cf98751e684de73567424ab2a88"},
+    {file = "tensorflow-2.19.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:849f72820e2bb1bfd4f6446d09db4635896f2ceaa35212a98a1238c9439f6f93"},
+    {file = "tensorflow-2.19.0-cp39-cp39-win_amd64.whl", hash = "sha256:88c594d98bbe6d81d069f418ae823b03f7273c8b612d7073a09373483f212d9a"},
 ]
 
 [package.dependencies]
@@ -7661,22 +7637,22 @@ grpcio = ">=1.24.3,<2.0"
 h5py = ">=3.11.0"
 keras = ">=3.5.0"
 libclang = ">=13.0.0"
-ml-dtypes = ">=0.4.0,<1.0.0"
-numpy = ">=1.26.0,<2.1.0"
+ml-dtypes = ">=0.5.1,<1.0.0"
+numpy = ">=1.26.0,<2.2.0"
 opt-einsum = ">=2.3.2"
 packaging = "*"
 protobuf = ">=3.20.3,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<6.0.0dev"
 requests = ">=2.21.0,<3"
 setuptools = "*"
 six = ">=1.12.0"
-tensorboard = ">=2.18,<2.19"
+tensorboard = ">=2.19.0,<2.20.0"
 tensorflow-io-gcs-filesystem = {version = ">=0.23.1", markers = "python_version < \"3.12\""}
 termcolor = ">=1.1.0"
 typing-extensions = ">=3.6.6"
 wrapt = ">=1.11.0"
 
 [package.extras]
-and-cuda = ["nvidia-cublas-cu12 (==12.5.3.2)", "nvidia-cuda-cupti-cu12 (==12.5.82)", "nvidia-cuda-nvcc-cu12 (==12.5.82)", "nvidia-cuda-nvrtc-cu12 (==12.5.82)", "nvidia-cuda-runtime-cu12 (==12.5.82)", "nvidia-cudnn-cu12 (==9.3.0.75)", "nvidia-cufft-cu12 (==11.2.3.61)", "nvidia-curand-cu12 (==10.3.6.82)", "nvidia-cusolver-cu12 (==11.6.3.83)", "nvidia-cusparse-cu12 (==12.5.1.3)", "nvidia-nccl-cu12 (==2.21.5)", "nvidia-nvjitlink-cu12 (==12.5.82)"]
+and-cuda = ["nvidia-cublas-cu12 (==12.5.3.2)", "nvidia-cuda-cupti-cu12 (==12.5.82)", "nvidia-cuda-nvcc-cu12 (==12.5.82)", "nvidia-cuda-nvrtc-cu12 (==12.5.82)", "nvidia-cuda-runtime-cu12 (==12.5.82)", "nvidia-cudnn-cu12 (==9.3.0.75)", "nvidia-cufft-cu12 (==11.2.3.61)", "nvidia-curand-cu12 (==10.3.6.82)", "nvidia-cusolver-cu12 (==11.6.3.83)", "nvidia-cusparse-cu12 (==12.5.1.3)", "nvidia-nccl-cu12 (==2.23.4)", "nvidia-nvjitlink-cu12 (==12.5.82)"]
 
 [[package]]
 name = "tensorflow-datasets"
@@ -7765,7 +7741,7 @@ version = "0.16.1"
 description = "TensorFlow Hub is a library to foster the publication, discovery, and consumption of reusable parts of machine learning models."
 optional = false
 python-versions = "*"
-groups = ["main"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "tensorflow_hub-0.16.1-py2.py3-none-any.whl", hash = "sha256:e10c184b3d08daeafada11ffea2dd46781725b6bef01fad1f74d6634ad05311f"},
@@ -7819,7 +7795,7 @@ version = "0.37.1"
 description = "TensorFlow IO"
 optional = false
 python-versions = "<3.13,>=3.7"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "tensorflow_io_gcs_filesystem-0.37.1-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:249c12b830165841411ba71e08215d0e94277a49c551e6dd5d72aab54fe5491b"},
@@ -7923,7 +7899,7 @@ version = "3.0.1"
 description = "ANSI color formatting for output in terminal"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "termcolor-3.0.1-py3-none-any.whl", hash = "sha256:da1ed4ec8a5dc5b2e17476d859febdb3cccb612be1c36e64511a6f2485c10c69"},
@@ -7958,19 +7934,19 @@ typing = ["mypy (>=1.6,<2.0)", "traitlets (>=5.11.1)"]
 
 [[package]]
 name = "tf-keras"
-version = "2.18.0"
+version = "2.19.0"
 description = "Deep learning for humans."
 optional = false
 python-versions = ">=3.9"
-groups = ["main"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
-    {file = "tf_keras-2.18.0-py3-none-any.whl", hash = "sha256:c431d04027eef790fcd3261cf7fdf93eb74f3cb32e05078b57b7f5a54bd53262"},
-    {file = "tf_keras-2.18.0.tar.gz", hash = "sha256:ebf744519b322afead33086a2aba872245473294affd40973694f3eb7c7ad77d"},
+    {file = "tf_keras-2.19.0-py3-none-any.whl", hash = "sha256:4f339e800987b39d1548a8c76a7b33b6801a97ec7fcd89c299ec29741f7890bd"},
+    {file = "tf_keras-2.19.0.tar.gz", hash = "sha256:b09a407d87a4571ce1e8ca985cfc68483e3d63b2518a5d79a97ad92cb64dbe9c"},
 ]
 
 [package.dependencies]
-tensorflow = ">=2.18,<2.19"
+tensorflow = ">=2.19,<2.20"
 
 [[package]]
 name = "threadpoolctl"
@@ -8150,6 +8126,28 @@ docs = ["myst-parser", "pydata-sphinx-theme", "sphinx"]
 test = ["argcomplete (>=3.0.3)", "mypy (>=1.7.0)", "pre-commit", "pytest (>=7.0,<8.2)", "pytest-mock", "pytest-mypy-testing"]
 
 [[package]]
+name = "treescope"
+version = "0.1.9"
+description = "Treescope: An interactive HTML pretty-printer for ML research in IPython notebooks."
+optional = false
+python-versions = ">=3.10"
+groups = ["main", "jaxtrain"]
+markers = "python_version <= \"3.11\""
+files = [
+    {file = "treescope-0.1.9-py3-none-any.whl", hash = "sha256:68677013a9f0228212fccf835f3fb037be07ae8b4c5f6f58eefab11198f83cf7"},
+    {file = "treescope-0.1.9.tar.gz", hash = "sha256:ba6cdbdc9c5b52691d5f3bb4c5d5c7daa5627119acac8640b46d37e6aabe63a6"},
+]
+
+[package.dependencies]
+numpy = ">=1.25.2"
+
+[package.extras]
+dev = ["ipython", "jupyter", "pyink (>=24.3.0)", "pylint (>=2.6.0)", "pytest (>=8.2.2)", "pytype"]
+docs = ["ipython", "ipython (>=8.8.0)", "jax[cpu] (>=0.4.23)", "matplotlib (>=3.5.0)", "myst-nb (>=1.0.0)", "myst-parser (>=3.0.1)", "packaging (==24.1)", "palettable (==3.3.3)", "pandas (==2.2.2)", "penzai (>=0.2.4,<0.3.0)", "plotly (==5.22.0)", "sphinx (>=6.0.0,<7.3.0)", "sphinx-book-theme (>=1.0.1)", "sphinx-hoverxref", "sphinx_contributors", "sphinxcontrib-katex", "torch (==2.3.1)"]
+notebook = ["ipython", "jax (>=0.4.23)", "palettable"]
+test = ["absl-py (>=1.4.0)", "jax (>=0.4.23)", "omegaconf (>=2.0.0)", "pydantic (>=2.0.0)", "pytest (>=8.2.2)", "torch (>=2.0.0)"]
+
+[[package]]
 name = "types-python-dateutil"
 version = "2.9.0.20241206"
 description = "Typing stubs for python-dateutil"
@@ -8168,7 +8166,7 @@ version = "4.13.1"
 description = "Backported and Experimental Type Hints for Python 3.8+"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "typing_extensions-4.13.1-py3-none-any.whl", hash = "sha256:4b6cf02909eb5495cfbc3f6e8fd49217e6cc7944e145cdda8caa3734777f9e69"},
@@ -8226,7 +8224,7 @@ version = "2.3.0"
 description = "HTTP library with thread-safe connection pooling, file post, and more."
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "urllib3-2.3.0-py3-none-any.whl", hash = "sha256:1cee9ad369867bfdbbb48b7dd50374c0967a0bb7710050facf0dd6911440e3df"},
@@ -8377,7 +8375,7 @@ version = "3.1.3"
 description = "The comprehensive WSGI web application library."
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "werkzeug-3.1.3-py3-none-any.whl", hash = "sha256:54b78bf3716d19a65be4fceccc0d1d7b89e608834989dfae50ea87564639213e"},
@@ -8396,7 +8394,7 @@ version = "0.45.1"
 description = "A built-package format for Python"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "wheel-0.45.1-py3-none-any.whl", hash = "sha256:708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248"},
@@ -8425,7 +8423,7 @@ version = "1.17.2"
 description = "Module for decorators, wrappers and monkey patching."
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "jaxtrain", "nonwindows"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "wrapt-1.17.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:3d57c572081fed831ad2d26fd430d565b76aa277ed1d30ff4d40670b1c0dd984"},
@@ -8767,4 +8765,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.12"
-content-hash = "a819753bbf83819901751c63a85627b33df6b739575715bfe794b10abf2c9a07"
+content-hash = "360b290801b5198f94bd052ce135164c7fe3f2c10fa30ac1617b85b69cd8cee0"
