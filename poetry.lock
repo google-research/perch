@@ -494,7 +494,7 @@ version = "1.6.3"
 description = "An AST unparser for Python"
 optional = false
 python-versions = "*"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "astunparse-1.6.3-py2.py3-none-any.whl", hash = "sha256:c2652417f2c8b5bb325c885ae329bdf3f86424075c4fd1a128674bc6fba4b8e8"},
@@ -1552,7 +1552,7 @@ version = "25.2.10"
 description = "The FlatBuffers serialization format for Python"
 optional = false
 python-versions = "*"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "flatbuffers-25.2.10-py2.py3-none-any.whl", hash = "sha256:ebba5f4d5ea615af3f7fd70fc310636fbb2bbd1f566ac0a23d98dd412de50051"},
@@ -1828,7 +1828,7 @@ version = "0.6.0"
 description = "Python AST that abstracts the underlying Python version"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "gast-0.6.0-py3-none-any.whl", hash = "sha256:52b182313f7330389f72b069ba00f174cfe2a06411099547288839c6cbafbd54"},
@@ -2441,7 +2441,7 @@ version = "0.2.0"
 description = "pasta is an AST-based Python refactoring library"
 optional = false
 python-versions = "*"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "google-pasta-0.2.0.tar.gz", hash = "sha256:c9f2c8dfc8f96d0d5808299920721be30c9eec37f2389f28904f454565c8a16e"},
@@ -2626,7 +2626,7 @@ version = "3.13.0"
 description = "Read and write HDF5 files from Python"
 optional = false
 python-versions = ">=3.9"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "h5py-3.13.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5540daee2b236d9569c950b417f13fd112d51d78b4c43012de05774908dff3f5"},
@@ -3631,7 +3631,7 @@ version = "3.9.2"
 description = "Multi-backend Keras"
 optional = false
 python-versions = ">=3.9"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "keras-3.9.2-py3-none-any.whl", hash = "sha256:404427856c2dc30e38c9fa6fa6a13ffb1844a8c35af312ca32a8e7dea9840f1e"},
@@ -3868,7 +3868,7 @@ version = "18.1.1"
 description = "Clang Python Bindings, mirrored from the official LLVM repo: https://github.com/llvm/llvm-project/tree/main/clang/bindings/python, to make the installation process easier."
 optional = false
 python-versions = "*"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "libclang-18.1.1-1-py2.py3-none-macosx_11_0_arm64.whl", hash = "sha256:0b2e143f0fac830156feb56f9231ff8338c20aecfe72b4ffe96f19e5a1dbb69a"},
@@ -3954,7 +3954,7 @@ version = "3.7"
 description = "Python implementation of John Gruber's Markdown."
 optional = false
 python-versions = ">=3.8"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "Markdown-3.7-py3-none-any.whl", hash = "sha256:7eb6df5690b81a1d7942992c97fad2938e956e79df20cbc6186e9c3a77b1c803"},
@@ -4442,7 +4442,7 @@ version = "0.0.8"
 description = "A simple utility to separate the implementation of your Python package and its public API surface."
 optional = false
 python-versions = "*"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "namex-0.0.8-py3-none-any.whl", hash = "sha256:7ddb6c2bb0e753a311b7590f84f6da659dd0c05e65cb89d519d54c0a250c0487"},
@@ -4830,7 +4830,7 @@ version = "0.15.0"
 description = "Optimized PyTree Utilities."
 optional = false
 python-versions = ">=3.8"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "optree-0.15.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:6e73e390520a545ebcaa0b77fd77943a85d1952df658268129e6c523d4d38972"},
@@ -7568,7 +7568,7 @@ version = "2.19.0"
 description = "TensorBoard lets you watch Tensors Flow"
 optional = false
 python-versions = ">=3.9"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "tensorboard-2.19.0-py3-none-any.whl", hash = "sha256:5e71b98663a641a7ce8a6e70b0be8e1a4c0c45d48760b076383ac4755c35b9a0"},
@@ -7592,7 +7592,7 @@ version = "0.7.2"
 description = "Fast data loading for TensorBoard"
 optional = false
 python-versions = ">=3.7"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "tensorboard_data_server-0.7.2-py3-none-any.whl", hash = "sha256:7e0610d205889588983836ec05dc098e80f97b7e7bbff7e994ebb78f578d0ddb"},
@@ -7606,7 +7606,7 @@ version = "2.19.0"
 description = "TensorFlow is an open source machine learning framework for everyone."
 optional = false
 python-versions = ">=3.9"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "tensorflow-2.19.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:c95604f25c3032e9591c7e01e457fdd442dde48e9cc1ce951078973ab1b4ca34"},
@@ -7741,7 +7741,7 @@ version = "0.16.1"
 description = "TensorFlow Hub is a library to foster the publication, discovery, and consumption of reusable parts of machine learning models."
 optional = false
 python-versions = "*"
-groups = ["jaxtrain"]
+groups = ["main"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "tensorflow_hub-0.16.1-py2.py3-none-any.whl", hash = "sha256:e10c184b3d08daeafada11ffea2dd46781725b6bef01fad1f74d6634ad05311f"},
@@ -7795,7 +7795,7 @@ version = "0.37.1"
 description = "TensorFlow IO"
 optional = false
 python-versions = "<3.13,>=3.7"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "tensorflow_io_gcs_filesystem-0.37.1-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:249c12b830165841411ba71e08215d0e94277a49c551e6dd5d72aab54fe5491b"},
@@ -7899,7 +7899,7 @@ version = "3.0.1"
 description = "ANSI color formatting for output in terminal"
 optional = false
 python-versions = ">=3.9"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "termcolor-3.0.1-py3-none-any.whl", hash = "sha256:da1ed4ec8a5dc5b2e17476d859febdb3cccb612be1c36e64511a6f2485c10c69"},
@@ -7938,7 +7938,7 @@ version = "2.19.0"
 description = "Deep learning for humans."
 optional = false
 python-versions = ">=3.9"
-groups = ["jaxtrain"]
+groups = ["main"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "tf_keras-2.19.0-py3-none-any.whl", hash = "sha256:4f339e800987b39d1548a8c76a7b33b6801a97ec7fcd89c299ec29741f7890bd"},
@@ -8375,7 +8375,7 @@ version = "3.1.3"
 description = "The comprehensive WSGI web application library."
 optional = false
 python-versions = ">=3.9"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "werkzeug-3.1.3-py3-none-any.whl", hash = "sha256:54b78bf3716d19a65be4fceccc0d1d7b89e608834989dfae50ea87564639213e"},
@@ -8394,7 +8394,7 @@ version = "0.45.1"
 description = "A built-package format for Python"
 optional = false
 python-versions = ">=3.8"
-groups = ["jaxtrain"]
+groups = ["main", "jaxtrain"]
 markers = "python_version <= \"3.11\""
 files = [
     {file = "wheel-0.45.1-py3-none-any.whl", hash = "sha256:708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248"},
@@ -8765,4 +8765,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.12"
-content-hash = "360b290801b5198f94bd052ce135164c7fe3f2c10fa30ac1617b85b69cd8cee0"
+content-hash = "565b98e83b4279945771ce21f6a96168f1ab4651f43b75f029fc3f33dd6f7d4a"

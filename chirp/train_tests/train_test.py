@@ -159,10 +159,10 @@ class TrainTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
       # Note that b0 tests tend to timeout.
-      ("xla", True, False),
+      ("xla", True, False, False),
       # ("no_xla", False, False),
   )
-  def test_export_model(self, enable_xla, test_b0):
+  def test_export_model(self, enable_xla, test_b0, export_tf_lite):
     # NOTE: This test might fail when run on a machine that has a GPU but when
     # CUDA is not linked (JAX will detect the GPU so jax2tf will try to create
     # a TF graph on the GPU and fail)
@@ -186,10 +186,12 @@ class TrainTest(parameterized.TestCase):
         num_train_steps=0,
         eval_sleep_s=0,
         enable_xla=enable_xla,
+        export_tf_lite=export_tf_lite,
     )
-    self.assertTrue(
-        tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite"))
-    )
+    if export_tf_lite:
+      self.assertTrue(
+          tf.io.gfile.exists(os.path.join(self.train_dir, "model.tflite"))
+      )
     self.assertTrue(
         tf.io.gfile.exists(os.path.join(self.train_dir, "label.csv"))
     )

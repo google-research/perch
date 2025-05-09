@@ -39,7 +39,6 @@ from perch_hoplite.zoo import handcrafted_features_model
 from perch_hoplite.zoo import placeholder_model
 from perch_hoplite.zoo import zoo_interface
 import tensorflow as tf
-import tf_keras
 
 from absl.testing import absltest
 from absl.testing import parameterized
