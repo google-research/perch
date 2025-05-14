@@ -509,9 +509,12 @@ class ResampleAudio(FeaturesPreprocessOp):
     elif len(audio.shape) != 1:
       raise ValueError(f'Unexpected audio shape. ({audio.shape})')
 
-    features[self.feature_name] = tfio.audio.resample(
-        audio, rate_in=source_sample_rate, rate_out=self.target_sample_rate
-    )
+    if source_sample_rate != self.target_sample_rate:
+      # Tensorflow-IO seems to be abandoned...
+      raise ValueError(
+          f'Source sample rate ({source_sample_rate}) must match target '
+          f'sample rate ({self.target_sample_rate})'
+      )
 
     if len(features[self.feature_name].shape) == 3:
       features[self.feature_name] = tf.squeeze(

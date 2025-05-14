@@ -401,6 +401,7 @@ def export_tf_model(
     tf_lite_select_ops: bool = True,
     export_dir: str | None = None,
     enable_xla: bool = True,
+    export_tf_lite: bool = True,
 ):
   """Export SavedModel and TFLite."""
   # Get model_ouput keys from output_head_metadatas and add the 'embedding' key
@@ -439,6 +440,7 @@ def export_tf_model(
         class_lists,
         tf_lite_dtype=tf_lite_dtype,
         tf_lite_select_ops=tf_lite_select_ops,
+        export_tf_lite=export_tf_lite,
     )
 
 

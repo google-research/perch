@@ -361,26 +361,6 @@ class PipelineTest(parameterized.TestCase):
 
     np.testing.assert_allclose(melspec, melspec_tf.numpy(), atol=1e-5)
 
-  def test_resample_audio(self):
-    original_dataset = self._builder.as_dataset('train')
-    original_examples = next(
-        original_dataset.batch(len(original_dataset)).as_numpy_iterator()
-    )
-    # Six seconds at 32kHz, gives 192000 samples.
-    original_length = original_examples['audio'].shape[1]
-    original_sample_rate = self._builder.info.features['audio'].sample_rate
-
-    resampled_examples = pipeline.ResampleAudio(target_sample_rate=16000)(
-        original_examples, self._builder.info
-    )
-    expected_length = int(16000 * original_length / original_sample_rate)
-    self.assertEqual(
-        resampled_examples['audio'].shape[0],
-        original_examples['audio'].shape[0],
-    )
-    self.assertEqual(resampled_examples['audio'].shape[1], expected_length)
-    self.assertLen(resampled_examples['audio'].shape, 2)
-
   @parameterized.named_parameters(('pad_end', True), ('no_pad_end', False))
   def test_extract_strided_slices(self, pad_end):
     sample_rate = self._builder.info.features['audio'].sample_rate
