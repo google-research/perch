@@ -97,7 +97,9 @@ class BernoulliRbfTest(absltest.TestCase):
         data_std=None,
         learn_feature_weights=False,
     )
-    optimizer = nnx.Optimizer(model, optax.adam(1e-3))  # reference sharing
+    optimizer = nnx.ModelAndOptimizer(
+        model, optax.adam(1e-3)
+    )  # reference sharing
     loss = bernoulli_rbf.train_step(model, optimizer, mu=1.0)
     self.assertLess(loss, 2.0)
 
