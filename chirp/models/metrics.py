@@ -224,7 +224,7 @@ def generalized_mean_rank(
   if label_mask is None:
     label_mask = True
   else:
-    label_mask = jnp.take_along_axis(label_mask, idx, axis=-1)
+    label_mask = jnp.take_along_axis(label_mask, idx, axis=-1).astype(bool)
 
   num_p = (labels > 0).sum(axis=-1, where=label_mask)
   num_p_above = jnp.cumsum((labels > 0) & label_mask, axis=-1)
