@@ -15,6 +15,7 @@
 
 """Create embeddings for an audio corpus."""
 
+import audioop
 import dataclasses
 import importlib
 import json
@@ -347,6 +348,9 @@ class EmbedFn(beam.DoFn):
     except EOFError as inst:
       self._log_exception(source_info, inst, 'audio_eof_error')
       return
+    except audioop.error as inst:
+      self._log_exception(source_info, inst, 'audio_op_error')
+      return
     except RuntimeError as inst:
       if 'Soundfile is not available' in str(inst):
         self._log_exception(source_info, inst, 'audio_no_soundfile')
@@ -368,15 +372,13 @@ class EmbedFn(beam.DoFn):
 def get_config(config_key: str, shard_idx: str = '') -> config_dict.ConfigDict:
   """Get a config given its keyed name."""
   module_key = '..{}'.format(config_key)
+  module = importlib.import_module(module_key, INFERENCE_CONFIGS_PKG)
+  if not hasattr(module, 'get_config'):
+    raise ValueError(f'Module {module_key} does not have a get_config method.')
   if shard_idx:
-    config = importlib.import_module(
-        module_key, INFERENCE_CONFIGS_PKG
-    ).get_config(shard_idx)
+    config = module.get_config(shard_idx)
   else:
-    config = importlib.import_module(
-        module_key, INFERENCE_CONFIGS_PKG
-    ).get_config()
-
+    config = module.get_config()
   logging.info('Loaded config %s', config_key)
   logging.info('Config output location : %s', config.output_dir)
   return config
