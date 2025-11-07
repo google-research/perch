@@ -275,7 +275,7 @@ def search_embeddings_parallel(
         f'{query_embedding_batch.shape}'
     )
 
-  score_fn = functools.partial(
+  score_fn = functools.partial(  # pytype: disable=wrong-arg-types
       score_fn, query_embedding_batch=query_embedding_batch
   )
   if random_sample:
