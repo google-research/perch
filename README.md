@@ -4,6 +4,8 @@
 
 A bioacoustics research project.
 
+Caution: This repository is for sharing open code artifacts relating to the Perch project; certain segments are out of date and pip install is unlikely to work (thanks to certain parts of Tensorflow slowly being abandoned). For inference and practical tooling, please try the [Perch-Hoplite repository](https://github.com/google-research/perch-hoplite).
+
 ## Directory of Things
 
 We have published quite a few things which utilize this repository!
@@ -23,6 +25,7 @@ The major parts of the Perch model training code is broken up across the followi
 * [Training loop](https://github.com/google-research/perch/blob/main/chirp/train/classifier.py)
 * [Training launch script](https://github.com/google-research/perch/blob/main/chirp/projects/main.py)
 * [Export](https://github.com/google-research/perch/blob/main/chirp/export_utils.py) from JAX to Tensorflow and TFLite
+* New model components for Perch 2.0 can be found in [perch_2.py](https://github.com/google-research/perch/blob/main/chirp/models/perch_2.py) and [heads.py](https://github.com/google-research/perch/blob/main/chirp/models/heads.py).
 
 ### Agile Modeling
 
