@@ -28,7 +28,6 @@ from perch_hoplite.taxonomy import namespace
 from perch_hoplite.taxonomy import namespace_db
 import tensorflow as tf
 import tensorflow_datasets as tfds
-import tensorflow_io as tfio
 
 
 Features = dict[str, tf.Tensor]

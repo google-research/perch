@@ -11,7 +11,7 @@ license = "Apache 2.0"
 # Other dependency groups will not be installed by pip, however.
 # See: https://python-poetry.org/docs/managing-dependencies/#dependency-groups
 python = ">=3.10,<3.12"
-perch_hoplite = {git = "https://github.com/google-research/perch-hoplite.git"}
+perch_hoplite = {git = "https://github.com/google-research/perch-hoplite.git@0.1.1"}
 apache-beam = {version = "^2.50.0", extras = ["gcp"]}
 chex = "^0.1.7"
 clu = "^0.0.12"
@@ -23,24 +23,16 @@ optax = ">=0.2.3"
 matplotlib = "^3.6.1"
 notebook = "^7.0.4"
 pandas = {version = "^2.1.1", extras=["gcp"]}
-numpy = "^1.24"
+numpy = ">=2.0,<2.1"
 SPARQLWrapper = "^2.0.0"
 tqdm = "^4.6"
-tensorflow = "^2.19"
-tf-keras = "^2.19"
-tensorflow-hub = "^0.16"
+tensorflow = "^2.20"
+tf-keras = "^2.20"
 
 [tool.poetry.group.jaxtrain]
 optional = true
 
 [tool.poetry.group.jaxtrain.dependencies]
-# TF-io is used for sample rate conversion only in data ingestion pipelines.
-# Note that tensorflow and tensorflow-io versions must be synchronized.
-# See: https://github.com/tensorflow/io#tensorflow-version-compatibility
-tensorflow-io = "^0.37"
-tensorflow-datasets = {version = "^4.9", extras = ["dev"]}
-# AudioMAE / ViT.
-scenic = {git = "https://github.com/google-research/scenic.git"}
 # Used for crawling datasources.
 ratelimiter = "^1.2.0.post0"
 # Quantization-aware training in Jax.

@@ -32,7 +32,8 @@ jobs:
           poetry install --with jaxtrain
       - name: Test with unittest
         run: poetry run python -m unittest discover -s chirp/tests -p "*test.py"
-      - name: Test training with unittest
-        run: poetry run python -m unittest discover -s chirp/train_tests -p "*test.py"
+      # Train tests are disabled until TFDS release compatible with TF 2.20 is released.
+      # - name: Test training with unittest
+      #   run: poetry run python -m unittest discover -s chirp/train_tests -p "*test.py"
       - name: Test inference with unittest
         run: poetry run python -m unittest discover -s chirp/inference/tests -p "*test.py"
