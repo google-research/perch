@@ -54,17 +54,7 @@ Code: See [call_density.py](https://github.com/google-research/perch/blob/main/c
 
 We produced a benchmark paper for understanding model generalization when transferring from focal to passive acoustic datasets. The preprint is [available here](https://arxiv.org/abs/2312.07439).
 
-For details on setting up the benchmark and evaluation protocol, please refer to this [brief readme](https://docs.google.com/document/d/1RasVkxIKKlUToFlJ8gZxaHqIE-mMy9G1MZwfK98Gb-I) with instructions. The evaluation codebase is in [perch/chirp/eval](https://github.com/google-research/perch/tree/main/chirp/eval).
-
-To build the BIRB evaluation data, after [installing](#installation) the `chirp` package, run the following command from the repository's root directory:
-
-```bash
-poetry run tfds build -i chirp.data.bird_taxonomy,chirp.data.soundscapes \
-    soundscapes/{ssw,hawaii,coffee_farms,sierras_kahl,high_sierras,peru}_full_length \
-    bird_taxonomy/{downstream_full_length,class_representatives_slice_peaked}
-```
-
-The process should take 36 to 48 hours to complete and use around 256 GiB of disk space.
+More info at [perch/chirp/eval/README.md](https://github.com/google-research/perch/tree/main/chirp/eval/README.md).
 
 
 ### Source-Free Domain Adaptation and NOTELA
