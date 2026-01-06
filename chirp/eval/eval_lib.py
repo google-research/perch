@@ -413,6 +413,17 @@ class _HashedEmbeddingsDataFrame:
 
   df: pd.DataFrame
 
+  # Directly comparing members of the type `pd.DataFrame` can throw an error:
+  # "The truth value of a DataFrame is ambiguous."
+  # So we bring back an explicit implementation of __eq__ like it was prior to
+  # Python 3.13 in order work around this possibility.
+  def __eq__(self, other):
+    if self is other:
+      return True
+    if other.__class__ is self.__class__:
+      return (self.df,) == (other.df,)
+    return NotImplemented
+
   def __hash__(self):
     return id(self.df)
 
