@@ -49,6 +49,7 @@ class BootstrapState:
   embeddings_dataset: tf.data.Dataset | None = None
   source_map: Callable[[str, float], str] | None = None
   baw_auth_token: str = ''
+  baw_domain: str = 'api.acousticobservatory.org/'
 
   def __post_init__(self):
     if self.embedding_model is None:
@@ -62,6 +63,7 @@ class BootstrapState:
         self.source_map = functools.partial(
             baw_utils.make_baw_audio_url_from_file_id,
             window_size_s=window_size_s,
+            baw_domain=self.baw_domain,
         )
       else:
         self.source_map = lambda file_id, offset: filesystem_source_map(
