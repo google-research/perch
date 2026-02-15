@@ -610,26 +610,38 @@ def _create_embeddings_dataframe(
 def prepare_eval_sets(
     config: ConfigDict, embedded_datasets: dict[str, tf.data.Dataset]
 ) -> Iterator[EvalSet]:
-  """Constructs and yields eval sets.
+  """Constructs and yields eval sets for the BIRB retrieval task.
+
+  For each class, we select some examples as "queries" and then test if the model can find other
+  recordings of that same class in the larger search corpus.
+
+  This function takes embedded audio datasets and organizes them into evaluation sets
+  where we can test how well the model recognizes specific classes. For each
+  evaluation set, it:
+  1. Creates a search corpus - the full set of audio examples to search through
+  2. For each class, selects representative examples and marks which examples
+     in the search corpus should be excluded for fair evaluation
 
   Args:
     config: The evaluation configuration dict.
     embedded_datasets: A mapping from dataset name to embedded dataset.
 
   Yields:
-    A tuple of (eval_set_name, search_corpus_df, classwise_eval_set_generator).
-    The classwise eval set generator itself yields (class_name,
-    class_representatives_df, search_corpus_mask) tuples. Each search corpus
-    mask indicates which part of the search corpus should be ignored in the
-    context of its corresponding class (e.g., because it overlaps with the
-    chosen class representatives). The DataFrame (`*_df`) objects have the
-    following columns:
-    - embedding: numpy array of dtype float32.
-    - label: space-separated string of foreground labels.
-    - bg_labels: space-separated string of background labels.
-    - dataset_name: name of the dataset of origin for the embedding.
-    - recording_id: integer recording ID.
-    - segment_id: integer segment ID within the recording.
+    An EvalSet tuple of (eval_set_name, search_corpus_df, classwise_eval_set_generator).
+    - eval_set_name: Name of this evaluation set, from the config.
+    - search_corpus_df: DataFrame of all audio examples, with columns:
+        - embedding: numpy array of dtype float32.
+        - label: space-separated string of foreground labels.
+        - bg_labels: space-separated string of background labels.
+        - dataset_name: name of the dataset of origin for the embedding.
+        - recording_id: integer recording ID.
+        - segment_id: integer segment ID within the recording.
+    - classwise_eval_sets: Generator that yields tuples containing:
+        - class_name,
+        - class_representatives_df: Representative examples of that class
+        - search_corpus_mask: Mask indicating which part of the search corpus
+             should be ignored in the context of its corresponding class (e.g.,
+             because it overlaps with the chosen class representatives)
   """
   # Add a 'dataset_name' feature to all embedded datasets.
   embedded_datasets = {
