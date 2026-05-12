@@ -25,8 +25,10 @@ from chirp.data.soundscapes import soundscapes
 from chirp.data.soundscapes import soundscapes_lib
 from etils import epath
 import librosa
+import numpy as np
 from perch_hoplite.taxonomy import annotations_fns
 from perch_hoplite.taxonomy import namespace_db
+import soundfile
 import tensorflow_datasets as tfds
 
 from absl.testing import absltest
@@ -49,9 +51,8 @@ class SoundscapesLibTest(parameterized.TestCase):
       audio_filepath.parent.mkdir(parents=True)
     if audio_filepath in all_audio_filepaths:
       return
-    tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
-        audio_filepath, format=extension
-    )
+    audio = np.random.uniform(-1, 1, 200_000).astype(np.float32)
+    soundfile.write(audio_filepath, audio, 32000)
     logging.info('created audio file : %s', audio_filepath)
     all_audio_filepaths.append(audio_filepath)
     return audio_filepath

@@ -21,7 +21,9 @@ from unittest import mock
 
 from chirp.data import soundevents
 from etils import epath
+import numpy as np
 import pandas as pd
+import soundfile
 import tensorflow_datasets as tfds
 
 from absl.testing import absltest
@@ -76,10 +78,9 @@ class SoundeventsTest(tfds.testing.DatasetBuilderTestCase):
     df_dev_samples.columns = ['fname', 'labels', 'mids', 'split']
     subdir = epath.Path(cls.tempdir) / 'dev_audio'
     subdir.mkdir(parents=True)
+    audio = np.zeros(10_000, dtype=np.float32)
     for _, row in df_dev_samples.iterrows():
-      tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(
-          subdir / f'{row["fname"]}.wav', format='wav'
-      )
+      soundfile.write(subdir / f'{row["fname"]}.wav', audio, 32000)
 
     # create audio files for eval set from placeholder_data samples
     df_eval_samples = pd.read_json(cls.DL_SAMPLE_FILES['eval_samples'])
@@ -88,9 +89,7 @@ class SoundeventsTest(tfds.testing.DatasetBuilderTestCase):
     subdir.mkdir(parents=True)
     print(subdir)
     for _, row in df_eval_samples.iterrows():
-      tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=10000).export(
-          subdir / f'{row["fname"]}.wav', format='wav'
-      )
+      soundfile.write(subdir / f'{row["fname"]}.wav', audio, 32000)
 
     subdir = epath.Path(cls.tempdir) / 'FSD50K.ground_truth'
     subdir.mkdir(parents=True)

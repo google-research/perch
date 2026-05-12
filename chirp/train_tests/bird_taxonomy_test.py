@@ -24,6 +24,7 @@ from chirp.data import tfds_features
 from chirp.data.bird_taxonomy import bird_taxonomy
 from etils import epath
 import numpy as np
+import soundfile
 import tensorflow_datasets as tfds
 
 from absl.testing import absltest
@@ -76,15 +77,9 @@ class BirdTaxonomyTest(tfds.testing.DatasetBuilderTestCase):
     subdir = epath.Path(cls.tempdir) / 'audio-data' / 'comter'
     subdir.mkdir(parents=True)
     for i in range(4):
-      tfds.core.lazy_imports.pydub.AudioSegment(
-          b'\0\1' * int(10_000 * 10),
-          metadata={
-              'channels': 1,
-              'sample_width': 2,
-              'frame_rate': 10_000,
-              'frame_width': 2,
-          },
-      ).export(subdir / f'XC{i:05d}.mp3', format='mp3')
+      audio = np.zeros(10_000 * 10, dtype=np.float32)
+      audio[0] = 1.0
+      soundfile.write(subdir / f'XC{i:05d}.wav', audio, 10_000)
 
   @classmethod
   def tearDownClass(cls):

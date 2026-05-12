@@ -22,8 +22,10 @@ from unittest import mock
 from chirp.data.soundscapes import soundscapes
 from chirp.data.soundscapes import soundscapes_lib
 from etils import epath
+import numpy as np
 import pandas as pd
 from perch_hoplite.taxonomy import namespace
+import soundfile
 import tensorflow_datasets as tfds
 
 from absl.testing import absltest
@@ -93,18 +95,11 @@ class SoundscapeTest(tfds.testing.DatasetBuilderTestCase):
     cls.url_patcher.start()
     subdir = epath.Path(cls.tempdir) / 'caples' / 'audio'
     subdir.mkdir(parents=True)
-    tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
-        subdir / 'soundscape_1.flac', format='flac'
-    )
-    tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
-        subdir / 'soundscape_2.wav', format='wav'
-    )
-    tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
-        subdir / 'soundscape_3.wav', format='wav'
-    )
-    tfds.core.lazy_imports.pydub.AudioSegment.silent(duration=100000).export(
-        subdir / 'soundscape_4.wav', format='wav'
-    )
+    audio = np.random.uniform(-1, 1, 200_000).astype(np.float32)
+    soundfile.write(subdir / 'soundscape_1.flac', audio, 32000)
+    soundfile.write(subdir / 'soundscape_2.wav', audio, 32000)
+    soundfile.write(subdir / 'soundscape_3.wav', audio, 32000)
+    soundfile.write(subdir / 'soundscape_4.wav', audio, 32000)
 
   @classmethod
   def tearDownClass(cls):
