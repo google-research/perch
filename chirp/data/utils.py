@@ -95,7 +95,7 @@ def get_dataset(
     datasets.append(pipeline(ds, dataset_info))
 
   if len(datasets) > 1:
-    ds = tf.data.Dataset.sample_from_datasets(datasets)
+    ds = tf.data.Dataset.sample_from_datasets(datasets)  # pyrefly: ignore[bad-argument-type]
   else:
     ds = datasets[0]
 
@@ -190,7 +190,7 @@ def get_multi_dataset(
     used).
   """
   if tfds_data_dirs is None:
-    tfds_data_dirs = [_DEFAULT_TFDS_DATADIR] * len(dataset_directories)
+    tfds_data_dirs = [_DEFAULT_TFDS_DATADIR] * len(dataset_directories)  # pyrefly: ignore[bad-assignment]
   num_datasets = len(dataset_directories)
   if len(pipelines) != num_datasets:
     raise ValueError('Length of pipelines does not match number of datasets.')
@@ -205,7 +205,7 @@ def get_multi_dataset(
   base_datasets = []
   dataset_infos = []
   for dataset_dir, ds_pipeline, tfds_data_dir in zip(
-      dataset_directories, pipelines, tfds_data_dirs
+      dataset_directories, pipelines, tfds_data_dirs  # pyrefly: ignore[bad-argument-type]
   ):
     ds, dataset_info = get_base_dataset(
         split, is_train, dataset_dir, tfds_data_dir
@@ -231,7 +231,7 @@ def get_multi_dataset(
 
   # Create a new dataset object that interleaves the multiple datasets
   unified_ds = tf.data.Dataset.sample_from_datasets(
-      merge_datasets, weights=weights
+      merge_datasets, weights=weights  # pyrefly: ignore[bad-argument-type]
   )
 
   # Batch wants ds_info as an arg, but doesnt use it, so pass the last ds_info

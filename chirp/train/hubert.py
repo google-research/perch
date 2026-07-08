@@ -303,22 +303,22 @@ def get_train_metrics(
     block_name = "late_fs_{}".format(block_ind) if block_ind >= 0 else "earlyfs"
     metrics_.update({
         "n_per_cluster_{}".format(block_name): clu_metrics.Average.from_fun(
-            functools.partial(
+            functools.partial(  # pyrefly: ignore[bad-argument-type]
                 cluster_targets_metrics, key="n_per_cluster_{}".format(i)
             )
         ),
         "max_per_cluster_{}".format(block_name): clu_metrics.Average.from_fun(
-            functools.partial(
+            functools.partial(  # pyrefly: ignore[bad-argument-type]
                 cluster_targets_metrics, key="max_per_cluster_{}".format(i)
             )
         ),
         "min_per_cluster_{}".format(block_name): clu_metrics.Average.from_fun(
-            functools.partial(
+            functools.partial(  # pyrefly: ignore[bad-argument-type]
                 cluster_targets_metrics, key="min_per_cluster_{}".format(i)
             )
         ),
         "h_diversity_{}".format(block_name): clu_metrics.Average.from_fun(
-            functools.partial(
+            functools.partial(  # pyrefly: ignore[bad-argument-type]
                 cluster_targets_metrics, key="h_diversity_{}".format(i)
             )
         ),
@@ -333,7 +333,7 @@ def get_train_metrics(
               functools.partial(keyed_cross_entropy, key=key, readout_index=i)
           ),
           f"{key}_{block_ind}_map": clu_metrics.Average.from_fun(
-              functools.partial(keyed_map, key=key, readout_index=i)
+              functools.partial(keyed_map, key=key, readout_index=i)  # pyrefly: ignore[bad-argument-type]
           ),
       })
 
@@ -419,7 +419,7 @@ def initialize_model(
         == quantizers.QuantizationStrategy.PRODUCT_QUANTIZATION.value
     ):
       base_quantizers = [
-          quantizer_class(**kwargs)
+          quantizer_class(**kwargs)  # pyrefly: ignore[bad-argument-type]
           for _ in range(quantizer_config.num_sections)
       ]
       quantizer = quantizers.ProductQuantizer(base_quantizers=base_quantizers)
@@ -428,7 +428,7 @@ def initialize_model(
         == quantizers.QuantizationStrategy.RESIDUAL_QUANTIZATION.value
     ):
       base_quantizers = [
-          quantizer_class(**kwargs)
+          quantizer_class(**kwargs)  # pyrefly: ignore[bad-argument-type]
           for _ in range(quantizer_config.num_sections)
       ]
       quantizer = quantizers.ResidualQuantizer(quantizers=base_quantizers)
@@ -472,7 +472,7 @@ def initialize_model(
         (512, 2, 2),
         (512, 2, 2),
     ])
-    early_fs = early_fs_class(
+    early_fs = early_fs_class(  # pyrefly: ignore[not-callable]
         dropout_prob=early_fs_config.dropout_prob,
         activation=early_fs_config.activation,
         conv_layer_tuples=conv_layer_tuples,
@@ -548,19 +548,19 @@ def initialize_model(
               (nf, 2, 1),
               (nf, 2, 1),
           ])
-      early_fs = early_fs_class(
+      early_fs = early_fs_class(  # pyrefly: ignore[not-callable]
           dropout_prob=early_fs_config.dropout_prob,
           activation=early_fs_config.activation,
           conv_layer_tuples=conv_layer_tuples,
       )
 
   # Now set up the HuBERT model.
-  model = hubert.HuBERTModel(
+  model = hubert.HuBERTModel(  # pyrefly: ignore[missing-argument]
       num_classes=num_classes,
       quantizer=quantizer_list,
-      frontend=frontend,
+      frontend=frontend,  # pyrefly: ignore[bad-argument-type]
       early_feature_extractor=early_fs,
-      **model_config,
+      **model_config,  # pyrefly: ignore[bad-unpacking]
   )
   variables = model.init(
       model_init_key,
@@ -580,7 +580,7 @@ def initialize_model(
     # peak_scaling factor is such that if we multiply the initial learning rate
     # with it, we get the intended peak learning rate.
     peak_scaling_factor = learning_rate / start_learning_rate
-    learning_rate = optax.piecewise_interpolate_schedule(
+    learning_rate = optax.piecewise_interpolate_schedule(  # pyrefly: ignore[bad-assignment]
         "linear",
         init_value=start_learning_rate,
         boundaries_and_scales={
@@ -590,7 +590,7 @@ def initialize_model(
     )
   elif learning_rate_schedule is LearningRateSchedule.COSINE_DECAY:
     # only `start_learning_rate` and `num_train_steps` are used in this case.
-    learning_rate = optax.cosine_decay_schedule(
+    learning_rate = optax.cosine_decay_schedule(  # pyrefly: ignore[bad-assignment]
         init_value=start_learning_rate,
         decay_steps=num_train_steps,
     )
@@ -604,7 +604,7 @@ def initialize_model(
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
   train_state = train_utils.TrainState(
-      step=0, params=params, opt_state=opt_state, model_state=model_state
+      step=0, params=params, opt_state=opt_state, model_state=model_state  # pyrefly: ignore[bad-argument-type]
   )
 
   did_reload = False
@@ -700,7 +700,7 @@ def initialize_model(
       ):
         logging.info("Ignoring HuBERT parameters for key %s.", k)
         continue
-      train_state.params[k] = (
+      train_state.params[k] = (  # pyrefly: ignore[unsupported-operation]
           v  # pytype: disable=unsupported-operands  # py310-upgrade
       )
       logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
@@ -818,7 +818,7 @@ def train(
           **output.logits(model_outputs),
       )
       loss = quantizer_loss_ if quantizer_pretrain else final_loss_
-      return jnp.mean(loss), (train_metrics, model_state)
+      return jnp.mean(loss), (train_metrics, model_state)  # pyrefly: ignore[bad-argument-type]
 
     # model_state has only the batch_norm stats which only appear in the
     # late feature extractor (conformer).
@@ -834,7 +834,7 @@ def train(
 
     train_state = train_utils.TrainState(
         step=train_state.step + 1,
-        params=params,
+        params=params,  # pyrefly: ignore[bad-argument-type]
         opt_state=opt_state,
         model_state=model_state,
     )
@@ -940,7 +940,7 @@ def evaluate(
       # Both model outputs and state are returned if `mutable` was given.
       model_outputs = model_outputs[0]
     loss = final_loss(
-        model_outputs,
+        model_outputs,  # pyrefly: ignore[bad-argument-type]
         taxonomy_loss_weight=taxonomy_loss_weight,
         alpha=model_bundle.model.alpha,
         quant_loss_mult=quant_loss_mult,
@@ -951,11 +951,11 @@ def evaluate(
     return valid_metrics_collection.gather_from_model_output(
         outputs=model_outputs,
         loss=loss,
-        quantizer_loss=quantizer_loss(model_outputs, quant_loss_mult),
+        quantizer_loss=quantizer_loss(model_outputs, quant_loss_mult),  # pyrefly: ignore[bad-argument-type]
         learning_rate=learning_rate_schedule(train_state.step),
         taxonomy_loss_weight=taxonomy_loss_weight,
         # TODO(bartvm): This only calculates CmAP over the first readout layer
-        label_logits=model_outputs.label[0],
+        label_logits=model_outputs.label[0],  # pyrefly: ignore[missing-attribute]
         **batch,
     )
 
@@ -974,7 +974,7 @@ def evaluate(
         batch = jax.tree.map(np.asarray, batch)
         mask_key = None
         if mask_at_eval:
-          mask_key, key = random.split(key)
+          mask_key, key = random.split(key)  # pyrefly: ignore[bad-argument-type]
           mask_key = random.split(mask_key, num=jax.local_device_count())
         new_valid_metrics = get_metrics(
             batch, flax_utils.replicate(train_state), mask_key
@@ -1084,7 +1084,7 @@ def run(
         model_bundle,
         flax_utils.replicate(train_state),
         learning_rate_schedule,
-        valid_dataset,
+        valid_dataset,  # pyrefly: ignore[bad-argument-type]
         workdir=workdir,
         train_mode_at_eval=config.eval_config.train_mode_at_eval,
         mask_at_eval=config.eval_config.mask_at_eval,
@@ -1098,7 +1098,7 @@ def run(
         model_bundle,
         train_state,
         learning_rate_schedule,
-        valid_dataset,
+        valid_dataset,  # pyrefly: ignore[bad-argument-type]
         workdir=workdir,
         name=name,
         **config.eval_config,

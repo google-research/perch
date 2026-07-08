@@ -74,7 +74,7 @@ def load_audio_file(
   filepath = epath.Path(filepath)
   if target_sample_rate <= 0:
     # Use the native sample rate.
-    target_sample_rate = None
+    target_sample_rate = None  # pyrefly: ignore[bad-assignment]
   extension = os.path.splitext(filepath)[-1].lower()
   if extension in ('wav', 'flac', 'ogg', 'opus'):
     with filepath.open('rb') as f:
@@ -643,7 +643,7 @@ def slice_peaked_audio(
   target_length = int(sample_rate_hz * interval_length_s)
 
   # Wrap audio to the target length if it's shorter than that.
-  audio = pad_to_length_if_shorter(audio, target_length)
+  audio = pad_to_length_if_shorter(audio, target_length)  # pyrefly: ignore[bad-argument-type]
 
   peaks = find_peaks_from_audio(audio, sample_rate_hz, max_intervals)
   left_shift = target_length // 2

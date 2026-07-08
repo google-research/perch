@@ -135,16 +135,16 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
       SoundscapesConfig(
-          name='caples',  # TODO(mboudiaf) Try to interface caples metadata.
+          name='caples',  # TODO(mboudiaf) Try to interface caples metadata.  # pyrefly: ignore[unexpected-keyword]
           class_list_name='caples',
           audio_glob='caples/audio/*',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=annotations_fns.load_caples_annotations,
-          description='Annotated Caples recordings from 2018/2019.',
+          description='Annotated Caples recordings from 2018/2019.',  # pyrefly: ignore[unexpected-keyword]
       ),
       SoundscapesConfig(
-          name='caples_full_length',
+          name='caples_full_length',  # pyrefly: ignore[unexpected-keyword]
           class_list_name='caples',
           audio_glob='caples/audio/*',
           annotation_filename='caples.csv',
@@ -155,154 +155,154 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           # "unknown" annotations before the first annotation and after the last
           # annotation.
           full_length_unknown_guard=True,
-          description='Full-length annotated Caples recordings from 2018/2019.',
+          description='Full-length annotated Caples recordings from 2018/2019.',  # pyrefly: ignore[unexpected-keyword]
       ),
       SoundscapesConfig(
-          name='hawaii',
+          name='hawaii',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='hawaii/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Fully annotated Hawaii recordings. '
               'https://zenodo.org/record/7078499'
           ),
           class_list_name='hawaii',
       ),
       SoundscapesConfig(
-          name='hawaii_full_length',
+          name='hawaii_full_length',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='hawaii/audio/*.flac',
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Full-length, fully annotated Hawaii recordings. '
               'https://zenodo.org/record/7078499'
           ),
           class_list_name='hawaii',
       ),
       SoundscapesConfig(
-          name='ssw',
+          name='ssw',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='ssw/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Annotated Sapsucker Woods recordings. '
               'https://zenodo.org/record/7018484'
           ),
           class_list_name='ssw',
       ),
       SoundscapesConfig(
-          name='ssw_full_length',
+          name='ssw_full_length',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='ssw/audio/*.flac',
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Full-length, annotated Sapsucker Woods recordings. '
               'https://zenodo.org/record/7018484'
           ),
           class_list_name='ssw',
       ),
       SoundscapesConfig(
-          name='coffee_farms',
+          name='coffee_farms',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='coffee_farms/audio/*.flac',
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Colombian and Costa Rican coffee farm recordings. '
               'https://zenodo.org/record/7525349'
           ),
           class_list_name='coffee_farms',
       ),
       SoundscapesConfig(
-          name='coffee_farms_full_length',
+          name='coffee_farms_full_length',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='coffee_farms/audio/*.flac',
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Full-length Colombian and Costa Rican coffee farm recordings. '
               'https://zenodo.org/record/7525349'
           ),
           class_list_name='coffee_farms',
       ),
       SoundscapesConfig(
-          name='high_sierras',
+          name='high_sierras',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='high_sierras/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'High Sierras recordings. https://zenodo.org/record/7525805'
           ),
           class_list_name='high_sierras',
       ),
       SoundscapesConfig(
-          name='high_sierras_full_length',
+          name='high_sierras_full_length',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='high_sierras/audio/*.flac',
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Full-length High Sierras recordings. '
               'https://zenodo.org/record/7525805'
           ),
           class_list_name='high_sierras',
       ),
       SoundscapesConfig(
-          name='sierras_kahl',
+          name='sierras_kahl',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='sierras_kahl/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Sierra Nevada recordings. https://zenodo.org/record/7050014'
           ),
           class_list_name='sierras_kahl',
       ),
       SoundscapesConfig(
-          name='sierras_kahl_full_length',
+          name='sierras_kahl_full_length',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='sierras_kahl/audio/*.flac',
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Full-length Sierra Nevada recordings. '
               'https://zenodo.org/record/7050014'
           ),
           class_list_name='sierras_kahl',
       ),
       SoundscapesConfig(
-          name='powdermill',
+          name='powdermill',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='powdermill/*/*.wav',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=annotations_fns.load_powdermill_annotations,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'New England recordings from Powdermill Nature Reserve, '
               'Rector, PA. https://doi.org/10.1002/ecy.3329'
           ),
           class_list_name='powdermill',
       ),
       SoundscapesConfig(
-          name='powdermill_full_length',
+          name='powdermill_full_length',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='powdermill/*/*.wav',
           annotation_filename='powdermill.csv',
           annotation_load_fn=annotations_fns.load_powdermill_annotations,
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Full-length New England recordings from Powdermill '
               'Nature Reserve, Rector, PA. '
               'https://doi.org/10.1002/ecy.3329'
@@ -310,50 +310,50 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           class_list_name='powdermill',
       ),
       SoundscapesConfig(
-          name='peru',
+          name='peru',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='peru/audio/*.flac',
           interval_length_s=5.0,
           localization_fn=audio_utils.slice_peaked_audio,
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Soundscapes from the SW Amazon basin. '
               'https://zenodo.org/record/7079124#.YypL8-xufhM'
           ),
           class_list_name='peru',
       ),
       SoundscapesConfig(
-          name='peru_full_length',
+          name='peru_full_length',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='peru/audio/*.flac',
           annotation_load_fn=annotations_fns.load_cornell_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Full-length soundscapes from the SW Amazon basin. '
               'https://zenodo.org/record/7079124#.YypL8-xufhM'
           ),
           class_list_name='peru',
       ),
       SoundscapesConfig(
-          name='weldy_calltype_full_length',
+          name='weldy_calltype_full_length',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='weldy_calltype/annotated_recordings/*.wav',
           annotation_load_fn=annotations_fns.load_weldy_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Full-length annotated bird call types from the PNW. '
               'https://zenodo.org/record/8047850'
           ),
           class_list_name='weldy_calltype',
       ),
       SoundscapesConfig(
-          name='anuraset_full_length',
+          name='anuraset_full_length',  # pyrefly: ignore[unexpected-keyword]
           audio_glob='anuraset/raw_data/*/*.wav',
           annotation_load_fn=annotations_fns.load_anuraset_annotations,
           annotation_filename='annotations.csv',
           keep_unknown_annotation=True,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Full-length annotated frog vocalizations. '
               'https://zenodo.org/record/8056090'
           ),
@@ -440,7 +440,7 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           self.builder_config.annotation_filename
           or f'{self.builder_config.class_list_name}.csv'
       )
-      annotations_path = dl_manager.download_and_extract({
+      annotations_path = dl_manager.download_and_extract({  # pyrefly: ignore[bad-index]
           'segments': (
               self.builder_config.audio_dir
               / self.builder_config.class_list_name

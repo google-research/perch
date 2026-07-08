@@ -117,14 +117,14 @@ class WavDirectoryBuilder(tfds.core.GeneratorBasedBuilder):
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
       WavDirectoryBuilderConfig(
-          name='unfiltered',
-          description=(
+          name='unfiltered',  # pyrefly: ignore[unexpected-keyword]
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Context windows covering the entire dataset with no overlap.'
           ),
       ),
       WavDirectoryBuilderConfig(
-          name='slice_peaked',
-          description=(
+          name='slice_peaked',  # pyrefly: ignore[unexpected-keyword]
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Context windows filtered to five peaks per original file.'
           ),
           max_peaks=5,

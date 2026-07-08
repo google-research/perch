@@ -851,8 +851,8 @@ def write_results_to_csv(
     write_filename: A specified name for the eval results file.
   """
 
-  write_results_path = os.path.join(write_results_dir, write_filename)
-  results_df = pd.DataFrame(metric_results[1:], columns=metric_results[0])
+  write_results_path = os.path.join(write_results_dir, write_filename)  # pyrefly: ignore[no-matching-overload]
+  results_df = pd.DataFrame(metric_results[1:], columns=metric_results[0])  # pyrefly: ignore[bad-argument-type]
 
   # Check if the specified directory exists; if not, create & write to csv.
   if write_results_dir.find('cns') == 0:

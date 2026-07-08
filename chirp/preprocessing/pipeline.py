@@ -576,7 +576,7 @@ class MixAudio(DatasetPreprocessOp):
     if not (self.mixin_prob is None) ^ (self.target_dist is None):
       raise ValueError('either mixin_prob or target_dist must be set')
     if self.target_dist is None:
-      self.target_dist = (1 - self.mixin_prob, self.mixin_prob / 2)
+      self.target_dist = (1 - self.mixin_prob, self.mixin_prob / 2)  # pyrefly: ignore[unsupported-operation]
 
   def __call__(
       self, dataset: tf.data.Dataset, dataset_info: tfds.core.DatasetInfo
@@ -590,7 +590,7 @@ class MixAudio(DatasetPreprocessOp):
     del features
     target_dist = tf.constant(self.target_dist, dtype=tf.float32)
     sample_dist = target_dist * (
-        tf.range(len(self.target_dist), dtype=tf.float32) + 1.0
+        tf.range(len(self.target_dist), dtype=tf.float32) + 1.0  # pyrefly: ignore[bad-argument-type]
     )
     return tf.squeeze(tf.random.categorical(tf.math.log([sample_dist]), 1))
 
@@ -605,7 +605,7 @@ class MixAudio(DatasetPreprocessOp):
             lambda i=i: dataset.batch(i + 1, drop_remainder=True).map(
                 self._mix_audio
             )
-            for i in range(len(self.target_dist))
+            for i in range(len(self.target_dist))  # pyrefly: ignore[bad-argument-type]
         ],
     )
 
@@ -628,8 +628,8 @@ class MixAudio(DatasetPreprocessOp):
     features[self.name] = tf.reduce_sum(source_audio, axis=0)
 
     # To enable batching we pad with zeros
-    if source_audio.shape[0] < len(self.target_dist):
-      p = len(self.target_dist) - source_audio.shape[0]
+    if source_audio.shape[0] < len(self.target_dist):  # pyrefly: ignore[bad-argument-type]
+      p = len(self.target_dist) - source_audio.shape[0]  # pyrefly: ignore[bad-argument-type]
       source_audio = self._pad_along_axis(source_audio, [0, p], axis=0)
       if self.axis:
         source_audio = tf.experimental.numpy.swapaxes(
@@ -692,10 +692,10 @@ class MergeBackgroundLabels(FeaturesPreprocessOp):
   ) -> Features:
     features = features.copy()
     features['label'] = tf.clip_by_value(
-        features['label'] + features['bg_labels'], 0, 1
+        features['label'] + features['bg_labels'], 0, 1  # pyrefly: ignore[unsupported-operation]
     )
     features['label_mask'] = tf.clip_by_value(
-        features['label_mask'] + features['bg_labels_mask'], 0, 1
+        features['label_mask'] + features['bg_labels_mask'], 0, 1  # pyrefly: ignore[unsupported-operation]
     )
     return features
 

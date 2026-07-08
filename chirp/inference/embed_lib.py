@@ -127,7 +127,7 @@ def get_existing_source_ids(
   if not output_dir.exists:
     return existing_source_ids
   filenames = [fn for fn in output_dir.glob(file_pattern)]
-  dataset = tf.data.TFRecordDataset(filenames)
+  dataset = tf.data.TFRecordDataset(filenames)  # pyrefly: ignore[bad-instantiation]
   parser = tf_examples.get_example_parser(tensor_dtype=tensor_dtype)
   dataset = dataset.map(parser)
   for e in dataset.as_numpy_iterator():
@@ -358,13 +358,13 @@ class EmbedFn(beam.DoFn):
         self._log_exception(source_info, inst, 'audio_runtime_error')
       return
 
-    if not self.validate_audio(source_info, audio):
+    if not self.validate_audio(source_info, audio):  # pyrefly: ignore[bad-argument-type]
       return
 
     logging.info(
         '...creating embeddings (%s / %d)', file_id, timestamp_offset_s
     )
-    example = self.audio_to_example(file_id, timestamp_offset_s, audio)
+    example = self.audio_to_example(file_id, timestamp_offset_s, audio)  # pyrefly: ignore[bad-argument-type]
     beam.metrics.Metrics.counter('beaminference', 'examples_processed').inc()
     return [example]
 

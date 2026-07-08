@@ -93,9 +93,9 @@ def initialize_model(
   # Load model
   model_init_key, key = random.split(key)
   class_lists = class_utils.get_class_lists(target_class_list, True)
-  model = separation_model.SeparationModel(
+  model = separation_model.SeparationModel(  # pyrefly: ignore[missing-argument]
       num_classes={k: len(v.classes) for (k, v) in class_lists.items()},
-      **model_config,
+      **model_config,  # pyrefly: ignore[bad-unpacking]
   )
   variables = model.init(
       model_init_key, jnp.zeros((1,) + input_shape), train=False
@@ -109,7 +109,7 @@ def initialize_model(
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
   train_state = train_utils.TrainState(
-      step=0, params=params, opt_state=opt_state, model_state=model_state
+      step=0, params=params, opt_state=opt_state, model_state=model_state  # pyrefly: ignore[bad-argument-type]
   )
   train_state = ckpt.restore_or_initialize(train_state)
   return (
@@ -188,7 +188,7 @@ def _audio_and_spectrogram_summaries(
   mixes = np.reshape(
       batch['source_audio'], (-1, *batch['source_audio'].shape[2:])
   )
-  separated_audio = np.reshape(
+  separated_audio = np.reshape(  # pyrefly: ignore[bad-assignment]
       separated_audio, (-1, *separated_audio.shape[-2:])
   )
 
@@ -326,7 +326,7 @@ def train(
     params = optax.apply_updates(train_state.params, updates)
     train_state = train_utils.TrainState(
         step=train_state.step + 1,
-        params=params,
+        params=params,  # pyrefly: ignore[bad-argument-type]
         opt_state=opt_state,
         model_state=model_state,
     )
@@ -377,7 +377,7 @@ def evaluate(
     model_outputs = model_bundle.model.apply(
         variables, batch['audio'], train=False
     )
-    model_outputs = model_outputs.time_reduce_logits('MIDPOINT')
+    model_outputs = model_outputs.time_reduce_logits('MIDPOINT')  # pyrefly: ignore[missing-attribute]
 
     estimate, _ = metrics.least_squares_mixit(
         reference=batch['source_audio'], estimate=model_outputs.separated_audio
@@ -476,9 +476,9 @@ def export_tf_model(
           variables, flat_inputs, train=False
       )
       return (
-          model_outputs.separated_audio,
-          model_outputs.label,
-          model_outputs.embedding,
+          model_outputs.separated_audio,  # pyrefly: ignore[missing-attribute]
+          model_outputs.label,  # pyrefly: ignore[missing-attribute]
+          model_outputs.embedding,  # pyrefly: ignore[missing-attribute]
       )
 
     logging.info('Creating converted_model...')
@@ -544,7 +544,7 @@ def run(
     evaluate(
         model_bundle,
         train_state,
-        valid_dataset,
+        valid_dataset,  # pyrefly: ignore[bad-argument-type]
         loss_fn=config.loss_fn,
         workdir=workdir,
         **config.eval_config,

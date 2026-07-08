@@ -115,8 +115,8 @@ def train_from_locs(
   # TODO(tomdenton): Implement recall@precision metric.
   recall = -1.0
 
-  cmap_value = metrics.cmap(test_logits, test_labels_hot)['macro']
-  auc_roc = metrics.roc_auc(test_logits, test_labels_hot)
+  cmap_value = metrics.cmap(test_logits, test_labels_hot)['macro']  # pyrefly: ignore[bad-argument-type]
+  auc_roc = metrics.roc_auc(test_logits, test_labels_hot)  # pyrefly: ignore[bad-argument-type]
   return ClassifierMetrics(
       top1acc,
       auc_roc['macro'],

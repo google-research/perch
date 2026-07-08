@@ -122,7 +122,7 @@ def create_embeddings_dataset(
   embeddings_files = [fn.as_posix() for fn in embeddings_dir.glob(file_glob)]
   if shuffle_files:
     np.random.shuffle(embeddings_files)
-  ds = tf.data.TFRecordDataset(
+  ds = tf.data.TFRecordDataset(  # pyrefly: ignore[bad-instantiation]
       embeddings_files, num_parallel_reads=tf.data.AUTOTUNE
   )
 

@@ -82,7 +82,7 @@ def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
       fsu.QuerySequence(
           mask_query=fsu.Query(
               fsu.MaskOp.IN,
-              {"key": "species_code", "values": ar_species},
+              {"key": "species_code", "values": ar_species},  # pyrefly: ignore[bad-argument-type]
           ),
           queries=[
               # Recall that recordings that contain downstream_species in
@@ -108,7 +108,7 @@ def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
               ),
               fsu.Query(
                   fsu.TransformOp.SAMPLE,
-                  {
+                  {  # pyrefly: ignore[bad-argument-type]
                       "target_fg": {k: 10 for k in ar_species},
                       "prng_seed": AR_SAMPLING_PRNG_SEED,
                   },
@@ -118,7 +118,7 @@ def get_upstream_data_query(ar_only: bool = False) -> fsu.QuerySequence:
       # Scrub annotations from downstream species
       fsu.Query(
           op=fsu.TransformOp.SCRUB,
-          kwargs={
+          kwargs={  # pyrefly: ignore[bad-argument-type]
               "key": "bg_species_codes",
               "values": downstream_species + ar_species,
           },
@@ -173,21 +173,21 @@ def get_downstream_data_query() -> fsu.QuerySequence:
   # intersect with the downstream species.
   ar_species = list(db.class_lists[AR_CLASS_LIST].classes)
   upstream_query = get_upstream_data_query()
-  return fsu.QuerySequence([
+  return fsu.QuerySequence([  # pyrefly: ignore[bad-argument-type]
       fsu.QueryComplement(upstream_query, "xeno_canto_id"),
       # Annotations of species that are not part of the downstream evaluation
       # are scrubbed if they appear in the background or foreground.
       # Therefore, we're only left with relevant species annotated.
       fsu.Query(
           op=fsu.TransformOp.SCRUB_ALL_BUT,
-          kwargs={
+          kwargs={  # pyrefly: ignore[bad-argument-type]
               "key": "bg_species_codes",
               "values": downstream_species + ar_species,
           },
       ),
       fsu.Query(
           op=fsu.TransformOp.SCRUB_ALL_BUT,
-          kwargs={
+          kwargs={  # pyrefly: ignore[bad-argument-type]
               "key": "species_code",
               "values": downstream_species + ar_species,
           },
@@ -256,7 +256,7 @@ def get_class_representatives_data_query() -> fsu.QuerySequence:
       # This scrubs all background labels except those with values in `species`.
       fsu.Query(
           op=fsu.TransformOp.SCRUB_ALL_BUT,
-          kwargs={
+          kwargs={  # pyrefly: ignore[bad-argument-type]
               "key": "bg_species_codes",
               "values": species,
           },

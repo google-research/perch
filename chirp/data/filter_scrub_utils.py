@@ -139,12 +139,12 @@ def apply_complement(
   """
 
   updated_df = APPLY_FN[type(query_complement.query)](
-      df, query_complement.query
+      df, query_complement.query  # pyrefly: ignore[bad-argument-type]
   )
   # If the query used a MaskOp (yields a boolean Series), we return the
   # complement of this boolean Series.
   if isinstance(query_complement.query, MaskOp):
-    return ~updated_df
+    return ~updated_df  # pyrefly: ignore[bad-return]
   # For other transformations, we use the unique_key to return the complement.
   else:
     key = query_complement.unique_key
@@ -172,7 +172,7 @@ def apply_query(
   Returns:
     The new version of the dataFrame (or Series) after applying the query.
   """
-  return OPS[query.op](df, **query.kwargs)
+  return OPS[query.op](df, **query.kwargs)  # pyrefly: ignore[bad-argument-type]
 
 
 def apply_sequence(
@@ -192,17 +192,17 @@ def apply_sequence(
   """
   if query_sequence.mask_query is not None:
     mask = APPLY_FN[type(query_sequence.mask_query)](
-        df, query_sequence.mask_query
+        df, query_sequence.mask_query  # pyrefly: ignore[bad-argument-type]
     )
     assert mask.dtype == bool
     modifiable_df = df[mask]
     frozen_df = df[~mask]
     for query in query_sequence.queries:
-      modifiable_df = APPLY_FN[type(query)](modifiable_df, query)
+      modifiable_df = APPLY_FN[type(query)](modifiable_df, query)  # pyrefly: ignore[bad-argument-type]
     return pd.concat([frozen_df, modifiable_df])
   else:
     for query in query_sequence.queries:
-      df = APPLY_FN[type(query)](df, query)
+      df = APPLY_FN[type(query)](df, query)  # pyrefly: ignore[bad-argument-type, bad-assignment]
     return df
 
 
@@ -223,7 +223,7 @@ def apply_parallel(
   """
   all_dfs = []
   for query in query_parallel.queries:
-    all_dfs.append(APPLY_FN[type(query)](df, query))
+    all_dfs.append(APPLY_FN[type(query)](df, query))  # pyrefly: ignore[bad-argument-type]
 
   final_df = MERGE_FN[query_parallel.merge_strategy](all_dfs)
   return final_df
@@ -404,7 +404,7 @@ def filter_df(
     The filtered dataframe
   """
   mask_query = Query(op=mask_op, kwargs=op_kwargs)
-  return df[APPLY_FN[type(mask_query)](df, mask_query)]
+  return df[APPLY_FN[type(mask_query)](df, mask_query)]  # pyrefly: ignore[bad-argument-type]
 
 
 def or_series(series_list: list[pd.Series]) -> pd.Series:
@@ -596,7 +596,7 @@ def scrub_all_but_class_list(key: str, class_list_name: str) -> Query:
   classes = list(db.class_lists[class_list_name].classes)
   return Query(
       op=TransformOp.SCRUB_ALL_BUT,
-      kwargs={
+      kwargs={  # pyrefly: ignore[bad-argument-type]
           'key': key,
           'values': classes,
       },

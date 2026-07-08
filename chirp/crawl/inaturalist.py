@@ -98,7 +98,7 @@ def download_audio(input_file, output_dir):
     return True
 
   for row in tqdm.tqdm(
-      csv.DictReader(tf.io.gfile.GFile(input_file)),
+      csv.DictReader(tf.io.gfile.GFile(input_file)),  # pyrefly: ignore[bad-argument-type]
       total=sum(1 for _ in tf.io.gfile.GFile(input_file)),
   ):
     for num_try in range(math.ceil(math.log2(60 * 60 * 24))):

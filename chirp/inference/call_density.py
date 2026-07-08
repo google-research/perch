@@ -112,7 +112,7 @@ class ValidationExample:
         timestamp_offset=result.timestamp_offset,
         score=result.score,
         is_pos=is_pos,
-        bin=result_bin,
+        bin=result_bin,  # pyrefly: ignore[bad-argument-type]
         bin_weight=bin_weights[result_bin],
     )
 
@@ -195,7 +195,7 @@ def load_validation_log(validation_log_filepath) -> list[ValidationExample]:
   fields = dataclasses.fields(ValidationExample)
   type_map = {f.name: f.type for f in fields}
   for _, row in df.iterrows():
-    row = {k: type_map[k](v) for k, v in row.to_dict().items()}
+    row = {k: type_map[k](v) for k, v in row.to_dict().items()}  # pyrefly: ignore[not-callable]
     data.append(ValidationExample(**row))
   return data
 

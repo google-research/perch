@@ -79,7 +79,7 @@ def sample_recordings(
 
 
 def hit_target(count_dic: dict[str, int]) -> bool:
-  return np.all(np.array(list(count_dic.values())) == 0)
+  return np.all(np.array(list(count_dic.values())) == 0)  # pyrefly: ignore[bad-return]
 
 
 def find_valid_subset(
@@ -121,7 +121,7 @@ def find_valid_subset(
 
   # Check that we haven't already been there. `chosen` needs to be sorted
   # for this to work. This is ensured when we construct `chosen`.
-  if seen[tuple(chosen)]:
+  if seen[tuple(chosen)]:  # pyrefly: ignore[bad-index]
     return None
 
   # Else we continue visiting. We focus on a single species at a time. We
@@ -133,7 +133,7 @@ def find_valid_subset(
       current_species = s
       break
   for index, recording in enumerate(candidates):
-    if valid_recording(recording, remaining_fg, remaining_bg, current_species):
+    if valid_recording(recording, remaining_fg, remaining_bg, current_species):  # pyrefly: ignore[unbound-name]
       updated_fg = copy.copy(remaining_fg)
       updated_bg = copy.copy(remaining_bg)
       if recording[0] in updated_fg:
@@ -154,7 +154,7 @@ def find_valid_subset(
       )
       if res is not None:
         return res
-  seen[tuple(chosen)] = True
+  seen[tuple(chosen)] = True  # pyrefly: ignore[unsupported-operation]
   return None
 
 

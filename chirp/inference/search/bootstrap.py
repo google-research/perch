@@ -86,7 +86,7 @@ class BootstrapState:
   ) -> Iterator[search.SearchResult]:
     """Create an iterator over TopKSearchResults which loads audio."""
     filepaths = [
-        self.source_map(r.filename, r.timestamp_offset)
+        self.source_map(r.filename, r.timestamp_offset)  # pyrefly: ignore[not-callable]
         for r in search_results.search_results
     ]
     offsets = [r.timestamp_offset for r in search_results.search_results]
@@ -95,7 +95,7 @@ class BootstrapState:
     if self.baw_auth_token:
       iterator = baw_utils.multi_load_baw_audio(
           filepaths=filepaths,
-          offsets=offsets,
+          offsets=offsets,  # pyrefly: ignore[bad-argument-type]
           auth_token=self.baw_auth_token,
           sample_rate=sample_rate,
           **kwargs,
@@ -109,7 +109,7 @@ class BootstrapState:
       iterator = audio_utils.multi_load_audio_window(
           filepaths=filepaths,
           offsets=offsets,
-          audio_loader=audio_loader,
+          audio_loader=audio_loader,  # pyrefly: ignore[bad-argument-type]
           **kwargs,
       )
     for result, audio in zip(search_results.search_results, iterator):

@@ -106,27 +106,27 @@ class Soundevents(tfds.core.GeneratorBasedBuilder):
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
       SoundeventsConfig(
-          name='fsd50k_full_length',
+          name='fsd50k_full_length',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=None,
           class_list_name='fsd50k',
-          description='full length audio sequences processed with ',
+          description='full length audio sequences processed with ',  # pyrefly: ignore[unexpected-keyword]
       ),
       SoundeventsConfig(
-          name='fsd50k_slice_peaked',
+          name='fsd50k_slice_peaked',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
           class_list_name='fsd50k',
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Chunked audio sequences processed with '
               'chirp.audio_utils.slice_peaked_audio.'
           ),
       ),
       SoundeventsConfig(
-          name='fsd50k_no_bird_slice_peaked',
+          name='fsd50k_no_bird_slice_peaked',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
           class_list_name='fsd50k',
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'FSD50K dataset excluding bird classes '
               'chunked audio sequences processed with '
               'chirp.audio_utils.slice_peaked_audio.'

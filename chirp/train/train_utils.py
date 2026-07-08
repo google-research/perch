@@ -103,7 +103,7 @@ class MultiAverage(clu_metrics.Average):
     )
 
   @classmethod
-  def empty(cls) -> clu_metrics.Metric:
+  def empty(cls) -> clu_metrics.Metric:  # pyrefly: ignore[bad-override]
     # pytype: disable=attribute-error
     return cls(
         total=jnp.zeros(cls._n, jnp.float32), count=jnp.zeros(cls._n, jnp.int32)
@@ -111,7 +111,7 @@ class MultiAverage(clu_metrics.Average):
     # pytype: enable=attribute-error
 
   @classmethod
-  def from_model_output(
+  def from_model_output(  # pyrefly: ignore[bad-override]
       cls, values: jnp.ndarray, mask: jnp.ndarray | None = None, **_
   ) -> clu_metrics.Metric:
     if values.ndim == 0:
@@ -176,7 +176,7 @@ class CollectingMetrics(clu_metrics.Metric):
     )
 
     @flax.struct.dataclass
-    class FromFuns(clu_metrics.CollectingMetric.from_outputs(names)):
+    class FromFuns(clu_metrics.CollectingMetric.from_outputs(names)):  # pyrefly: ignore[invalid-inheritance]
       """Collecting metric which applies functions to collected values."""
 
       def compute(self):

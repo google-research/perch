@@ -62,7 +62,7 @@ def callable_config(
     A ConfigDict object containing the callable and its arguments. This
     dictionary can later be parsed by the `parse_config` function.
   """
-  kwargs = config_dict.ConfigDict(kwargs)
+  kwargs = config_dict.ConfigDict(kwargs)  # pyrefly: ignore[bad-assignment]
   for arg in args:
     kwargs.update(arg)
   return config_dict.ConfigDict({_CALLABLE: callable_, _KWARGS: kwargs})

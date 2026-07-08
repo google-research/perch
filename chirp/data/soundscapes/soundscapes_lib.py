@@ -110,7 +110,7 @@ def create_segments_df(
   if supervised:
     # Combine segments with additional metadata (e.g Country).
     segments = combine_annotations_with_metadata(
-        annotations_df, metadata_dir, metadata_fields, metadata_load_fn
+        annotations_df, metadata_dir, metadata_fields, metadata_load_fn  # pyrefly: ignore[bad-argument-type]
     )
     logging.info('starting with %d annotations...', len(segments))
     segments = add_annotated_urls(segments, all_audio_filepaths)

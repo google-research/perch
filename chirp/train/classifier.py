@@ -110,9 +110,9 @@ def initialize_model(
   num_classes = {
       md.key: len(md.class_list.classes) for md in output_head_metadatas
   }
-  model = taxonomy_model.TaxonomyModel(
+  model = taxonomy_model.TaxonomyModel(  # pyrefly: ignore[missing-argument]
       num_classes=num_classes,
-      **model_config,
+      **model_config,  # pyrefly: ignore[bad-unpacking]
   )
   # Ensure input_shape is a tuple for concatenation.
   input_shape = tuple(input_shape)
@@ -134,7 +134,7 @@ def initialize_model(
   # Load checkpoint
   ckpt = checkpoint.MultihostCheckpoint(workdir)
   train_state = train_utils.TrainState(
-      step=0, params=params, opt_state=opt_state, model_state=model_state
+      step=0, params=params, opt_state=opt_state, model_state=model_state  # pyrefly: ignore[bad-argument-type]
   )
   return (
       train_utils.ModelBundle(
@@ -221,7 +221,7 @@ def train(
     params = optax.apply_updates(train_state.params, updates)
     train_state = train_utils.TrainState(
         step=train_state.step + 1,
-        params=params,
+        params=params,  # pyrefly: ignore[bad-argument-type]
         opt_state=opt_state,
         model_state=model_state,
     )
@@ -274,9 +274,9 @@ def evaluate(
 ):
   """Run evaluation."""
   # The metrics are the same as for training, but with rank-based metrics added.
-  metrics_ = get_train_metrics(model_bundle.output_head_metadatas)
+  metrics_ = get_train_metrics(model_bundle.output_head_metadatas)  # pyrefly: ignore[bad-argument-type]
   valid_metrics = {}
-  for md in model_bundle.output_head_metadatas:
+  for md in model_bundle.output_head_metadatas:  # pyrefly: ignore[not-iterable]
     valid_metrics[f"{md.key}_cmap"] = (
         (f"{md.key}_logits", md.key),
         metrics.cmap,
@@ -298,8 +298,8 @@ def evaluate(
         variables, batch["audio"], train=False, **kwargs
     )
     losses = train_utils.output_head_loss(
-        outputs=model_outputs,
-        output_head_metadatas=model_bundle.output_head_metadatas,
+        outputs=model_outputs,  # pyrefly: ignore[bad-argument-type]
+        output_head_metadatas=model_bundle.output_head_metadatas,  # pyrefly: ignore[bad-argument-type]
         loss_fn=loss_fn,
         **batch,
     )
@@ -354,7 +354,7 @@ def evaluate(
           # the batch are found in `remainder_batch`).
           if even_batch["label"].shape[1] > 0:
             new_valid_metrics = get_metrics(even_batch, replicated_train_state)
-            valid_metrics = valid_metrics.merge(
+            valid_metrics = valid_metrics.merge(  # pyrefly: ignore[missing-attribute]
                 flax_utils.unreplicate(new_valid_metrics)
             )
           # It's also possible for `remainder_batch` to be empty if the batch
@@ -367,12 +367,12 @@ def evaluate(
                 # [jax.local_device_count(), ...].
                 jax.tree.map(lambda x: x[:1], replicated_train_state),
             )
-            valid_metrics = valid_metrics.merge(
+            valid_metrics = valid_metrics.merge(  # pyrefly: ignore[missing-attribute]
                 flax_utils.unreplicate(new_valid_metrics)
             )
         else:
           new_valid_metrics = get_metrics(batch, replicated_train_state)
-          valid_metrics = valid_metrics.merge(
+          valid_metrics = valid_metrics.merge(  # pyrefly: ignore[missing-attribute]
               flax_utils.unreplicate(new_valid_metrics)
           )
         if (
@@ -383,7 +383,7 @@ def evaluate(
 
       # Log validation loss
       train_utils.write_metrics(
-          writer, step, valid_metrics.compute(prefix=name)
+          writer, step, valid_metrics.compute(prefix=name)  # pyrefly: ignore[missing-attribute]
       )
     writer.flush()
 
@@ -406,7 +406,7 @@ def export_tf_model(
   """Export SavedModel and TFLite."""
   # Get model_ouput keys from output_head_metadatas and add the 'embedding' key
   if output_keys is None:
-    output_keys = set(md.key for md in model_bundle.output_head_metadatas)
+    output_keys = set(md.key for md in model_bundle.output_head_metadatas)  # pyrefly: ignore[bad-assignment, not-iterable]
     output_keys.add("embedding")  # Add 'embedding' if not already present
     output_keys.add("frontend")  # Add 'frontend' if not already present
   if export_dir is None:
@@ -422,7 +422,7 @@ def export_tf_model(
           variables, audio_batch, train=False
       )
       # Will use all keys in configs.init_config.output_head_metadatas
-      return {k: v for k, v in model_outputs.items() if k in output_keys}
+      return {k: v for k, v in model_outputs.items() if k in output_keys}  # pyrefly: ignore[missing-attribute]
 
     if polymorphic_batch:
       shape = (None,) + input_shape
@@ -432,7 +432,7 @@ def export_tf_model(
         infer_fn, variables, shape, enable_xla=enable_xla
     )
     class_lists = {
-        md.key: md.class_list for md in model_bundle.output_head_metadatas
+        md.key: md.class_list for md in model_bundle.output_head_metadatas  # pyrefly: ignore[not-iterable]
     }
     converted_model.export_converted_model(
         export_dir,
@@ -512,7 +512,7 @@ def run(
     evaluate(
         model_bundle,
         train_state,
-        valid_dataset,
+        valid_dataset,  # pyrefly: ignore[bad-argument-type]
         loss_fn=config.loss_fn,
         workdir=workdir,
         name=name,

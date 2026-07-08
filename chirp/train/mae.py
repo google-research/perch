@@ -51,14 +51,14 @@ def initialize_model(
   # Load model
   model_init_key, key = random.split(key)
   model = mae.MaskedAutoencoder(
-      encoder=mae.Encoder(), decoder=mae.Decoder(output_size=input_shape)
+      encoder=mae.Encoder(), decoder=mae.Decoder(output_size=input_shape)  # pyrefly: ignore[bad-argument-type]
   )
   variables = model.init(
       model_init_key, jnp.zeros((1,) + input_shape), train=False
   )
   model_state, params = variables.pop("params")
   # NOTE: https://github.com/deepmind/optax/issues/160
-  params = params.unfreeze()
+  params = params.unfreeze()  # pyrefly: ignore[missing-attribute]
 
   # Initialize optimizer and handle constraints
   optimizer = optax.adamw(
@@ -115,7 +115,7 @@ def initialize_finetune_model(
   )
   model_state, params = variables.pop("params")
   # NOTE: https://github.com/deepmind/optax/issues/160
-  params = params.unfreeze()
+  params = params.unfreeze()  # pyrefly: ignore[missing-attribute]
 
   # Load checkpoint
   mae_model_bundle, mae_train_state = initialize_model(
@@ -230,7 +230,7 @@ def train(
     params = optax.apply_updates(train_state.params, updates)
     train_state = train_utils.TrainState(
         step=train_state.step + 1,
-        params=params,
+        params=params,  # pyrefly: ignore[bad-argument-type]
         opt_state=opt_state,
         model_state=model_state,
     )
@@ -330,7 +330,7 @@ def run(
     classifier.evaluate(
         model_bundle,
         train_state,
-        valid_dataset,
+        valid_dataset,  # pyrefly: ignore[bad-argument-type]
         loss_fn=config.loss_fn,
         workdir=workdir,
         **config.eval_config,

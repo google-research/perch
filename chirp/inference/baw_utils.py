@@ -81,7 +81,7 @@ def load_baw_audio(
 
   if session is None:
     # Use requests.get instead of session.get if no session is provided.
-    session = requests
+    session = requests  # pyrefly: ignore[bad-assignment]
   audio_response = session.get(
       url=audio_url,
       headers={"Authorization": f"Token token={auth_token}"},
@@ -124,7 +124,7 @@ def multi_load_baw_audio(
   iterator = audio_utils.multi_load_audio_window(
       filepaths=filepaths,
       offsets=offsets,
-      audio_loader=baw_audio_loader,
+      audio_loader=baw_audio_loader,  # pyrefly: ignore[bad-argument-type]
       **kwargs,
   )
   try:

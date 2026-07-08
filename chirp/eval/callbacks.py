@@ -119,8 +119,8 @@ class TaxonomyModelCallback:
   )
 
   def __post_init__(self):
-    model_bundle, train_state = classifier.initialize_model(
-        workdir=self.workdir, **self.init_config
+    model_bundle, train_state = classifier.initialize_model(  # pyrefly: ignore[missing-argument]
+        workdir=self.workdir, **self.init_config  # pyrefly: ignore[bad-unpacking]
     )
     # All hosts should load the same checkpoint
     multihost_ckpt = cast(checkpoint.MultihostCheckpoint, model_bundle.ckpt)
@@ -129,7 +129,7 @@ class TaxonomyModelCallback:
     variables = {'params': train_state.params, **train_state.model_state}
 
     def fprop(inputs):
-      return model_bundle.model.apply(variables, inputs, train=False).embedding
+      return model_bundle.model.apply(variables, inputs, train=False).embedding  # pyrefly: ignore[missing-attribute]
 
     self.model_callback = pmap_with_remainder(fprop)
 
@@ -269,7 +269,7 @@ class EmbeddingModelCallback:
   def __post_init__(self):
     logging.info('Loading separation model...')
     model_class = model_configs.get_model_class(self.model_key)
-    self.loaded_model = model_class(**self.model_config)
+    self.loaded_model = model_class(**self.model_config)  # pyrefly: ignore[bad-unpacking, missing-argument]
     # Set the object's call method as the model_callback.
     self.model_callback = self.__call__
 
@@ -306,8 +306,8 @@ class HuBERTModelCallback:
   )
 
   def __post_init__(self):
-    model_bundle, train_state, _ = hubert.initialize_model(
-        workdir=self.workdir, num_train_steps=1, **self.init_config
+    model_bundle, train_state, _ = hubert.initialize_model(  # pyrefly: ignore[missing-argument]
+        workdir=self.workdir, num_train_steps=1, **self.init_config  # pyrefly: ignore[bad-unpacking]
     )
     train_state = model_bundle.ckpt.restore(train_state)
     variables = {'params': train_state.params, **train_state.model_state}
@@ -349,8 +349,8 @@ class SeparationModelCallback:
   )
 
   def __post_init__(self):
-    model_bundle, train_state = separator.initialize_model(
-        workdir=self.workdir, **self.init_config
+    model_bundle, train_state = separator.initialize_model(  # pyrefly: ignore[missing-argument]
+        workdir=self.workdir, **self.init_config  # pyrefly: ignore[bad-unpacking]
     )
     train_state = model_bundle.ckpt.restore_or_initialize(train_state)
     variables = {'params': train_state.params, **train_state.model_state}

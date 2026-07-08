@@ -100,10 +100,10 @@ def main(argv: Sequence[str]) -> None:
       _CONFIG.value, config_globals.get_globals()
   )
 
-  TARGETS[_TARGET.value](
-      _MODE.value,
+  TARGETS[_TARGET.value](  # pyrefly: ignore[bad-index]
+      _MODE.value,  # pyrefly: ignore[bad-argument-type]
       config,
-      _WORKDIR.value,
+      _WORKDIR.value,  # pyrefly: ignore[bad-argument-type]
       _TF_DATA_SERVICE_ADDRESS.value,
   )
 

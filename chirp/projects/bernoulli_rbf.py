@@ -239,5 +239,5 @@ def train_step(
     return gt_log_likelihood_loss + mu * matching_loss
 
   loss, grads = nnx.value_and_grad(loss_fn)(model)
-  optimizer.update(grads)
+  optimizer.update(grads)  # pyrefly: ignore[bad-argument-count]
   return loss

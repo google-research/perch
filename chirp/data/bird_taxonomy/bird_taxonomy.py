@@ -134,21 +134,21 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
   BUILDER_CONFIGS = [
       # pylint: disable=unexpected-keyword-arg
       BirdTaxonomyConfig(
-          name='slice_peaked',
+          name='slice_peaked',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Chunked audio sequences processed with '
               'chirp.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
-          name='slice_peaked_tiny',
+          name='slice_peaked_tiny',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=functools.partial(
               audio_utils.slice_peaked_audio, max_intervals=1
           ),
           interval_length_s=6.0,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'A tiny version of the slice_peaked dataset '
               'containing only two species'
           ),
@@ -161,43 +161,43 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           ]),
       ),
       BirdTaxonomyConfig(
-          name='upstream_slice_peaked',
+          name='upstream_slice_peaked',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
           data_processing_query=premade_queries.get_upstream_data_query(),
           metadata_processing_query=premade_queries.get_upstream_metadata_query(),
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Upstream data version with chunked audio sequences '
               'processed with chirp.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
-          name='upstream_ar_only_slice_peaked',
+          name='upstream_ar_only_slice_peaked',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
           data_processing_query=premade_queries.get_upstream_data_query(
               ar_only=True
           ),
           metadata_processing_query=premade_queries.get_upstream_metadata_query(),
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Upstream data version (AR-only) with chunked audio '
               'sequences processed with '
               'chirp.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
-          name='downstream_slice_peaked',
+          name='downstream_slice_peaked',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
           data_processing_query=premade_queries.get_downstream_data_query(),
           metadata_processing_query=premade_queries.get_downstream_metadata_query(),
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Downstream data version with chunked audio sequences '
               'processed with chirp.audio_utils.slice_peaked_audio.'
           ),
       ),
       BirdTaxonomyConfig(
-          name='class_representatives_slice_peaked',
+          name='class_representatives_slice_peaked',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
           data_processing_query=(
@@ -206,7 +206,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           metadata_processing_query=(
               premade_queries.get_class_representatives_metadata_query()
           ),
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'All recordings available to be used as class representatives '
               '(namely recording for artificially-rare, downstream, High '
               'Sierras, Sierra Nevada, and Peru), processed with '
@@ -214,40 +214,40 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           ),
       ),
       BirdTaxonomyConfig(
-          name='full_length',
+          name='full_length',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=None,
-          description='Full-length audio sequences.',
+          description='Full-length audio sequences.',  # pyrefly: ignore[unexpected-keyword]
       ),
       BirdTaxonomyConfig(
-          name='upstream_full_length',
+          name='upstream_full_length',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=None,
           data_processing_query=premade_queries.get_upstream_data_query(),
           metadata_processing_query=premade_queries.get_upstream_metadata_query(),
-          description='Upstream data with full-length audio sequences.',
+          description='Upstream data with full-length audio sequences.',  # pyrefly: ignore[unexpected-keyword]
       ),
       BirdTaxonomyConfig(
-          name='upstream_ar_only_full_length',
+          name='upstream_ar_only_full_length',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=None,
           data_processing_query=premade_queries.get_upstream_data_query(
               ar_only=True
           ),
           metadata_processing_query=premade_queries.get_upstream_metadata_query(),
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Upstream data (AR-only) with full-length audio sequences.'
           ),
       ),
       BirdTaxonomyConfig(
-          name='downstream_full_length',
+          name='downstream_full_length',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=None,
           data_processing_query=premade_queries.get_downstream_data_query(),
           metadata_processing_query=premade_queries.get_downstream_metadata_query(),
-          description='Downstream data with full-length audio sequences.',
+          description='Downstream data with full-length audio sequences.',  # pyrefly: ignore[unexpected-keyword]
       ),
       BirdTaxonomyConfig(
-          name='seabird_slice_peaked',
+          name='seabird_slice_peaked',  # pyrefly: ignore[unexpected-keyword]
           localization_fn=audio_utils.slice_peaked_audio,
           interval_length_s=6.0,
-          description=(
+          description=(  # pyrefly: ignore[unexpected-keyword]
               'Seabird dataset consisting of data '
               'with chunked audio sequences processed with '
               'chirp.audio_utils.slice_peaked_audio.'
@@ -421,7 +421,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
       source_info[column] = source_info[column].map(lambda s: s or '')
 
     return {
-        'train': self._generate_examples(source_info=source_info),
+        'train': self._generate_examples(source_info=source_info),  # pyrefly: ignore[bad-argument-type]
     }
 
   def _generate_examples(self, source_info: pd.DataFrame):

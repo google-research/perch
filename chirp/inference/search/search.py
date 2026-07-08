@@ -113,7 +113,7 @@ class TopKSearchResults:
 
   def write_labeled_data(self, labeled_data_path: str, sample_rate: int):
     """Write labeled results to the labeled data collection."""
-    labeled_data_path = epath.Path(labeled_data_path)
+    labeled_data_path = epath.Path(labeled_data_path)  # pyrefly: ignore[bad-assignment]
     counts = collections.defaultdict(int)
     for r in self.search_results:
       labels = [ch.description for ch in r.label_widgets if ch.value]

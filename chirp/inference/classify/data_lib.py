@@ -142,7 +142,7 @@ class MergedDataset:
         load_audio=load_audio,
         target_sample_rate=target_sample_rate,
         audio_file_pattern=audio_file_pattern,
-        excluded_files=existing_embedded_srcs,
+        excluded_files=existing_embedded_srcs,  # pyrefly: ignore[bad-argument-type]
         embedding_file_prefix=embedding_file_prefix,
         pad_type=pad_type,
         max_workers=max_workers,
@@ -444,8 +444,8 @@ def labels_from_folder_of_folders(
     embedding_file_prefix: Folders containing existing embeddings that will be
       ignored when determining labels.
   """
-  base_dir = epath.Path(base_dir)
-  sub_dirs = sorted([p.name for p in base_dir.glob('*') if p.is_dir()])
+  base_dir = epath.Path(base_dir)  # pyrefly: ignore[bad-assignment]
+  sub_dirs = sorted([p.name for p in base_dir.glob('*') if p.is_dir()])  # pyrefly: ignore[missing-attribute]
   if not sub_dirs:
     raise ValueError(
         'No subfolders found in base directory. Audio will be '
@@ -506,7 +506,7 @@ def embed_dataset(
     Ordered labels and a Dict contianing the entire embedded dataset.
   """
   labels = labels_from_folder_of_folders(base_dir, exclude_classes)
-  base_dir = epath.Path(base_dir)
+  base_dir = epath.Path(base_dir)  # pyrefly: ignore[bad-assignment]
 
   if hasattr(embedding_model, 'window_size_s'):
     window_size = int(
@@ -526,14 +526,14 @@ def embed_dataset(
     # Get filepaths excluding embedding files
     filepaths = [
         fp
-        for fp in (base_dir / label).glob(audio_file_pattern)
+        for fp in (base_dir / label).glob(audio_file_pattern)  # pyrefly: ignore[unsupported-operation]
         if not fp.name.startswith(embedding_file_prefix)
     ]
 
     if not filepaths:
       raise ValueError(
           'No files matching {} were found in directory {}'.format(
-              audio_file_pattern, base_dir / label
+              audio_file_pattern, base_dir / label  # pyrefly: ignore[unsupported-operation]
           )
       )
 
@@ -616,7 +616,7 @@ def read_embedded_dataset(
 
   output_dir = epath.Path(embeddings_path)
   fns = [fn for fn in output_dir.glob('embeddings-*')]
-  ds = tf.data.TFRecordDataset(fns)
+  ds = tf.data.TFRecordDataset(fns)  # pyrefly: ignore[bad-instantiation]
   parser = tf_examples.get_example_parser(tensor_dtype=tensor_dtype)
   ds = ds.map(parser)
 
