@@ -316,7 +316,7 @@ def melspec_params(
   """
   # The melspec triangle filters are equally spaced in the mel-scale
   range_ = map(chirp.signal.hertz_to_mel, (lower_edge_hertz, upper_edge_hertz))  # pytype: disable=wrong-arg-types  # jax-ndarray
-  bands = chirp.signal.mel_to_hertz(jnp.linspace(*range_, num_mel_bins + 2))
+  bands = chirp.signal.mel_to_hertz(jnp.linspace(*range_, num_mel_bins + 2))  # pyrefly: ignore[no-matching-overload]
 
   # Convert from Hertz to normalized frequencies
   bands = bands / sample_rate * jnp.pi * 2

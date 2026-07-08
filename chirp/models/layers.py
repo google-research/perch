@@ -447,28 +447,28 @@ class LightConv1D(nn.Module):
 
     inputs = nn.LayerNorm(name="ln")(inputs)
     act_inputs = FeedForward(
-        output_dims=self.input_dims, activation=Identity()
+        output_dims=self.input_dims, activation=Identity()  # pyrefly: ignore[bad-argument-type]
     )(inputs)
     gated_inputs = FeedForward(
-        output_dims=self.input_dims, activation=Identity()
+        output_dims=self.input_dims, activation=Identity()  # pyrefly: ignore[bad-argument-type]
     )(inputs)
     inputs = act_inputs * jax.nn.sigmoid(gated_inputs)
 
     inputs = nn.Conv(
-        features=self.input_dims,
-        kernel_size=(self.kernel_size,),
+        features=self.input_dims,  # pyrefly: ignore[bad-argument-type]
+        kernel_size=(self.kernel_size,),  # pyrefly: ignore[bad-argument-type]
         strides=2 if self.downsample else 1,
         padding="SAME",
         input_dilation=1,
         kernel_dilation=1,
-        feature_group_count=self.input_dims,
+        feature_group_count=self.input_dims,  # pyrefly: ignore[bad-argument-type]
         use_bias=False,
     )(inputs)
 
     inputs = nn.BatchNorm()(inputs, use_running_average=use_running_average)
     inputs = self.conv_activation(inputs)
 
-    inputs = FeedForward(output_dims=self.input_dims, activation=Identity())(
+    inputs = FeedForward(output_dims=self.input_dims, activation=Identity())(  # pyrefly: ignore[bad-argument-type]
         inputs
     )
     inputs = nn.Dropout(self.dropout_prob)(inputs, deterministic=not train)
@@ -480,7 +480,7 @@ class LightConv1D(nn.Module):
       # If downsampling happened, the dimensions might also have changed, which
       # means we need to project the inputs for the residual connection
       if unnormalized_inputs.shape[-1] != self.input_dims:
-        unnormalized_inputs = nn.Dense(features=self.input_dims)(
+        unnormalized_inputs = nn.Dense(features=self.input_dims)(  # pyrefly: ignore[bad-argument-type]
             unnormalized_inputs
         )
 
@@ -650,8 +650,8 @@ class Conformer(nn.Module):
         input_dims=input_dims,
         hidden_dims=input_dims * self.ffn_dim_multiplier,
         residual_weight=self.ff_residual_weight,
-        residual_dropout_prob=self.ffn_residual_dropout,
-        relu_dropout_prob=self.ffn_relu_dropout,
+        residual_dropout_prob=self.ffn_residual_dropout,  # pyrefly: ignore[bad-argument-type]
+        relu_dropout_prob=self.ffn_relu_dropout,  # pyrefly: ignore[bad-argument-type]
     )
 
     # Set up the last ff layer.
@@ -661,15 +661,15 @@ class Conformer(nn.Module):
         input_dims=self.model_dims,
         hidden_dims=self.model_dims * self.ffn_dim_multiplier,
         residual_weight=self.ff_residual_weight,
-        residual_dropout_prob=self.ffn_residual_dropout,
-        relu_dropout_prob=self.ffn_relu_dropout,
+        residual_dropout_prob=self.ffn_residual_dropout,  # pyrefly: ignore[bad-argument-type]
+        relu_dropout_prob=self.ffn_relu_dropout,  # pyrefly: ignore[bad-argument-type]
     )
 
     # Setup attention layer.
     if "mhsa" in self.layer_order:
       trans_atten = SelfAttentionWithNormAndResidual(
-          residual_dropout_prob=self.atten_residual_dropout,
-          atten_dropout_prob=self.atten_dropout,
+          residual_dropout_prob=self.atten_residual_dropout,  # pyrefly: ignore[bad-argument-type]
+          atten_dropout_prob=self.atten_dropout,  # pyrefly: ignore[bad-argument-type]
           num_heads=self.atten_num_heads,
       )
     else:
@@ -679,7 +679,7 @@ class Conformer(nn.Module):
     lconv = LightConv1D(
         input_dims=self.model_dims,
         kernel_size=self.kernel_size,
-        dropout_prob=self.conv_residual_dropout,
+        dropout_prob=self.conv_residual_dropout,  # pyrefly: ignore[bad-argument-type]
         downsample=self.downsample,
     )
 
@@ -694,17 +694,17 @@ class Conformer(nn.Module):
     inputs = fflayer_start(inputs, train)
 
     if self.layer_order == "mhsa":
-      inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)
+      inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)  # pyrefly: ignore[not-callable]
     elif self.layer_order == "conv":
       inputs = lconv(
           inputs, train=train, use_running_average=use_running_average
       )
     elif self.layer_order == "mhsa_before_conv":
-      inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)
+      inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)  # pyrefly: ignore[not-callable]
       inputs = lconv(inputs, train)
     else:
       inputs = lconv(inputs, train)
-      inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)
+      inputs = trans_atten(inputs=inputs, train=train, atten_mask=atten_mask)  # pyrefly: ignore[not-callable]
 
     if self.fflayer_weight_sharing:
       # With the weight sharing, we apply fflayer_start again
@@ -713,7 +713,7 @@ class Conformer(nn.Module):
       inputs = fflayer_end(inputs, train)
 
     if not self.skip_layer_norm:
-      inputs = final_ln(inputs)
+      inputs = final_ln(inputs)  # pyrefly: ignore[not-callable]
     return inputs
 
 

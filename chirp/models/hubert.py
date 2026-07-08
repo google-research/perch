@@ -187,14 +187,14 @@ class HuBERTEval(nn.Module):
     if self.use_raw_audio:
       # Raw audio (no frontend) is fed through the early feature extractor.
       early_fs_inputs = jnp.expand_dims(inputs, -1)  # (bsz, sz, 1)
-      x_earlyfs = self.early_feature_extractor(early_fs_inputs, train=False)
+      x_earlyfs = self.early_feature_extractor(early_fs_inputs, train=False)  # pyrefly: ignore[not-callable]
       x = x_earlyfs
     else:
       # Process audio with a frontend before the early feature extractor.
-      x_frontend = self.frontend(inputs)  # (bsz, sz, csz)
+      x_frontend = self.frontend(inputs)  # (bsz, sz, csz)  # pyrefly: ignore[not-callable]
       if self.early_feature_extractor is not None:
         x_earlyfs = self.early_feature_extractor(x_frontend, train=False)
-      x = x_earlyfs
+      x = x_earlyfs  # pyrefly: ignore[unbound-name]
 
     _, sz, csz = x.shape
     if self.add_positional_embeddings:
@@ -544,7 +544,7 @@ class HuBERTModel(nn.Module):
     if self.use_raw_audio:
       # Raw audio (no frontend) is fed through the early feature extractor.
       early_fs_inputs = jnp.expand_dims(inputs, -1)  # (bsz, sz, 1)
-      x_earlyfs = self.early_feature_extractor(early_fs_inputs, train=train)
+      x_earlyfs = self.early_feature_extractor(early_fs_inputs, train=train)  # pyrefly: ignore[not-callable]
       if QuantizerPoints.FRONTEND.value in self.quantizer_points:
         x_frontend = self.frontend(inputs)  # (bsz, sz, csz)
         if x_earlyfs.shape[-2] != x_frontend.shape[-2]:
@@ -561,12 +561,12 @@ class HuBERTModel(nn.Module):
       x_frontend = self.frontend(inputs)  # (bsz, sz, csz)
       if self.early_feature_extractor is not None:
         x_earlyfs = self.early_feature_extractor(x_frontend, train=train)
-      x = x_earlyfs
+      x = x_earlyfs  # pyrefly: ignore[unbound-name]
 
     # Add quantizers on frontend and/or early fs, if requested.
     if QuantizerPoints.FRONTEND.value in self.quantizer_points:
       quantizers = self.add_projected_quantizer(
-          x_frontend, quantizers, train_mode_quantizer
+          x_frontend, quantizers, train_mode_quantizer  # pyrefly: ignore[unbound-name]
       )
 
     if QuantizerPoints.EARLY_FS.value in self.quantizer_points:

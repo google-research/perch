@@ -115,7 +115,7 @@ def decode_block_string(block_string: str) -> BlockArgs:
       input_filters=int(options['i']),
       output_filters=int(options['o']),
       expand_ratio=int(options['e']),
-      reduction_ratio=float(options['se']) if 'se' in options else None,
+      reduction_ratio=float(options['se']) if 'se' in options else None,  # pyrefly: ignore[bad-argument-type]
       strides=int(options['s']),
       conv_type=int(options['c']) if 'c' in options else 0,
   )
@@ -145,11 +145,11 @@ def make_conv_block(
   args.pop('input_filters')
   args.pop('num_repeats')
   args['batch_norm'] = True
-  args['activation'] = ops.activation
-  args['sigmoid_activation'] = ops.sigmoid
-  args['dot_general'] = ops.dot_general
-  args['conv_general_dilated'] = ops.conv_general_dilated
-  return cls(**args)
+  args['activation'] = ops.activation  # pyrefly: ignore[bad-assignment]
+  args['sigmoid_activation'] = ops.sigmoid  # pyrefly: ignore[bad-assignment]
+  args['dot_general'] = ops.dot_general  # pyrefly: ignore[bad-assignment]
+  args['conv_general_dilated'] = ops.conv_general_dilated  # pyrefly: ignore[bad-assignment]
+  return cls(**args)  # pyrefly: ignore[missing-argument, unexpected-keyword]
 
 
 class EfficientNetV2(nn.Module):
@@ -223,7 +223,7 @@ class EfficientNetV2(nn.Module):
 
     if self.stem is None:
       stem = efficientnet.Stem(
-          features=self.block_configs[0].input_filters,
+          features=self.block_configs[0].input_filters,  # pyrefly: ignore[unsupported-operation]
           activation=ops.stem_activation,
           conv_general_dilated=ops.conv_general_dilated,
       )
@@ -231,12 +231,12 @@ class EfficientNetV2(nn.Module):
       stem = self.stem
     x = stem(inputs, use_running_average=use_running_average)
 
-    for block_idx, block_config in enumerate(self.block_configs):
+    for block_idx, block_config in enumerate(self.block_configs):  # pyrefly: ignore[bad-argument-type]
 
       if self.survival_probability:
         drop_rate = 1.0 - self.survival_probability
         survival_prob = 1.0 - drop_rate * float(block_idx) / len(
-            self.block_configs
+            self.block_configs  # pyrefly: ignore[bad-argument-type]
         )
       else:
         survival_prob = 0.0
@@ -244,9 +244,9 @@ class EfficientNetV2(nn.Module):
       for i in range(block_config.num_repeats):
         # Stride is only applied in the first repeat.
         block_strides = (1, 1) if i > 0 else block_config.strides
-        block = make_conv_block(block_config, ops, stride=block_strides)
+        block = make_conv_block(block_config, ops, stride=block_strides)  # pyrefly: ignore[bad-argument-type]
         y = block(x, train=train, use_running_average=use_running_average)
-        x = self.residual(x, y, block_idx, block_strides, survival_prob, train)
+        x = self.residual(x, y, block_idx, block_strides, survival_prob, train)  # pyrefly: ignore[bad-argument-type]
 
     head = self.head or efficientnet.Head(
         1280,
@@ -257,5 +257,5 @@ class EfficientNetV2(nn.Module):
 
     if self.include_top:
       x = jnp.mean(x, axis=(1, 2))
-      x = nn.Dropout(rate=self.dropout_rate, deterministic=not train)(x)
+      x = nn.Dropout(rate=self.dropout_rate, deterministic=not train)(x)  # pyrefly: ignore[bad-argument-type]
     return x

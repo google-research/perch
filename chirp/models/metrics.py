@@ -222,18 +222,18 @@ def generalized_mean_rank(
     idx = jnp.flip(idx, axis=-1)
   labels = jnp.take_along_axis(labels, idx, axis=-1)
   if label_mask is None:
-    label_mask = True
+    label_mask = True  # pyrefly: ignore[bad-assignment]
   else:
     label_mask = jnp.take_along_axis(label_mask, idx, axis=-1).astype(bool)
 
   num_p = (labels > 0).sum(axis=-1, where=label_mask)
-  num_p_above = jnp.cumsum((labels > 0) & label_mask, axis=-1)
+  num_p_above = jnp.cumsum((labels > 0) & label_mask, axis=-1)  # pyrefly: ignore[unsupported-operation]
   num_n = (labels == 0).sum(axis=-1, where=label_mask)
-  num_n_above = jnp.cumsum((labels == 0) & label_mask, axis=-1)
+  num_n_above = jnp.cumsum((labels == 0) & label_mask, axis=-1)  # pyrefly: ignore[unsupported-operation]
 
-  gmr = num_p_above.mean(axis=-1, where=(labels == 0) & label_mask) / num_p
+  gmr = num_p_above.mean(axis=-1, where=(labels == 0) & label_mask) / num_p  # pyrefly: ignore[unsupported-operation]
   gmr_var = (num_n_above / num_n[:, None]).var(
-      axis=-1, where=(labels > 0) & label_mask
+      axis=-1, where=(labels > 0) & label_mask  # pyrefly: ignore[unsupported-operation]
   )
   return gmr, gmr_var
 

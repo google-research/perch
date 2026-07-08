@@ -99,7 +99,7 @@ def round_features(
     features: int, width_coefficient: float, depth_divisor: int = 8
 ) -> int:
   """Round number of filters based on width multiplier."""
-  features *= width_coefficient
+  features *= width_coefficient  # pyrefly: ignore[bad-assignment]
   new_features = max(
       depth_divisor,
       int(features + depth_divisor / 2) // depth_divisor * depth_divisor,

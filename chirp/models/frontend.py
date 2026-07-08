@@ -110,8 +110,8 @@ class Frontend(nn.Module):
             "spcen_smoothing_coef", lambda _: init_smoothing_coef
         )
         smoothing_coef = jnp.clip(smoothing_coef, 0, 1)
-        kwargs["smoothing_coef"] = smoothing_coef
-      outputs, _ = audio_utils.pcen(inputs, **kwargs)
+        kwargs["smoothing_coef"] = smoothing_coef  # pyrefly: ignore[bad-assignment]
+      outputs, _ = audio_utils.pcen(inputs, **kwargs)  # pyrefly: ignore[unexpected-keyword]
     elif scaling_config is None:
       outputs = inputs
     else:
@@ -452,7 +452,7 @@ class MorletWaveletTransform(Frontend):
     gabor_std = self.param("gabor_std", lambda rng: params[1])
     sigma = gabor_mean * gabor_std
     gabor_filter = cwt.gabor_filter(
-        sigma, cwt.Domain.TIME, cwt.Normalization.L1
+        sigma, cwt.Domain.TIME, cwt.Normalization.L1  # pyrefly: ignore[bad-argument-type]
     )
     filtered_signal = cwt.convolve_filter(
         gabor_filter,

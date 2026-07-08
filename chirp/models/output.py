@@ -47,7 +47,7 @@ class AnyOutput(Protocol):
 
 @runtime_checkable
 @dataclasses.dataclass
-class TaxonomicOutput(Protocol):
+class TaxonomicOutput(Protocol):  # pyrefly: ignore[bad-class-definition]
   label: jnp.ndarray
   genus: jnp.ndarray
   family: jnp.ndarray

@@ -233,9 +233,9 @@ class VectorQuantizer(BaseQuantizer):
     quantization_loss = jnp.reshape(quantization_loss, inputs.shape)
 
     if self.rescale:
-      quantized *= stdev + 1e-8
+      quantized *= stdev + 1e-8  # pyrefly: ignore[unbound-name]
     if self.demean:
-      quantized += feature_means
+      quantized += feature_means  # pyrefly: ignore[unbound-name]
     quantized = jnp.reshape(quantized, inputs.shape)
 
     nn_idx = jnp.reshape(nn_idx, inputs.shape[:-1])
