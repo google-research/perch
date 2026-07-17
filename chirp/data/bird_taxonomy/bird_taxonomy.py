@@ -434,6 +434,7 @@ class BirdTaxonomy(tfds.core.GeneratorBasedBuilder):
           mode='w+b', suffix=source['url'].suffix
       ) as f:
         f.write(source['url'].read_bytes())
+        f.flush()
         # librosa outputs lots of warnings which we can safely ignore when
         # processing all Xeno-Canto files and PySoundFile is unavailable.
         with warnings.catch_warnings():
