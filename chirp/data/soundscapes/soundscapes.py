@@ -440,12 +440,14 @@ class Soundscapes(bird_taxonomy.BirdTaxonomy):
           self.builder_config.annotation_filename
           or f'{self.builder_config.class_list_name}.csv'
       )
-      annotations_path = dl_manager.download_and_extract({  # pyrefly: ignore[bad-index]
+      annotations_path = dl_manager.download_and_extract({
           'segments': (
-              self.builder_config.audio_dir
-              / self.builder_config.class_list_name
-              / filename
-          ).as_posix(),
+              (
+                  self.builder_config.audio_dir
+                  / self.builder_config.class_list_name
+                  / filename
+              ).as_posix()
+          ),
       })['segments']
       annotations_df = self.builder_config.annotation_load_fn(annotations_path)
     else:

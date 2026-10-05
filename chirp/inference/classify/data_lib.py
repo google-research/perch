@@ -616,7 +616,7 @@ def read_embedded_dataset(
 
   output_dir = epath.Path(embeddings_path)
   fns = [fn for fn in output_dir.glob('embeddings-*')]
-  ds = tf.data.TFRecordDataset(fns)  # pyrefly: ignore[bad-instantiation]
+  ds = tf.data.TFRecordDataset(fns)
   parser = tf_examples.get_example_parser(tensor_dtype=tensor_dtype)
   ds = ds.map(parser)
 

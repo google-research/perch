@@ -391,7 +391,7 @@ def ema(
   final_state, ys = lax.scan(ema_fn, init=initial_state, xs=xs)
 
   ys = jnp.swapaxes(ys, 0, axis)
-  return ys, final_state  # pytype: disable=bad-return-type  # jax-ndarray
+  return ys, final_state  # pyrefly: ignore[bad-return]
 
 
 def ema_conv1d(

@@ -315,7 +315,7 @@ def melspec_params(
     The central frequencies and the inverse bandwidth (normalized).
   """
   # The melspec triangle filters are equally spaced in the mel-scale
-  range_ = map(chirp.signal.hertz_to_mel, (lower_edge_hertz, upper_edge_hertz))  # pytype: disable=wrong-arg-types  # jax-ndarray
+  range_ = map(chirp.signal.hertz_to_mel, (lower_edge_hertz, upper_edge_hertz))  # pyrefly: ignore[bad-argument-type]
   bands = chirp.signal.mel_to_hertz(jnp.linspace(*range_, num_mel_bins + 2))  # pyrefly: ignore[no-matching-overload]
 
   # Convert from Hertz to normalized frequencies
@@ -328,7 +328,7 @@ def melspec_params(
   coeff = 2 * jnp.sqrt(2 * jnp.log(2))
   inv_fwhms = coeff / fwhms
 
-  return bands[1:-1], inv_fwhms  # pytype: disable=bad-return-type  # jax-ndarray
+  return bands[1:-1], inv_fwhms  # pyrefly: ignore[bad-return]
 
 
 def convolve_filter(

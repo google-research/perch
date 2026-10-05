@@ -118,7 +118,7 @@ def _main():
   if jax.process_index() == 0:
     eval_lib.write_results_to_csv(
         eval_metrics, config.write_results_dir, config.write_filename  # pyrefly: ignore[bad-argument-type]
-    )  # pytype: disable=wrong-arg-types  # jax-ndarray
+    )
 
 
 def main(argv: Sequence[str]) -> None:

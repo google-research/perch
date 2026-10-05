@@ -692,10 +692,10 @@ class MergeBackgroundLabels(FeaturesPreprocessOp):
   ) -> Features:
     features = features.copy()
     features['label'] = tf.clip_by_value(
-        features['label'] + features['bg_labels'], 0, 1  # pyrefly: ignore[unsupported-operation]
+        features['label'] + features['bg_labels'], 0, 1
     )
     features['label_mask'] = tf.clip_by_value(
-        features['label_mask'] + features['bg_labels_mask'], 0, 1  # pyrefly: ignore[unsupported-operation]
+        features['label_mask'] + features['bg_labels_mask'], 0, 1
     )
     return features
 

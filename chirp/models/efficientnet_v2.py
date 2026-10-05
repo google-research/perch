@@ -231,7 +231,7 @@ class EfficientNetV2(nn.Module):
       stem = self.stem
     x = stem(inputs, use_running_average=use_running_average)
 
-    for block_idx, block_config in enumerate(self.block_configs):  # pyrefly: ignore[bad-argument-type, not-iterable]
+    for block_idx, block_config in enumerate(self.block_configs):  # pyrefly: ignore[not-iterable]
 
       if self.survival_probability:
         drop_rate = 1.0 - self.survival_probability

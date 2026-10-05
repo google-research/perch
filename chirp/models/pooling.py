@@ -62,7 +62,7 @@ def gaussian_init(
     the standard deviation scaled by the window size.
   """
   del key
-  return (std * 0.5 * (window_size - 1) * jnp.ones((num_channels,)),)  # pytype: disable=bad-return-type  # jax-ndarray
+  return (std * 0.5 * (window_size - 1) * jnp.ones((num_channels,)),)  # pyrefly: ignore[bad-return]
 
 
 class WindowPool(nn.Module):

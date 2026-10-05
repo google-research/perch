@@ -121,7 +121,7 @@ def quantizer_loss(
   del unused_kwargs
   # [bsz, sz, csz] or [bsz, sz, 1] (depending on the quantizer).
   quant_loss = outputs.quantization_loss
-  quant_loss = jnp.squeeze(jnp.mean(quant_loss, -1))  # pytype: disable=wrong-arg-types  # jnp-type
+  quant_loss = jnp.squeeze(jnp.mean(quant_loss, -1))  # pyrefly: ignore[bad-argument-type]
   # [bsz, sz].
   return quant_loss * quant_loss_mult
 
@@ -661,7 +661,7 @@ def initialize_model(
           "so unable to reload it. The reloaded params do not contain a key "
           "'quantizer' nor 'quantizer_0'."
       )
-    train_state.params[quantizer_key] = reloaded_quantizer["params"][  # pytype: disable=unsupported-operands  # py310-upgrade
+    train_state.params[quantizer_key] = reloaded_quantizer["params"][  # pyrefly: ignore[unsupported-operation]
         quantizer_key
     ]
 
@@ -701,7 +701,7 @@ def initialize_model(
         logging.info("Ignoring HuBERT parameters for key %s.", k)
         continue
       train_state.params[k] = (  # pyrefly: ignore[unsupported-operation]
-          v  # pytype: disable=unsupported-operands  # py310-upgrade
+          v
       )
       logging.info("Assigned reloaded HuBERT parameters for key %s.", k)
 

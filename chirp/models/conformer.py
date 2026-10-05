@@ -132,7 +132,7 @@ class Conformer(nn.Module):
       )(inputs, train, use_running_average=use_running_average)
       intermediate.append(inputs)
     if return_intermediate_list:
-      return intermediate  # pytype: disable=bad-return-type  # jax-ndarray
+      return intermediate  # pyrefly: ignore[bad-return]
     else:
       return inputs
 

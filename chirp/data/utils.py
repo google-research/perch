@@ -95,7 +95,7 @@ def get_dataset(
     datasets.append(pipeline(ds, dataset_info))
 
   if len(datasets) > 1:
-    ds = tf.data.Dataset.sample_from_datasets(datasets)  # pyrefly: ignore[bad-argument-type]
+    ds = tf.data.Dataset.sample_from_datasets(datasets)
   else:
     ds = datasets[0]
 
@@ -231,7 +231,7 @@ def get_multi_dataset(
 
   # Create a new dataset object that interleaves the multiple datasets
   unified_ds = tf.data.Dataset.sample_from_datasets(
-      merge_datasets, weights=weights  # pyrefly: ignore[bad-argument-type]
+      merge_datasets, weights=weights
   )
 
   # Batch wants ds_info as an arg, but doesnt use it, so pass the last ds_info

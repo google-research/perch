@@ -127,7 +127,7 @@ def get_existing_source_ids(
   if not output_dir.exists:
     return existing_source_ids
   filenames = [fn for fn in output_dir.glob(file_pattern)]
-  dataset = tf.data.TFRecordDataset(filenames)  # pyrefly: ignore[bad-instantiation]
+  dataset = tf.data.TFRecordDataset(filenames)
   parser = tf_examples.get_example_parser(tensor_dtype=tensor_dtype)
   dataset = dataset.map(parser)
   for e in dataset.as_numpy_iterator():

@@ -104,11 +104,9 @@ class MultiAverage(clu_metrics.Average):
 
   @classmethod
   def empty(cls) -> clu_metrics.Metric:  # pyrefly: ignore[bad-override]
-    # pytype: disable=attribute-error
     return cls(
-        total=jnp.zeros(cls._n, jnp.float32), count=jnp.zeros(cls._n, jnp.int32)
+        total=jnp.zeros(cls._n, jnp.float32), count=jnp.zeros(cls._n, jnp.int32)  # pyrefly: ignore[missing-attribute]
     )
-    # pytype: enable=attribute-error
 
   @classmethod
   def from_model_output(  # pyrefly: ignore[bad-override]
@@ -140,7 +138,7 @@ class MultiAverage(clu_metrics.Average):
             jnp.zeros_like(values, dtype=jnp.int32),
         ).sum(
             axis=axes  # pyrefly: ignore[bad-argument-type]
-        ),  # pyrefly: ignore[bad-argument-type]
+        ),
     )
 
   def compute(self):
@@ -370,4 +368,4 @@ def taxonomy_loss(
         taxonomy_loss_weight * jnp.mean(losses[f'{key}_loss'], axis=-1)
         for key in TAXONOMY_KEYS
     )
-  return losses  # pytype: disable=bad-return-type  # jax-ndarray
+  return losses  # pyrefly: ignore[bad-return]

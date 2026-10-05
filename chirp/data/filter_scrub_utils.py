@@ -596,7 +596,7 @@ def scrub_all_but_class_list(key: str, class_list_name: str) -> Query:
   classes = list(db.class_lists[class_list_name].classes)
   return Query(
       op=TransformOp.SCRUB_ALL_BUT,
-      kwargs={  # pyrefly: ignore[bad-argument-type]
+      kwargs={
           'key': key,  # pyrefly: ignore[bad-assignment]
           'values': classes,  # pyrefly: ignore[bad-assignment]
       },

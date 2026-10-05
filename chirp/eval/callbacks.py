@@ -70,12 +70,12 @@ def pmap_with_remainder(
     # Check if there is a remainder to the batch
     r = m - n * (m // n)
     if r == 0:
-      return outputs  # pytype: disable=bad-return-type  # jnp-type
+      return outputs  # pyrefly: ignore[bad-return]
     else:
       # If not, run the remainder of the batch on each host
       batch = inputs[n * (m // n) :]
       remainder = model_callable_jit(batch)
-      return jnp.concatenate([outputs, remainder])  # pytype: disable=bad-return-type  # jnp-type
+      return jnp.concatenate([outputs, remainder])  # pyrefly: ignore[bad-return]
 
   return parallel_model_callable
 
