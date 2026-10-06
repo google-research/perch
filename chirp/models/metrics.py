@@ -260,7 +260,9 @@ def least_squares_mixit(reference, estimate):
       jnp.swapaxes(estimate, -1, -2), jnp.swapaxes(reference, -1, -2)
   )
   mix_matrix = jnp.swapaxes(mix_matrix, -1, -2)
-  max_per_column = jnp.max(mix_matrix, axis=-2, keepdims=True)
-  mix_matrix = jnp.where(mix_matrix == max_per_column, 1.0, 0.0)
+  # Assign each source to exactly one reference, including tied columns.
+  best_reference = jnp.argmax(mix_matrix, axis=-2, keepdims=True)
+  reference_indices = jnp.arange(mix_matrix.shape[-2])[:, None]
+  mix_matrix = jnp.where(reference_indices == best_reference, 1.0, 0.0)
   best_mix = mix_matrix @ estimate
   return best_mix, mix_matrix
