@@ -114,7 +114,7 @@ def _make_result_buttons(button_labels: Sequence[str]):
         disabled=False,
         button_style='',
     )
-    check.value = False
+    check.value = False  # pyrefly: ignore[missing-attribute]
     check.on_click(button_callback)
 
     buttons.append(check)
