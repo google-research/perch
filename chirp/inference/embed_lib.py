@@ -15,7 +15,6 @@
 
 """Create embeddings for an audio corpus."""
 
-import audioop
 import dataclasses
 import importlib
 import json
@@ -347,9 +346,6 @@ class EmbedFn(beam.DoFn):
       return
     except EOFError as inst:
       self._log_exception(source_info, inst, 'audio_eof_error')
-      return
-    except audioop.error as inst:
-      self._log_exception(source_info, inst, 'audio_op_error')
       return
     except RuntimeError as inst:
       if 'Soundfile is not available' in str(inst):
