@@ -129,7 +129,10 @@ def prune_random_results(
   for r in results.search_results:
     result_bin = max(np.argmax(r.score < value_bounds) - 1, 0)
     binned[result_bin].append(r)
-  binned = [np.random.choice(b, samples_per_bin, replace=False) for b in binned]
+  binned = [
+      np.random.choice(b, min(samples_per_bin, len(b)), replace=False)
+      for b in binned
+  ]
 
   combined_results = []
   for b in binned:
