@@ -30,6 +30,7 @@ from flax import linen as nn
 import jax
 from jax import numpy as jnp
 from jax import scipy as jsp
+import numpy as np
 
 
 @dataclasses.dataclass
@@ -291,7 +292,9 @@ class SimpleMelspec(Frontend):
         dimension_numbers=("NTC", "OIT", "NTC"),
     )
 
-    window = jnp.hanning(self.kernel_size)
+    # Compute the static window with NumPy: jnp.hanning uses jax.lax.cospi,
+    # whose BitwiseAnd op is unsupported by TFLite without SELECT_TF_OPS.
+    window = jnp.asarray(np.hanning(self.kernel_size))
     # The scipy stft default scaling resolves down to this...
     # For the stft, the scalar is squared then sqrt'ed.
     window *= 1.0 / window.sum()
